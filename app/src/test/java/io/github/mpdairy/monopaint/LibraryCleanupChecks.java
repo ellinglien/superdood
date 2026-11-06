@@ -21,7 +21,7 @@ public final class LibraryCleanupChecks {
         store.put(LibraryCleanup.DONE, null);
         int[] base = LibraryCleanup.run(slots.library, slots.swatches, store);
         store.put(LibraryCleanup.DONE, null);
-        Brush fineliner = row(0), noodly = row(4), other = ToolSlots.first(0);
+        Brush fineliner = row(0), noodly = row(4), other = ToolSlots.first(3);
         check(fineliner != null && noodly != null && LibraryCleanup.ROWS[0][3].equals("Classic fineliner") && LibraryCleanup.ROWS[4][2].equals("remove"), "the rows read");
         slots.library.save(fineliner);
         slots.library.save(noodly);
@@ -41,8 +41,9 @@ public final class LibraryCleanupChecks {
         check(slots.swatches.look(key, renamed.brush).px == 3 && slots.swatches.look(key, renamed.brush).darkness == 1, "its own 3 px, black");
         slots.swatches.useSize(key, 50);
         slots.swatches.useGrey(key, .4);
-        check(slots.use(3, other), "another picked");
-        check(slots.swatches.look(key, other).px == 50 && slots.swatches.look(key, other).darkness == .4, "a brush without its own keeps the slot's");
+        Brush lookless = ToolPresets.named("Hatch pen").brush(); // no starting look (the bar's brushes now have the bar's)
+        check(slots.use(3, lookless), "another picked");
+        check(slots.swatches.look(key, lookless).px == 50 && slots.swatches.look(key, lookless).darkness == .4, "a brush without its own keeps the slot's");
         // Once: a brush the table removes, saved again, stays.
         slots.library.save(noodly);
         check(LibraryCleanup.run(slots.library, slots.swatches, store) == null && slots.library.contains(noodly), "runs once");

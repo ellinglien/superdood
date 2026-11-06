@@ -1,0 +1,1716 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Superdood</title>
+<!-- Added to the Home Screen it opens without Safari's bars. -->
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Superdood">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+  @font-face { font-family: Ukulele; src: url(fonts/ukulele.ttf); font-weight: 400; }
+  @font-face { font-family: Ukulele; src: url(fonts/ukulele_bold.ttf); font-weight: 700; }
+  @font-face { font-family: Duo; src: url(fonts/ia_writer_duo_regular.ttf); font-weight: 400; }
+  @font-face { font-family: Duo; src: url(fonts/ia_writer_duo_bold.ttf); font-weight: 700; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; color: #000; }
+  body { font-family: Ukulele, Duo, monospace; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+  .at { position: absolute; margin: 0; padding: 0; border: 0; background: none; }
+  button.at { cursor: pointer; }
+  button.at:focus-visible { outline: 2px solid #000; }
+  canvas { display: block; }
+  /* The view stays over the scroller's room (sticky) while the browser scrolls it: its bars and a desktop's wheel. */
+  #scroll { overflow: auto; background: #ddd; touch-action: none; overscroll-behavior: none; }
+  #room { position: relative; }
+  #view { position: sticky; left: 0; top: 0; overflow: hidden; touch-action: none; }
+  #page { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: #fff; image-rendering: auto; }
+  #ring, #over, #sharp { position: absolute; left: 0; top: 0; pointer-events: none; }
+  body.right #column > * > canvas.icon, body.right #column canvas.unflip { transform: scaleX(-1); }
+  #undos { display: flex; z-index: 2; } #undos button { flex: 1; display: flex; align-items: center; justify-content: center; }
+  #line { display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
+  #words { overflow: hidden; text-overflow: ellipsis; }
+  #note { margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
+  /* M2: popups, the Tools page, Brush Lab. Paper, ink, a fine ink edge (Theme.menu); grey only for small words. */
+  button { font: inherit; color: #000; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
+  button:disabled { color: #bbb; cursor: default; }
+  button:disabled canvas { opacity: .3; }
+  .scrim, .sheetscrim { position: fixed; inset: 0; z-index: 20; }
+  .sheetscrim { display: flex; align-items: center; justify-content: center; }
+  .pop, .sheet { position: absolute; background: #fff; border: 1px solid #000; overflow: auto; box-sizing: border-box; }
+  .sheet { position: static; }
+  .pop.across { display: flex; white-space: nowrap; }
+  .pop.across .mrow { padding: 0 14px; }
+  .mrow { display: flex; align-items: center; justify-content: center; width: 100%; box-sizing: border-box; padding: 0 10px; }
+  .marked { box-shadow: inset -6px 0 #fff, inset -10px 0 #000; }
+  .cells { display: grid; }
+  .cell { display: flex; flex-direction: column; align-items: center; box-sizing: border-box; min-width: 0; }
+  .cell .name { width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .split { display: flex; } .split .mrow { flex: 1; }
+  .otitle { padding: 6px 8px; white-space: nowrap; }
+  #cut { position: fixed; inset: 0; z-index: 20; background: rgba(255,255,255,.6); display: flex; align-items: center; justify-content: center; touch-action: none; }
+  #cut[hidden] { display: none; }
+  #cut .sheet { position: static; padding: 24px 28px; display: grid; gap: 10px; max-width: 80vw; text-align: center; }
+  #screen { position: fixed; inset: 0; z-index: 10; background: #fff; overflow: auto; touch-action: pan-y; }
+  #screen .scratch { touch-action: none; display: block; }
+  .bar, .head, .mtop, .actions, .named, .find, .chips, .line, .drow, .hrow, .randomize, .buttons, .step, .mline { display: flex; align-items: center; }
+  .bar .words { display: flex; flex-direction: column; justify-content: center; margin-left: 10px; flex: 1; min-width: 0; }
+  .pagebar { display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; } .pagebar > :first-child { justify-self: start; }
+  .pagebar .words { margin: 0 10px; text-align: center; } .pagebar > :nth-child(3) { justify-self: end; }
+  .bar .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spring, .grow { flex: 1; min-width: 0; }
+  .lb { display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 40px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb.quiet { text-transform: none; letter-spacing: 0; color: #555; padding: 0 8px; min-height: 0; }
+  .lb.boxed { border: 2px solid #000; border-radius: 5px; margin-left: 10px; }
+  .lb.ink { background: #000; color: #fff; justify-content: center; }
+  .lb.ink canvas { filter: invert(1); }
+  .lb.right { margin-left: auto; }
+  .sq { width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+  .small { color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .faint { color: #bbb; }
+  .main { display: flex; box-sizing: border-box; }
+  .main.down { flex-direction: column; } .main.across { flex-direction: row; }
+  .left { display: flex; flex-direction: column; flex: none; }
+  .named { white-space: nowrap; overflow: hidden; }
+  .strip { display: flex; flex-direction: column; flex: none; }
+  .head { position: relative; justify-content: space-between; }
+  .tcard { position: relative; flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: flex-start; }
+  .tname { display: flex; align-items: center; gap: 6px; max-width: 100%; box-sizing: border-box; white-space: nowrap; }
+  .tname span { overflow: hidden; text-overflow: ellipsis; }
+  .tile { align-items: stretch; } .tile .face { box-sizing: border-box; flex: none; } .tile.on .face { background: #000; }
+  .tile .dot { align-self: center; width: 6px; height: 6px; border-radius: 3px; background: #555; flex: none; }
+  .under { position: absolute; left: 0; background: #000; }
+  .library { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+  .chips { flex-wrap: wrap; align-content: flex-start; }
+  .chip { border: 1px solid #000; background: #fff; white-space: nowrap; }
+  .chip.on { background: #000; color: #fff; }
+  .wrap { display: flex; flex-wrap: wrap; gap: 6px; } .wrap .chip { min-height: 44px; padding: 0 12px; border-radius: 22px; }
+  input.search { flex: 1; border: 1px solid #000; outline: none; }
+  .grid { flex: 1; min-height: 0; }
+  .empty { color: #555; text-align: center; padding-top: 40px; }
+  .step .small { margin-left: 12px; }
+  .buttons { gap: 10px; }
+  .lab .band, .band { border: 1px solid #000; box-sizing: border-box; display: flex; flex-direction: column; }
+  .about { display: flex; align-items: flex-start; box-sizing: border-box; }
+  .about .words { overflow: hidden; } .about .small { margin-left: auto; }
+  .rule { height: 1px; background: #000; flex: none; }
+  .labrow { display: flex; flex: 1; min-height: 0; }
+  .column { position: relative; flex: none; display: flex; flex-direction: column; }
+  .right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .trypad { flex: 1; min-height: 0; border: 1px solid #000; }
+  .right .strip { flex: 1; min-height: 0; }
+  .pair { display: flex; flex: none; }
+  .pair > * { flex: 1; min-width: 0; }
+  .module { position: relative; border: 1px solid #000; box-sizing: border-box; display: flex; flex-direction: column; cursor: pointer; overflow: hidden; }
+  .module.picked::after { content: ""; position: absolute; left: 3px; right: 3px; bottom: 0; height: 5px; background: #000; }
+  .mhead { box-sizing: content-box; flex: none; }
+  .lower { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .choice { display: flex; align-items: center; justify-content: center; text-align: center; flex: none; overflow: hidden; }
+  .sample { flex: 1; min-height: 0; width: 100%; }
+  .macro { display: flex; flex-direction: column; flex: none; }
+  .ends { display: flex; justify-content: space-between; padding: 0 4px; } .ends.two { flex-direction: column; } .ends.two span:last-child { text-align: right; }
+  .slider { position: relative; height: 28px; touch-action: none; cursor: pointer; flex: 1; min-width: 0; margin: 0 7px; }
+  .slider b { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: #888; }
+  .slider i { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 7px; background: #888; }
+  .slider.locked i { background: #ccc; }
+  .opencard { border-top: 1px solid #000; padding: 0 8px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
+  .drow { border-bottom: 1px solid #000; box-sizing: border-box; gap: 4px; }
+  .drow.stacked { flex-direction: column; align-items: stretch; }
+  .dlabel { flex: none; text-transform: uppercase; letter-spacing: .04em; overflow-wrap: anywhere; }
+  .dvalue { color: #555; text-align: right; flex: none; white-space: nowrap; }
+  .segments { display: flex; } .seg { border: 1px solid #000; margin-left: -1px; white-space: nowrap; } .seg.on { background: #000; color: #fff; }
+  .menu { border: 1px solid #000; height: 28px; padding: 0 4px; text-align: left; white-space: nowrap; overflow: hidden; }
+  .hhead { text-align: center; color: #555; }
+  .hcell { position: relative; flex: 1; height: 100%; border: 2px solid #000; margin-left: -2px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .hcell i { position: absolute; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(-45deg, #000 0 2px, #fff 2px 5px); }
+  .hcell.full i { background: #000; } .hcell span { position: relative; background: #fff; padding: 0 3px; } .hcell.full span { background: #000; color: #fff; }
+  .flyout { position: absolute; left: 0; right: 0; background: #fff; border: 2px solid #000; padding: 10px 12px 12px; z-index: 2; }
+  .pop.swaps .tiles { display: grid; gap: 1px; background: #000; border-top: 1px solid #000; }
+  .tile { position: relative; background: #fff; display: flex; flex-direction: column; overflow: hidden; }
+  .tile canvas { flex: 1; min-height: 0; width: 100%; } .tile .cap { padding: 2px 6px 6px; }
+  .tile.picked::after { content: ""; position: absolute; left: 3px; right: 3px; bottom: 0; height: 5px; background: #000; }
+  .icon { display: block; flex: none; }
+  /* Something dragged over a place that takes it (live.js dropFiles): what a drop there does. */
+  .drophint { position: fixed; z-index: 40; pointer-events: none; border: 2px dashed #000; box-sizing: border-box; background: rgba(255,255,255,.7); display: flex; align-items: center; justify-content: center; }
+  .drophint span { background: #fff; border: 1px solid #000; padding: 8px 14px; font: 18px Ukulele, Duo, monospace; }
+</style>
+<div id="column" class="at"></div>
+<button id="zoom" class="at"><canvas></canvas></button>
+<div id="undos" class="at"></div>
+<div id="scroll" class="at"><div id="room"><div id="view"><canvas id="page"></canvas><canvas id="sharp"></canvas><canvas id="over"></canvas><canvas id="ring"></canvas></div></div></div>
+<div id="line" class="at"><span id="words"></span><span id="note"></span></div>
+<div id="screen" class="at" hidden></div>
+<!-- While the engine loads (seconds over the Manta's Wi-Fi): the app's loading screen, the owner's drawing of the name
+     (res/drawable-nodpi/splash_drawing.png), till the screen is made or something stops it. -->
+<div id="loading" style="position:fixed;inset:0;z-index:50;background:#fff;display:flex;align-items:center;justify-content:center"><img src="drawable/splash_drawing.png" alt="Superdood" style="max-width:min(90vw,680px);max-height:90vh"></div>
+<!-- The pen's pressure and tilt as the lab reads a pointer (engine.js pointerSample, Brush Studio's: the Pencil's curve,
+     then the Manta's); the app's engine compiled to WebAssembly (web/engine); what every live page shares (live.js). -->
+<script src="engine.js"></script>
+<script src="mbd-engine.wasm-runtime.js"></script><script src="mbd-engine.js"></script><script src="live.js"></script>
+<script type="module">
+// A file dropped where nothing takes it is ignored, not opened in place of the app (the page and its strokes would go).
+addEventListener("dragover", e => e.preventDefault()); addEventListener("drop", e => e.preventDefault());
+// The drawing screen a live page's guest opens (docs/superpowers/specs/2026-10-31-browser-app-design.md, M1): the Manta's
+// column as DrawLayout lays it out (WebEngine.layout: the same Java, compiled to WebAssembly), the host's ten slots, sizes,
+// greys and mirrors (LiveTools, sent by the host before its page), the size slider and grey strip, the eraser, two-finger
+// Undo of your own changes, pinch and pan, the hover ring; strokes drawn by the app's engine as the drawing screen starts
+// them (StrokeStart), sent as live pixels (LiveChange's bytes, live.js). Only the look of each widget is written here.
+const $ = id => document.getElementById(id);
+const loaded = () => $("loading")?.remove();
+addEventListener("error", loaded); addEventListener("unhandledrejection", loaded);  // a stop's note, or the code box, not hidden
+// A note, or with none the live page's status (connected, others there, reconnecting: LivePresence) in its place.
+let status = "";
+const note = text => { $("note").textContent = text || status; };
+if (!window.MBDEngine || !MBDEngine.supported()) { note("This browser can't draw here yet: it needs Safari 18.2, Chrome 119 or Firefox 120."); loaded(); throw new Error("no WebAssembly GC"); }
+// The Manta's address typed alone (Share on Wi-Fi shows it beside its code; only the Manta serves the page at /): no key
+// after a #, so the code is asked for here.
+if (location.pathname === "/" && location.hash.length < 2) {
+  const box = document.createElement("form"), sheet = document.createElement("div"), title = document.createElement("div"),
+    field = document.createElement("input"), join = document.createElement("button");
+  box.id = "cut"; sheet.className = "sheet"; title.textContent = "Code"; join.textContent = "Join";
+  title.style.font = "700 22px Ukulele, sans-serif"; field.style.font = "22px Duo, monospace"; join.style.font = "18px Ukulele, sans-serif";
+  field.style.userSelect = field.style.webkitUserSelect = "text";  // the page's none would keep Safari from typing
+  Object.assign(field, { autocapitalize: "none", autocomplete: "off", spellcheck: false, size: 19, ariaLabel: "Code" });
+  sheet.append(title, field, join); box.append(sheet); document.body.append(box); field.focus();
+  box.onsubmit = e => {
+    e.preventDefault();
+    const code = field.value.toLowerCase().replace(/[^a-z0-9]/g, "");  // the Manta shows it in fives
+    if (code) { location.hash = code; location.reload(); }
+  };
+  loaded(); throw new Error("no code yet");
+}
+const E = await MBDEngine.load("mbd-engine.wasm", "mbd-assets.bin"), T = E.T;
+// Loaded before anything can arrive from the relay (installed at the end, once the page's parts are made).
+const M4module = await import("./m4.js"), BooksModule = await import("./books.js"), StampModule = await import("./stamp.js"), XModule = await import("./extras.js");
+let BK = null, X = null;
+// Who this page is to the relay (LivePresence.ID): 16 random hex digits, new each load, never a name.
+const me = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, "0")).join("");
+// The link's key (after its #) never leaves this page: all that is sent is sealed with it and all heard opened with it
+// (LiveCrypt, as the Manta's); a relay is given only its access hash, which the Manta's own (LiveHost) asks for.
+const crypt = E.crypt(decodeURIComponent(location.hash.slice(1))), key = crypt.access;
+const q16 = t => Math.round(t / 17) * 17;  // the Manta's 16 greys: what a change sends and compares, not what shows
+// A page tone as the screen shows it: the Manta's dots for it as a smooth grey (WebEngine.shade), so a mid grey looks as
+// dark as there and the lightest greys stay faintly visible. Display only: S, what's sent and Undo keep the tones.
+const SHADES = Uint8Array.from({ length: 256 }, (_, t) => T.shade(t)), screenGrey = t => SHADES[t];
+// The owner's drawings are sized in the Manta's pixels (res/drawable, "px"): 1.875 a dp (300 dpi over 160).
+const MANTA_DENSITY = 1.875;
+let dpr = window.devicePixelRatio || 1;
+
+// ---- The page: the app's engine's (P) and its tones as they show (S) ----
+let W = 0, H = 0, P = null, S = null, pageCtx = null;
+// Sharp dry brushes' tiles (showSharp): the grid drawn at, the tiles drawn by key, whether one is on its way.
+const SH = { k: 0, tiles: new Map(), busy: false }, SHARP_TILE = 64;
+const pageCanvas = $("page");
+function newPage(w, h) {
+  if (P) P.free();
+  W = w; H = h; P = E.page(W, H); S = new Uint8Array(W * H).fill(255); SH.tiles.clear();
+  pageCanvas.width = W; pageCanvas.height = H;
+  pageCtx = pageCanvas.getContext("2d", { willReadFrequently: true });
+  pageCtx.fillStyle = "#fff"; pageCtx.fillRect(0, 0, W, H);
+  T.mirrors(P.id); own.length = undone.length = 0; wetSeen = null; undoLook();
+}
+// What the engine changed over rect r (inclusive) into S and onto the canvas in its shades; r back.
+function pull(r) {
+  undoLook();  // the engine's page changed, or may have: Undo and Redo greyed or not
+  if (!r) return r;
+  const x = r[0], y = r[1], w = r[2] - r[0] + 1, h = r[3] - r[1] + 1, t = P.tones(x, y, w, h), img = pageCtx.createImageData(w, h), d = img.data;
+  for (let row = 0; row < h; row++) S.set(t.subarray(row * w, (row + 1) * w), (y + row) * W + x);
+  const v = X ? X.shown(x, y, w, h, t) : t;  // Show Kinds' steps: the screen's alone (extras.js)
+  for (let i = 0; i < t.length; i++) { const g = screenGrey(v[i]); d[4 * i] = d[4 * i + 1] = d[4 * i + 2] = g; d[4 * i + 3] = 255; }
+  pageCtx.putImageData(img, x, y);
+  sharpGone(r);
+  return r;
+}
+const shownRect = (x, y, w, h) => { const g = new Uint8Array(w * h); for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) g[r * w + c] = q16(S[(y + r) * W + x + c]); return g; };
+
+// ---- The host's tools ----
+// The guest's own store (the slots, their sizes and greys, the library, Recent, Hold Opens Full Library), kept in this browser:
+// read into the engine before anything else, what changed written back after each change (WebEngine.keep, kept).
+const STORE = "mbd-store";
+let stored = {};
+try { stored = JSON.parse(localStorage.getItem(STORE) || "{}") || {}; } catch (err) { stored = {}; }
+for (const k in stored) if (typeof stored[k] === "string") T.keep(k, stored[k]);
+function saveStore() {
+  const c = JSON.parse(T.kept()); let any = false;
+  for (const k in c) { any = true; if (c[k] === null) delete stored[k]; else stored[k] = c[k]; }
+  if (any) try { localStorage.setItem(STORE, JSON.stringify(stored)); } catch (err) { /* private browsing: kept for this visit */ }
+}
+let tools = JSON.parse(T.toolsJson()), sel = 0, px = [], dark = [], eraserPx = 31, eraseKinds = 0;
+saveStore();
+// The guest's own bar again after a change of its own (a pick, the Tools page, Brush Lab): every slot as it is now, {@code select} in use.
+function ownTools(select) {
+  const t = JSON.parse(T.toolsJson());
+  tools.slots = t.slots; tools.smudge = t.smudge; tools.fill = t.fill; px = t.slots.map(s => s.px); dark = t.slots.map(s => s.dark);
+  px[C.SMUDGE] = t.smudge.px; dark[C.SMUDGE] = t.smudge.dark; px[C.FILL] = t.fill.px; dark[C.FILL] = t.fill.dark;
+  if (select != null) sel = select;
+  saveStore(); showTools(); arrived = true;
+}
+// The host's tools: the first time, its tool in use too; later (a change mid-session, M4) the guest's own stays in use.
+let hostSeen = false;
+function takeTools(t) {
+  const was = sel;
+  tools = t; sel = t.selected; px = t.slots.map(s => s.px); dark = t.slots.map(s => s.dark); eraserPx = t.eraserPx;
+  px[C.SMUDGE] = t.smudge.px; dark[C.SMUDGE] = t.smudge.dark; px[C.FILL] = t.fill.px; dark[C.FILL] = t.fill.dark;
+  if (hostSeen) sel = was;
+  if (sel === C.STAMP) sel = 0;  // the stamp tool isn't a guest's
+}
+const look = tool => tool === C.ERASER ? [eraserPx, 0] : [px[tool], dark[tool]];
+// The bar's tool's own: a slot's, the smudge tool's (M4) or Fill in's; null for the eraser.
+const slotOf = tool => tool === C.SMUDGE ? tools.smudge : tool === C.FILL ? tools.fill : tool < C.COUNT ? tools.slots[tool] : null;
+// Whether the tool lays a grey of its own (DrawLayout.greys): a slot or Fill in.
+const greysOf = tool => tool < C.COUNT || tool === C.FILL;
+
+// ---- The chrome: DrawLayout's numbers (dp, CSS px) ----
+let L = null, C = null, M4 = null, ST = null;
+const column = $("column");
+const place = (el, x, y, w, h) => Object.assign(el.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
+// A canvas w × h dp drawn at the screen's pixels; its context in dp.
+function sized(canvas, w, h) {
+  canvas.width = Math.max(1, Math.round(w * dpr)); canvas.height = Math.max(1, Math.round(h * dpr));
+  canvas.style.width = w + "px"; canvas.style.height = h + "px";
+  const c = canvas.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); return c;
+}
+// The app's vector drawables (res/drawable) drawn with the canvas's own paths: their sizes in dp. A drawing that is a
+// picture (res/drawable-nodpi: Springy brush's) is drawn as it is, its size in the Manta's pixels.
+const vectors = {};
+function vector(name) {
+  return vectors[name] ??= fetch("drawable/" + name + ".xml").then(r => r.ok ? r.text() : null).then(async text => {
+    if (!text) {
+      const r = await fetch("drawable/" + name + ".png");
+      if (!r.ok) return null;
+      const img = await createImageBitmap(await r.blob());
+      return { img, w: img.width / MANTA_DENSITY, h: img.height / MANTA_DENSITY };
+    }
+    const v = new DOMParser().parseFromString(text, "application/xml").documentElement, size = s => s.endsWith("px") ? parseFloat(s) / MANTA_DENSITY : parseFloat(s);
+    return { w: size(attr(v, "width")), h: size(attr(v, "height")), vw: +attr(v, "viewportWidth"), vh: +attr(v, "viewportHeight"), root: v };
+  }).catch(() => null);
+}
+const attr = (el, k) => el.getAttribute("android:" + k);
+const colour = c => !c || c[0] !== "#" ? "#000" : c.length === 9 ? "#" + c.slice(3) + c.slice(1, 3) : c;
+function drawVector(ctx, v, x, y, w, h) {
+  if (v.img) return ctx.drawImage(v.img, x, y, w, h);
+  ctx.save(); ctx.translate(x, y); ctx.scale(w / v.vw, h / v.vh);
+  (function walk(el) {
+    for (const c of el.children) {
+      if (c.tagName === "group") {
+        const n = k => +(attr(c, k) || 0), px = n("pivotX"), py = n("pivotY"), sx = attr(c, "scaleX") ? n("scaleX") : 1, sy = attr(c, "scaleY") ? n("scaleY") : 1;
+        ctx.save(); ctx.translate(n("translateX") + px, n("translateY") + py); ctx.rotate(n("rotation") * Math.PI / 180); ctx.scale(sx, sy); ctx.translate(-px, -py);
+        walk(c); ctx.restore();
+      } else if (c.tagName === "path") {
+        const p = new Path2D(attr(c, "pathData"));
+        if (attr(c, "fillColor")) { ctx.fillStyle = colour(attr(c, "fillColor")); ctx.fill(p, attr(c, "fillType") === "evenOdd" ? "evenodd" : "nonzero"); }
+        if (attr(c, "strokeColor")) {
+          ctx.strokeStyle = colour(attr(c, "strokeColor")); ctx.lineWidth = +(attr(c, "strokeWidth") || 1);
+          ctx.lineCap = (attr(c, "strokeLineCap") || "butt").toLowerCase(); ctx.lineJoin = (attr(c, "strokeLineJoin") || "miter").toLowerCase(); ctx.stroke(p);
+        }
+      }
+    }
+  })(v.root);
+  ctx.restore();
+}
+// A drawing on a tray row, as InkWashBar.drawing lays it: never enlarged, trim of its width cut at its handle's end, against the screen's edge, centred down.
+function drawing(ctx, v, w, h, trim) {
+  const cut = v.w * trim, scale = Math.min(1, Math.min(w / (v.w - cut), h / v.h)), dw = v.w * scale, dh = v.h * scale;
+  drawVector(ctx, v, -cut * scale, (h - dh) / 2, dw, dh);
+}
+
+const rows = [];  // the tray's buttons, then the eraser's: {el, tool}
+function arrange() {
+  dpr = window.devicePixelRatio || 1;
+  L = JSON.parse(T.layout(innerWidth, innerHeight)); C = L.c;
+  const top = part => L.tops[L.parts.indexOf(part)];
+  column.replaceChildren(); rows.length = 0;
+  // Left-Handed (M4): the column on the right, mirrored, its drawings too (InkWashBar.arrange); the page and its bars beside it.
+  const R = T.columnRight(), across = (el, x, y, w, h) => place(el, R ? innerWidth - x - w : x, y, w, h);
+  document.body.classList.toggle("right", R);
+  place(column, R ? innerWidth - L.side : 0, 0, L.side, L.columnHeight);
+  column.style.transform = R ? "scaleX(-1)" : "";
+  // A tray row reaches over the column's margin to the screen's edge; its picture the row less its side bar's room.
+  const rowWidth = 2 * Math.floor((L.inner + L.edge) / 2);
+  const addRow = (tool, y) => {
+    const b = document.createElement("button"); b.className = "at"; place(b, 0, y, rowWidth, L.slot);
+    b.appendChild(document.createElement("canvas")); column.appendChild(b);
+    b.onclick = () => choose(tool);
+    // A long press, as on the Manta (InkWashBar): a slot's opens the tool picker beside it, the eraser's what it takes, Fill in's nothing.
+    holdable(b, () => tool === C.ERASER ? eraserMenu(b) : tool === C.FILL ? null : slotHeld(tool, b));
+    rows.push({ el: b, tool }); return b;
+  };
+  for (let i = 0; i < L.trays; i++) addRow(i, top("TRAY") + i * L.slot);
+  addRow(C.FILL, top("TOOLS"));
+  addRow(C.SMUDGE, top("TOOLS") + L.slot);
+  addRow(C.ERASER, top("TOOLS") + 2 * L.slot);
+  // The readout over the picker box (SwatchBar), the column's inside, its axis.
+  const readout = document.createElement("canvas"); readout.className = "at"; readout.id = "readout";
+  place(readout, L.edge, top("FACES"), 2 * L.half, C.READOUT_ROWS * L.face); column.appendChild(readout);
+  const box = document.createElement("canvas"); box.className = "at"; box.id = "box"; box.setAttribute("role", "slider");
+  place(box, L.edge, top("FACES") + C.READOUT_ROWS * L.face, 2 * L.half, L.box); column.appendChild(box);
+  boxInput(box);
+  // The page bar's Zoom, at the end away from the column; the canvas under the bar; the brush line along the foot.
+  across($("zoom"), L.side + L.strip[0], 0, L.zoomButton, L.pageBar - C.PAGE_RULE);
+  across(undos, L.side, 0, 2 * C.UNDO_BUTTON, L.pageBar - C.PAGE_RULE);
+  for (const b of undos.children) { b.title = L.w[b.dataset.undo]; b.setAttribute("aria-label", b.title); }
+  undoLook();
+  across(scroller, L.side, L.pageBar, L.pageWidth, L.canvasHeight);
+  across($("line"), L.lineStart, innerHeight - L.footHeight, innerWidth - L.lineStart, C.BRUSH_LINE);
+  $("line").style.direction = R ? "rtl" : "";
+  if (M4) M4.arranged(top, across);
+  if (X) X.arranged(top);
+  Object.assign($("line").style, { font: `400 ${C.CAPTION}px Ukulele, Duo, monospace`, paddingLeft: C.LINE_PAD + "px", boxSizing: "border-box" });
+  $("words").style.maxWidth = C.LINE_NAME + "px";
+  fitView(); showTools();
+  if (BK) BK.arranged();
+}
+// Every row, the readout, the box and the line as the tools are now.
+function showTools() {
+  for (const r of rows) showRow(r);
+  showFaces();
+  const s = slotOf(sel);
+  $("words").textContent = s ? s.words : L.w.eraser;
+  $("line").setAttribute("aria-label", s ? s.said : L.w.eraser);
+}
+async function showRow(r) {
+  const { el, tool } = r, slot = slotOf(tool), w = el.offsetWidth, h = L.slot, inUse = tool === sel && !(M4 && M4.covers());
+  el.setAttribute("aria-label", slot ? slot.name : L.w.eraser); el.setAttribute("aria-pressed", String(tool === sel));
+  const pw = w - (C.SIDE_BAR + C.BAR_GAP), ph = h - 2 * C.TRAY_TOP, name = slot ? slot.drawing : "tool_eraser";
+  const v = name && await vector(name), shows = [tool, slot && slot.name, slot && slot.words, name, w, h, inUse, !!v].join(" ");
+  if (r.shows === shows) return;
+  r.shows = shows;
+  const ctx = sized(el.firstChild, w, h);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+  ctx.save(); ctx.translate(0, C.TRAY_TOP); ctx.beginPath(); ctx.rect(0, 0, pw, ph); ctx.clip();
+  if (v) drawing(ctx, v, pw, ph, slot && greysOf(tool) ? C.TIP_TRIM : 0);
+  else if (slot && pw > 0 && ph > 0) {  // none while the column is hidden (Zen Mode): no row to draw
+    // Its stroke lying across the row (WildSample.slotTray), at the screen's pixels.
+    const tw = Math.round(pw * dpr), th = Math.round(ph * dpr), argb = new Int32Array(T.tray(tool, tw, th)), img = new ImageData(tw, th);
+    for (let i = 0; i < argb.length; i++) { const c = argb[i], a = c >>> 24; img.data[4 * i] = c >> 16 & 255; img.data[4 * i + 1] = c >> 8 & 255; img.data[4 * i + 2] = c & 255; img.data[4 * i + 3] = a; }
+    const off = new OffscreenCanvas(tw, th); off.getContext("2d").putImageData(img, 0, 0);
+    ctx.drawImage(off, 0, 0, pw, ph);
+  }
+  ctx.restore();
+  // The tool in use: an ink bar down the row's page side, its height less the inset (SlotTile.sideBar).
+  ctx.fillStyle = "#000";
+  if (inUse) ctx.fillRect(w - C.SIDE_BAR, C.BAR_INSET, C.SIDE_BAR, h - 2 * C.BAR_INSET);
+}
+function choose(tool) {
+  if (live) return;
+  const tap = T.tap(sel, tool);
+  // A tool chosen puts down the Lasso, the Dropper, Shapes and Text (M4), as on the Manta (InkWashBar.selectTool).
+  if (M4) M4.chose();
+  if (tap !== 0) return showTools();
+  sel = tool; showTools(); arrived = true;
+  if (X) X.chose(tool);
+}
+
+// ---- The size slider and the grey strip (the picker box, PickerBox), the readout (SwatchReadout) ----
+// A box B: the drawing screen's, upright in the column (SCREEN_BOX), or Brush Lab's, the same box turned a quarter to lie
+// across (extras.js): its tool, its size (w across and tall up, upright; its squares' side), its look, the pen's point
+// on it upright, what a lift sets, its long press (none in Brush Lab).
+let boxDrag = null;  // {B, shade, value} while the pen is on a box
+const SCREEN_BOX = {
+  get tool() { return sel; }, get w() { return 2 * L.half; }, get tall() { return L.box; }, get side() { return L.faceSide; },
+  look: () => look(sel), canvas: () => $("box"), refused: () => !!live,
+  // The column mirrored (Left-Handed): x from the box's own left.
+  at(box, e) { const r = box.getBoundingClientRect(), x = e.clientX - r.left; return [document.body.classList.contains("right") ? r.width - x : x, e.clientY - r.top]; },
+  // Set on the lift, the tool's own (ToolSwatches.useSize, useGrey).
+  set(d) {
+    if (d.shade) dark[sel] = d.value;
+    else if (sel === C.ERASER) eraserPx = T.sizeAt(sel, d.value); else px[sel] = T.sizeAt(sel, d.value);
+    keepLook();
+    arrived = true;
+  },
+  show: () => showFaces(), hold: box => opacityMenu(box)
+};
+function boxGeometry(B = SCREEN_BOX) {
+  const side = B.side, half = B.w / 2, g = C.FACE_GAP / 2, left = half - g - side, right = half + g + side;
+  return { side, left, right, top: T.sliderY(1, B.tall), foot: T.sliderY(0, B.tall), inset: C.PAIR_PAD, length: B.tall - C.FACE_GAP, width: 2 * (side + g) };
+}
+async function showFaces() {
+  const [size, dk] = look(sel);
+  readoutDot($("readout"), 2 * L.half, C.READOUT_ROWS * L.face, sel, size, dk);
+  await drawBox(SCREEN_BOX);
+}
+// The readout: one dot of the size at its true size (page px at 100%, a device pixel each) in the grey it lays.
+function readoutDot(rd, rw, rh, tool, size, dk) {
+  const rc = sized(rd, rw, rh);
+  rc.fillStyle = "#fff"; rc.fillRect(0, 0, rw, rh);
+  const room = Math.max(1, Math.min(rw, rh) - C.FACE_GAP), r = Math.max(.8, Math.min(size / dpr, room) / 2), tone = greysOf(tool) ? T.swatch(tool, dk) : -1;
+  rc.beginPath(); rc.arc(rw / 2, rh / 2, r, 0, 2 * Math.PI);
+  if (tone >= 0) { rc.fillStyle = `rgb(${screenGrey(tone)},${screenGrey(tone)},${screenGrey(tone)})`; rc.fill(); }
+  if (tone < 0 || tone > 235 || 2 * r < 6) { rc.strokeStyle = "#000"; rc.lineWidth = 1; rc.stroke(); }
+  rd.setAttribute("aria-label", T.sizeSaid(size));
+}
+// The box: the strip its lower-left triangle (the panel's dots, ShadeStrip), the slider's outline its upper-right one.
+async function drawBox(B) {
+  const [size, dk] = B.look(), greys = greysOf(B.tool), drag = boxDrag && boxDrag.B === B ? boxDrag : null;
+  const bx = B.canvas(), G = boxGeometry(B), c = sized(bx, B.w, B.tall), [shade, wedge] = await Promise.all([vector("shape_box_shade"), vector("shape_box_size")]);
+  c.fillStyle = "#fff"; c.fillRect(0, 0, B.w, B.tall);
+  const lenPx = Math.round(G.length * dpr), widPx = Math.round(G.width * dpr), end = T.stripEnd(lenPx, Math.round(C.SHADE_END * dpr));
+  if (greys && shade && lenPx > 0 && widPx > 0) {
+    const pixels = new Int32Array(T.stripPixels(lenPx, widPx, end)), mask = new OffscreenCanvas(widPx, lenPx), mc = mask.getContext("2d");
+    drawVector(mc, shade, 0, 0, widPx, lenPx);
+    const alpha = mc.getImageData(0, 0, widPx, lenPx).data, img = new ImageData(widPx, lenPx);
+    // Laid along x black to white, stood up: white at the top, black at the foot.
+    for (let row = 0; row < lenPx; row++) for (let col = 0; col < widPx; col++) {
+      const o = 4 * (row * widPx + col), v = alpha[o + 3] === 0 ? 255 : pixels[col * lenPx + lenPx - 1 - row] & 255;
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = v; img.data[o + 3] = 255;
+    }
+    const off = new OffscreenCanvas(widPx, lenPx); off.getContext("2d").putImageData(img, 0, 0);
+    c.drawImage(off, G.left, G.inset, G.width, G.length);
+    const at = G.inset + G.length - T.stripMark(drag && drag.shade ? drag.value : dk, lenPx, end) / dpr;
+    c.fillStyle = "#000"; c.fillRect(G.left - C.FACE_MARK_GAP - C.FACE_MARK, at - C.STRIP_MARK / 2, C.FACE_MARK, C.STRIP_MARK);
+  }
+  if (wedge) drawVector(c, wedge, G.left, G.top, G.right - G.left, G.foot - G.top);
+  const t = drag && !drag.shade ? drag.value : T.position(size), ty = T.sliderY(t, B.tall);
+  c.fillStyle = "#000"; c.fillRect(G.right + C.FACE_MARK_GAP, Math.max(0, ty - C.STRIP_MARK / 2), C.FACE_MARK, C.STRIP_MARK);
+  bx.setAttribute("aria-label", T.sizeSaid(size) + (greys ? ", " + T.greyWords(B.tool, dk) : ""));
+}
+function boxInput(box, B = SCREEN_BOX) {
+  const value = (d, y) => { const G = boxGeometry(B); return d.shade ? T.shadeAt(y * dpr, G.inset * dpr, Math.round(G.length * dpr), T.stripEnd(Math.round(G.length * dpr), Math.round(C.SHADE_END * dpr))) : T.sliderAt(y, B.tall); };
+  const shadeAt = e => { const [x, y] = B.at(box, e), G = boxGeometry(B); return greysOf(B.tool) && T.boxShade(x, y, G.left, G.top, G.right, G.foot); };
+  box.addEventListener("pointerdown", e => {
+    if (B.refused()) return;
+    boxDrag = { B, id: e.pointerId, shade: shadeAt(e) };
+    boxDrag.value = value(boxDrag, B.at(box, e)[1]);
+    try { box.setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ }
+    B.show();
+  });
+  box.addEventListener("pointermove", e => { if (!boxDrag || e.pointerId !== boxDrag.id) return; boxDrag.value = value(boxDrag, B.at(box, e)[1]); B.show(); });
+  const lift = e => {
+    if (!boxDrag || e.pointerId !== boxDrag.id) return;
+    const d = boxDrag; boxDrag = null;
+    // Set on the lift; a cancel keeps what was.
+    if (e.type === "pointerup") B.set(d);
+    B.show();
+  };
+  box.addEventListener("pointerup", lift); box.addEventListener("pointercancel", lift);
+  // The grey strip's long press (GreyStrip's hold): Opacity beside it; its lift picks nothing.
+  if (B.hold) holdable(box, () => { const d = boxDrag; boxDrag = null; B.show(); if (d && d.shade) B.hold(box); }, shadeAt);
+}
+// The slot's size and grey kept as the guest's own (ToolSwatches through WebEngine.look); the eraser's stays this visit's.
+function keepLook() { if (sel !== C.ERASER) { T.look(sel, px[sel], dark[sel]); saveStore(); } }
+
+// ---- The view: CanvasViewport through the same Java, in device pixels (so 100% is a page pixel each) ----
+let V = { x: 0, y: 0, s: 1, percent: 100 };
+// A desktop (a mouse or a trackpad, not a finger): a window wider than tall shows the page across its width (CanvasViewport.wide).
+T.viewWide(matchMedia("(pointer: fine)").matches);
+const scroller = $("scroll"), room = $("room");
+// The view: the scroller's room less its scroll bars (a desktop's), fitted again when they come or go.
+function fitView() {
+  const w = scroller.clientWidth, h = scroller.clientHeight;
+  place(view, 0, 0, w, h); for (const id of ["ring", "over", "sharp"]) sized($(id), w, h);
+  T.view(w * dpr, h * dpr, W, H);
+  showView();
+}
+new ResizeObserver(() => { if (L && (view.offsetWidth !== scroller.clientWidth || view.offsetHeight !== scroller.clientHeight)) fitView(); }).observe(scroller);
+// The page where the view puts it; the scroller's room the page's size and its scroll where the page is (not when the
+// scroll moved it: scrolled).
+function showView(scrolled) {
+  const v = T.viewport(); V = { x: v[0], y: v[1], s: v[2], percent: v[3] };
+  pageCanvas.style.transform = `translate(${V.x / dpr}px, ${V.y / dpr}px) scale(${V.s / dpr})`;
+  if (!scrolled) {
+    room.style.width = Math.max(view.offsetWidth, Math.floor(W * V.s / dpr)) + "px"; room.style.height = Math.max(view.offsetHeight, Math.floor(H * V.s / dpr)) + "px";
+    scroller.scrollLeft = Math.max(0, -V.x / dpr); scroller.scrollTop = Math.max(0, -V.y / dpr);
+  }
+  showSharp();
+  showZoom();
+  if (M4) M4.viewChanged();
+  if (ST) ST.viewChanged();
+}
+// ---- Sharp dry brushes when zoomed (SharpView through WebEngine, as on the Manta) ----
+// The page's 64 px tiles that hold kept strokes, drawn finer (WebEngine.sharpTile) over its pixels, a tile at a time
+// while nothing is drawn; the pixels meanwhile. A tile goes where the page changes (pull) and is drawn again.
+function sharpGone(r) {
+  if (!r || !SH.tiles.size) return;
+  for (const [key, t] of SH.tiles) if (t.x <= r[2] && t.x + SHARP_TILE > r[0] && t.y <= r[3] && t.y + SHARP_TILE > r[1]) SH.tiles.delete(key);
+  showSharp();
+}
+// The tiles the view shows, [tx0, ty0, tx1, ty1] inclusive.
+function sharpSeen() {
+  const vw = view.offsetWidth * dpr, vh = view.offsetHeight * dpr, at = v => Math.floor(v / SHARP_TILE);
+  return [Math.max(0, at(-V.x / V.s)), Math.max(0, at(-V.y / V.s)), Math.min(at((W - 1)), at((vw - V.x) / V.s)), Math.min(at((H - 1)), at((vh - V.y) / V.s))];
+}
+function showSharp() {
+  const cv = $("sharp"), c = cv.getContext("2d");
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
+  // Not with Show Kinds' steps (the page shows other greys then); no new tile while a stroke is drawn.
+  SH.k = !P || T.kinds(P.id) ? 0 : T.sharpStep(V.s);
+  if (!SH.k) return;
+  c.imageSmoothingEnabled = false;
+  const [tx0, ty0, tx1, ty1] = sharpSeen();
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const t = SH.tiles.get(SH.k + "," + tx + "," + ty);
+    if (t && t.img) c.drawImage(t.img, V.x + t.x * V.s, V.y + t.y * V.s, SHARP_TILE * V.s, SHARP_TILE * V.s);
+  }
+  if (!SH.busy) { SH.busy = true; setTimeout(sharpNext, 0); }
+}
+// The next tile the view shows not drawn yet, drawn and shown.
+function sharpNext() {
+  SH.busy = false;
+  if (!SH.k || live || !P) return;
+  const k = SH.k, [tx0, ty0, tx1, ty1] = sharpSeen();
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const key = k + "," + tx + "," + ty;
+    if (SH.tiles.has(key)) continue;
+    const g = P.sharpTile(k, tx, ty), side = SHARP_TILE * k;
+    let img = null;
+    if (g.length) {
+      img = new OffscreenCanvas(side, side);
+      const ic = img.getContext("2d"), d = ic.createImageData(side, side);
+      for (let i = 0; i < side * side; i++) { const v = g[i]; if (v < 0) continue; const s = screenGrey(v); d.data[4 * i] = d.data[4 * i + 1] = d.data[4 * i + 2] = s; d.data[4 * i + 3] = 255; }
+      ic.putImageData(d, 0, 0);
+    }
+    SH.tiles.set(key, { x: tx * SHARP_TILE, y: ty * SHARP_TILE, img });
+    if (img) showSharp();
+    else if (!SH.busy) { SH.busy = true; setTimeout(sharpNext, 0); }
+    return;
+  }
+}
+// Zoom's percentage, centred, with no padlock (PinchPan.describe): in the browser two fingers always pinch and pan, as a
+// finger is told from the pen, which stops them while down or near; a two-finger tap still undoes.
+function showZoom() {
+  const b = $("zoom"), w = L.zoomButton, h = L.pageBar - C.PAGE_RULE, c = sized(b.firstChild, w, h);
+  c.fillStyle = "#fff"; c.fillRect(0, 0, w, h);
+  c.font = `700 ${C.CAPTION}px Ukulele, Duo, monospace`; c.textBaseline = "middle"; c.textAlign = "center"; c.fillStyle = "#000";
+  c.fillText(T.zoomCaption(V.percent), w / 2, h / 2);
+  b.setAttribute("aria-label", T.zoomSaid(V.percent));
+}
+// A tap on Zoom: the fit again (CanvasViewport.whole: the whole page, a desktop's width).
+function wholePage() { T.viewReset(); T.view(view.offsetWidth * dpr, view.offsetHeight * dpr, W, H); showView(); }
+$("zoom").onclick = wholePage;
+// Undo and Redo on the page bar at the column's end: the browser's alone (a mouse has no two- or three-finger tap; the
+// Manta keeps its taps and no buttons), the same undo() and redo() as the taps and the keyboard, greyed with nothing to do.
+const undos = $("undos");
+for (const [name, act] of [["undo", () => undo()], ["redo", () => redo()]]) {
+  const b = el("button"); b.dataset.undo = name; b.append(icon("ic_ph_" + name, 20)); b.onclick = act; undos.append(b);
+}
+function undoLook() {
+  if (!L) return;
+  const [u, r] = undos.children;
+  u.disabled = !own.length; r.disabled = !undone.length;
+}
+const view = $("view");
+// A pointer at the page's pixels.
+function pagePoint(e) { const r = view.getBoundingClientRect(); return [((e.clientX - r.left) * dpr - V.x) / V.s, ((e.clientY - r.top) * dpr - V.y) / V.s]; }
+
+// ---- Strokes: drawn by the engine as the pen moves, sent as it goes (a part every PART_MS) and at the lift ----
+let live = null, penUntil = 0;  // the stroke being drawn; until when the pen counts as near (a finger then never draws)
+const drawMs = [], strokeLog = [];
+const union = (a, b) => !b ? a : !a ? b.slice() : [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+// Whether the stroke started.
+function begin(e, finger) {
+  // One finger draws with Finger Action's tool (the menu's Finger row, M4), the pen with the tool in use.
+  const tool = finger ? T.fingerTool(sel) : sel, [size, dk] = look(tool);
+  if (X && X.refuses(tool, size, dk, eraseKinds)) return false;  // Show Kinds: nothing drawn, or erased, unseen
+  wetFlush();
+  const st = P.pen(tool, size, dk, tool === C.ERASER ? eraseKinds : 0, finger);
+  live = { st, id: e.pointerId, box: null, path: [], t0: e.timeStamp, found: S.slice(), finger, start: e.timeStamp, moved: false, tool, kinds: T.kindOf(tool, size, dk), part: null, partAt: performance.now(), parts: 0, sent: null };
+  hideRing();
+  if (M4) M4.began(live);
+  return true;
+}
+function sampleOf(e) {
+  const [x, y] = pagePoint(e);
+  live.path.push(x, y, e.timeStamp - live.t0);
+  return live.finger ? [x, y, C.FINGER_TRAVEL, e.timeStamp, NaN, NaN] : pointerSample(e, live, x, y);
+}
+function add(events) {
+  if (live.snapped) return;  // Hold to Snap drew the clean shape: the pen's lift finishes it
+  const t = performance.now(), samples = events.map(sampleOf), r = pull(live.st.add(samples));
+  if (M4) M4.sampled(samples);
+  if (r) { live.box = union(live.box, r); live.part = union(live.part, r); }
+  // Not while a send is on its way: the next part takes in all since (a slow link sends fewer, larger parts).
+  if (live.part && !posting && performance.now() - live.partAt >= PART_MS) sendPart(live.part);
+  drawMs.push(performance.now() - t);
+}
+// What the stroke changed over b since its last part goes out, a part with no path: the others lay it at once, so the
+// stroke draws itself on there as it is drawn. Its parts are one Undo step everywhere (Live.encode's joins).
+const PART_MS = 80;
+function sendPart(b) {
+  live.part = null; live.partAt = performance.now();
+  live.sent ??= live.found.slice();
+  if (send(b, [], live.sent, live.parts ? 2 : 1, live.kinds)) live.parts++;
+  const x = Math.max(0, b[0]), y = Math.max(0, b[1]);
+  seen(x, y, Math.min(W - 1, b[2]) - x + 1, Math.min(H - 1, b[3]) - y + 1, live.sent);
+}
+function lift() {
+  const t = performance.now(), r = pull(live.st.end());
+  if (r) live.box = union(live.box, r);
+  const { box, path, found, parts, kinds } = live, ms = performance.now() - t;
+  // Sent in parts: the last over the whole stroke (Hold to Snap redraws it), and Undo takes back the whole stroke.
+  if (box && parts) { sendPart(box); const a = area(box, found); if (a) keep(a); }
+  live = null; strokeLog.push({ lift: ms }); showSharp();
+  if (M4) M4.lifted();
+  if (box && !parts) send(box, path, found, 0, kinds);
+  wetStart(); waiting.splice(0).forEach(go => go());
+}
+// A finger's stroke taken back (a second finger, the pen, a palm): finished, then the engine's own Undo; never sent, or
+// taken back where its parts went.
+function cancel() {
+  pull(live.st.end()); pull(P.undo());
+  if (live.parts) sendPart(live.box);
+  live = null; wetStart(); waiting.splice(0).forEach(go => go()); showSharp();
+}
+// The box b on the page and what it showed there when the page was found: {x, y, w, h, before}; null off the page.
+function area(b, found) {
+  const x = Math.max(0, b[0]), y = Math.max(0, b[1]), w = Math.min(W - 1, b[2]) - x + 1, h = Math.min(H - 1, b[3]) - y + 1;
+  if (w <= 0 || h <= 0) return null;
+  const before = new Uint8Array(w * h);
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) before[r * w + c] = q16(found[(y + r) * W + x + c]);
+  return { x, y, w, h, before };
+}
+// An own change, for Undo.
+function keep(a) { own.push({ ...a, after: shownRect(a.x, a.y, a.w, a.h) }); if (own.length > Live.MOST_OWN) own.shift(); undone.length = 0; undoLook(); }
+// What the stroke changed goes out: as ink, or set (an Undo's) when it lightens (the eraser, a lift). part: 1, a stroke's
+// first part sent while it is drawn, 2 a later one (kept for Undo at the lift, whole); kinds, its marks' kind (the
+// others lay them on its plane, so their Show Kinds fades them). Whether anything went.
+function send(b, path, found, part, kinds) {
+  const a = area(b, found);
+  if (!a) return false;
+  const { x, y, w, h, before } = a, { greys, lighter, any } = Live.changed(x, y, w, h, W, S, found, before);
+  if (!any) return false;
+  if (!part) keep(a);
+  post(Live.encode(x, y, w, h, greys, path, lighter, part === 2, kinds), w, h);
+  return true;
+}
+const liveLog = [];
+// One at a time, in order: a stroke's parts arrive as sent (a later one joins the one before it). One that doesn't
+// reach the relay (the Wi-Fi gone, the Manta asleep) waits, and so do the rest, and goes again once the relay is back
+// with the host on it (the Manta hears only what comes while it listens); a relay refusing it lets it go.
+// unsent: those not yet taken, oldest first. The page starting over (listen) loses them: each is laid again as it comes
+// back from the relay, in the relay's order (echoes: the sealed bodies, as the relay passes them on), not skipped.
+let outgoing = Promise.resolve(), posting = 0;
+const unsent = [], echoes = new Set();
+function post(raw, w, h) {
+  const u = { raw }; unsent.push(u); posting++;
+  return outgoing = outgoing.then(() => postNow(u, w, h)).catch(() => say("Couldn't send a mark")).finally(() => { unsent.splice(unsent.indexOf(u), 1); posting--; });
+}
+const sendable = () => presence.connected && presence.names !== null && !(hostSeen && T.liveCut(status));  // the relay has said who listens
+const base64 = b => { let s = ""; for (let i = 0; i < b.length; i += 32768) s += String.fromCharCode.apply(null, b.subarray(i, i + 32768)); return btoa(s); };
+async function postNow(u, w, h) {
+  const deflated = await Live.deflate(u.raw), body = crypt.seal(deflated);
+  u.sealed = base64(body);
+  if (u.again) echoes.add(u.sealed);
+  for (;;) {
+    if (sendable()) {
+      const started = performance.now();
+      try {
+        const a = await fetch("send?key=" + key + "&from=" + me, { method: "POST", body, signal: AbortSignal.timeout && AbortSignal.timeout(10000) });
+        if (!a.ok) { say("Couldn't send a mark"); return; }
+        liveLog.push({ sent: +await a.text(), at: Date.now(), w, h, bytes: deflated.length, ms: performance.now() - started });
+        return;
+      } catch (err) { /* not reached: again */ }
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+// Undo: this browser's own changes only, newest first, where nothing was drawn over them since (as the Manta's live
+// Undo, LiveOwn); sent as set. Redo puts back what this browser's Undo took, where nothing was drawn over that since:
+// the Undo's own change taken back the same way, sent as ink, set when it lightens. A new own change clears it (keep);
+// others' don't.
+const own = [], undone = [];
+function undo() {
+  if (live) return;
+  wetFlush();
+  const sent = takeBack(own, undone, true); undoLook(); return sent;
+}
+function redo() {
+  if (live) return;
+  wetFlush();
+  const sent = takeBack(undone, own, false); undoLook(); return sent;
+}
+// The newest of from still on the page taken back, as one change kept on to; sent (set: an Undo's).
+function takeBack(from, to, set) {
+  while (from.length) {
+    const o = from.pop(), was = shownRect(o.x, o.y, o.w, o.h), now = was.slice(), greys = Live.takeBack(o, now);
+    if (greys.every(g => g === 255)) continue;
+    pull(P.picture(o.x, o.y, o.w, o.h, now)); seen(o.x, o.y, o.w, o.h);
+    to.push({ x: o.x, y: o.y, w: o.w, h: o.h, before: was, after: shownRect(o.x, o.y, o.w, o.h) });
+    if (to.length > Live.MOST_OWN) to.shift();
+    return post(Live.encode(o.x, o.y, o.w, o.h, greys, [], set || greys.some((g, i) => g !== 255 && g > was[i])), o.w, o.h);
+  }
+}
+
+// Wet paint after the lift, ten ticks a second as on the Manta (DryingTicker.TICK_MS) while no pen is down; what it
+// changed goes out every C.LIVE_TICKS_MS (LiveChange.TICKS_MS, as the Manta sends its own) and when it rests.
+const TICK_MS = 100;
+let wetSeen = null, wetBox = null, wetSent = 0, wetTicking = false;
+function wetStart() {
+  if (!P.settling || wetTicking) return;
+  wetTicking = true; wetSeen ??= S.slice(); setTimeout(wetTick, TICK_MS);
+}
+function wetTick() {
+  if (live) { wetTicking = false; return; }
+  const hurry = X && X.hurrying(), d = pull(hurry ? X.hurryTick() : P.tick()), more = hurry || P.settling;
+  if (d) wetBox = union(wetBox, d);
+  if (!more || performance.now() - wetSent > C.LIVE_TICKS_MS) wetFlush();
+  if (more) setTimeout(wetTick, X && X.hurrying() ? 0 : TICK_MS); else wetTicking = false;
+  if (X) X.wetChanged();
+}
+function wetFlush() {
+  if (!wetBox) return;
+  const b = wetBox; wetBox = null; wetSent = performance.now();
+  send(b, [], wetSeen, 0, 2);  // wet paint's own moves: Paint (ToneDocument.KIND_PAINT)
+  seen(b[0], b[1], b[2] - b[0] + 1, b[3] - b[1] + 1);
+}
+// What the page shows now over a rect, seen by wet paint's next send (or a stroke's next part, into).
+function seen(x, y, w, h, into = wetSeen) { if (into) for (let r = y; r < y + h; r++) into.set(S.subarray(r * W + x, r * W + x + w), r * W + x); }
+
+// ---- The pen and the mouse; one finger, two and three (MultiFingerTap, PinchPan, FingerTool: the same Java) ----
+const touches = new Map();  // id → {x, y, width} in view px (device), dp across
+let fingerTool = null;      // {id, x, y, refused, t} while one finger may draw
+const fingerEvent = (action, e) => {
+  const ids = [...touches.keys()], pts = [...touches.values()];
+  return T.fingers(action, e.timeStamp, new Int32Array(ids), new Float64Array(pts.map(p => p.x)), new Float64Array(pts.map(p => p.y)), C.PINCH_SLOP * dpr);
+};
+// A touch at the view's device pixels (the pinch's and the taps' units).
+const viewPoint = e => { const r = view.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; };
+const widest = () => Math.max(0, ...[...touches.values()].map(p => p.width));
+function touchDown(e) {
+  const first = touches.size === 0;
+  const [vx, vy] = viewPoint(e);
+  touches.set(e.pointerId, { x: vx, y: vy, width: Math.max(e.width || 0, e.height || 0) });
+  // Two and three fingers tap; the pen near or down, they don't.
+  if (live && !live.finger || performance.now() < penUntil) T.fingersReset();
+  else if (fingerEvent(first ? 0 : 5, e)) { /* a tap ends at the last lift */ }
+  if (first) {
+    fingerTool = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, refused: T.fingerRefused(T.fingerTool(sel), true, !!live || performance.now() < penUntil, widest()) };
+    return;
+  }
+  // Another finger: the first finger's stroke taken back; two fingers may pinch, unless the pen is down or near (a palm).
+  if (live && live.finger && T.fingerCancels(true, true, widest(), true)) cancel();
+  if (fingerTool) fingerTool.refused = true;
+  if (touches.size === 2 && !T.pinchTracking() && !(live && !live.finger) && performance.now() >= penUntil) {
+    const [a, b] = [...touches.entries()];
+    T.pinchLand(false, a[0], a[1].x, a[1].y, b[0], b[1].x, b[1].y, C.LEAST_SPAN * dpr);
+  } else if (touches.size > 2 && !T.pinchMoving()) T.pinchEnd();  // a third finger before they moved: a three-finger tap
+}
+function touchMove(e) {
+  const p = touches.get(e.pointerId); if (!p) return;
+  [p.x, p.y] = viewPoint(e);
+  p.width = Math.max(p.width, e.width || 0, e.height || 0);
+  fingerEvent(2, e);
+  if (T.pinchTracking()) {
+    const a = touches.get(T.pinchFirst()), b = touches.get(T.pinchSecond());
+    if (a && b) {
+      if (!T.pinchMoving() && T.pinchStarts(a.x, a.y, b.x, b.y, C.PINCH_SLOP * dpr)) T.fingersReset();
+      if (T.pinchMoving()) {
+        if (T.pinchStep(a.x, a.y, b.x, b.y, C.LEAST_SPAN * dpr)) showView();
+      }
+    }
+    return;
+  }
+  const f = fingerTool;
+  if (!f || f.id !== e.pointerId || f.refused || touches.size > 1) return;
+  if (live && live.finger && T.fingerCancels(false, true, widest(), true)) { cancel(); f.refused = true; return; }
+  if (!live) {
+    if (!T.fingerStarts(Math.hypot(e.clientX - f.x, e.clientY - f.y))) return;
+    if (!begin(e, true)) { f.refused = true; return; }
+    add([{ clientX: f.x, clientY: f.y, timeStamp: f.t }]);  // from where it landed, so the line is whole
+  }
+  if (live.finger) add(e.getCoalescedEvents ? e.getCoalescedEvents() : [e]);
+}
+function touchUp(e) {
+  if (!touches.has(e.pointerId)) return;
+  const last = touches.size === 1, tap = e.type === "pointercancel" ? (T.fingersReset(), 0) : fingerEvent(last ? 1 : 6, e);
+  touches.delete(e.pointerId);
+  if (T.pinchTracking() && (e.pointerId === T.pinchFirst() || e.pointerId === T.pinchSecond())) T.pinchEnd();
+  if (live && live.finger && live.id === e.pointerId) {
+    if (e.type === "pointercancel" && !T.fingerKeeps(e.timeStamp - live.start)) cancel(); else lift();
+  }
+  if (last) fingerTool = null;
+  if (tap === 2) undo();  // three fingers: Redo
+  else if (tap === 3) redo();
+}
+view.addEventListener("pointerdown", e => {
+  if (ST && !live && ST.down(e)) return;  // Cut Stamp's lasso, a picture being placed (stamp.js)
+  if (M4 && !live && M4.down(e)) return;
+  if (e.pointerType === "touch") return touchDown(e);
+  if (e.button > 0 && e.pointerType === "mouse") return;
+  if (live && live.finger) cancel();  // the pen takes over from a finger
+  if (live) return;
+  penUntil = performance.now() + 250;
+  try { view.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events can't capture */ }
+  if (begin(e, false)) add([e]);
+});
+view.addEventListener("pointermove", e => {
+  if (ST && ST.move(e)) return;
+  if (M4 && M4.move(e)) return;
+  if (e.pointerType === "touch") return touchMove(e);
+  penUntil = performance.now() + 250;
+  if (live && !live.finger && e.pointerId === live.id) return add(e.getCoalescedEvents ? e.getCoalescedEvents() : [e]);
+  if (!live && e.buttons === 0) hover(e);
+});
+// The stroke ends at the first of pointerup, pointercancel or pointerleave (an iPad's Pencil can miss its pointerup), once.
+for (const k of ["pointerup", "pointercancel", "pointerleave"]) view.addEventListener(k, e => {
+  if (ST && ST.up(e, k)) return;
+  if (M4 && M4.up(e, k)) return;
+  if (e.pointerType === "touch") return k === "pointerleave" ? undefined : touchUp(e);
+  if (live && !live.finger && e.pointerId === live.id) lift();
+  if (k === "pointerleave") { hideRing(); arrived = true; }
+});
+// No scrolling, zooming or Scribble while drawing.
+view.addEventListener("touchmove", e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+document.addEventListener("gesturestart", e => e.preventDefault());
+// A trackpad or a mouse: ctrl or cmd with the wheel (a trackpad's pinch in Chrome and Firefox) zooms about the pointer, the
+// wheel alone scrolls (the browser's own, below); Safari's own trackpad pinch (its gesture events, never while fingers
+// touch the screen) zooms too. Neither while drawing.
+const zoomAbout = (factor, e) => { const [x, y] = viewPoint(e); T.viewGesture(Math.min(2, Math.max(.5, factor)), x, y, x, y); showView(); };
+view.addEventListener("wheel", e => {
+  const zoom = e.ctrlKey || e.metaKey;
+  if (zoom || live || T.pinchMoving()) e.preventDefault();
+  if (!zoom || live || T.pinchMoving()) return;
+  const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.offsetHeight : 1;
+  zoomAbout(Math.exp(-e.deltaY * k / 100), e);
+}, { passive: false });
+// The browser scrolled the room (its bars, the wheel, the keys): the page moved as far (CanvasViewport, a pan); while
+// drawing (a wheel's glide it can't stop) the scroll put back instead, so the page stays under the pen.
+scroller.addEventListener("scroll", () => {
+  const dx = room.offsetWidth > view.offsetWidth ? -scroller.scrollLeft * dpr - V.x : 0, dy = room.offsetHeight > view.offsetHeight ? -scroller.scrollTop * dpr - V.y : 0;
+  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+  if (live || T.pinchMoving()) return showView();
+  T.viewGesture(1, 0, 0, dx, dy); showView(true);
+});
+let gestureScale = 1;
+view.addEventListener("gesturestart", () => { gestureScale = 1; });
+view.addEventListener("gesturechange", e => { e.preventDefault(); if (!touches.size && !live) zoomAbout(e.scale / gestureScale, e); gestureScale = e.scale; });
+
+// The hover ring (HoverNib): a few ink dots where the tool would lay its mark, shown a second as the pen (or the
+// mouse) arrives: once away a while, or with a new tool or size.
+const ring = $("ring");
+let arrived = true, ringUntil = 0, lastHover = 0;
+function hideRing() { const c = ring.getContext("2d"); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, ring.width, ring.height); }
+function hover(e) {
+  if (e.timeStamp - lastHover > C.HOVER_AWAY) arrived = true;
+  lastHover = e.timeStamp;
+  if (arrived) { arrived = false; ringUntil = e.timeStamp + C.HOVER_SHOWN; setTimeout(hideRing, C.HOVER_SHOWN + 20); }
+  hideRing();
+  if (e.timeStamp >= ringUntil) return;
+  const [size, dk] = look(sel), [nw, nh, angle] = T.nib(sel, size, dk), r = view.getBoundingClientRect();
+  const a = T.ring(nw, V.s), b = T.ring(nh, V.s), dots = T.ticks((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr, a, b, angle), c = ring.getContext("2d"), side = C.TICK_SIDE;
+  c.fillStyle = "#000";
+  for (let i = 0; i < dots.length; i += 2) c.fillRect(dots[i] - side / 2, dots[i + 1] - side / 2, side, side);
+}
+
+// The keyboard mirrors the gestures only: Undo, [ and ] the size, E the eraser, 1 to 9 the slots.
+addEventListener("keydown", e => {
+  if (shown) return;  // the Tools page and Brush Lab have their own Undo; the search takes typing
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (!e.shiftKey) undo(); else redo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "e" || e.key === "E") choose(C.ERASER);
+  else if (/^[1-9]$/.test(e.key) && +e.key <= C.COUNT) choose(+e.key - 1);
+  else if ((e.key === "[" || e.key === "]") && !live) {
+    const t = Math.max(0, Math.min(1, T.position(look(sel)[0]) + (e.key === "]" ? .05 : -.05)));
+    if (sel === C.ERASER) eraserPx = T.sizeAt(sel, t); else px[sel] = T.sizeAt(sel, t);
+    keepLook(); showFaces(); arrived = true;
+  }
+});
+
+// ---- Others' changes, and the host's tools, through the relay ----
+const waiting = [];  // laying waits while the pen is down, as on the Manta
+const penUp = () => live ? new Promise(go => waiting.push(go)) : null;
+let incoming = Promise.resolve(), queued = 0, wake = null;  // wake: a change drawing itself on lays the rest when another arrives
+// The status (LivePresence.guest): connected or for how long not, and who listens (the relay's here event, when it says).
+const presence = { connected: false, lostAt: performance.now(), names: null };
+function showStatus() {
+  const was = status, p = presence;
+  status = T.liveSaid(crypt.n, p.connected, performance.now() - p.lostAt, p.names !== null, p.names || "", me);
+  if ($("note").textContent === was) note("");  // a note showing stays until its time is up
+  if (BK) BK.connected(p.connected);  // the Manta's notebook: no strokes while not connected (books.js)
+  cutOff(hostSeen ? T.liveCut(status) : null);  // only once a host has been here: guests on their own draw on
+}
+// Host gone or the connection lost: a window over the page, which takes no strokes until it's back.
+function cutOff(said) {
+  let box = $("cut");
+  if (!said) { if (box) box.hidden = true; return; }
+  if (!box) {
+    box = el("div", ""); box.id = "cut";
+    const sheet = el("div", "sheet"), title = el("div", ""), words = el("div", "");
+    title.style.font = font("MENU", 700); words.style.font = font("CAPTION");
+    sheet.append(title, words); box.append(sheet); document.body.append(box);
+  }
+  const [title, words] = box.firstChild.children;
+  title.textContent = status; words.textContent = said; box.hidden = false;
+  if (live) lift();
+}
+// Listening, with every change from the relay's start (history=1). Connected again after a drop, the page starts over:
+// blank, then every change the relay holds laid again in its order, this guest's own too (otherwise skipped: laid as
+// drawn), and its own not yet sent as they come back (post). The relay's history is the page, whichever relay it is:
+// the same one (a Wi-Fi blip) holds all of it; one started again (the Manta back from sleep) the Manta's page whole,
+// sent as its probe connects. A page kept as it was would keep marks the host erased meanwhile (a page laid whole only
+// lays its marks). replaying: the history still arriving, until the relay says who listens (right after the history).
+let events = null, opened = false, replaying = false, heardAt = 0;
+const heard = () => { heardAt = performance.now(); };
+function listen() {
+  if (events) events.close();
+  heard();
+  events = new EventSource("listen?history=1&here=1&key=" + key + "&from=" + me);
+  events.onopen = () => {
+    heard(); presence.connected = true; showStatus();
+    if (opened) { for (const u of unsent) { u.again = true; if (u.sealed) echoes.add(u.sealed); } incoming = incoming.then(startOver); }
+    opened = replaying = true;
+  };
+  events.addEventListener(C.LIVE_EVENT, e => {
+    heard(); presence.names = e.data; showStatus();
+    replaying = false;
+  });
+  events.addEventListener(C.LIVE_STILL, heard);
+  events.onmessage = e => { heard(); arrive(e); };
+  events.onerror = dropped;
+}
+function dropped() {
+  if (presence.connected) { presence.connected = false; presence.lostAt = performance.now(); presence.names = null; }
+  showStatus(); setTimeout(showStatus, C.LIVE_LOST_MS + 100);
+}
+// The browser retries a dropped line itself, but gives up on some (CLOSED) and never notices one gone silent (a Wi-Fi
+// or a Manta gone without closing it): the relay says it is still here every few seconds. Nothing for LIVE_SILENT_MS,
+// or given up, this page listens again, and keeps on while it is open; a try under way is left twice as long.
+setInterval(() => {
+  if (!events) return;
+  const state = events.readyState, quiet = performance.now() - heardAt;
+  if (state === EventSource.CLOSED || quiet > (state === EventSource.OPEN ? 1 : 2) * C.LIVE_SILENT_MS) { dropped(); listen(); }
+}, 1000);
+async function startOver() {
+  await penUp();
+  const kept = own.slice(), redos = undone.slice();  // this guest's Undo and Redo stay: the page comes back as it was
+  newPage(W, H); own.push(...kept); undone.push(...redos); undoLook();
+}
+function arrive(e) {
+  const at = +e.lastEventId, [number, from, sealed] = e.data.split(" ", 3);
+  if (from === me && !echoes.delete(sealed) && !replaying) return;
+  queued++; if (wake) wake();
+  incoming = incoming.then(() => lay(e.data)).then(laid => { if (laid && at) liveLog.push({ number: +number, from, relay: at, shown: Date.now() }); })
+    .catch(err => say("Couldn't show a mark: " + err.message));
+}
+async function lay(data) {
+  queued--;
+  const raw = await Live.inflate(crypt.open(Uint8Array.from(atob(data.split(" ")[2]), c => c.charCodeAt(0))));
+  const which = Live.page(raw);
+  if (which) { await penUp(); return BK && BK.page(which); }
+  if (Live.isTools(raw)) { await penUp(); return takeHost(raw); }
+  const c = Live.parse(raw), { x, y, w, h, greys } = c;
+  if (x + w > W || y + h > H) throw new Error("a mark off this page");
+  // Drawn on as the Manta does (LiveReveal), the rest at once when another waits; into the engine as the Manta lays it.
+  const { count, n, ends, order, over } = Live.reveal(c), start = performance.now();
+  const put = (from, to) => {
+    const part = new Uint8Array(w * h).fill(255);
+    for (let k = from; k < to; k++) part[order[k]] = greys[order[k]];
+    pull(P.lay(x, y, w, h, part, c.set, c.kinds)); seen(x, y, w, h);
+  };
+  for (let k = 0; k < n; k++) {
+    const wait = start + k * over / Math.max(1, n - 1) - performance.now();
+    if (k > 0 && wait > 0 && !queued) await new Promise(r => { wake = r; setTimeout(r, wait); });
+    wake = null;
+    await penUp();
+    if (queued) { put(ends[k], count); break; }
+    put(ends[k], ends[k + 1]);
+  }
+  return true;
+}
+// A host's tools: its page's size (a new page when it differs), its slots, sizes, greys, tool in use and mirrors.
+function takeHost(raw) {
+  const head = new TextDecoder().decode(raw.subarray(8, 200)).split("\n")[1].split(" ");
+  if (+head[1] !== W || +head[2] !== H) { newPage(+head[1], +head[2]); T.view(view.offsetWidth * dpr, view.offsetHeight * dpr, W, H); showView(); }
+  const json = T.tools(P.id, new Int8Array(raw.buffer, raw.byteOffset, raw.length));
+  if (!json) { note("This page's tools are from a newer version."); return false; }
+  takeTools(JSON.parse(json)); hostSeen = true; saveStore(); showTools(); arrived = true;
+  if (M4) M4.viewChanged();
+  return true;
+}
+
+// ---- Long presses, the tool picker, the Tools page and Brush Lab (the browser app's M2) ----
+// A long press as the Manta's (DrawLayout.LONG_PRESS_MS, Android's own there): a slot's opens the tool picker beside it
+// (DrawLayout.Picker, as PaintActivity.toolPicker), or the Tools page with Hold Opens Full Library ticked; the eraser's what it takes
+// (EraseKind; no Clear page: a guest's would clear the host's page); the grey strip's Opacity. The picker's Brush Lab and
+// Library open the lab and the Tools page, on an iPad or a desktop (LabLayout.fits), each on the guest's own slots.
+// Every decision is WebEngine's (ToolsPage, ToolsLayout, ToolKits, BrushLab, LabLayout, WildSample); this draws them.
+const HOLD = JSON.parse(T.holds()), TYPE = HOLD.type;
+const font = (style, weight) => `${weight ?? TYPE[style][1]} ${TYPE[style][0]}px Ukulele, Duo, monospace`;
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const fits = () => T.screensFit(innerWidth, innerHeight);
+let noteTimer = 0;
+function say(text, ms = HOLD.noteMs) { note(text); clearTimeout(noteTimer); noteTimer = setTimeout(() => note(""), ms); }
+
+// Held still HOLD.ms (moved no more than HOLD.slop dp), it fires once and the click after it does nothing. when(e): whether
+// this press may become one.
+function holdable(target, hold, when) {
+  let timer = 0, at = null;
+  const stop = () => { clearTimeout(timer); timer = 0; at = null; };
+  target.addEventListener("pointerdown", e => {
+    stop();
+    if (e.button > 0 || when && !when(e)) return;
+    at = [e.clientX, e.clientY];
+    timer = setTimeout(() => { timer = 0; at = null; swallow = true; hold(e); }, HOLD.ms);
+  });
+  target.addEventListener("pointermove", e => { if (at && Math.hypot(e.clientX - at[0], e.clientY - at[1]) > HOLD.slop) stop(); });
+  // Not on pointercancel: a phone's browser takes a held finger for its own long press and cancels it, still held.
+  for (const k of ["pointerup", "pointerleave"]) target.addEventListener(k, stop);
+  target.addEventListener("touchend", stop);
+  target.addEventListener("contextmenu", e => e.preventDefault());
+}
+// The lift that ends a long press clicks nothing, wherever it lands (a finger's click lands on what opened under it).
+let swallow = false;
+document.addEventListener("pointerdown", () => { swallow = false; }, true);
+document.addEventListener("click", e => { if (swallow) { swallow = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+
+// The engine's pictures (ARGB) as a canvas image; kept by what they show, as ToolCard keeps its art.
+function argbImage(argb, w, h) {
+  const img = new ImageData(w, h), a = new Int32Array(argb);
+  for (let i = 0; i < a.length; i++) { const c = a[i]; img.data[4 * i] = c >> 16 & 255; img.data[4 * i + 1] = c >> 8 & 255; img.data[4 * i + 2] = c & 255; img.data[4 * i + 3] = c >>> 24; }
+  const off = new OffscreenCanvas(w, h); off.getContext("2d").putImageData(img, 0, 0); return off;
+}
+const pictures = new Map();
+function picture(key, tw, th, pixels) {
+  const k = key + " " + tw + "×" + th;
+  if (!pictures.has(k)) { if (pictures.size > 300) pictures.clear(); pictures.set(k, argbImage(pixels(tw, th), tw, th)); }
+  return pictures.get(k);
+}
+// A tool's picture on canvas c, w × h dp: the owner's drawing (fit: centred whole, as an ImageView; else cut at its
+// handle end, ToolsLayout.art), or its stroke from pixels(tw, th) kept under key; tint: the ink in that grey level
+// (0x88, ToolCard.GREY; 255, paper on a selected slot's ink tile), else as drawn.
+async function toolArt(c, w, h, drawing, key, pixels, fit, tint) {
+  const ctx = sized(c, w, h), v = drawing && await vector(drawing);
+  ctx.clearRect(0, 0, w, h);
+  if (v) {
+    if (fit) { const s = Math.min(w / v.w, h / v.h); drawVector(ctx, v, (w - v.w * s) / 2, (h - v.h * s) / 2, v.w * s, v.h * s); }
+    else { const a = T.art(v.w, v.h, w, h); ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip(); drawVector(ctx, v, a[0], a[1], a[2], a[3]); ctx.restore(); }
+  } else if (pixels) {
+    const tw = Math.max(1, Math.round(w * dpr)), th = Math.max(1, Math.round(h * dpr));
+    ctx.drawImage(picture(key, tw, th, pixels), 0, 0, w, h);
+  }
+  if (tint) {
+    // As a mask, ink where it is dark (ToolCard's pictures), in the solid tint.
+    const img = ctx.getImageData(0, 0, c.width, c.height), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const ink = (255 - (d[i] + d[i + 1] + d[i + 2]) / 3) * d[i + 3] / 255; d[i] = d[i + 1] = d[i + 2] = tint; d[i + 3] = ink; }
+    ctx.putImageData(img, 0, 0);
+  }
+}
+// An icon (res/drawable, Phosphor's) side dp square; nothing where the relay doesn't serve it yet.
+function icon(name, side) { const c = el("canvas", "icon"); vector(name).then(v => { if (v) drawVector(sized(c, side, side), v, 0, 0, side, side); }); c.style.width = c.style.height = side + "px"; return c; }
+
+// ---- Popups over the drawing screen (PaintActivity.placed): beside the anchor toward the page, level with it, moved up
+// where they would run off the foot; a tap outside closes them.
+let popped = null;
+function popup(anchor, width) {
+  closePopup();
+  const scrim = el("div", "scrim"), box = el("div", "pop");
+  scrim.addEventListener("pointerdown", e => { if (e.target === scrim) closePopup(); });
+  if (width) box.style.width = Math.min(width, innerWidth) + "px";
+  scrim.appendChild(box); document.body.appendChild(scrim);
+  popped = { scrim, box, anchor };
+  return box;
+}
+function placePopup(beside) {
+  if (!popped) return;
+  const { box, anchor } = popped, a = anchor.getBoundingClientRect(), w = box.offsetWidth, h = Math.min(box.offsetHeight, innerHeight);
+  box.style.maxHeight = innerHeight + "px";
+  box.style.left = clamp(beside != null ? beside : document.body.classList.contains("right") ? a.left - w : a.right, 0, Math.max(0, innerWidth - w)) + "px";
+  box.style.top = clamp(a.top, 0, Math.max(0, innerHeight - h)) + "px";
+}
+function closePopup() { if (popped) { popped.scrim.remove(); popped = null; } }
+// A menu's row (Theme.menuRow): its words centred, the chosen one bold with the side bar.
+function menuRow(words, on, act, height = HOLD.row) {
+  const b = el("button", "mrow" + (on ? " marked" : ""), words);
+  b.style.minHeight = height + "px"; b.style.font = font("MENU", on ? 700 : 400);
+  b.setAttribute("aria-pressed", String(!!on)); b.onclick = act;
+  return b;
+}
+
+// A slot's long press: the Tools page with Hold Opens Full Library ticked (an iPad or a desktop), else the tool picker beside it.
+function slotHeld(slot, row) {
+  if (live) return;
+  if (M4 && M4.held(slot, row)) return;
+  if (fits() && T.toolsFirst()) return openTools(slot);
+  picker(slot, row);
+}
+// The tool picker (DrawLayout.Picker): Reset to Default at its top for an edited Basic tool, the shown tools four wide
+// (DrawLayout.pickerColumns, pickerTip) kind by kind, a grey line between, the slot's marked; at its foot one row, Edit Brush, Full Library, Hold Opens Full Library and Brush Studio (on an iPad or a desktop). A pick puts
+// the tool in the slot and takes it up (ToolSlots.pick). For a Stamp, Stamp ▾ over Brush Lab's row: its menu (stamp.js).
+function picker(slot, row) {
+  const P = JSON.parse(T.picker(slot, innerWidth, innerHeight)), box = popup(row, P.columns * P.cellWidth + 2);
+  box.dataset.picker = slot;
+  const done = act => () => { closePopup(); act(); };
+  if (P.reset) box.appendChild(menuRow(P.reset, false, done(() => picked(slot, -1)), P.ROW));
+  const cells = () => { const g = el("div", "cells"); g.style.gridTemplateColumns = `repeat(${P.columns}, ${P.cellWidth}px)`; return box.appendChild(g); };
+  let grid = cells();
+  P.cells.forEach((c, i) => {
+    // A new kind (DrawLayout.pickerGroups): the menu's grey line (m4.js's rule), then a new grid.
+    if (c.line) { const d = el("div", "rule"); d.style.background = "#bbb"; d.style.margin = `${P.LINE_ROOM}px 16px`; d.style.height = P.LINE + "px"; box.appendChild(d); grid = cells(); }
+    const cell = el("button", "cell" + (c.on ? " marked" : "")), art = el("canvas"), name = el("div", "name", c.name);
+    cell.style.padding = `${P.ROOM}px ${P.PAD + P.MARK}px ${P.ROOM}px ${P.PAD}px`;
+    cell.setAttribute("aria-label", c.name); cell.setAttribute("aria-pressed", String(c.on));
+    name.style.marginTop = P.ROOM + "px"; name.style.font = font("CAPTION", c.on ? 700 : 400);
+    cell.append(art, name);
+    toolArt(art, P.cellWidth - 2 * P.PAD - P.MARK, P.TIP, c.drawing, "picker " + i, (w, h) => T.pickerTray(i, w, h), true);
+    cell.onclick = done(() => picked(slot, i));
+    grid.appendChild(cell);
+  });
+  if (P.stamp) box.appendChild(menuRow(P.stamp, false, done(() => ST.stampMenu(slot, row)), P.ROW));
+  if (fits()) {
+    // The foot, one row of menu words (DrawLayout.FOOT_PAD in each): Edit Brush, Full Library, Hold Opens Full Library, Brush Studio (a link).
+    const last = el("div", "split"), first = firstBox(P.first), studio = el("a", "mrow", P.studio);
+    studio.href = P.link; studio.target = "_blank"; studio.rel = "noopener"; studio.onclick = closePopup;
+    studio.style.cssText = `min-height:${P.ROW}px;font:${font("MENU")};color:inherit;text-decoration:none`;
+    const foot = [menuRow(P.lab, false, done(() => openLab(slot)), P.ROW), menuRow(P.library, false, done(() => openTools(slot)), P.ROW), first, studio];
+    first.style.minHeight = P.ROW + "px"; first.style.font = font("MENU"); first.style.textTransform = "none"; first.style.letterSpacing = "0";
+    first.style.justifyContent = "center"; first.style.flex = "1";
+    for (const b of foot) { b.style.padding = `0 ${P.FOOT_PAD}px`; b.style.whiteSpace = "nowrap"; }
+    last.append(...foot);
+    box.append(last);
+  }
+  placePopup();
+}
+// Hold Opens Full Library (DrawLayout.TOOLS_FIRST), a checkbox as Brush Lab's As New (LabButton.ticked): ticked, a slot's
+// long press opens the Tools page. A tap ticks or unticks it, then done(), else it is drawn again in its place.
+function firstBox(words, done) {
+  const on = T.toolsFirst(), b = iconButton(on ? "ic_ph_check_square" : "ic_ph_square", words, () => {
+    T.setToolsFirst(!on); saveStore();
+    if (done) done(); else { const again = firstBox(words); again.style.cssText = b.style.cssText; b.replaceWith(again); }
+  });
+  b.setAttribute("aria-label", words + (on ? ", on" : ", off"));
+  return b;
+}
+function picked(slot, cell) { T.pick(slot, cell); ownTools(slot); }
+// The eraser's long press (InkWashBar.eraserMenu): what it takes, the one in use marked, for a few seconds; a pick takes
+// the eraser up too.
+function eraserMenu(row) {
+  if (live) return;
+  const box = popup(row);
+  box.classList.add("across");
+  const at = HOLD.kinds.indexOf(eraseKinds);
+  HOLD.labels.forEach((l, i) => box.appendChild(menuRow(l, i === at, () => { closePopup(); eraseKinds = HOLD.kinds[i]; say(HOLD.notes[i]); choose(C.ERASER); })));
+  placePopup();
+  const shown = popped; setTimeout(() => { if (popped === shown) closePopup(); }, HOLD.offerMs);
+}
+// The grey strip's long press (InkWashBar.opacityMenu): for opaque paint its Opacity beside it, a strip of its own, thin
+// at the top to opaque at the foot; a pick sets the slot's brush's own dial; for any other brush a note.
+function opacityMenu(anchor) {
+  const now = T.opacity(sel);
+  if (now < 0) return say(HOLD.opacityOnly);
+  const box = popup(anchor), title = el("div", "otitle", HOLD.opacity), strip = el("canvas");
+  title.style.font = font("MENU", 700);
+  box.append(title, strip);
+  const w = L.half, h = L.box, lenPx = Math.round(h * dpr), widPx = Math.max(1, Math.round(w * dpr)), end = T.stripEnd(lenPx, Math.round(C.SHADE_END * dpr));
+  const show = v => {
+    const c = sized(strip, w, h), pixels = new Int32Array(T.stripPixels(lenPx, widPx, end)), img = new ImageData(widPx, lenPx);
+    for (let row = 0; row < lenPx; row++) for (let col = 0; col < widPx; col++) { const o = 4 * (row * widPx + col), g = pixels[col * lenPx + lenPx - 1 - row] & 255; img.data[o] = img.data[o + 1] = img.data[o + 2] = g; img.data[o + 3] = 255; }
+    const off = new OffscreenCanvas(widPx, lenPx); off.getContext("2d").putImageData(img, 0, 0); c.drawImage(off, 0, 0, w, h);
+    const y = h - T.stripMark(v, lenPx, end) / dpr; c.fillStyle = "#000"; c.fillRect(0, y - C.STRIP_MARK / 2, C.FACE_MARK, C.STRIP_MARK);
+    strip.setAttribute("aria-label", HOLD.opacity);
+  };
+  show(now);
+  strip.addEventListener("pointerup", e => {
+    const v = T.shadeAt((e.clientY - strip.getBoundingClientRect().top) * dpr, 0, lenPx, end);
+    say(T.setOpacity(sel, v)); ownTools(sel); show(v);
+  });
+  placePopup();
+}
+
+// ---- The screens over the drawing screen: the Tools page and Brush Lab (iPad and desktop) ----
+const screen = $("screen");
+let shown = null;  // "tools", "lab" or null
+function closeScreen() { screen.replaceChildren(); screen.hidden = true; shown = null; closePopup(); }
+function lb(words, act, cls = "") { const b = el("button", "lb " + cls, words); b.style.font = font("LABEL"); b.onclick = act; return b; }
+function iconButton(name, words, act, cls = "") {
+  const b = el("button", "lb " + cls); b.style.font = font("LABEL"); b.onclick = act;
+  if (name) b.appendChild(icon(name, 22));
+  if (words) b.appendChild(el("span", "", words));
+  return b;
+}
+const square = (name, said, act, on = true) => { const b = el("button", "sq"); b.setAttribute("aria-label", said); b.appendChild(icon(name, 16)); b.disabled = !on; b.onclick = e => { e.stopPropagation(); act(); }; return b; };
+function tall(e, n) { e.style.height = n + "px"; return e; }
+
+// The scratch pad (TestArea): a page of the engine's own, not live, drawn with the screen's tool at the slot's size and
+// grey; it keeps what is drawn on it while the screen is open.
+let pad = null;
+function scratchPad(w, h, inLab) {
+  const pw = Math.max(1, Math.round(w * dpr)), ph = Math.max(1, Math.round(h * dpr));
+  if (!pad || pad.pw !== pw || pad.ph !== ph || pad.inLab !== inLab) {
+    if (pad) pad.P.free();
+    const c = el("canvas", "scratch");
+    pad = { P: E.page(pw, ph), pw, ph, inLab, c, ctx: null, st: null };
+    c.width = pw; c.height = ph; pad.ctx = c.getContext("2d", { willReadFrequently: true });
+    pad.ctx.fillStyle = "#fff"; pad.ctx.fillRect(0, 0, pw, ph);
+    const at = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; };
+    const put = r => { if (!r) return; const x = r[0], y = r[1], ww = r[2] - r[0] + 1, hh = r[3] - r[1] + 1, t = pad.P.tones(x, y, ww, hh), img = pad.ctx.createImageData(ww, hh); for (let i = 0; i < t.length; i++) { const g = screenGrey(t[i]); img.data[4 * i] = img.data[4 * i + 1] = img.data[4 * i + 2] = g; img.data[4 * i + 3] = 255; } pad.ctx.putImageData(img, x, y); };
+    const tick = () => { if (!pad || pad.st) return; put(pad.P.tick()); if (pad.P.settling) setTimeout(tick, TICK_MS); };
+    pad.put = put;
+    c.addEventListener("pointerdown", e => {
+      if (pad.st || e.button > 0 || ST.padDown(e, pad)) return;
+      try { c.setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ }
+      pad.st = { s: pad.P.scratch(pad.inLab), id: e.pointerId, L: {} };
+      const [x, y] = at(e); put(pad.st.s.add([pointerSample(e, pad.st.L, x, y)]));
+    });
+    c.addEventListener("pointermove", e => {
+      if (ST.padMove(e, pad) || !pad.st || e.pointerId !== pad.st.id) return;
+      put(pad.st.s.add((e.getCoalescedEvents ? e.getCoalescedEvents() : [e]).map(q => { const [x, y] = at(q); return pointerSample(q, pad.st.L, x, y); })));
+    });
+    for (const k of ["pointerup", "pointercancel"]) c.addEventListener(k, e => {
+      if (ST.padUp(e, pad, () => lab_(T.lab())) || !pad.st || e.pointerId !== pad.st.id) return;
+      put(pad.st.s.end()); pad.st = null; setTimeout(tick, TICK_MS);
+    });
+  }
+  pad.c.style.width = w + "px"; pad.c.style.height = h + "px";
+  return pad.c;
+}
+function clearPad() { if (pad) { pad.P.free(); pad = null; } }
+
+// The Tools page (ToolsActivity), laid out by ToolsLayout: the bar (its job under its title); the slots, the selected
+// slot's tool with Edit in Brush Lab, the try strip; the Library's search, filter row and grid. Tap a slot, then a card:
+// the slot's tool here; Back puts each in its slot.
+let tp = null, confirming = -1, searchOpen = false, kitOpen = null;
+function openTools(slot) {
+  if (!fits()) return;
+  closePopup(); clearPad();
+  confirming = -1; searchOpen = false; kitOpen = null;
+  shown = "tools"; screen.hidden = false;
+  tools_(T.toolsOpen(slot, innerWidth, innerHeight));
+}
+// A page's bar (LabUi.PageBar), the Tools page's, Brush Lab's and the notebook screens': Back with its word (none where
+// back is null: the shelf), the title over the page's job centred across the bar (2026-11-03), the page's own button,
+// if any, at the right.
+function pageBar(height, side, back, onBack, title, job) {
+  const bar = tall(el("div", "bar pagebar"), height); bar.style.padding = `0 ${side}px`;
+  const words = el("div", "words"), t = el("div", "title", title), j = el("div", "small job", job);
+  t.style.font = font("HEADING"); j.style.font = font("CAPTION");
+  words.append(t, j);
+  bar.append(back ? iconButton("ic_ph_caret_left", back, onBack) : el("div"), words);
+  return bar;
+}
+// The try strip (TestArea.strip), the Tools page's and Brush Lab's: "Draw here to try Fill in" and Clear in its head row,
+// then the framed test page (the caller puts the scratch pad in it once its size is known).
+function tryStrip(head, gap, label, onClear) {
+  const strip = el("div", "strip"), row = tall(el("div", "head"), head), said = el("div", "small grow", label);
+  said.style.font = font("CAPTION");
+  const clear = lb("Clear", onClear, "quiet");
+  row.append(said, clear);
+  const box = el("div", "trypad"); box.style.marginTop = gap + "px";
+  strip.append(row, box);
+  return { strip, row, box };
+}
+function tools_(json) {
+  tp = JSON.parse(json);
+  const Lt = tp.L, root = el("div", "tools");
+  root.style.width = Lt.width + "px"; root.style.height = Lt.height + "px";
+  const bar = pageBar(Lt.BAR, Lt.side, "Back", () => leaveTools(false), tp.w.title, tp.note || tp.w.job);
+  // Hold Opens Full Library lives in the picker's foot; while it is ticked the long press skips the picker, so it shows here then.
+  if (T.toolsFirst()) bar.append(firstBox(tp.w.first, () => tools_(T.toolsPage())));
+  // The slots, one row of tiles across the page; the selected one inverted.
+  const slots = tall(el("div", "slots line"), Lt.slotCard); slots.style.gap = Lt.slotGap + "px"; slots.style.margin = `${Lt.gap}px ${Lt.side}px`;
+  tp.slots.forEach((s, i) => {
+    const card = slotTile(s, i === tp.slot, (w, h) => T.toolsTray(true, i, w, h), Lt);
+    card.setAttribute("aria-label", s.said + (i === tp.slot ? ", selected" : "") + (s.changed ? ", changed" : ""));
+    card.onclick = () => tools_(T.toolsSelect(i));
+    slots.appendChild(card);
+  });
+  const main = el("div", "main " + (Lt.wide ? "across" : "down"));
+  main.style.padding = `0 ${Lt.side}px ${Lt.side}px`; main.style.height = (Lt.height - Lt.BAR - Lt.slotCard - 2 * Lt.gap) + "px";
+  const left = el("div", "left"); if (Lt.wide) left.style.width = Lt.top + "px";
+  // The selected slot's tool, Edit in Brush Lab at the row's right (Reset to Default before it, for an edited Basic tool).
+  const named = tall(el("div", "named"), Lt.NAME_ROW);
+  const tn = el("b", "", tp.tool.name), tl = el("span", "small grow", tp.tool.line); tn.style.font = font("CAPTION", 700); tl.style.font = font("CAPTION");
+  tn.title = tp.tool.about; tn.style.maxWidth = tp.tool.room + "px"; tn.style.overflow = "hidden"; tn.style.textOverflow = "ellipsis";
+  named.append(tn, tl);
+  // Reset to Default, plain words, while the tool is a Basic tool changed in Brush Lab (the tool picker's top row).
+  if (tp.tool.reset) { const r = lb(tp.tool.reset, () => tools_(T.toolsReset()), "quiet"); r.style.font = font("CAPTION"); r.style.alignSelf = "stretch"; named.append(r); }
+  named.append(iconButton("ic_ph_flask", tp.w.lab, () => leaveTools(true), "boxed"));
+  // The try strip: at the foot (portrait), or under the name row at the left (landscape).
+  const t = tryStrip(Lt.TRY_HEAD, 0, tp.tool.try, () => { clearPad(); tools_(T.toolsPage()); });
+  tall(t.strip, Lt.TRY_HEAD + Lt.testHeight);
+  t.box.appendChild(scratchPad(Lt.testWidth - 2, Lt.testHeight - 2, false));
+  if (Lt.wide) left.append(named, t.strip); else { left.append(named); t.strip.style.marginTop = Lt.gap + "px"; }
+  // The Library: Search (its field, or a delete's question, in its place) and the pages; the filter row; the grid.
+  const lib = el("div", "library"); lib.style[Lt.wide ? "marginLeft" : "marginTop"] = Lt.apart + "px";
+  const find = tall(el("div", "find"), Lt.FIND);
+  if (confirming >= 0) {
+    const asked = el("b", "grow", "Delete " + tp.cards[confirming].name + "?"); asked.style.font = font("BODY", 700);
+    find.append(asked, iconButton("ic_ph_trash", "Delete", () => { const i = confirming; confirming = -1; tools_(T.toolsDelete(i)); }), lb("Keep", () => { confirming = -1; tools_(T.toolsPage()); }));
+  } else if (searchOpen) {
+    const field = el("input", "search"); field.placeholder = tp.w.search; field.value = tp.search; field.style.font = font("CAPTION"); tall(field, Lt.CHIP);
+    field.style.borderRadius = Lt.CHIP / 2 + "px"; field.style.padding = `0 ${Lt.chipPad}px`;
+    let typing = 0; field.oninput = () => { clearTimeout(typing); typing = setTimeout(() => { const at = field.selectionStart; tools_(T.toolsSearch(field.value)); const f = screen.querySelector("input.search"); if (f) { f.value = field.value; f.focus(); f.setSelectionRange(at, at); } }, 250); };
+    find.append(field, square("ic_ph_x", "Close search", () => { closeSearch(); tools_(T.toolsPage()); }));
+    setTimeout(() => { const f = screen.querySelector("input.search"); if (f && document.activeElement !== f) f.focus(); });
+  } else find.append(iconButton("ic_ph_magnifying_glass", tp.w.search, () => { confirming = -1; searchOpen = true; tools_(T.toolsPage()); }), el("div", "spring"));
+  // More Brushes, the shelf's chip, beside Search (the release pare-down, 2026-11-05).
+  const more = chip(tp.more.label, tp.more.on, () => { confirming = -1; searchOpen = false; tools_(T.toolsChip(tp.more.i)); }, Lt); more.style.marginLeft = Lt.chipGap + "px"; find.append(more);
+  if (tp.pages > 1) {
+    const prev = square("ic_ph_caret_left", "Previous page", () => tools_(T.toolsTurn(-1)), tp.page > 0), next = square("ic_ph_caret_right", "Next page", () => tools_(T.toolsTurn(1)), tp.page < tp.pages - 1);
+    const count = el("div", "small", (tp.page + 1) + " / " + tp.pages); count.style.font = font("CAPTION"); count.style.padding = "0 4px";
+    prev.style.width = next.style.width = Lt.PAGE_BUTTON + "px"; find.append(prev, count, next);
+  }
+  const chips = tall(el("div", "chips"), Lt.chips); chips.style.gap = Lt.chipGap + "px";
+  tp.chips.forEach((c, i) => chips.appendChild(chip(c.label, c.on, () => { confirming = -1; searchOpen = false; tools_(T.toolsChip(i)); }, Lt)));
+  const grid = el("div", "grid"); grid.style.marginTop = Lt.gap + "px";
+  if (!tp.cards.length) { const e = el("div", "empty", tp.empty); e.style.font = font("BODY"); grid.appendChild(e); }
+  for (let r = 0; r * Lt.columns < tp.cards.length; r++) {
+    const line = tall(el("div", "line"), Lt.cardHeight);
+    if (r) line.style.marginTop = Lt.ROW_GAP + "px";
+    for (let c = 0; c < Lt.columns; c++) {
+      const i = r * Lt.columns + c, k = tp.cards[i];
+      if (!k) { line.appendChild(el("div", "grow")); continue; }
+      const card = toolCard(k, Lt.cardArt, Lt.cardArtHeight, k.now, (w, h) => T.toolsTray(false, i, w, h), Lt);
+      card.setAttribute("aria-label", k.said);
+      card.onclick = () => k.kit ? openKit(i) : tools_(T.toolsCard(i));
+      if (k.deletable) holdable(card, () => { closeSearch(); confirming = i; tools_(T.toolsPage()); });
+      line.appendChild(card);
+    }
+    grid.appendChild(line);
+  }
+  lib.append(find, chips, grid);
+  main.append(left, lib);
+  if (!Lt.wide) main.append(t.strip);
+  root.append(bar, slots, main);
+  screen.replaceChildren(root);
+  if (kitOpen) showKit();
+}
+function closeSearch() { if (searchOpen) { searchOpen = false; T.toolsSearch(""); } }
+// A chip (ToolsActivity.chip): its word in a rounded fine ink edge, filled while on.
+function chip(words, on, act, Lt) {
+  const b = el("button", "chip" + (on ? " on" : ""), words);
+  b.style.font = font("CAPTION"); b.style.height = Lt.CHIP + "px"; b.style.padding = `0 ${Lt.chipPad}px`; b.style.borderRadius = Lt.CHIP / 2 + "px";
+  b.setAttribute("aria-label", words + (on ? ", on" : ", off")); b.onclick = act;
+  return b;
+}
+// A Library card (ToolCard): its art box at its top left, its name under it; the one holding the slot's tool underlined
+// across the art.
+function toolCard(t, aw, ah, now, pixels, Lt) {
+  const card = el("button", "tcard"), art = el("canvas"), name = el("div", "tname");
+  name.style.font = font("CAPTION"); name.style.marginTop = Lt.NAME_GAP + "px"; name.style.paddingRight = Lt.NAME_END + "px";
+  name.append(el("span", "", t.name));
+  card.append(art, name);
+  if (now) { const u = el("div", "under"); u.style.width = aw + "px"; u.style.height = Lt.UNDERLINE + "px"; u.style.bottom = Lt.MARK_CLEAR + "px"; card.append(u); }
+  toolArt(art, aw, ah, t.drawing, t.key, pixels, false);
+  return card;
+}
+// A toolbar slot's tile (ToolCard.tile): its art alone in its padding, no name; the selected one an ink tile with its
+// drawing in paper (as a chosen chip), the others grey; one changed on this visit a grey dot under it.
+function slotTile(s, on, pixels, Lt) {
+  const card = el("button", "tcard tile" + (on ? " on" : "")), face = tall(el("div", "face"), Lt.slotArtHeight + 2 * Lt.SLOT_PAD), art = el("canvas");
+  face.style.padding = Lt.SLOT_PAD + "px"; face.style.borderRadius = Lt.PAD_RADIUS + "px";
+  face.append(art); card.append(face);
+  if (s.changed) { const d = el("i", "dot"); d.style.marginTop = (Lt.DOT_ROW - 6) / 2 + "px"; card.append(d); }
+  toolArt(art, Lt.slotArt, Lt.slotArtHeight, s.drawing, s.key, pixels, false, on ? 255 : 0x88);
+  return card;
+}
+// A kit's sheet over the page (ToolsActivity.openKit): its name, intro, steps, where it goes; Cancel or Load Kit.
+function openKit(card) { kitOpen = { card, kit: JSON.parse(T.toolsKit(card)) }; showKit(); }
+function showKit() {
+  const { card, kit } = kitOpen, Lt = tp.L, scrim = el("div", "sheetscrim"), box = el("div", "sheet");
+  scrim.onclick = e => { if (e.target === scrim) { kitOpen = null; scrim.remove(); } };
+  box.style.width = Lt.sheetWidth + "px"; box.style.padding = Lt.SHEET_PAD + "px";
+  const t = el("div", "", kit.title), intro = el("div", "", kit.intro), where = el("div", "small", kit.where);
+  t.style.font = font("HEADING"); intro.style.font = font("BODY"); where.style.font = font("CAPTION"); where.style.marginTop = Lt.gap + "px";
+  box.append(t, intro);
+  kit.steps.forEach((s, i) => { const row = tall(el("div", "step"), Lt.SHEET_ROW), job = el("div", "grow", s.said), tool = el("div", "small", s.tool); job.style.font = font("LABEL"); tool.style.font = font("CAPTION"); if (!i) row.style.marginTop = Lt.gap + "px"; row.append(job, tool); box.append(row); });
+  const buttons = el("div", "buttons"); buttons.style.marginTop = Lt.gap + "px";
+  const load = lb(tp.w.load, () => { kitOpen = null; tools_(T.toolsLoadKit(card)); }, "ink"); load.setAttribute("aria-label", kit.said);
+  buttons.append(el("div", "spring"), lb(tp.w.cancel, () => { kitOpen = null; scrim.remove(); }), load);
+  box.append(where, buttons); scrim.append(box); screen.append(scrim);
+}
+// Back (or Brush Lab): each slot the page changed takes its tool, the guest's own; a kit's eraser step sets the eraser's kind.
+function leaveTools(toLab) {
+  const back = JSON.parse(T.toolsLeave(toLab));
+  if (back.eraser >= 0) eraseKinds = back.eraser;
+  ownTools(back.slot);
+  if (toLab) return openLab(back.slot);
+  clearPad(); closeScreen();
+}
+
+// Brush Lab (BrushLabActivity), laid out by LabLayout (as tall as it needs in a landscape window, which scrolls): the bar;
+// About This Brush; Adjust's modules (a part open: the slim modules and its open card) beside the scratch pad; Randomize.
+let lp = null, swapPage = 0, flyout = false, asNew = false, wordsOpen = false;
+function openLab(slot) {
+  if (!fits()) return;
+  closePopup(); clearPad(); flyout = false; swapPage = -1;
+  shown = "lab"; screen.hidden = false;
+  if (X) X.labOpened();
+  lab_(T.labOpen(slot, innerWidth, innerHeight));
+}
+function lab_(json) {
+  const was = lp && lp.swaps && lp.swaps.part;
+  lp = JSON.parse(json);
+  if (!lp.swaps || lp.swaps.part !== was) swapPage = -1;
+  const Ll = lp.L, root = el("div", "lab");
+  root.style.width = Ll.width + "px"; root.style.height = Ll.height + "px";
+  const bar = pageBar(Ll.BAR, Ll.side, lp.w.back, leaveLab, lp.w.title);
+  const undo = iconButton("ic_ph_undo", Ll.compact ? null : "Undo", () => lab_(T.labUndo())); undo.disabled = !lp.canUndo; undo.setAttribute("aria-label", "Undo");
+  bar.append(undo);
+  const band = el("div", "band"); band.style.padding = `${Ll.top}px ${Ll.side}px ${Ll.bottom}px`; band.style.height = (Ll.height - Ll.BAR) + "px";
+  // About This Brush's header: New ▾ (its styles under it), Open, Save and its As New box (a brush from the library: any
+  // other is added anyway, BrushLab.save), a Stamp's Cut Stamp.
+  const actions = tall(el("div", "actions"), Ll.aboutHead);
+  actions.style.position = "relative";
+  const nw = lb(lp.new, () => { flyout = !flyout; lab_(T.lab()); }); nw.setAttribute("aria-label", "New brush");
+  actions.append(nw);
+  if (X) actions.append(X.openButton());  // Open and its sheet (extras.js)
+  actions.append(iconButton(lp.saved ? "ic_ph_saved" : "ic_ph_save", lp.save, () => lab_(T.labSave(asNew)), lp.saved ? "" : "ink"));
+  if (lp.entry != null) {
+    const box = iconButton(asNew ? "ic_ph_check_square" : "ic_ph_square", lp.asNew, () => { asNew = !asNew; lab_(T.lab()); });
+    box.setAttribute("aria-label", lp.asNew + (asNew ? ", on" : ", off")); actions.append(box);
+  }
+  if (lp.cut) actions.append(ST.labButton(lp.cut, () => lab_(T.lab())));
+  if (flyout) {
+    const panel = el("div", "flyout"); panel.style.top = Ll.aboutHead + "px"; panel.style.right = "auto"; panel.style.width = Ll.column + "px";
+    const t = el("div", "", lp.w.startFrom); t.style.font = font("LABEL"); panel.append(t);
+    const wrap = el("div", "wrap"); lp.styles.forEach((s, i) => { const c = el("button", "chip" + (s.on ? " on" : ""), s.label); c.style.font = font("CAPTION", 700); c.onclick = () => { flyout = false; clearPadLab(); lab_(T.labNew(i)); }; wrap.append(c); });
+    panel.append(wrap); actions.append(panel);
+  }
+  // Its block: the loop, the name, Edited and a suggested name, the words.
+  const about = tall(el("div", "about"), Ll.about); about.style.padding = Ll.pad + "px";
+  const loop = el("canvas"); toolArt(loop, Ll.loopWidth, Ll.about - 2 * Ll.pad, null, "loop " + lp.key, (w, h) => T.labLoop(w, h), false, false);
+  const words = el("div", "words"); words.style.marginLeft = "8px"; words.style.width = Ll.wordsWidth + "px";
+  const name = el("div", "", lp.name), mark = el("div", "small", (lp.edited ? "Edited" : "") + (lp.suggestion ? " · " + lp.suggestion : "")), said = el("div", "", lp.about);
+  // The brush's words while it is tapped (its loop or name), their room kept; a tap again hides them.
+  said.style.visibility = wordsOpen ? "visible" : "hidden";
+  loop.onclick = name.onclick = () => { wordsOpen = !wordsOpen; lab_(T.lab()); }; loop.style.cursor = name.style.cursor = "pointer";
+  name.style.font = font("HEADING"); mark.style.font = font("CAPTION"); said.style.font = `400 ${Ll.wordsSp}px Ukulele, Duo, monospace`; said.title = lp.said;
+  mark.style.minHeight = Ll.mark + "px";
+  words.append(name, mark, said);
+  const note_ = el("div", "small", lp.note || ""); note_.style.font = font("CAPTION");
+  about.append(loop, words, X ? X.labBox(Ll, note_) : note_);  // the picker box lying across, the note under it (extras.js)
+  const rule = el("div", "rule"); rule.style.margin = `0 0 ${Ll.gap}px`;
+  // The column and the scratch pad, level.
+  const row = el("div", "labrow"), col = el("div", "column"), right = el("div", "right");
+  col.style.width = Ll.column + "px"; right.style.marginLeft = Ll.split + "px";
+  const adjust = tall(el("div", "head"), Ll.headRow), adj = el("div", "", "ADJUST"); adj.style.font = font("LABEL");
+  adjust.append(adj);
+  col.appendChild(adjust);
+  const open = lp.open != null;
+  for (let r = 0; r < Ll.rows; r++) {
+    const pair = tall(el("div", "pair"), open ? Ll.slim : Ll.module); pair.style.gap = Ll.moduleGap + "px"; pair.style.marginTop = (r ? Ll.moduleGap : Ll.gap) + "px";
+    const inRow = lp.modules.filter(m => m.row === r);
+    for (let i = 0; i < 2; i++) pair.appendChild(inRow[i] ? (open ? slimModule(inRow[i], Ll) : partModule(inRow[i], Ll)) : el("div", "grow"));
+    col.appendChild(pair);
+  }
+  if (open) col.appendChild(openCard(lp.open, Ll));
+  // The try strip, the Tools page's too: its head row level with Adjust's.
+  const t = tryStrip(Ll.headRow, Ll.gap, lp.w.try, () => { clearPad(); lab_(T.lab()); }), padBox = t.box;
+  right.append(t.strip);
+  row.append(col, right);
+  // Randomize across the foot, Anything Goes beside it.
+  const foot = tall(el("div", "randomize"), Ll.randomize); foot.style.marginTop = Ll.gap + "px";
+  const rnd = iconButton("ic_ph_dice", "Randomize", () => lab_(T.labRandomize(false)), "ink grow"); rnd.style.font = font("LABEL", 700);
+  foot.append(rnd, iconButton("ic_ph_shuffle", "Anything Goes", () => lab_(T.labRandomize(true))));
+  foot.lastChild.style.marginLeft = Ll.gap + "px";
+  band.append(actions, about, rule, row, foot);
+  root.append(bar, band);
+  screen.replaceChildren(root);
+  // The scratch pad takes the room left (it keeps what is drawn while the size stays).
+  const r = padBox.getBoundingClientRect();
+  padBox.appendChild(scratchPad(Math.max(1, Math.floor(r.width) - 2), Math.max(1, Math.floor(r.height) - 2), true));
+  if (lp.swaps) showSwaps(Ll);
+  if (X) X.labShown(root);
+}
+function clearPadLab() { /* a new brush keeps the scratch pad, as the Manta's */ }
+// A module (PartCard): its head (name, glyph, what the part holds), its choice, its sample, its slider over the choice's
+// macro dial with its end words, its lock and die; a tap anywhere else opens the part.
+function partModule(m, Ll) {
+  const card = el("div", "module" + (m.picked ? " picked" : "")), head = tall(el("div", "mhead"), lp.L.rowHead[m.row]);
+  card.setAttribute("aria-label", m.label + ": " + m.words.replace(/​/g, ""));
+  head.style.padding = Ll.modulePad + "px";
+  const top = el("div", "mtop"), n = el("div", "grow", m.label.toUpperCase()); n.style.font = `700 ${Ll.NAME_SP}px Ukulele, Duo, monospace`; n.style.letterSpacing = ".08em";
+  top.append(n, icon("ic_part_" + m.key.toLowerCase(), Ll.glyph)); head.append(top);
+  if (Ll.described) { const d = el("div", "", m.inside); d.style.font = font("CAPTION"); d.style.marginTop = "3px"; head.append(d); }
+  const lower = el("div", "lower"); lower.style.padding = `${Ll.rowGap}px ${Ll.modulePad}px ${Ll.modulePad}px`;
+  const choice = tall(el("div", "choice", m.words), lp.L.rowChoice[m.row]); choice.style.font = `700 ${m.lines > 1 ? Ll.SMALL_SP : Ll.CHOICE_SP}px Ukulele, Duo, monospace`;
+  lower.append(choice);
+  if (m.sampled) { const s = el("canvas", "sample"); s.style.marginTop = Ll.rowGap + "px"; lower.append(s); requestAnimationFrame(() => { const r = s.parentNode && s.getBoundingClientRect(); if (r && r.height > 2) toolArt(s, r.width, r.height, null, "part " + m.part + " " + lp.key, (w, h) => T.labSample(m.part, -1, w, h), false, false); }); }
+  const macro = el("div", "macro"); macro.style.marginTop = Ll.rowGap + "px";
+  if (m.sampled) tall(macro, lp.L.rowMacro[m.row]); else macro.classList.add("grow");
+  const line = tall(el("div", "mline"), m.macro ? Ll.sliderHeight : Ll.LOCK);
+  if (m.macro) line.append(slider(m.macro.value, m.macro.lo, m.macro.hi, m.macro.locked, m.macro.dial, null, m.label + ": " + m.macro.a + " to " + m.macro.b));
+  else { const w = el("div", "grow", m.means); w.style.font = `400 ${Ll.DENSE}px Ukulele, Duo, monospace`; line.append(w); }
+  line.append(square(m.locked ? "ic_ph_lock" : "ic_ph_lock_open", (m.locked ? "Unlock " : "Lock ") + m.label, () => lab_(T.labLockPart(m.part))),
+    square("ic_ph_dice", "Roll " + m.label, () => lab_(T.labRollPart(m.part)), !m.locked));
+  macro.append(line);
+  if (m.macro) {
+    const ends = el("div", m.ends === 1 ? "ends" : "ends two"), a = el("span", "", m.macro.a), b = el("span", "", m.macro.b);
+    a.style.font = b.style.font = font("CAPTION"); ends.append(a, b); macro.append(ends);
+  }
+  lower.append(macro);
+  card.append(head, tall(el("div"), Ll.HEAD_RULE), lower);
+  card.onclick = e => { if (!e.target.closest(".sq, .slider")) lab_(T.labPart(m.part)); };
+  return card;
+}
+function slimModule(m, Ll) {
+  const card = el("div", "module slim" + (m.picked ? " picked" : "")); card.style.padding = `${Ll.slimPad}px 6px`;
+  const line = tall(el("div", "mtop"), Ll.LOCK), n = el("div", "grow", m.label.toUpperCase()); n.style.font = `700 ${Ll.DENSE}px Ukulele, Duo, monospace`; n.style.letterSpacing = ".07em"; n.style.marginLeft = "6px";
+  line.append(icon("ic_part_" + m.key.toLowerCase(), 16), n, square(m.locked ? "ic_ph_lock" : "ic_ph_lock_open", (m.locked ? "Unlock " : "Lock ") + m.label, () => lab_(T.labLockPart(m.part))));
+  const choice = tall(el("div", "", m.words), Ll.slimChoice); choice.style.font = `700 ${Ll.DENSE}px Ukulele, Duo, monospace`; choice.style.marginTop = "2px";
+  card.append(line, choice);
+  card.setAttribute("aria-label", m.label + ": " + m.words.replace(/​/g, ""));
+  card.onclick = e => { if (!e.target.closest(".sq")) lab_(T.labPart(m.part)); };
+  return card;
+}
+// The open card (LabSettings.showOpen): its head (glyph, name, lock, die, ✕), then each dial a row; Control its grid.
+function openCard(o, Ll) {
+  const card = el("div", "opencard"); card.style.height = Ll.open + "px"; card.style.margin = `${Ll.pad}px -${Ll.pad}px 0`;
+  const head = tall(el("div", "mtop"), Ll.OPEN_HEAD), n = el("div", "grow", o.label.toUpperCase()); n.style.font = `700 ${Ll.DENSE}px Ukulele, Duo, monospace`; n.style.letterSpacing = ".07em"; n.style.marginLeft = "6px";
+  head.append(icon("ic_part_" + o.key.toLowerCase(), 16), n, square(o.locked ? "ic_ph_lock" : "ic_ph_lock_open", (o.locked ? "Unlock " : "Lock ") + o.label, () => lab_(T.labLockPart(o.part))),
+    square("ic_ph_dice", "Roll " + o.label, () => lab_(T.labRollPart(o.part)), !o.locked), square("ic_ph_x", "Close", () => lab_(T.labPart(-1))));
+  card.append(head, tall(el("div"), 10));
+  if (o.hand) {
+    const grid = el("div", "hand"), heads = tall(el("div", "hrow"), Ll.handHead);
+    heads.append(Object.assign(el("div"), { style: `width:${Ll.handName + 4}px` }));
+    for (const h of o.hand.heads) { const t = el("div", "hhead grow", h); t.style.font = `700 ${Ll.DENSE}px Ukulele, Duo, monospace`; heads.append(t); }
+    heads.append(Object.assign(el("div"), { style: `width:${8 + 2 * Ll.LOCK}px` }));
+    grid.append(heads);
+    o.hand.rows.forEach((r, i) => {
+      const line = tall(el("div", "hrow"), o.hand.cell), nm = el("div", "", r.name.toUpperCase()); nm.style.width = Ll.handName + 4 + "px"; nm.style.font = `700 ${Ll.DENSE}px Ukulele, Duo, monospace`; if (r.locked) nm.classList.add("small");
+      line.append(nm);
+      for (const c of r.cells) {
+        const cell = el("button", "hcell" + (c.value >= .75 ? " full" : c.value >= .17 ? " some" : "")), fill = el("i"), t = el("span", "", c.text);
+        fill.style.height = clamp(c.value, 0, 1) * 100 + "%"; t.style.font = `700 ${Ll.DENSE}px Ukulele, Duo, monospace`;
+        cell.append(fill, t); cell.disabled = c.locked; cell.setAttribute("aria-label", c.said); cell.onclick = () => lab_(T.labCell(c.dial));
+        line.append(cell);
+      }
+      const lock = square(r.locked ? "ic_ph_lock" : "ic_ph_lock_open", (r.locked ? "Unlock " : "Lock ") + r.name, () => lab_(T.labRowLock(i)), r.lock); lock.style.marginLeft = "8px";
+      line.append(lock, square("ic_ph_dice", "Roll " + r.name, () => lab_(T.labRowRoll(i)), !r.locked));
+      grid.append(line);
+    });
+    card.append(grid);
+  }
+  if (o.means) { const m = el("div", "", o.means); m.style.font = font("CAPTION"); card.append(m); }
+  for (const d of o.rows) card.append(d.kind === "GREYS" ? X.greySet(d, o.rowHeight, Ll) : dialRow(d, o.rowHeight, Ll));
+  return card;
+}
+// A dial's row (LabSettings.dialRow, its kind LabLayout.rowKind's): the label, a slider (a double tap resets it),
+// segments, a menu button or Fast is's switch, the value, the lock and die.
+function dialRow(d, height, Ll) {
+  const row = tall(el("div", "drow" + (d.kind === "STACKED" ? " stacked" : "")), d.kind === "STACKED" ? Ll.stackedRow : height);
+  const label = el("div", "dlabel", d.label); label.style.width = Ll.label + "px"; label.style.font = `700 ${Ll.DENSE}px Ukulele, Duo, monospace`;
+  if (!d.active) label.classList.add("faint"); else if (d.locked) label.classList.add("small");
+  let middle;
+  if (d.kind === "SLIDER") middle = slider(d.value, d.lo, d.hi, d.locked, d.dial, d, d.name);
+  else if (d.kind === "MENU") {
+    middle = el("button", "menu", d.options[Math.round(d.value)] + " ▾"); middle.style.font = `400 ${Ll.DENSE}px Ukulele, Duo, monospace`; middle.disabled = d.locked;
+    middle.onclick = () => {
+      const box = popup(middle, Ll.column), t = el("div", "otitle", d.name); t.style.font = font("LABEL"); box.append(t);
+      const wrap = el("div", "wrap"); d.options.forEach((o, i) => { const c = el("button", "chip" + (i === Math.round(d.value) ? " on" : ""), o); c.style.font = font("CAPTION", 700); c.onclick = () => { closePopup(); lab_(T.labOption(d.dial, i)); }; wrap.append(c); });
+      box.append(wrap); placePopup(screen.querySelector(".column").getBoundingClientRect().right + Ll.split);
+    };
+  } else {
+    middle = el("div", "segments");
+    const options = d.kind === "SWITCH" && !d.options.length ? ["Off", "On"] : d.options;
+    options.forEach((o, i) => { const s = el("button", "seg" + (i === Math.round(d.value) ? " on" : ""), o); s.style.font = `400 ${Ll.DENSE}px Ukulele, Duo, monospace`; s.style.padding = `0 ${Ll.SEGMENT_PAD}px`; s.disabled = d.locked; s.onclick = () => { if (i !== Math.round(d.value)) lab_(d.kind === "SWITCH" ? T.labFast() : T.labOption(d.dial, i)); }; middle.append(s); });
+    tall(middle, Ll.SEGMENT);
+  }
+  middle.classList.add("grow");
+  const ends = [];
+  if (d.shown != null) { const v = el("div", "dvalue", d.shown); v.style.width = Ll.value + "px"; v.style.font = `400 ${Ll.DENSE}px Ukulele, Duo, monospace`; if (!d.active) v.classList.add("faint"); ends.push(v); }
+  if (d.rolls) {
+    const lock = square(d.locked ? "ic_ph_lock" : "ic_ph_lock_open", (d.locked ? "Unlock " : "Lock ") + d.name, () => lab_(T.labLock(d.dial)), d.lock); lock.style.marginLeft = "8px";
+    ends.push(lock, square("ic_ph_dice", "Roll " + d.name, () => lab_(T.labRoll(d.dial)), !d.locked));
+  } else ends.push(Object.assign(el("div"), { style: `width:${8 + 2 * Ll.LOCK}px;flex:none` }));
+  if (d.kind === "STACKED") { const under = el("div", "mtop"); under.append(middle, ...ends); row.append(label, under); }
+  else if (d.kind === "SWITCH") row.append(middle, ...ends);
+  else row.append(label, middle, ...ends);
+  return row;
+}
+// A slider (BandSlider): pressed, an Undo step starts; moved, only its knob and value change; let go, the lab is shown
+// as it now stands; two taps within BandSlider's 500 ms reset its dial.
+let lastTap = { dial: -1, at: 0, x: 0 };
+function slider(value, lo, hi, locked, dial, row, said) {
+  const s = el("div", "slider" + (locked ? " locked" : "")), knob = el("i");
+  s.append(el("b"), knob); s.setAttribute("role", "slider"); s.setAttribute("aria-label", said);
+  const place = v => { knob.style.left = (100 * clamp((v - lo) / (hi - lo || 1), 0, 1)) + "%"; };
+  place(value);
+  if (locked) return s;
+  const at = e => { const r = s.getBoundingClientRect(); return lo + clamp((e.clientX - r.left) / Math.max(1, r.width), 0, 1) * (hi - lo); };
+  let id = null;
+  s.addEventListener("pointerdown", e => {
+    e.stopPropagation();
+    if (row && lastTap.dial === dial && e.timeStamp - lastTap.at <= 500 && Math.abs(e.clientX - lastTap.x) <= 3 * HOLD.slop) { lastTap.dial = -1; return lab_(T.labResetDial(dial)); }
+    lastTap = { dial, at: e.timeStamp, x: e.clientX };
+    id = e.pointerId; try { s.setPointerCapture(id); } catch (err) { /* synthetic */ }
+    const v = at(e); place(v); T.labSlide(dial, v, 0);
+  });
+  s.addEventListener("pointermove", e => {
+    if (e.pointerId !== id) return;
+    const v = at(e); place(v); T.labSlide(dial, v, 1);
+    if (row) { const shown = s.parentNode.querySelector(".dvalue"); if (shown) shown.textContent = JSON.parse(T.lab()).open.rows.find(q => q.dial === dial)?.shown ?? shown.textContent; }
+  });
+  const end = e => { if (e.pointerId !== id) return; id = null; lab_(T.labSlide(dial, at(e), 2)); };
+  s.addEventListener("pointerup", end); s.addEventListener("pointercancel", end);
+  s.addEventListener("click", e => e.stopPropagation());
+  return s;
+}
+// The swap panel (SwapStrip) beside the column, level with the open part's module: its choices' tiles, the one in use
+// marked, paged; a tap puts that choice in and closes it, as Done and a tap outside it do.
+function showSwaps(Ll) {
+  const s = lp.swaps, n = s.tiles.length, per = s.perPage, pages = Math.max(1, Math.ceil(n / per));
+  if (swapPage < 0) swapPage = Math.floor(Math.max(0, s.tiles.findIndex(t => t.now)) / per);
+  swapPage = clamp(swapPage, 0, pages - 1);
+  const anchor = [...screen.querySelectorAll(".module")].find(m => m.classList.contains("picked")) || screen.querySelector(".column");
+  const box = popup(anchor, s.panelWidth);
+  box.classList.add("swaps");
+  const scrim = popped.scrim;  // closePopup (the scrim's first listener) has let it go by the time this one runs
+  scrim.addEventListener("pointerdown", e => { if (e.target === scrim) lab_(T.labCloseSwap()); });
+  const head = tall(el("div", "mtop"), 36), t = el("div", "grow", s.label); t.style.font = font("LABEL"); t.style.marginLeft = "6px";
+  head.append(icon("ic_part_" + s.key.toLowerCase(), 20), t);
+  if (pages > 1) head.append(square("ic_ph_caret_left", "Previous page", () => { swapPage--; lab_(T.lab()); }, swapPage > 0), square("ic_ph_caret_right", "Next page", () => { swapPage++; lab_(T.lab()); }, swapPage < pages - 1));
+  head.append(lb("Done", () => { closePopup(); lab_(T.labCloseSwap()); }, "quiet"));
+  const grid = el("div", "tiles"); grid.style.gridTemplateColumns = `repeat(${s.columns}, 1fr)`;
+  for (let i = swapPage * per; i < Math.min(n, (swapPage + 1) * per); i++) {
+    const tile = el("button", "tile" + (s.tiles[i].now ? " picked" : "")), c = el("canvas"), cap = el("div", "cap");
+    tall(tile, s.cellHeight);
+    s.tiles[i].caption.forEach((w, k) => { const line = el("div", k ? "small" : "", w); line.style.font = font("CAPTION", k ? 400 : 700); cap.append(line); });
+    tile.append(c, cap); tile.setAttribute("aria-label", s.label + ": " + s.tiles[i].caption.join(", "));
+    tile.onclick = () => { closePopup(); lab_(T.labSwap(i)); };
+    grid.append(tile);
+    const tileIndex = i;
+    requestAnimationFrame(() => { const r = c.getBoundingClientRect(); if (r.height > 2) toolArt(c, r.width, r.height, null, "swap " + s.tiles[tileIndex].key + " " + s.part, (w, h) => T.labSample(s.part, tileIndex, w, h), false, false); });
+  }
+  for (let k = grid.children.length; k % s.columns; k++) grid.append(tall(el("div", "tile"), s.cellHeight));
+  box.append(head, grid);
+  placePopup(screen.querySelector(".column").getBoundingClientRect().right + Ll.split);
+}
+// Back: each slot the lab changed takes its brush, the guest's own; opened from the Tools page, the Tools page again.
+function leaveLab() {
+  const back = JSON.parse(T.labLeave());
+  ownTools(back.slot); clearPad();
+  if (back.tools) { shown = null; return openTools(back.slot); }
+  closeScreen();
+}
+
+C = JSON.parse(T.layout(innerWidth, innerHeight)).c;
+// The rest of the drawing screen (M4: the menu, Play, Shapes, the smudge tool, the Lasso, Text, the Dropper, Zen Mode,
+// Left-Handed, Hold to Snap), in a module of its own over this page's parts.
+M4 = M4module.install({ T, E, $, el, font, icon, vector, drawVector, sized, place, popup, placePopup, closePopup, menuRow, holdable, say, note, pull, send,
+  seen, picture, choose, picker, showTools, showFaces, keepLook, saveStore, pagePoint, hideRing, HOLD, screenGrey, slotOf, look, arrange, showView, undo, ownTools,
+  get P() { return P; }, get S() { return S; }, get W() { return W; }, get H() { return H; }, get L() { return L; }, get C() { return C; }, get V() { return V; },
+  get dpr() { return dpr; }, get sel() { return sel; }, set sel(v) { sel = v; }, get tools() { return tools; }, get live() { return live; }, get px() { return px; }, get dark() { return dark; },
+  get popped() { return popped; }, get shown() { return shown; }, view, pageCanvas, get pageCtx() { return pageCtx; }, get books() { return BK; }, get ST() { return ST; } });
+// The Stamp, Cut Stamp and Import Image, in a module of their own.
+ST = StampModule.install({ T, el, font, popup, placePopup, closePopup, menuRow, say, pull, send, view, sized, picture, pagePoint, hideRing, HOLD, screenGrey, ownTools: () => ownTools(),
+  get P() { return P; }, get S() { return S; }, get W() { return W; }, get H() { return H; }, get V() { return V; }, get dpr() { return dpr; }, get live() { return live; },
+  get shown() { return shown; }, get pageCtx() { return pageCtx; }, get pad() { return pad; }, get M4() { return M4; } });
+// Brush Lab's Open, its picker box and Grey Shift's set; the column's Show Kinds, sand timer and wet indicator.
+X = XModule.install({ T, $, el, font, icon, vector, drawVector, sized, place, popup, placePopup, closePopup, menuRow, say, pull, send, look, lb, iconButton, square,
+  tall, lab_, boxInput, drawBox, readoutDot, toolArt, wetStart, screenGrey, HOLD, screen,
+  get P() { return P; }, get S() { return S; }, get W() { return W; }, get H() { return H; }, get L() { return L; }, get C() { return C; }, get dpr() { return dpr; },
+  get sel() { return sel; }, get live() { return live; }, get lp() { return lp; }, get popped() { return popped; }, get pad() { return pad; }, get shown() { return shown; } });
+takeTools(tools);
+newPage(tools.width, tools.height);
+arrange();
+// The Manta's notebooks on a live page (Share on Wi-Fi): its shelf, downloads, its page bar; in a module of its own.
+BK = BooksModule.install({ T, E, $, el, font, icon, popup, placePopup, closePopup, menuRow, holdable, say, sized, argbImage, key, crypt, me,
+  newPage: () => newPage(W, H), get W() { return W; }, get H() { return H; }, get L() { return L; }, get C() { return C; }, get live() { return !!live; } });
+// The relay's changes and who listens, once the screen is laid out (all of them from the start: history=1).
+listen();
+loaded();
+// The open screen laid out anew for the window (not while the search is typed into: the keyboard resizes it).
+addEventListener("resize", () => {
+  arrange();
+  if (!shown || document.activeElement && document.activeElement.matches("input.search")) return;
+  T.screens(innerWidth, innerHeight); closePopup();
+  if (shown === "lab") lab_(T.lab()); else tools_(T.toolsPage());
+});
+// An iPad: Scribble takes the Pencil's strokes for handwriting unless it is off.
+if (/iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)) say("Apple Pencil: turn off Scribble in Settings.", 3 * HOLD.noteMs);
+// For the checks (live-check.cjs).
+window.guest = { get L() { return L; }, get tools() { return tools; }, get sel() { return sel; }, get V() { return V; }, get W() { return W; }, get H() { return H; },
+  get S() { return S; }, own, drawMs, strokeLog, liveLog, undo, redo, choose, E, ready: true, get P() { return P; },
+  get M4() { return M4; }, get ST() { return ST; }, get BK() { return BK; }, get X() { return X; }, get rows() { return rows; }, lab_, get live() { return live; }, get px() { return px; }, get dark() { return dark; },
+  get shown() { return shown; }, get tp() { return tp; }, get lp() { return lp; }, get eraseKinds() { return eraseKinds; }, get pad() { return pad; }, stored: () => stored,
+  get status() { return status; } };
+</script>

@@ -74,6 +74,13 @@ final class DrawingBook {
     private final ArrayList<Integer> steps=new ArrayList<>();
     /** Inkwash: each page's own template key (null: none), kept beside {@link #steps}: what Random gave it, for good ({@link NotebookOptions#pageTemplate}). */
     private final ArrayList<String> templates=new ArrayList<>();
+    /** Inkwash: each page's own surface (0: the notebook's, else its index plus one), kept beside {@link #templates}; a stack's is its bottom page's. */
+    private final ArrayList<Integer> surfaces=new ArrayList<>();
+    /**
+     * Favourites (the owner, 2026-11-06): each page's star mark, kept beside {@link #surfaces} (0: none; a stack's is its
+     * bottom page's). In a notebook, the id its copy in Favourites carries; in Favourites, the same id on that copy.
+     */
+    private final ArrayList<Integer> faves=new ArrayList<>();
     /** Inkwash: what Random draws a new page's template with (a check may seed it). */
     java.util.Random dice=new java.util.Random();
     /** What each decoded cover's paper was made from ({@link #paperKey}), front then back. */
@@ -87,9 +94,11 @@ final class DrawingBook {
     }
 
     DrawingBook(ToneDocument first) {
-        width=first.width;height=first.height;pages.add(null);canvasChoices.add(0);pictures.add(null);steps.add(0);templates.add(null);cache.put(0,first);
+        width=first.width;height=first.height;pages.add(null);canvasChoices.add(0);pictures.add(null);steps.add(0);templates.add(null);surfaces.add(0);faves.add(0);cache.put(0,first);first.surface=surface(0);
         savedRevisions.put(0,first.revision());
     }
+    /** Inkwash: a new notebook, its one page {@code first}, on a new notebook's options ({@link NotebookOptions#NEW}). */
+    static DrawingBook fresh(ToneDocument first){DrawingBook book=new DrawingBook(first);book.restoreOptions(NotebookOptions.NEW);return book;}
     DrawingBook(int width,int height,ArrayList<byte[]> pages,int index) throws IOException {
         this(width,height,held(pages),index,null);
     }
@@ -101,7 +110,7 @@ final class DrawingBook {
     DrawingBook(int width,int height,java.util.List<PackedPage> pages,int index,ToneDocument decoded) throws IOException {
         ToneDocument.validateSize(width,height);this.width=width;this.height=height;
         if(pages.isEmpty()||pages.size()>MAX_PAGES||index<0||index>=pages.size())throw new IOException("Invalid page list");
-        this.pages.addAll(pages); for(int i=0;i<pages.size();i++){canvasChoices.add(0);pictures.add(null);steps.add(0);templates.add(null);} this.index=index;cache.put(index,decoded==null?decode(pages.get(index)):decoded);
+        this.pages.addAll(pages); for(int i=0;i<pages.size();i++){canvasChoices.add(0);pictures.add(null);steps.add(0);templates.add(null);surfaces.add(0);faves.add(0);} this.index=index;cache.put(index,decoded==null?decode(pages.get(index)):decoded);current().surface=surface(index);
         packedRevisions.put(index,current().revision());savedRevisions.put(index,current().revision());
     }
     int count(){return pages.size();}
@@ -216,6 +225,28 @@ final class DrawingBook {
     }
     /** Inkwash: page {@code i}'s template (a cover's: Blank): its stack's bottom page's, under every layer of it. */
     NotebookTemplate template(int i){return isCover(i)||i<0||i>=count()?NotebookTemplate.BLANK:options.pageTemplate(templates.get(stacks().bottom(i)));}
+    /**
+     * Inkwash: the surface page {@code i} is on (the surface spec, 2026-11-01): its stack's own (Page Settings' Surface),
+     * else the notebook's; a cover's, the notebook's. Every brush drawing on it meets it ({@link ToneDocument#surface}).
+     */
+    BrushTexture surface(int i){int own=ownSurface(i);return own>0?BrushTexture.of(own-1):options.surface;}
+    /** Inkwash: page {@code i}'s stack's own surface, its index plus one (0: the notebook's). */
+    int ownSurface(int i){return isCover(i)||i<0||i>=count()?0:surfaces.get(stacks().bottom(i));}
+    /** Inkwash: page {@code i}'s stack's own surface made {@code s} (null, or the notebook's: back to the notebook's), a change to save. */
+    void setPageSurface(int i,BrushTexture s){
+        if(isCover(i)||i<0||i>=count())return;
+        i=stacks().bottom(i);
+        int own=s==null||s==options.surface?0:s.ordinal()+1;
+        if(surfaces.get(i)==own)return;
+        surfaces.set(i,own);edits++;guideCached();
+    }
+    /** Inkwash: every page's own surface (index plus one, 0: none), for its file. */
+    int[] pageSurfaces(){int[] s=new int[count()];for(int i=0;i<s.length;i++)s[i]=surfaces.get(i);return s;}
+    /** Inkwash: the pages' own surfaces a file or recovery held (null, or for another page count: none), not a change. */
+    void restorePageSurfaces(int[] own){
+        for(int i=0;i<count();i++)surfaces.set(i,own!=null&&own.length==count()&&own[i]>=0&&own[i]<=BrushTexture.values().length?own[i]:0);
+        guideCached();
+    }
     /** Inkwash: under Random, every page without a template of its own is given one now, and keeps it. */
     private void fillTemplates(){ for(int i=0;i<count();i++)if(templates.get(i)==null)templates.set(i,newTemplate(i)); }
     /** Inkwash: the own template of a page at {@code at} (in {@link #templates}): Random's pick, never its neighbours' while the set has another, or none. */
@@ -371,8 +402,8 @@ final class DrawingBook {
         return p!=null?":p"+p.length+'/'+p.crc:"";
     }
     /** Page {@code i} of this book (not a cover), with its template's guides under it as the screen shows them ({@link NotebookOptions#guidesShown}; shared by every page of the template). */
-    private ToneDocument guided(int i,ToneDocument page){ page.placeGuides(template(i).shown(width,height,options.guidesShown)); return page; }
-    private void guideCached(){ for(java.util.Map.Entry<Integer,ToneDocument> page:cache.entrySet())if(!isCover(page.getKey()))guided(page.getKey(),page.getValue()); }
+    private ToneDocument guided(int i,ToneDocument page){ page.placeGuides(template(i).shown(width,height,options.guidesShown)); page.surface=surface(i); return page; }
+    private void guideCached(){ for(java.util.Map.Entry<Integer,ToneDocument> page:cache.entrySet())if(!isCover(page.getKey()))guided(page.getKey(),page.getValue()); else page.getValue().surface=surface(page.getKey()); }
     /**
      * Makes the paper of the cover drawn on again if what it is made from changed (the name, the cover picture); whether
      * it did. A cover not drawn on now gets its paper again when turned to ({@link #select}), so turning pages never
@@ -422,7 +453,7 @@ final class DrawingBook {
     void addPage() throws IOException {
         if(count()>=MAX_PAGES)throw new IOException(FULL_PAGES);
         retainCurrent();
-        index=pages.size();pages.add(null);canvasChoices.add(0);pictures.add(null);steps.add(0);templates.add(newTemplate(templates.size()));
+        index=pages.size();pages.add(null);canvasChoices.add(0);pictures.add(null);steps.add(0);templates.add(newTemplate(templates.size()));surfaces.add(0);faves.add(0);
         cache.put(index,guided(index,blankPage()));edits++;pageEdits++;evict();
     }
     /**
@@ -445,7 +476,7 @@ final class DrawingBook {
      */
     boolean appendUnchanged(PackedPage page,byte[] picture) {
         if(count()>=MAX_PAGES||packedBytes()+page.length>MAX_PACKED_BYTES)return false;
-        pages.add(page);canvasChoices.add(0);pictures.add(picture);steps.add(0);templates.add(newTemplate(templates.size()));
+        pages.add(page);canvasChoices.add(0);pictures.add(picture);steps.add(0);templates.add(newTemplate(templates.size()));surfaces.add(0);faves.add(0);
         return true;
     }
     /** Inserts a copy of the current page right after it, stacked on it (a layer), without its undo history, and selects the copy. */
@@ -461,7 +492,7 @@ final class DrawingBook {
         int target=index+1;
         shiftPages(target,1);
         // The copy is a layer stacked on its original (Duplicate, the side column's layers): a stack stays one run.
-        pages.add(target,packed);canvasChoices.add(target,canvasChoice());pictures.add(target,picture);steps.add(target,steps.get(index)|TracingPaper.LINKED);templates.add(target,templates.get(index));
+        pages.add(target,packed);canvasChoices.add(target,canvasChoice());pictures.add(target,picture);steps.add(target,steps.get(index)|TracingPaper.LINKED);templates.add(target,templates.get(index));surfaces.add(target,surfaces.get(index));faves.add(target,0);
         if(cover>=target)cover++;
         if(ghost>=target)ghost++;
         index=target;cache.put(index,copy);if(!timed)packedRevisions.put(index,copy.revision());
@@ -479,7 +510,7 @@ final class DrawingBook {
         if(shown==null) shown=decodePage(next);
         cache.remove(removed);packedRevisions.remove(removed);savedRevisions.remove(removed);pictureRevisions.remove(removed);
         unstack(removed);
-        pages.remove(removed);canvasChoices.remove(removed);pictures.remove(removed);steps.remove(removed);templates.remove(removed);
+        pages.remove(removed);canvasChoices.remove(removed);pictures.remove(removed);steps.remove(removed);templates.remove(removed);surfaces.remove(removed);faves.remove(removed);
         cover=cover==removed?-1:cover>removed?cover-1:cover;
         ghost=ghost==removed?-1:ghost>removed?ghost-1:ghost;
         shiftPages(removed+1,-1);
@@ -490,7 +521,7 @@ final class DrawingBook {
         if(linked(i)||!linked(i+1))return;
         link(i+1,false);
         // The stack's guides, own rules, ghost pin and cover picture go with it to the layer on the bottom.
-        templates.set(i+1,templates.get(i));
+        templates.set(i+1,templates.get(i));surfaces.set(i+1,surfaces.get(i));faves.set(i+1,faves.get(i));
         steps.set(i+1,steps.get(i+1)&~OWN|steps.get(i)&OWN);
         if(cover==i)cover=i+1;
         if(ghost==i)ghost=i+1;
@@ -505,7 +536,7 @@ final class DrawingBook {
         if(count()<=1)throw new IOException(LAST_PAGE);
         cache.remove(page);packedRevisions.remove(page);savedRevisions.remove(page);pictureRevisions.remove(page);
         unstack(page);
-        pages.remove(page);canvasChoices.remove(page);pictures.remove(page);steps.remove(page);templates.remove(page);
+        pages.remove(page);canvasChoices.remove(page);pictures.remove(page);steps.remove(page);templates.remove(page);surfaces.remove(page);faves.remove(page);
         shiftPages(page+1,-1);guideCached();
         if(index>page)index--;
         cover=cover==page?-1:cover>page?cover-1:cover;
@@ -521,7 +552,7 @@ final class DrawingBook {
     void move(int from,int to) {
         if(from<0||from>=count()||to<0||to>=count())throw new IllegalArgumentException("Invalid page");
         if(from==to)return;
-        pages.add(to,pages.remove(from));canvasChoices.add(to,canvasChoices.remove(from));pictures.add(to,pictures.remove(from));steps.add(to,steps.remove(from));templates.add(to,templates.remove(from));
+        pages.add(to,pages.remove(from));canvasChoices.add(to,canvasChoices.remove(from));pictures.add(to,pictures.remove(from));steps.add(to,steps.remove(from));templates.add(to,templates.remove(from));surfaces.add(to,surfaces.remove(from));faves.add(to,faves.remove(from));
         LinkedHashMap<Integer,ToneDocument> moved=new LinkedHashMap<>(4,.75f,true);
         for(java.util.Map.Entry<Integer,ToneDocument> page:cache.entrySet())moved.put(moved(page.getKey(),from,to),page.getValue());
         cache.clear();cache.putAll(moved);
@@ -549,7 +580,7 @@ final class DrawingBook {
         int paper=current().paperTone();
         addPage(); current().placePaper(paper); move(count()-1,at);
         // Above: stacked on the page drawn on. Below: in its place in the stack, the page drawn on stacked on it.
-        if(above)link(at,true); else { link(at,!bottom); link(at+1,true); if(bottom){templates.set(at,templates.get(at+1));steps.set(at,steps.get(at)&~OWN|steps.get(at+1)&OWN);} }
+        if(above)link(at,true); else { link(at,!bottom); link(at+1,true); if(bottom){templates.set(at,templates.get(at+1));surfaces.set(at,surfaces.get(at+1));faves.set(at,faves.get(at+1));steps.set(at,steps.get(at)&~OWN|steps.get(at+1)&OWN);} }
         guideCached();
         return true;
     }
@@ -572,13 +603,13 @@ final class DrawingBook {
         if(isCover(i)||i<0||i>=count())throw new IllegalArgumentException("Invalid page");
         ToneDocument page=cached(i);
         PackedPage packed=page!=null&&!retained(i)?PackedPage.of(encode(page,DocumentCodec.QUICK),true):pages.get(i);
-        return new Taken(i,packed,picture(i),canvasChoices.get(i),steps.get(i),templates.get(i),cover==i,ghost==i,linked(i+1));
+        return new Taken(i,packed,picture(i),canvasChoices.get(i),steps.get(i),templates.get(i),surfaces.get(i),faves.get(i),cover==i,ghost==i,linked(i+1));
     }
     /** Inkwash: a page {@link #take} took, back in its place (not drawn on: its caller selects it); one book edit. */
     void restore(Taken t) throws IOException {
         if(count()>=MAX_PAGES||t.at>count())throw new IOException(FULL_PAGES);
         shiftPages(t.at,1);
-        pages.add(t.at,t.packed);canvasChoices.add(t.at,t.choice);pictures.add(t.at,t.picture);steps.add(t.at,t.bits);templates.add(t.at,t.template);
+        pages.add(t.at,t.packed);canvasChoices.add(t.at,t.choice);pictures.add(t.at,t.picture);steps.add(t.at,t.bits);templates.add(t.at,t.template);surfaces.add(t.at,t.surface);faves.add(t.at,t.fave);
         if(cover>=t.at)cover++;
         if(ghost>=t.at)ghost++;
         if(index>=t.at)index++;
@@ -589,11 +620,48 @@ final class DrawingBook {
     }
     /** Inkwash: a page as {@link #take} took it. */
     static final class Taken {
-        final int at,choice,bits; final PackedPage packed; final byte[] picture; final String template; final boolean cover,ghost,above;
-        Taken(int at,PackedPage packed,byte[] picture,int choice,int bits,String template,boolean cover,boolean ghost,boolean above){
-            this.at=at;this.packed=packed;this.picture=picture;this.choice=choice;this.bits=bits;this.template=template;this.cover=cover;this.ghost=ghost;this.above=above;
+        final int at,choice,bits; final PackedPage packed; final byte[] picture; final String template; final int surface,fave; final boolean cover,ghost,above;
+        Taken(int at,PackedPage packed,byte[] picture,int choice,int bits,String template,int surface,int fave,boolean cover,boolean ghost,boolean above){
+            this.at=at;this.packed=packed;this.picture=picture;this.choice=choice;this.bits=bits;this.template=template;this.surface=surface;this.fave=fave;this.cover=cover;this.ghost=ghost;this.above=above;
         }
     }
+    /**
+     * Favourites (the owner, 2026-11-06): stack {@code place} as it is now, every layer {@link #take}n, for {@link #append}
+     * to another book: its template and surface made its own, so it looks the same there.
+     */
+    java.util.List<Taken> copyStack(int place) throws IOException {
+        PageStacks s=stacks();
+        if(place<0||place>=s.count())throw new IllegalArgumentException("Invalid page");
+        java.util.List<Taken> stack=new ArrayList<>();
+        for(int p=s.first(place);p<=s.last(place);p++){
+            Taken t=take(p);
+            stack.add(p>s.first(place)?t:new Taken(t.at,t.packed,t.picture,t.choice,t.bits,NotebookOptions.ownKey(template(p)),surface(p).ordinal()+1,t.fave,false,false,false));
+        }
+        return stack;
+    }
+    /**
+     * Favourites: {@code stack}, another book's ({@link #copyStack}), after the last page as one page, its bottom marked
+     * {@code fave}; not drawn on, a book edit a layer. Each page's bytes are held here, its own: the other book's file may change.
+     */
+    void append(java.util.List<Taken> stack,int fave) throws IOException {
+        if(count()+stack.size()>MAX_PAGES)throw new IOException(FULL_PAGES);
+        for(int k=0;k<stack.size();k++){
+            Taken t=stack.get(k);
+            restore(new Taken(count(),PackedPage.of(t.packed.bytes()),t.picture,t.choice,t.bits&~LAST,t.template,t.surface,k==0?fave:0,false,false,false));
+        }
+    }
+    /** Favourites: page {@code i}'s stack's star mark (0: none; a cover: none). */
+    int fave(int i){return isCover(i)||i<0||i>=count()?0:faves.get(stacks().bottom(i));}
+    /** Favourites: page {@code i}'s stack's star mark made {@code fave} (0: none), a change to save. */
+    void setFave(int i,int fave){
+        if(isCover(i)||i<0||i>=count())return;
+        i=stacks().bottom(i);
+        if(faves.set(i,fave)!=fave)edits++;
+    }
+    /** Favourites: every page's star mark, for its file. */
+    int[] pageFaves(){int[] f=new int[count()];for(int i=0;i<f.length;i++)f[i]=faves.get(i);return f;}
+    /** Favourites: the marks a file or recovery held (null, or for another page count: none), not a change. */
+    void restorePageFaves(int[] f){for(int i=0;i<count();i++)faves.set(i,f!=null&&f.length==count()?f[i]:0);}
     /** Inkwash: the book's edits so far (pages, their order, tracing paper, options): what an undo of a layer change checks nothing else changed since. */
     long changes(){return edits;}
     /** Where page {@code i} is once page {@code from} moved to {@code to}; a cover's place stays. */
@@ -657,7 +725,7 @@ final class DrawingBook {
     private ToneDocument decodePage(int i) throws IOException {
         PackedPage packed=packedAt(i);
         ToneDocument page=packed==null?(isCover(i)?new ToneDocument(width,height):blankPage()):decode(packed);
-        if(isCover(i))placePaper(i,page); else guided(i,page);
+        if(isCover(i)){placePaper(i,page);page.surface=surface(i);} else guided(i,page);
         packedRevisions.put(i,page.revision());savedRevisions.put(i,page.revision());
         if(pictureAt(i)!=null)pictureRevisions.put(i,page.revision());
         return page;
@@ -841,6 +909,10 @@ final class DrawingBook {
         final int[] pageRules;
         /** Inkwash: each page's own time, s (0: none). */
         final int[] pageSeconds;
+        /** Each page's own surface ({@link DrawingBook#pageSurfaces()}). */
+        final int[] pageSurfaces;
+        /** Favourites: each page's star mark ({@link DrawingBook#pageFaves()}). */
+        final int[] pageFaves;
         /** Inkwash: the day a page was last added to or changed (today, when one is in this snapshot; -1: not known), and the page edits it holds. */
         final long lastDay,pageEdits;
         /** The pages as {@code BookCodec} last wrote them, the active one packed, and where each one's bytes start in the file; null until written. */
@@ -873,7 +945,7 @@ final class DrawingBook {
             tracing=book.tracing();
             pageTemplates=book.pageTemplates();
             pageRules=book.pageRules();
-            pageSeconds=book.pageSeconds();
+            pageSeconds=book.pageSeconds();pageSurfaces=book.pageSurfaces();pageFaves=book.pageFaves();
             pageEdits=book.pageEdits;
             lastDay=book.pagesChanged()?book.today.getAsLong():book.lastDay;
         }

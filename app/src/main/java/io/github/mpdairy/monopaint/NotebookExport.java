@@ -32,9 +32,11 @@ import java.util.zip.DeflaterOutputStream;
 final class NotebookExport {
     /** The page's pixels a printed inch. */
     static final int DPI = 300;
-    private static final byte[] SIGNATURE = {(byte) 137, 'P', 'N', 'G', 13, 10, 26, 10};
+    static final byte[] SIGNATURE = {(byte) 137, 'P', 'N', 'G', 13, 10, 26, 10};
     /** The PNG's text key for its page's CRC-32. */
     static final String KEY = "Inkwash page";
+    /** A PDF picture's private chunk ({@link #vectorPng}): the PDF path operators of the Vector Ink lines drawn over it, deflated. */
+    static final String VECTORS = "veCt";
 
     // PNG
 
@@ -43,9 +45,12 @@ final class NotebookExport {
     /** As {@link #png(ToneDocument.Snapshot, long)}, the page's fridge magnets drawn by {@code tiles} over it ({@link Magnets#stamp}; null: none). */
     static byte[] png(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles) { return png(page, crc, tiles, false); }
     /** As above, with the page's template guides under its marks when {@code guides} (every notebook prints them; the page must hold them). */
-    static byte[] png(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles, boolean guides) {
-        int w = page.width, h = page.height;
-        byte[] greys = greys(page, tiles, guides);
+    static byte[] png(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles, boolean guides) { return png(page, crc, tiles, guides, null); }
+    /** As above, carrying {@code vectors} (null: none) in its {@link #VECTORS} chunk: {@link #vectorPng}'s. */
+    private static byte[] png(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles, boolean guides, byte[] vectors) { return png(greys(page, tiles, guides), page.width, page.height, crc, DPI, vectors); }
+    /** {@code greys} ({@code w × h}, a byte a pixel) as {@link #png} writes a page's, at {@code dpi} (Export Page's Social: the page's print size). */
+    static byte[] png(byte[] greys, int w, int h, long crc, int dpi) { return png(greys, w, h, crc, dpi, null); }
+    private static byte[] png(byte[] greys, int w, int h, long crc, int dpi, byte[] vectors) {
         // At most 16 greys (pen and pencil on plain paper, mostly): a palette of exactly those, 1, 2 or 4 bits a pixel,
         // lossless and far smaller; more (washes, magnets' soft edges): 8-bit grey as always.
         boolean[] seen = new boolean[256];
@@ -99,25 +104,30 @@ final class NotebookExport {
                 for (int k = 0; k < n; k++) plte[3 * k] = plte[3 * k + 1] = plte[3 * k + 2] = palette[k];
                 chunk(png, "PLTE", plte);
             }
-            // 300 dpi, as pixels a metre, so it prints at its real size.
-            ByteArrayOutputStream phys = new ByteArrayOutputStream();
-            DataOutputStream p = new DataOutputStream(phys);
-            int perMetre = (int) Math.round(DPI / .0254); p.writeInt(perMetre); p.writeInt(perMetre); p.writeByte(1);
-            chunk(png, "pHYs", phys.toByteArray());
-            chunk(png, "tEXt", (KEY + "\0" + String.format(Locale.ROOT, "%08x", crc)).getBytes(StandardCharsets.ISO_8859_1));
+            about(png, dpi, crc);
+            if (vectors != null) chunk(png, VECTORS, vectors);
             chunk(png, "IDAT", data.toByteArray());
             chunk(png, "IEND", new byte[0]);
             return png.toByteArray();
         } catch (IOException impossible) { throw new IllegalStateException(impossible); }
+    }
+    /** A page's PNG's pHYs and tEXt: {@code dpi} as pixels a metre, so it prints at its real size; its page's CRC-32 ({@link #KEY}). */
+    static void about(OutputStream png, int dpi, long crc) throws IOException {
+        ByteArrayOutputStream phys = new ByteArrayOutputStream();
+        DataOutputStream p = new DataOutputStream(phys);
+        int perMetre = (int) Math.round(dpi / .0254); p.writeInt(perMetre); p.writeInt(perMetre); p.writeByte(1);
+        chunk(png, "pHYs", phys.toByteArray());
+        chunk(png, "tEXt", (KEY + "\0" + String.format(Locale.ROOT, "%08x", crc)).getBytes(StandardCharsets.ISO_8859_1));
     }
     /**
      * The page's greys as {@link #png} writes them, a byte a pixel, row by row: its composite in smooth greys, its guides
      * under its marks when {@code guides}, its magnets stamped over by {@code tiles} (null: none). Also a page's Layers
      * copy's merged image ({@link PageExport}).
      */
-    static byte[] greys(ToneDocument.Snapshot page, Magnets.Tiles tiles, boolean guides) {
+    static byte[] greys(ToneDocument.Snapshot page, Magnets.Tiles tiles, boolean guides) { return greys(PagePicture.Composite.of(page, guides, 0), page, tiles); }
+    /** As above, of {@code composite} (the page's, perhaps without some layers: {@link PagePicture.Composite#of}). */
+    static byte[] greys(PagePicture.Composite composite, ToneDocument.Snapshot page, Magnets.Tiles tiles) {
         int w = page.width, h = page.height;
-        PagePicture.Composite composite = guides ? PagePicture.Composite.printed(page) : new PagePicture.Composite(page);
         int[] row = new int[w];
         // The page's greys, a byte a pixel; with magnets, the whole page as its PNG copy shows it first, its tiles stamped on.
         byte[] greys = new byte[w * h];
@@ -135,7 +145,55 @@ final class NotebookExport {
         }
         return greys;
     }
-    private static void chunk(OutputStream out, String type, byte[] data) throws IOException {
+    /**
+     * A page's picture for its PDF page with Vector Ink's lines as vectors (docs/superpowers/specs/2026-11-04-vector-ink-design.md,
+     * phase 2), sharp at any zoom or print size: {@code page} (a stack flattened, the copy's own) as {@link #png} draws it
+     * but without the layers {@link #vectorLayers} gives (their pixels would show jagged round the lines), which it hides on
+     * {@code page}, carrying their lines as PDF path operators ({@link VectorLines#pdf}, page pixels, in the copies' greys)
+     * for {@link NotebookPdf#write} to draw over it. A page holding kept dry strokes ({@link PngRender#sharp}) at twice
+     * the page, 600 dpi, those strokes drawn sharp ({@link PngRender#high}, the rest its pixels doubled), placed at the
+     * page's size. Null when it has neither: its PDF page is the PNG copy's, as ever.
+     */
+    static byte[] vectorPng(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles, boolean guides) throws IOException {
+        List<ToneDocument.Layer> lined = vectorLayers(page, tiles);
+        boolean sharp = PngRender.sharp(page);
+        if (lined.isEmpty() && !sharp) return null;
+        byte[] vectors = null;
+        if (!lined.isEmpty()) {
+            StringBuilder ops = new StringBuilder();
+            for (ToneDocument.Layer layer : lined) { layer.lines.pdf(ops, DotPattern::exportGray); layer.visible = false; }
+            ByteArrayOutputStream zipped = new ByteArrayOutputStream();
+            try (DeflaterOutputStream zip = new DeflaterOutputStream(zipped)) { zip.write(ops.toString().getBytes(StandardCharsets.ISO_8859_1)); }
+            vectors = zipped.toByteArray();
+        }
+        return sharp ? PngRender.high(page, false, tiles, guides, crc, vectors) : png(page, crc, tiles, guides, vectors);
+    }
+    /**
+     * The layers of {@code page} (a stack flattened) whose lines its PDF draws as vectors, bottom first: each holding Vector
+     * Ink's lines and shown at full strength, with no mark of another layer over it in the page's order ({@link
+     * ToneDocument#stacked}). One with a mark over it (opaque paint on its wash half, a page stacked on it) or faded stays
+     * pixels, as do those under it. Magnets ({@code tiles}), text boxes and a mirror's reflection show over every mark.
+     */
+    static List<ToneDocument.Layer> vectorLayers(ToneDocument.Snapshot page, Magnets.Tiles tiles) {
+        List<ToneDocument.Layer> out = new ArrayList<>();
+        boolean lined = false;
+        for (ToneDocument.Layer layer : page.layers) lined |= layer.visible && layer.lines != null && !layer.lines.isEmpty();
+        // shortcut: magnets, text boxes and Real Mirror's reflection are drawn over the whole picture, so their pages' lines stay pixels; draw those over the vectors if such pages need sharp lines.
+        if (!lined || tiles != null && page.magnets != null && !page.magnets.isEmpty() || page.texts != null && !page.texts.isEmpty() || page.mirrors != null && page.mirrors.view() != null) return out;
+        boolean over = false;
+        for (int k = ToneDocument.stackSize(page.layers.size()) - 1; k >= 0; k--) {
+            ToneDocument.Layer entry = ToneDocument.stacked(page.layers, k);
+            if (entry == null) continue;
+            ToneDocument.Layer owner = page.layers.get(ToneDocument.stackOwner(k));
+            if (!owner.visible || !entry.covers()) continue;
+            boolean lines = owner.lines != null && !owner.lines.isEmpty();
+            if (lines && !over && ToneDocument.stackOpacity(owner, entry) == 100) { if (!out.contains(owner)) out.add(0, owner); continue; }
+            out.remove(owner);
+            over = true;
+        }
+        return out;
+    }
+    static void chunk(OutputStream out, String type, byte[] data) throws IOException {
         DataOutputStream d = new DataOutputStream(out);
         byte[] name = type.getBytes(StandardCharsets.US_ASCII);
         d.writeInt(data.length); d.write(name); d.write(data);
@@ -143,11 +201,18 @@ final class NotebookExport {
         d.writeInt((int) crc.getValue());
     }
 
-    /** A grey PNG as {@link #png} writes it: its size, its page's CRC (-1 if none), its image data, its bits a pixel and its palette's greys (null: 8-bit grey). */
+    /**
+     * A grey PNG as {@link #png} writes it: its size, its page's CRC (-1 if none), its image data, its bits a pixel, its
+     * palette's greys (null: 8-bit grey), the lines a PDF draws over it ({@link #vectorPng}; null: none) and its pixels an
+     * inch ({@link #DPI}, or twice that for a sharp page's PDF picture).
+     */
     static final class Png {
-        final int width, height; final long crc; final byte[] data; final int bits; final byte[] palette;
-        Png(int width, int height, long crc, byte[] data) { this(width, height, crc, data, 8, null); }
-        Png(int width, int height, long crc, byte[] data, int bits, byte[] palette) { this.width = width; this.height = height; this.crc = crc; this.data = data; this.bits = bits; this.palette = palette; }
+        final int width, height; final long crc; final byte[] data; final int bits; final byte[] palette, vectors; final int dpi;
+        Png(int width, int height, long crc, byte[] data) { this(width, height, crc, data, 8, null, null, DPI); }
+        Png(int width, int height, long crc, byte[] data, int bits, byte[] palette, byte[] vectors, int dpi) { this.width = width; this.height = height; this.crc = crc; this.data = data; this.bits = bits; this.palette = palette; this.vectors = vectors; this.dpi = dpi; }
+        /** Its size on the page, in the page's pixels ({@link #DPI}). */
+        int pageWidth() { return (int) ((long) width * DPI / dpi); }
+        int pageHeight() { return (int) ((long) height * DPI / dpi); }
     }
     /** Reads {@link #png}'s kinds of PNG (8-bit grey, or a palette of greys at 1, 2 or 4 bits; not interlaced); null for any other file. */
     static Png read(byte[] file) {
@@ -155,8 +220,8 @@ final class NotebookExport {
         for (int i = 0; i < 8; i++) if (file[i] != SIGNATURE[i]) return null;
         java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(file);
         b.position(8);
-        int width = 0, height = 0, bits = 8; long crc = -1;
-        byte[] palette = null;
+        int width = 0, height = 0, bits = 8, dpi = DPI; long crc = -1;
+        byte[] palette = null, vectors = null;
         ByteArrayOutputStream data = new ByteArrayOutputStream();
         boolean header = false, indexed = false;
         while (b.remaining() >= 12) {
@@ -184,8 +249,12 @@ final class NotebookExport {
             } else if (name.equals("tEXt")) {
                 String text = new String(body, StandardCharsets.ISO_8859_1);
                 if (text.startsWith(KEY + "\0")) try { crc = Long.parseLong(text.substring(KEY.length() + 1), 16); } catch (NumberFormatException ignored) { }
-            } else if (name.equals("IDAT")) data.write(body, 0, body.length);
-            else if (name.equals("IEND")) return header && width > 0 && height > 0 && indexed == (palette != null) && (!indexed || palette.length <= 1 << bits) ? new Png(width, height, crc, data.toByteArray(), bits, indexed ? palette : null) : null;
+            } else if (name.equals("pHYs") && length == 9 && body[8] == 1) {
+                long perMetre = java.nio.ByteBuffer.wrap(body).getInt() & 0xffffffffL;
+                if (perMetre > 0) dpi = (int) Math.max(1, Math.round(perMetre * .0254));
+            } else if (name.equals(VECTORS)) vectors = body;
+            else if (name.equals("IDAT")) data.write(body, 0, body.length);
+            else if (name.equals("IEND")) return header && width > 0 && height > 0 && indexed == (palette != null) && (!indexed || palette.length <= 1 << bits) ? new Png(width, height, crc, data.toByteArray(), bits, indexed ? palette : null, vectors, dpi) : null;
         }
         return null;
     }
@@ -284,17 +353,11 @@ final class NotebookExport {
      */
     static Done update(File folder, String name, List<PackedPage> pages, Magnets.Tiles tiles, Covers covers, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing, Documents documents) throws IOException {
         List<PackedPage> all = pages;
-        PageStacks stacks = tracing != null && tracing.count() == all.size() ? tracing.stacks() : new PageStacks(new boolean[all.size()]);
-        int drawn = BlankPages.drawn(pages, options.paper).size(), sheets = stacks.of(drawn - 1) + 1;
-        NotebookTemplate[] templates = new NotebookTemplate[sheets];
-        String[] named = new String[sheets];
-        for (int s = 0; s < sheets; s++) {
-            int b = stacks.first(s);
-            String key = pageTemplates != null && b < pageTemplates.size() ? pageTemplates.get(b) : null;
-            templates[s] = options.pageTemplate(key);
-            NotebookTemplate own = options.pageTemplate(key);
-            named[s] = own.equals(NotebookTemplate.BLANK) ? "" : own.label;
-        }
+        Plan plan = new Plan(pages, covers, options, pageTemplates, tracing);
+        PageStacks stacks = plan.stacks;
+        int sheets = plan.sheets;
+        NotebookTemplate[] templates = plan.templates;
+        String[] named = plan.named;
         File pngs = new File(folder, name);
         if (!pngs.isDirectory() && !pngs.mkdirs()) throw new IOException("Could not make " + pngs);
         // What is there now, by the CRC each PNG carries (pages alike, blank ones between drawn ones, keep one each).
@@ -305,20 +368,15 @@ final class NotebookExport {
             Png png = read(Files.readAllBytes(f.toPath()));
             if (png != null && png.crc >= 0) found.computeIfAbsent(png.crc, k -> new java.util.ArrayDeque<>()).add(f);
         }
-        long[] crcs = new long[sheets];
-        for (int s = 0; s < sheets; s++) crcs[s] = pageKey(stackKey(all, stacks, s, tracing), templates[s]);
+        long[] crcs = plan.crcs;
         // What the PDF said of each page last time, by key, and this time's keys in its order: the days follow a page.
         File state = new File(pngs, NotebookPdf.STATE);
         NotebookPdf.State old = NotebookPdf.State.read(state);
         Map<Long, NotebookPdf.Sheet> known = new HashMap<>();
         if (old != null) for (NotebookPdf.Sheet s : old.sheets) known.putIfAbsent(s.key, s);
         List<Long> keys = new ArrayList<>();
-        long[] coverKeys = new long[2];
-        PackedPage pictured = covers != null && covers.picture >= 0 && covers.picture < all.size() ? all.get(covers.picture) : null;
-        if (covers != null) for (int c = 0; c < 2; c++) {
-            PackedPage own = c == 0 ? covers.front : covers.back;
-            coverKeys[c] = NotebookCovers.key(c == 0, covers.design, covers.name, covers.width, covers.height, own == null ? 0 : own.crc, c == 0 && pictured != null ? pictured.crc : 0);
-        }
+        long[] coverKeys = plan.coverKeys;
+        PackedPage pictured = plan.pictured;
         if (covers != null) keys.add(coverKeys[0]);
         for (long crc : crcs) keys.add(crc);
         long today = documents.today.toEpochDay();
@@ -352,20 +410,35 @@ final class NotebookExport {
                 } else { kept++; keptOn = day(target.lastModified()); }
                 long[] coverDays = days(key, 0, keptOn, old, known, keys, today);
                 // The back cover's PNG only: in the PDF it would take a new number with every page added.
-                if (front) { said.add(new NotebookPdf.Sheet(key, 0, 0, true, "", "", java.util.Collections.emptyList()).days(coverDays[0], coverDays[1])); pdf.add(target); }
+                if (front) { said.add(new NotebookPdf.Sheet(key, 0, 0, true, "", java.util.Collections.emptyList()).days(coverDays[0], coverDays[1])); pdf.add(target); }
             }
         }
+        // Which pages' PDF pictures are their own ({@link #vectorPng}: lines as vectors, sharp at 2 ×; kept by key), as last
+        // written; a record without its first line is from before the sharp pages, each of its pages read once.
+        File linesState = new File(pngs, LINES_STATE);
+        String linesWere = linesState.isFile() ? new String(Files.readAllBytes(linesState.toPath()), StandardCharsets.ISO_8859_1) : "";
+        java.util.Set<String> rows = new java.util.HashSet<>(linesWere.startsWith(LINES_MARK) ? java.util.Arrays.asList(linesWere.split("\n")) : java.util.Collections.emptyList());
+        StringBuilder lines = new StringBuilder(LINES_MARK);
+        java.util.Set<String> twins = new java.util.HashSet<>();
         for (int i = 0; i < crcs.length; i++) {
-            File target = new File(pngs, pageName(i));
+            File target = new File(pngs, pageName(i)), twin = new File(pngs, vectorName(crcs[i]));
+            String key = Long.toHexString(crcs[i]);
             NotebookPdf.Sheet sheet;
+            int vectors = 0;
             long[] days = days(crcs[i], pdf.size(), aside.containsKey(i) ? keptDay[i] : -1, old, known, keys, today);
             if (aside.containsKey(i)) {
                 move(aside.get(i), target);
                 NotebookPdf.Sheet was = known.get(crcs[i]);
-                if (was != null) sheet = was;
-                // A PNG from before the PDF said its words: the page read once for them.
-                else try { synchronized (DocumentCodec.ONE_PAGE) { sheet = said(crcs[i], named[i], layers(all, stacks, i, tracing, null)); } }
-                catch (IOException | RuntimeException e) { sheet = new NotebookPdf.Sheet(crcs[i], 0, 0, false, named[i], "", java.util.Collections.emptyList()); }
+                boolean plain = rows.contains(key + "\t0"), lined = rows.contains(key + "\t1") && twin.isFile();
+                if (was != null && (plain || lined)) { sheet = was; vectors = lined ? 1 : 0; }
+                // A PNG from before the PDF said its words, or drew its lines as vectors: the page read once for them.
+                else try { synchronized (DocumentCodec.ONE_PAGE) {
+                    List<ToneDocument> layers = layers(all, stacks, i, tracing, templates[i]);
+                    sheet = said(crcs[i], named[i], layers);
+                    ToneDocument.Snapshot page = flatten(layers, hidden(stacks, i, tracing));
+                    vectors = twin(page, crcs[i], tiles, templates[i].shared(page.width, page.height) != null, twin);
+                } }
+                catch (IOException | RuntimeException e) { sheet = new NotebookPdf.Sheet(crcs[i], 0, 0, false, named[i], java.util.Collections.emptyList()); }
             } else synchronized (DocumentCodec.ONE_PAGE) {
                 ToneDocument.Snapshot page;
                 byte[] guides;
@@ -378,22 +451,102 @@ final class NotebookExport {
                 catch (IOException | RuntimeException e) { target.delete(); continue; }
                 byte[] bytes = png(page, crcs[i], tiles, guides != null);
                 write(target, bytes); made++;
+                vectors = twin(page, crcs[i], tiles, guides != null, twin);
             }
             said.add(sheet.days(days[0], days[1]));
-            pdf.add(target);
+            lines.append(key).append('\t').append(vectors).append('\n');
+            if (vectors == 1) twins.add(twin.getName());
+            pdf.add(vectors == 1 ? twin : target);
         }
         // PNGs past the last page, or of pages since changed.
         File[] left = pngs.listFiles();
         if (left != null) for (File f : left) {
             String n = f.getName();
-            if (n.matches("\\d{3}\\.png") && Integer.parseInt(n.substring(0, 3)) > crcs.length || n.endsWith(".moving")) f.delete();
+            if (n.matches("\\d{3}\\.png") && Integer.parseInt(n.substring(0, 3)) > crcs.length || n.endsWith(".moving") || n.endsWith(VECTOR_PNG) && !twins.contains(n)) f.delete();
         }
+        // A record from before says nothing of the lines: the PDF written again once, with them.
+        boolean pictures = !lines.toString().equals(linesWere);
         File target = NotebookPdf.update(documents.folder, state, name, documents.title, options.template.equals(NotebookTemplate.BLANK) ? "" : options.template.label, said,
-                k -> read(Files.readAllBytes(pdf.get(k).toPath())));
+                k -> read(Files.readAllBytes(pdf.get(k).toPath())), pictures);
+        if (pictures) write(linesState, lines.toString().getBytes(StandardCharsets.ISO_8859_1));
         // The PDF the app wrote beside the PNGs before it wrote one in Documents.
         File before = pdf(folder, name);
         if (!before.equals(target) && before.isFile() && !NotebookPdf.mark(before).exists()) before.delete();
         return new Done(made, kept, target);
+    }
+    /** A page's own PDF picture ({@link #vectorPng}: its lines as vectors, sharp at 2 ×) beside its PNG copy: hidden, by its key (".1a2b3c4d.pdf.png"). */
+    static final String VECTOR_PNG = ".pdf.png";
+    /** Beside them, after {@link #LINES_MARK}, each page's key and whether its PDF picture is one (1) or its PNG copy (0), a line each. */
+    static final String LINES_STATE = ".lines.txt", LINES_MARK = "pictures 2\n";
+    static String vectorName(long key) { return String.format(Locale.ROOT, ".%08x", key) + VECTOR_PNG; }
+    /** {@code page}'s {@link #vectorPng} written to {@code twin}: 1 when it has one, else 0 (none written). */
+    private static int twin(ToneDocument.Snapshot page, long key, Magnets.Tiles tiles, boolean guides, File twin) throws IOException {
+        byte[] bytes = vectorPng(page, key, tiles, guides);
+        if (bytes == null) return 0;
+        write(twin, bytes);
+        return 1;
+    }
+    /**
+     * What a notebook's copies are of ({@link #update}, {@link #pdf}): its stacks, the sheets up to the last drawn page
+     * ({@link BlankPages#drawn}), each sheet's template and its name in the PDF ("" for Blank), the key its PNG carries
+     * ({@link #pageKey}), and the covers' keys ({@link NotebookCovers#key}) and picture's page.
+     */
+    static final class Plan {
+        final PageStacks stacks; final int sheets; final NotebookTemplate[] templates; final String[] named; final long[] crcs, coverKeys = new long[2];
+        final PackedPage pictured;
+        Plan(List<PackedPage> pages, Covers covers, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing) {
+            stacks = tracing != null && tracing.count() == pages.size() ? tracing.stacks() : new PageStacks(new boolean[pages.size()]);
+            int drawn = BlankPages.drawn(pages, options.paper).size();
+            sheets = stacks.of(drawn - 1) + 1;
+            templates = new NotebookTemplate[sheets]; named = new String[sheets]; crcs = new long[sheets];
+            for (int s = 0; s < sheets; s++) {
+                int b = stacks.first(s);
+                templates[s] = options.pageTemplate(pageTemplates != null && b < pageTemplates.size() ? pageTemplates.get(b) : null);
+                named[s] = templates[s].equals(NotebookTemplate.BLANK) ? "" : templates[s].label;
+                crcs[s] = pageKey(stackKey(pages, stacks, s, tracing), templates[s]);
+            }
+            pictured = covers != null && covers.picture >= 0 && covers.picture < pages.size() ? pages.get(covers.picture) : null;
+            if (covers != null) for (int c = 0; c < 2; c++) {
+                PackedPage own = c == 0 ? covers.front : covers.back;
+                coverKeys[c] = NotebookCovers.key(c == 0, covers.design, covers.name, covers.width, covers.height, own == null ? 0 : own.crc, c == 0 && pictured != null ? pictured.crc : 0);
+            }
+        }
+    }
+    /**
+     * The notebook's PDF as {@link #update} first writes it, into a folder with no copies yet (every PNG drawn now, every
+     * day {@code today}, an epoch day), straight to {@code out} with no PNG kept: the browser's Export Now. {@code title}
+     * is {@link Documents#title}.
+     */
+    /** Notebook {@code name}'s ({@code book}, wet paint laid) PDF as Export Now writes it, to {@code out}: the browser app's Export Now and a browser's download from the Manta ({@link LiveBooks}). */
+    static void pdf(OutputStream out, DrawingBook book, String name, Magnets.Tiles tiles, long today) throws IOException {
+        DrawingBook.Snapshot s = book.snapshot();
+        List<PackedPage> pages = s.packed();
+        PackedPage[] covers = s.packedCovers();
+        s.release();
+        pdf(out, name, NotebookPdf.title(name), pages, tiles, new Covers(name, s.design, s.width, s.height, covers[0], covers[1], s.cover), s.options, s.pageTemplates, s.tracing, today);
+    }
+    static void pdf(OutputStream out, String name, String title, List<PackedPage> pages, Magnets.Tiles tiles, Covers covers, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing, long today) throws IOException {
+        Plan plan = new Plan(pages, covers, options, pageTemplates, tracing);
+        List<byte[]> pngs = new ArrayList<>();
+        List<NotebookPdf.Sheet> said = new ArrayList<>();
+        // A page that doesn't decode has no PNG and no PDF page, as in update.
+        if (covers != null) try { synchronized (DocumentCodec.ONE_PAGE) { pngs.add(png(cover(true, covers, covers.front, plan.pictured), plan.coverKeys[0], tiles)); } said.add(new NotebookPdf.Sheet(plan.coverKeys[0], today, today, true, "", java.util.Collections.emptyList())); }
+        catch (IOException | RuntimeException e) { /* no cover page */ }
+        for (int i = 0; i < plan.sheets; i++) synchronized (DocumentCodec.ONE_PAGE) {
+            NotebookPdf.Sheet sheet;
+            ToneDocument.Snapshot page;
+            byte[] guides;
+            try {
+                List<ToneDocument> layers = layers(pages, plan.stacks, i, tracing, plan.templates[i]);
+                sheet = said(plan.crcs[i], plan.named[i], layers);
+                page = flatten(layers, hidden(plan.stacks, i, tracing));
+                guides = plan.templates[i].shared(page.width, page.height);
+            } catch (IOException | RuntimeException e) { continue; }
+            byte[] picture = vectorPng(page, plan.crcs[i], tiles, guides != null);
+            pngs.add(picture != null ? picture : png(page, plan.crcs[i], tiles, guides != null));
+            said.add(sheet.days(today, today));
+        }
+        NotebookPdf.write(out, name, title, options.template.equals(NotebookTemplate.BLANK) ? "" : options.template.label, said, k -> read(pngs.get(k)));
     }
     /** Stack {@code s}'s pages read, bottom first, the bottom one under {@code template}'s guides (null: none placed). */
     static List<ToneDocument> layers(List<PackedPage> pages, PageStacks stacks, int s, TracingPaper tracing, NotebookTemplate template) throws IOException {
@@ -418,15 +571,11 @@ final class NotebookExport {
         for (ToneDocument layer : layers) snapshots.add(layer.layerSnapshot());
         return PageStacks.flatten(snapshots, hidden);
     }
-    /** What the PDF says of a page beyond its days: its template's name, its card and its magnets' words, from its shown layers. */
+    /** What the PDF says of a page beyond its days: its template's name and its magnets' words, from its shown layers. */
     static NotebookPdf.Sheet said(long key, String template, List<ToneDocument> layers) {
-        String prompt = null;
         List<Magnets.Magnet> words = new ArrayList<>();
-        for (ToneDocument layer : layers) {
-            if (prompt == null) prompt = layer.prompt();
-            if (layer.magnets() != null) words.addAll(layer.magnets().list());
-        }
-        return new NotebookPdf.Sheet(key, 0, 0, false, template, prompt, words);
+        for (ToneDocument layer : layers) if (layer.magnets() != null) words.addAll(layer.magnets().list());
+        return new NotebookPdf.Sheet(key, 0, 0, false, template, words);
     }
     /**
      * A page's days, {made, changed}: as the PDF last said them when its key is known; a PNG from before that, the day it
@@ -487,7 +636,7 @@ final class NotebookExport {
         File pngs = new File(folder, name);
         NotebookPdf.delete(documents, new File(pngs, NotebookPdf.STATE));
         File[] files = pngs.listFiles();
-        if (files != null) for (File f : files) if (f.getName().endsWith(".png") || f.getName().endsWith(".moving") || f.getName().equals(NotebookPdf.STATE)) f.delete();
+        if (files != null) for (File f : files) if (f.getName().endsWith(".png") || f.getName().endsWith(".moving") || f.getName().equals(NotebookPdf.STATE) || f.getName().equals(LINES_STATE)) f.delete();
         pngs.delete();
         File before = pdf(folder, name);
         if (!NotebookPdf.mark(before).exists()) before.delete();

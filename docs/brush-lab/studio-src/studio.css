@@ -43,6 +43,11 @@ p { margin: 0; }
 .icn:hover { color: var(--ink); }
 .icn.on { background: var(--ink); color: var(--paper); }
 .icn:disabled { opacity: .35; cursor: default; }
+/* ⓘ: quieter than the lock and die beside it (thinner and smaller), its touch area a little past its box. */
+.icn.info { position: relative; width: 17px; height: 17px; }
+.icn.info::after { content: ""; position: absolute; inset: -3px; }
+.dn { display: flex; align-items: center; gap: 1px; min-width: 0; }
+.dn .dname { min-width: 0; }
 .chip { padding: 1px 8px; background: var(--paper); border: 2px solid var(--ink); cursor: pointer; font-size: 12px; touch-action: manipulation; }
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); font-weight: 700; }
 .check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-size: 13px; }
@@ -79,7 +84,11 @@ select { padding: 3px 6px; border: 2px solid var(--ink); background: var(--paper
 .idname .ico { width: 14px; height: 14px; flex: none; color: var(--g600); display: inline-block; }
 .idname .ico svg { display: block; width: 100%; height: 100%; }
 .idname:hover .ico { color: var(--ink); }
-.idinput { width: 100%; padding: 1px 6px; border: 2px solid var(--ink); font-weight: 700; border-radius: 0; font-size: 15px; }
+.idform { display: flex; gap: 4px; width: 100%; min-width: 0; }
+.idform[hidden] { display: none; }
+.idinput { flex: 1; min-width: 0; padding: 1px 6px; border: 2px solid var(--ink); font-weight: 700; border-radius: 0; font-size: 15px; }
+.idmark { display: flex; gap: 12px; min-height: 16px; font-size: 12px; margin-top: -6px; min-width: 0; }
+.idsuggest { padding: 0; border: 0; background: none; font-size: 12px; text-decoration: underline; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; color: var(--ink); }
 .brushbar .words { color: var(--g800); font-size: 12px; line-height: 1.35; }
 .brushbar .acts { gap: 4px; }
 .brushbar .acts .btn.sm { padding: 2px 6px; }
@@ -128,11 +137,14 @@ section { min-width: 0; }
 .chead .plabel.dname { padding: 0; }
 .dial.focus { background: var(--g200); border-left-color: var(--ink); }
 .dname { padding: 0; border: 0; background: none; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; touch-action: manipulation; font-size: 12px; line-height: 17px; }
+span.dname { cursor: default; }
 .dval { padding: 0 4px; white-space: nowrap; font-size: 12px; }
 .dial.focus .dname { font-weight: 700; }
 .dial.def .dname, .dial.def .dval { color: var(--g600); }
 .dial .ctl { grid-column: 1 / -1; padding: 0 0 2px; }
 .dial .opts { display: flex; flex-wrap: wrap; gap: 4px; padding: 1px 0 4px; }
+/* A long list of options (Print Shading's eighteen) packs two to a row: narrower chips. */
+.dial .opts:has(> .chip:nth-child(9)) .chip { padding: 1px 4px; }
 .dial.def .chip { border-color: var(--g600); }
 .dial.def .chip[aria-pressed="true"] { background: var(--g600); border-color: var(--g600); }
 
@@ -243,7 +255,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--ink); outline-offse
 .sharedgrid .del { font-size: 12px; padding: 0 8px; border: 2px solid var(--g600); background: var(--paper); color: var(--g800); cursor: pointer; }
 .sharedgrid .del:disabled { opacity: .5; cursor: default; }
 .sharedgrid .more { align-self: center; justify-self: start; }
-.pubconfirm { align-items: center; }
+.pubconfirm { display: flex; flex-direction: column; gap: 8px; }
 #pubnote:empty { display: none; }
 #commnote { margin-left: auto; }
 .foot { color: var(--g800); font-size: 12px; display: flex; flex-direction: column; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 2px solid var(--g200); }

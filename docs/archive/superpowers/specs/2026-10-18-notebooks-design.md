@@ -2,7 +2,7 @@
 
 Status: designed and built on branch `inkwash-books`, 2026-10-18, from `inkwash-v2-lab` `580a326`. Owner's ask: a
 Paper-by-WeTransfer-style app where everything lives in notebooks, not loose drawings (mockup:
-claude.ai/artifact/5Z7ND16BszQ5cozLhMjHrQ). The user-facing word is **notebook**. Plan:
+a private page). The user-facing word is **notebook**. Plan:
 `docs/archive/superpowers/plans/2026-10-18-notebooks.md`.
 
 ## What was there

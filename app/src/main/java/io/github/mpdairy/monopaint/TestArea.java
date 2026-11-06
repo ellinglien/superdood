@@ -1,15 +1,18 @@
 package io.github.mpdairy.monopaint;
 
 import android.content.Context;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import java.util.Collections;
 
 /**
  * Brush Lab's test area, shared with the Tools page: the test page ({@link BrushTestPad}, in its own
- * {@link WatercolorSession} paced as the drawing screen's, its settling on a {@link SettleWorker}) in a 2 dp ink frame,
- * nothing over it; for the head row over it Clear and the wet indicator, through which the tilt feed listens (so
- * Gravity runs on the test page); and the brush's loop in the look's grey, which Brush Lab puts right beside the
+ * {@link WatercolorSession} paced as the drawing screen's, its settling on a {@link SettleWorker}; the tilt feed listens
+ * through it, so Gravity runs on it) in a {@link Theme#FINE} dp ink frame, nothing over it; the <b>try strip</b> both
+ * pages show ({@link #strip}: "Draw here to try Fill in" and Clear over the framed page; no wet drop since 2026-11-03,
+ * the page's paint drying by itself); and the brush's loop in the look's grey, which Brush Lab puts right beside the
  * brush's name ({@link #blockLoop}), so the name and what it draws always show together. The host says which brush and
  * look the strokes use; they are the drawing screen's strokes ({@link InkWash#stroke}).
  */
@@ -39,6 +42,8 @@ final class TestArea {
 
     TestArea(Context context, SampleQueue samples, Host host) {
         this.context = context; this.host = host;
+        // No page shown yet (Brush Lab or Tools brought back alone): a new notebook's surface, Fine, not each brush's own paper.
+        if (WildSample.surface == null) WildSample.show(NotebookOptions.NEW.surface);
         // The name beside it says what it is.
         blockLoop = new LoopCard(context, samples, Collections.emptyList(), null);
         blockLoop.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -58,6 +63,37 @@ final class TestArea {
             session.swatches = host.swatches();
             return InkWash.stroke(page, brush, SwatchPicker.look(brush, look, host.swatches(), session.held, session.holder()), session);
         });
+        new TiltFeed(pad, session);
+    }
+
+    /** The try strip's words: "Draw here to try Fill in", what the test page is for, named after the brush it draws with. */
+    private TextView tryLabel;
+    /**
+     * The try strip, the Tools page's and Brush Lab's one piece: a head row {@code head} dp tall, what it is for ("Draw
+     * here to try Fill in", grey, cut with … to fit; {@link #label}) and Clear at its right ({@code clearPad} dp either
+     * side of its word), then {@code gap} dp, then the test page in its frame, taking the rest.
+     */
+    LinearLayout strip(int head, int gap, int clearPad) {
+        LinearLayout strip = LabUi.column(context);
+        LinearLayout row = LabUi.row(context);
+        tryLabel = LabUi.text(context, tryLabel == null ? "" : tryLabel.getText().toString(), TypeStyle.CAPTION);
+        tryLabel.setTextColor(Theme.GREY_800);
+        tryLabel.setSingleLine(true);
+        tryLabel.setEllipsize(TextUtils.TruncateAt.END);
+        row.addView(tryLabel, new LinearLayout.LayoutParams(0, -2, 1));
+        LabButton clear = clear(clearPad);
+        clear.setMinHeight(0); clear.setMinimumHeight(0);
+        row.addView(clear, new LinearLayout.LayoutParams(-2, -1));
+        strip.addView(row, new LinearLayout.LayoutParams(-1, dp(head)));
+        LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(-1, 0, 1);
+        place.topMargin = dp(gap);
+        strip.addView(frame(), place);
+        return strip;
+    }
+    /** The try strip names {@code name}, the brush the test page draws with ({@link ToolsLayout#TRY}). */
+    void label(String name) {
+        String said = ToolsLayout.TRY + name;
+        if (tryLabel != null && !said.contentEquals(tryLabel.getText())) tryLabel.setText(said);
     }
 
     /** Clear, plain words, {@code padding} dp either side of its word: clears the test page. */
@@ -67,27 +103,8 @@ final class TestArea {
         clear.setOnClickListener(v -> pad.clear());
         return clear;
     }
-    /**
-     * The droplet beside Clear while the test page's Slow wash is still settling; a tap lays it now. The tilt feed
-     * listens through it: the test page tilts with the tablet (the accelerometer, only while something reads it).
-     */
-    WetIndicator wet() {
-        WetIndicator wet = new WetIndicator(context, new WetIndicator.Host() {
-            @Override public boolean wet() { return session.wet(); }
-            @Override public boolean moving() { return session.moving(); }
-            @Override public boolean stroking() { return pad.stroking(); }
-            @Override public boolean onlyRendering() { return session.onlyRendering(); }
-            @Override public void dry() { pad.dry(); }
-            @Override public boolean hurrying() { return session.hurrying(); }
-            @Override public void update(View indicator, Runnable change) { change.run(); indicator.invalidate(); }
-        });
-        session.wetChanged = wet::changed;
-        wet.changed();
-        new TiltFeed(wet, session);
-        return wet;
-    }
-    /** The test page in a {@link Theme#FINE} dp ink frame, {@code width} dp wide, frame included (no grey: e-ink); nothing lies over the page. */
-    View frame(int width) {
+    /** The test page in a {@link Theme#FINE} dp ink frame (no grey: e-ink); nothing lies over the page. */
+    private View frame() {
         LinearLayout test = LabUi.column(context);
         test.setBackgroundColor(Theme.INK);
         int rule = dp(Theme.FINE);

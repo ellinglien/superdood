@@ -90,10 +90,13 @@ public final class WildSampleChecks {
         double lightest = ToolSwatches.GREYS[3];
         ModularBrush pencil = null, wash = null;
         for (ToolPresets.Preset q : ToolPresets.all()) { if (q.name.equals("2H pencil")) pencil = q.brush().parts; if (q.name.equals("Soft wash")) wash = q.brush().parts; }
-        int[] faint = WildSample.modular(pencil, lightest, WildSample.Shape.TRAY, 8, 90, 49, true), read = WildSample.legibleTray(pencil, lightest, 8, 90, 49, true);
+        // On a Smooth page, as a new notebook's (the surface spec, 2026-11-01: samples show the page's surface, not the brush's paper).
+        WildSample.surface = BrushTexture.PLAIN;
+        int[] faint = WildSample.modular(pencil, lightest, WildSample.Shape.TRAY, 6, 90, 49, true), read = WildSample.legibleTray(pencil, lightest, 6, 90, 49, true);
         check(WildSample.densest(faint, 90, 49) < WildSample.LEGIBLE && WildSample.ink(faint) < WildSample.LEGIBLE_INK && WildSample.densest(read, 90, 49) >= .3
-                && WildSample.densest(read, 90, 49) <= WildSample.LEGIBLE, "A 2H pencil in Lighter reads: densest " + WildSample.densest(faint, 90, 49) + " to " + WildSample.densest(read, 90, 49));
-        check(WildSample.modular(pencil, lightest, WildSample.Shape.TRAY, 8, 90, 49, true) == faint, "its sample kept as drawn");
+                && WildSample.densest(read, 90, 49) <= WildSample.LEGIBLE, "A 2H pencil in Lighter reads: ink " + WildSample.ink(faint) + ", densest " + WildSample.densest(faint, 90, 49) + " to " + WildSample.densest(read, 90, 49));
+        check(WildSample.modular(pencil, lightest, WildSample.Shape.TRAY, 6, 90, 49, true) == faint, "its sample kept as drawn");
+        WildSample.surface = null;
         float washPx = (float) Math.min(ModularSizes.size(wash, InkWashSizes.Preset.MEDIUM), WildSample.trayCap(49));
         // A wash in Lighter as kept before washes reached black (ModularSizes.sinceBlack): its pale 11 % glaze.
         double paleGrey = ModularSizes.sinceBlack(wash, lightest);
@@ -110,16 +113,18 @@ public final class WildSampleChecks {
         DrawLayout manta = new DrawLayout(1024, 1365);
         int w = 2 * px((manta.inner + manta.edge) / 2) - px(DrawLayout.barRoom()), h = 2 * px(manta.slot / 2) - 2 * px(DrawLayout.TRAY_TOP);
         List<Double> ends = new ArrayList<>();
-        for (String[] tool : DrawLayout.PICKER) {
-            if (tool[1] == null) continue;
-            double[] art = inkRight(tool[1]);
+        java.util.Set<String> files = new java.util.TreeSet<>();
+        for (String[] tool : DrawLayout.PICKER) if (tool[1] != null) files.add(tool[1]);  // each drawing once: several tools share one
+        for (String file : files) {
+            double[] art = inkRight(file);
             double cut = art[0] * DrawLayout.TIP_TRIM, scale = Math.min(1, Math.min(w / (art[0] - cut), h / art[1]));
             ends.add((art[2] - cut) * scale);
         }
         Collections.sort(ends);
         double end = ends.get(ends.size() / 2);
         check(Math.abs(end - DrawLayout.TIP_END * w) <= 1, "The drawings end at TIP_END of a " + w + " x " + h + " row: " + end + " px");
-        for (String name : new String[]{"Mold ink", "Halftone brush"}) {
+        // Dot tone, a print, in Halftone brush's place since that has the owner's drawing (2026-11-06).
+        for (String name : new String[]{"Mold ink", "Dot tone"}) {
             Brush b = ToolKits.preset(name).brush();
             check(DrawLayout.drawing(b) == null, name + " has no drawing");
             double size = Math.min(ModularSizes.size(b.parts, InkWashSizes.Preset.MEDIUM), WildSample.trayCap(h));
@@ -246,7 +251,8 @@ public final class WildSampleChecks {
             if (white) {
                 int light = 0;
                 for (int i = w * h / 3; i < 2 * w * h / 3; i++) if ((black[i] & 0xff) == 255) light++;
-                check(light > w * h / 12, p.name + ": its white stroke shows on the ground: " + light + " px");
+                // A sixteenth: White chalk on the new cold press (2026-11-01) breaks up more than on the old scan.
+                check(light > w * h / 16, p.name + ": its white stroke shows on the ground: " + light + " px");
                 dark.add(p.name);
             }
         }

@@ -22,7 +22,7 @@ public final class GreyBarChecks {
         System.out.println("PASS: the grey bar is MonoPaint's color bar strip, black at the left to white at the right in the panel's dots, a solid black and white end; "
                 + "it holds the panel's " + ShadeStrip.LEVELS + " dot densities in order, each a share of the strip a pen can hit, and sets a grey swatch to one of them (darkness 1 − tone/255), "
                 + "a tap at its marker picking the grey it marks; every swatch's grey has its marker on the bar; black and white are always its ends, whatever the brush "
-                + "(washes showed no black: one glaze laid at most 34 %; since washes reach black a wash's black lays 97 %, solid black on the panel, and the 21 Basic tools (22 before Drips retired) that couldn't reach black draw near-black there); "
+                + "(washes showed no black: one glaze laid at most 34 %; since washes reach black a wash's black lays 97 %, solid black on the panel, and the 20 Basic tools (22 before Drips and the Water brush retired) that couldn't reach black draw near-black there); "
                 + "the side bar's grey strip stands beside the four sizes in their column, a tap near a mark taking its grey and elsewhere setting the nearest mark's; "
                 + "the Sizes and Greys window fits the Manta and the Nomad either way up without scrolling, the bar beside the big grey under the faces, and so does the flyout");
     }
@@ -94,11 +94,11 @@ public final class GreyBarChecks {
      * The Basic tools that couldn't reach black (the owner, 2026-10-19: "doesn't include black for some"): the washes,
      * whose swatch shows its glaze, then a third of its darkness, so their darkest grey was 34 % grey.
      */
-    static final String[] WITHOUT_BLACK = {"Soft wash", "Wet blooms", "Backrun", "Granulating", "Slow bloom", "Pooling wash", "Tilt blend",
-            "Sinking grain", "Stipple sponge", "Wash behind", "Wash comb", "Dirty brush", "Water brush", "Grey wash", "Flat wash", "Dry glaze", "Grainy wash",
-            "Wet hake", "Rough hake", "Flat hake", "Big sky"};
+    static final String[] WITHOUT_BLACK = {"Soft wash", "Wet blooms", "Watercolour backrun", "Granulating", "Slow bloom", "Pooling wash", "Tilt blend",
+            "Sinking grain", "Stipple sponge", "Wash behind", "Wash comb", "Dirty brush", "Grey wash", "Flat wash", "Dry glaze", "Grainy wash",
+            "Wet hake", "Rough hake", "Flat hake", "Flat brush"};
     /**
-     * What lacked black: the 22 washes (21 on Basic tools since Drips retired, 2026-10-22) ({@link #WITHOUT_BLACK}), whose darkest grey was a 34 % glaze. The owner chose to
+     * What lacked black: the 22 washes (20 on Basic tools since Drips retired, 2026-10-22, and the Water brush, 2026-10-31) ({@link #WITHOUT_BLACK}), whose darkest grey was a 34 % glaze. The owner chose to
      * let washes reach black (2026-10-19): a wash's black lays {@link ModularSizes#WASH_BLACK}, 97 %, which the panel
      * shows solid black, so every Basic tool's swatch reaches black; one kept from before shows its 34 % as it did
      * ({@link ModularSizes#sinceBlack}). Each of them that lays paint of its own lays near-black at black, most of its
@@ -125,8 +125,8 @@ public final class GreyBarChecks {
                     && ModularSizes.swatch(parts, ToolSwatches.darkness(ShadeStrip.toneAt(length - 1, length, end))) == 255,
                     "The bar's ends are the brush's darkest and paper: " + preset.name);
         }
-        check(washes.equals(java.util.Arrays.asList(WITHOUT_BLACK)), "The 21 that couldn't reach black are the washes: " + washes);
-        System.out.println("  The 21 Basic tools that couldn't reach black (a 34 % glaze at most), at black now (the stroke's median, its darkest twentieth; "
+        check(washes.equals(java.util.Arrays.asList(WITHOUT_BLACK)), "The 20 that couldn't reach black are the washes: " + washes);
+        System.out.println("  The 20 Basic tools that couldn't reach black (a 34 % glaze at most), at black now (the stroke's median, its darkest twentieth; "
                 + (washes.size() - dark.size()) + " smudges lay no paint of their own): " + String.join(", ", dark));
     }
     /**
@@ -139,12 +139,14 @@ public final class GreyBarChecks {
     static String laidAtBlack(ModularBrush b) {
         double[] now = strokeAt(b, 1), was = strokeAt(b, ModularSizes.sinceBlack(b, 1));
         if (now == null) return null;
-        check(now[0] >= .85, "Near-black at black: " + Math.round(100 * now[0]) + " %");
+        // A wet watercolour on Smooth pools to its rim (the surface spec, 2026-11-01): its middle a little lighter, 80 % or more.
+        boolean pools = b.choice(BrushPart.LIFE) == PartChoice.WET_PAINT;
+        check(now[0] >= (pools ? .8 : .85), "Near-black at black: " + b.name + " " + Math.round(1000 * now[0]) / 10.0 + " %");
         check(now[1] > now[0] || !(was[1] > was[0]), "its darkest twentieth darker than its middle, as at the old black: " + Math.round(100 * now[0]) + " %, " + Math.round(100 * now[1]) + " %");
         // A wet watercolour (the wet paint spec, section 9) dries back by multiplying its pigment (dark edge, grain, blooms):
         // near black that saturates, so it keeps fewer greys there, though still dozens of them.
         boolean wet = b.choice(BrushPart.LIFE) == PartChoice.WET_PAINT;
-        check(wet ? now[2] >= 80 && now[2] >= was[2] / 2.5 : now[2] >= was[2], "and as many greys as at the old black: " + now[2] + ", was " + was[2]);
+        check(wet ? now[2] >= 80 && now[2] >= was[2] / 2.5 : now[2] >= was[2], "and as many greys as at the old black: " + b.name + " " + now[2] + ", was " + was[2]);
         return Math.round(100 * now[0]) + "/" + Math.round(100 * now[1]) + " %";
     }
     /** {@link #laidAtBlack}'s stroke at {@code darkness}: its median darkness, its darkest twentieth's and how many greys it lays; null for none. */

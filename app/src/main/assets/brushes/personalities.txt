@@ -3,19 +3,24 @@
 # One line a brush: its name exactly as on the Tools page, a colon, then one or two short sentences that replace
 # the written opener. Add a line to override any brush, or delete one to let the app write it.
 # Plain, warm words, whole sentences ending in a full stop, no semicolons, at most 80 characters a sentence.
-# Lines starting with # are notes.
+# A retired tool keeps its line, for a slot or the library still holding it. Lines starting with # are notes.
 White gel pen: Bright white ink for highlights on top of dark areas.
 Spirograph: The toy from your childhood. Draw a line and watch it spin out loops.
 Vanishing ink: Ink that won't stay put. Whatever you draw slowly fades back to paper.
+Vector ink: A smooth pen whose lines stay sharp however far you zoom in.
 Wet brush: A brush loaded with inky water, for soft, wet strokes.
 Lemon juice: Secret-message ink from the kitchen drawer.
 Highlighter: A highlighter that slides under your lines instead of covering them.
 Colouring pen: For colouring in. It keeps itself inside your ink lines.
+Blend: A rolled paper stump for blending. It adds nothing of its own.
+Water: A brush of clear water that wakes up dried paint.
+Blur: A soft blur for any mark, pen lines too. It adds nothing of its own.
 Blend stump: A rolled paper stump for softening charcoal. It adds nothing of its own.
 Stump: Like rubbing charcoal with a fingertip. It only moves what's already there.
 Wash behind: A wash that tucks itself behind your lines, so the ink stays on top.
 Wash comb: A comb for wet washes. Drag it through to make streaks.
 Dirty brush: A brush you never rinse. It smears paint, not pen or pencil lines, and carries it into the next stroke.
+Palette knife: A flat blade for wet paint. It pushes wet paint into ridges and scrapes damp paint back to paper.
 Water brush: Clear water that wakes up dried paint so you can push it around.
 Masking fluid: Paint it on to save the white paper, then rub it off later.
 Wax resist: Like drawing with a candle. Washes slide off it and leave it white.

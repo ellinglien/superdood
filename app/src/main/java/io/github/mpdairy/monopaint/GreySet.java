@@ -20,23 +20,21 @@ import java.util.function.IntConsumer;
  */
 @SuppressLint("ViewConstructor")
 final class GreySet extends LinearLayout {
-    /** dp: a toolbar swatch's width; the gap between swatches. */
-    private static final int WIDE = 44, GAP = 4;
-
-    /** {@code tones}: each grey as the brush lays it (0–255); {@code darkness}, as picked, for its words; {@code in}, whether it is in the set. */
-    GreySet(Context context, int[] tones, double[] darkness, boolean[] in, boolean enabled, IntConsumer tap) {
+    /** {@code greys}: each as the brush lays it, whether it is in the set, and its words ({@link BrushLab#greys}). */
+    GreySet(Context context, java.util.List<BrushLab.Grey> greys, boolean enabled, IntConsumer tap) {
         super(context);
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
-        boolean few = tones.length <= ToolSwatches.COUNT;
-        for (int k = 0; k < tones.length; k++) {
+        boolean few = greys.size() <= ToolSwatches.COUNT;
+        for (int k = 0; k < greys.size(); k++) {
             int index = k;
-            Swatch swatch = new Swatch(context, tones[k], in[k]);
-            swatch.setContentDescription(ToolSwatches.greyWords(darkness[k], tones[k]) + (in[k] ? "" : ", left out"));
+            BrushLab.Grey grey = greys.get(k);
+            Swatch swatch = new Swatch(context, grey.tone, grey.in);
+            swatch.setContentDescription(grey.said);
             swatch.setEnabled(enabled);
             swatch.setOnClickListener(v -> tap.accept(index));
-            LayoutParams place = few ? new LayoutParams(Ui.dp(context, WIDE), -1) : new LayoutParams(0, -1, 1);
-            if (k > 0) place.leftMargin = Ui.dp(context, GAP);
+            LayoutParams place = few ? new LayoutParams(Ui.dp(context, LabLayout.GREY_WIDE), -1) : new LayoutParams(0, -1, 1);
+            if (k > 0) place.leftMargin = Ui.dp(context, LabLayout.GREY_GAP);
             addView(swatch, place);
         }
     }
@@ -57,9 +55,9 @@ final class GreySet extends LinearLayout {
             edge.setColor(in ? Theme.INK : Theme.GREY_600);
         }
         @Override protected void onDraw(Canvas canvas) {
-            float line = edge.getStrokeWidth(), pad = Ui.dp(getContext(), 3), w = getWidth(), h = getHeight() - Ui.dp(getContext(), LabLayout.ROW_RULE);
+            float line = edge.getStrokeWidth(), pad = Ui.dp(getContext(), LabLayout.GREY_PAD), w = getWidth(), h = getHeight() - Ui.dp(getContext(), LabLayout.ROW_RULE);
             float side = Math.min(w, h - 2 * pad), left = (w - side) / 2, top = (h - side) / 2;
-            float inset = in ? line : side * .3f;
+            float inset = in ? line : side * LabLayout.GREY_OUT;
             canvas.drawRect(left + inset, top + inset, left + side - inset, top + side - inset, dots);
             canvas.drawRect(left + line / 2, top + line / 2, left + side - line / 2, top + side - line / 2, edge);
         }

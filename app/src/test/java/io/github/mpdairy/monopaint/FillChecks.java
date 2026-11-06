@@ -166,7 +166,9 @@ public final class FillChecks {
         BlendChecks.live(boxed, BlendChecks.brush(PEN), 7, 1, null, box(30, 40, SW - 30, SH - 40));
         byte[] page = written(boxed);
         java.util.List<Object[]> cases = new java.util.ArrayList<>();
-        for (ToolPresets.Preset p : ToolPresets.all()) cases.add(new Object[]{p.name, InkWashSizes.Preset.MEDIUM, false, .7});
+        // The Palette knife, the Photocopier, Newsprint and Blur lay no paint of their own, so they fill nothing (and the table's hashes are the tools' before them);
+        // Vector ink (2026-11-04) fills as Steady line, its pen: the table is the tools' before it.
+        for (ToolPresets.Preset p : ToolPresets.all()) if (!p.name.equals("Vector ink") && !p.name.equals("Palette knife") && !p.name.equals("Photocopier") && !p.name.equals("Newsprint") && !p.name.equals("Blur")) cases.add(new Object[]{p.name, InkWashSizes.Preset.MEDIUM, false, .7});
         for (String name : new String[]{"Bleed marker", "Wet chisel", "Fountain pen", "Halftone brush", "Soft pastel", "Flat wash"}) cases.add(new Object[]{name, InkWashSizes.Preset.LARGE, false, .7});
         for (String name : new String[]{"Bleed marker", "Fountain pen", "Halftone brush"}) cases.add(new Object[]{name, InkWashSizes.Preset.MEDIUM, true, .7});
         // Light greys over a dark fill: opaque media cover it.
@@ -202,22 +204,26 @@ public final class FillChecks {
         DocumentCodec.write(out, d.layerSnapshot(), java.util.zip.Deflater.NO_COMPRESSION);
         return out.toByteArray();
     }
-    /** {@link #strips}' pages as the whole fill at once wrote them. */
+    /** {@link #strips}' pages as the whole fill at once wrote them (40 re-pinned 2026-11-01: textured papers made whole, SurfaceGrain; 49 on
+     * 2026-11-02: the paper's grain a little quieter under every mark, StrokePaper.SHOWS; the HB pencil on 2026-11-05: Pressure Dark 0; Riso on 2026-11-06: Pressure Dark 1; Gradient tone the same day, Pressure Dark 1, and Soft pencil added; Mezzotint, Pressure Dark 1, and the nine texture markers added; the owner's Watercolour splatter and Opaque flat added; Pixel pen and Stitch pen added). */
     static final int[] STRIPS = {
             0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x8d0bb76d, 0x8d0bb76d, 0x8d0bb76d, 0x8d0bb76d, 0xed45a9c6,
             0x14cf3f28, 0x14cf3f28, 0x6661b6aa, 0x43d49130, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0xd3777a10, 0x14cf3f28,
-            0xd123005e, 0xbe4a730f, 0x14cf3f28, 0xaa57e6c7, 0x4dd3446b, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28,
-            0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0xb2f9f3f0, 0x14cf3f28, 0x936d56ce, 0xa123645d, 0xa796f9b1, 0x6d45853a, 0x60f1492c,
-            0x7e432ed1, 0x7e432ed1, 0x7e432ed1, 0x177648f9, 0x15bd2ea0, 0x089db095, 0xc96135c2, 0xbe87f0c4, 0x874e62a6, 0x5ad89a32,
-            0xfc977f63, 0x6cca5b1e, 0xf194c8ea, 0x45895bf3, 0xe1763498, 0xb1c2fe0e, 0xe1763498, 0xe1763498, 0xd8ef82ad, 0x106a9538,
-            0x106a9538, 0x106a9538, 0x106a9538, 0x106a9538, 0x106a9538, 0x106a9538, 0x106a9538, 0x413466a5, 0xd3892a11, 0x9c2d079c,
-            0x9c2d079c, 0xdf0d4cbe, 0xe972ebbe, 0x3f73461f, 0x7e432ed1, 0x4a474667, 0x6661b6aa, 0x106a9538, 0x7e432ed1, 0x5fa0b096,
-            0x1134925a, 0x1134925a, 0x1134925a, 0x9fbe96d5, 0x6d45853a, 0x6d45853a, 0xb977e4ab, 0xb977e4ab, 0xb977e4ab, 0x6d45853a,
-            0xb977e4ab, 0xb977e4ab, 0xb977e4ab, 0xb977e4ab, 0xb977e4ab, 0x328ebc9d, 0x3dbcbbb5, 0x4007c0ae, 0xd9dcc324, 0xd6675cc0,
-            0xa3ce4f14, 0x56a8eb3e, 0xaf77e29d, 0x7f92afbb, 0xd9c418c2, 0xda26c372, 0x0358e9dc, 0x0ad37687, 0x2e0e8634, 0xec5621de,
-            0xe0b1b015, 0x5f929c7a, 0xe8e77816, 0xe4424e0a, 0x76a4fd42, 0x632d0a40, 0x42330764, 0xa5961932, 0xcdb851c4, 0x3b9ff36e,
-            0xc98bd61d, 0x3fd15847, 0x08d20d11, 0xbaf54ac8, 0x2e9b2cb0, 0x0474fe0f, 0x491b0d3d, 0xc2dc72a9, 0x6661b6aa, 0x3fd15847,
-            0x4007c0ae, 0x7e432ed1, 0xf0c4e8c6, 0x638bdf12, 0xc863833c, 0xa958ccc7, 0xdbc6265b, 0xf33ed11a, 0x94864ddc
+            0xd123005e, 0xbe4a730f, 0x14cf3f28, 0xaa57e6c7, 0x841cbbae, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28,
+            0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x14cf3f28, 0x009b9332, 0x14cf3f28, 0x936d56ce, 0xa123645d,
+            0x7f9f54dc, 0x6d45853a, 0x60f1492c, 0x7e432ed1, 0x7e432ed1, 0xf2c69b40, 0x6c330d3d, 0x18894301, 0x8543faac, 0xaa2013d5,
+            0xe5de33a7, 0xad258136, 0x299d5703, 0xc56bd636, 0xf88b537d, 0xf484f307, 0xd5031f78, 0x7aed19af, 0xe4a90fbe, 0xd613fe1c,
+            0x5ac37955, 0x0eac8667, 0xd613fe1c, 0xb52ce935, 0x6058ea1d, 0x106a9538, 0x106a9538, 0x106a9538, 0x106a9538, 0x106a9538,
+            0x106a9538, 0x106a9538, 0x106a9538, 0x1222d989, 0x413466a5, 0xf12bf179, 0xe20068e6, 0xe20068e6, 0xcb0cb812, 0xe972ebbe,
+            0xed7ec5ff, 0x4a474667, 0x6661b6aa, 0x106a9538, 0x7e432ed1, 0x5fa0b096, 0x1134925a, 0x1134925a, 0x1134925a, 0x9fbe96d5,
+            0x6d45853a, 0x6d45853a, 0xb977e4ab, 0xb977e4ab, 0xb977e4ab, 0x6d45853a, 0x6a0559f6, 0xb977e4ab, 0xb977e4ab, 0xb977e4ab,
+            0xb977e4ab, 0xb977e4ab, 0x328ebc9d, 0x219bdd79, 0x54ddba2b, 0x47be4b97, 0xa33ad11d, 0x9174b0d6, 0x1fa726c8, 0xaf77e29d,
+            0x73413740, 0xeeae6018, 0x51a6b2cc, 0xbea31ced, 0x6b7dd323, 0x28218646, 0x14cf3f28, 0x72b1a86a, 0x04c71a4e, 0x5f929c7a,
+            0x973c87bb, 0xf2d79a3d, 0x618bd06d, 0x76a4fd42, 0x632d0a40, 0x42330764, 0x4c8ac491, 0xcdb851c4, 0x3b9ff36e, 0xc98bd61d,
+            0x3fd15847, 0xffcc907f, 0xbaf54ac8, 0x2e9b2cb0, 0x0474fe0f, 0x14cf3f28, 0x09418846, 0x14cf3f28, 0x64e34c6c, 0xa05609c9,
+            0x4e99d3f6, 0x841dccfc, 0x7c6b2b67, 0x7557fa22, 0xfae7663c, 0x93693464, 0x70114304, 0x61e7068f, 0x8ce9b9fb, 0x37a73bf5,
+            0xc2dc72a9, 0x6661b6aa, 0x3fd15847, 0x54ddba2b, 0x7e432ed1, 0x2d1f1253, 0x638bdf12, 0xc863833c, 0x8446e77a, 0xf809a7a9,
+            0xf33ed11a, 0xe784d260,
     };
 
     // ---- 2. what holds nothing ----

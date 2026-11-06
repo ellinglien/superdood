@@ -16,15 +16,15 @@ public final class ToolBackupChecks {
         }, new Random(1));
         String text = ToolBackup.text(slots, 2);
         String[] lines = text.split("\n");
-        check(lines.length == 2 + ToolSlots.COUNT + 2 && lines[0].startsWith("#") && lines[1].startsWith("#"), "header, ten slots, eraser, selected");
+        check(lines.length == 2 + ToolSlots.COUNT + 3 && lines[0].startsWith("#") && lines[1].startsWith("#"), "header, nine slots, Fill in, eraser, selected");
         for (int i = 0; i < ToolSlots.COUNT; i++) {
             String[] f = lines[2 + i].split("\t");
             Brush b = slots.brush(i);
             check(f.length == 5 && f[0].equals("" + (i + 1)) && f[1].equals(b.name()) && f[2].equals(ModularCode.encode(b.parts)) && f[3].equals(ToolSwatches.pxText(ToolSlots.firstPx(i)) + " px") && f[4].equals("" + ToolSlots.firstGrey(i)), "slot " + (i + 1) + " line, its size and grey: " + lines[2 + i]);
         }
         check(lines[2].split("\t")[1].equals("Another pencil"), "first slot is Another pencil");
-        check(lines[2 + ToolSlots.COUNT].equals("eraser\t31 px") && lines[3 + ToolSlots.COUNT].equals("selected\tslot 3"), "the eraser's own 31 px, selected lines");
-        check(ToolBackup.text(slots, ToolSlots.ERASER).endsWith("selected\teraser\n"), "eraser selected");
+        check(lines[2 + ToolSlots.COUNT].equals("fill in\t2.5 px\t1.0") && lines[3 + ToolSlots.COUNT].equals("eraser\t31 px") && lines[4 + ToolSlots.COUNT].equals("selected\tslot 3"), "Fill in's own 2.5 px and black, the eraser's own 31 px, selected lines");
+        check(ToolBackup.text(slots, ToolSlots.ERASER).endsWith("selected\teraser\n") && ToolBackup.text(slots, ToolSlots.FILL).endsWith("selected\tfill in\n"), "eraser or Fill in selected");
         check(ToolBackup.text(slots, 2).equals(text), "same state, same text");
         slots.swatches.useGrey(ToolSlots.key(2), 0.25);
         check(!ToolBackup.text(slots, 2).equals(text) && ToolBackup.text(slots, 2).split("\n")[4].endsWith("\t" + ToolSwatches.pxText(ToolSlots.firstPx(2)) + " px\t0.25"), "a slot's grey change changes its line");

@@ -22,7 +22,7 @@ final class FillTool {
         ModularBrush b = slot.copy();
         b.set(BrushPart.CARRY, new ModularBrush.Part(PartChoice.OFF));
         b.part(BrushPart.HAND).set(PartDial.GRADIENT, GreyGradient.OFF);
-        if (b.choice(BrushPart.LIFE) == PartChoice.FLOAT) b.set(BrushPart.LIFE, new ModularBrush.Part(PartChoice.DRYING));
+        if (b.floats()) { b.set(BrushPart.LIFE, new ModularBrush.Part(PartChoice.DRYING)); b.set(BrushPart.LATER, new ModularBrush.Part(PartChoice.LATER_OFF)); }
         return b;
     }
 
@@ -173,6 +173,18 @@ final class FillTool {
         else document.selectLayer(InkWashLayers.washOf(document, InkWashLayers.current(document)));
         ModularStroke s = new ModularStroke(document, brush, size, darkness, session);
         if (shape) s.fillShape(room); else s.fill(room);
+        return s;
+    }
+    /**
+     * Make Ink ({@link TextBoxes#ink}): {@code letters} laid by {@code slot}'s brush as a fill's brush ({@link #brush}), at
+     * {@code size} and {@code darkness}, on the layer its strokes go to ({@link ModularStroke#print}); the caller finishes it.
+     */
+    static ModularStroke print(ToneDocument document, ModularBrush slot, double size, double darkness, WatercolorSession session, FillRegion.Room letters) {
+        ModularBrush brush = brush(slot);
+        if (session != null) { session.settleBefore(document, brush); session.dry("make ink"); }
+        ModularStroke.selectLayer(document, brush);
+        ModularStroke s = new ModularStroke(document, brush, size, darkness, session);
+        s.print(letters);
         return s;
     }
 

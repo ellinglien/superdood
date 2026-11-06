@@ -87,7 +87,7 @@ public final class WidthInstrumentation extends Instrumentation {
         liveStrokes = args != null && "true".equals(args.getString("liveStrokes"));
         if (liveStrokes) benchArgs = args;
         pickerMode = args == null ? null : args.getString("pickerBench");
-        pickerBench = java.util.Arrays.asList("true", "press", "slots", "pages").contains(pickerMode);
+        pickerBench = java.util.Arrays.asList("true", "press", "slots", "pages", "tools").contains(pickerMode);
         start();
     }
     /**
@@ -163,11 +163,11 @@ public final class WidthInstrumentation extends Instrumentation {
                 else if (airbrushOnly) retired(report,"airbrush","MonoPaint's Airbrush tool; the pen draws with Inkwash's slots");
                 else if (gradientOnly) retired(report,"gradient","MonoPaint's Gradient tool; the pen draws with Inkwash's slots");
                 else if (toolbarOnly) retired(report,"toolbar","MonoPaint's header hamburger, toolbar order/visibility and eyedropper; Inkwash shows only its side column");
-                else if (layersOnly) LayerUiChecks.run(this,report);
+                else if (layersOnly) retired(report,"layers","MonoPaint's layers panel, opened from its toolbar; deleted with it (Page Settings' Layers row since the refocus)");
                 else if (orientationOnly) OrientationChecks.run(this,report);
                 else if (storageOnly) StorageChecks.run(this, report);
                 else if (brushPerfOnly) BrushPerformanceChecks.run(report);
-                else PaintChecks.run(this, report, brushOnly);
+                else retired(report,brushOnly ? "brush" : "paint","MonoPaint's tools through its toolbar and the pen; deleted with them (the pen draws with Superdood's slots)");
                 result.putString("stream", report.toString());
                 finish(Activity.RESULT_OK, result);
             } catch (Throwable error) {

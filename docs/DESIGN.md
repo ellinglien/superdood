@@ -1,7 +1,7 @@
 # Scribbler Style
 
-My Bad Drawings' look is the owner's **Scribbler Style** (once called "Daily Puzzle Style", then "Inkwash Design Style"; the design system's README
-and tokens are the owner's artifact, https://claude.ai/artifact/6ccnsCHTZGBT8VqYy7uZFT). In the app every token lives in `Theme` and `TypeStyle`; nothing else names a
+Superdood's look is the owner's **Scribbler Style** (once called "Daily Puzzle Style", then "Inkwash Design Style"; the design system's README
+and tokens are the owner's artifact, a private page). In the app every token lives in `Theme` and `TypeStyle`; nothing else names a
 colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
 
 - **Shade before line** (the owner, 2026-10-23: "the solid black strokes, let's remove them where possible and rely on
@@ -18,7 +18,9 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   the grey in use marked by MonoPaint's 6 dp black marker under it and shown big beside it.
 - **What's on is ink-filled or marked by a tab or a bar:** a chosen tab or chip is ink-filled; every tile and card in
   use has a 5 dp ink tab under it; Brush Lab's picker box marks the size and grey with its tabs, as the side column's. The toolbar slot in use on the
-  Tools page has a thick ink underline, 5 dp, across its full width, its mark drawn as it is (the
+  Tools page is ink-filled as a chosen chip, its whole tile, its drawing in paper (2026-11-03, the owner: "maybe invert it
+  so it's dark? to make it obvious it's selected"; an underline until then); the Library's card holding it has a thick
+  ink underline, 5 dp, across its full width, its mark drawn as it is (the
   owner, 2026-10-23: "some brushes are inverted, so in addition to the inverted look of the brush we need to determine
   another way to indicate that it is active... underline?"), 1 dp under the stroke and 3 dp clear of the card's foot
   (`DrawLayout.MARK`). On the drawing screen's side column every "in use" or "on" mark is a **side bar** instead (the
@@ -29,6 +31,13 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   open, the page's mirrors on) have it on the column's edge side of their cell, its icon's height, so it never lies between two icons. The Dropper while taken up has it at its cell's right, as Mirrors. The size
   in use is the slider's tab, so it has no bar (the size and the swatch in use had a 3 dp one until 2026-10-24). The
   grey strip's grey in use has a 3 dp tab right of the strip. Template Visibility has no mark (a state, not a tool: its eye says the step). The finger's choices and a menu's chosen rows have the menu's bar at the row's right.
+- **The sand timer, Show Kinds and Play to the menu; the layer button under the picker box** (the owner, 2026-11-06:
+  "move the timer, visibility, and mischief tools to the dropdown", "move it right below the picker"; where the bullets
+  below differ, this is current). The icon block is the Dropper and the Lasso over the wet indicator alone
+  (`DrawLayout.PLAY_ROWS` 1); the menu's four groups: Notebook Explorer, Notebook Settings; Export Page, Import, Show Kinds;
+  Draw Together, Sand Timer (while it can be set), Play (marked while a toy is on); Left-Handed, System Settings. Finger
+  Action is System Settings' row. The layer button (58 dp, its icons in the picker box's 1.5 dp lines) sits straight
+  under the picker box on the Manta and the Nomad; the Manta's tray rows are 34 dp both ways again.
 - **Shapes and Play back in the column** (the owner, 2026-10-30: "move shapes button to below visibility and timer,
   and move fun button beside it"; where the bullets below differ, this is current). Later that day Shapes and Show Kinds
   swapped ("the fun button looks a bit like the shapes button .. let's swap the location of the visibility and shapes
@@ -39,7 +48,7 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   or any tool, puts it down); **Play** (Phosphor confetti) in the right cell, its tap its menu beside it, its side bar
   while a toy is on (`DrawLayout.playOn`: the magnets' bin open, the page's mirrors on). Play's menu: **Magnetic
   Poetry**, **Mirrors**, each marked while on; a grey-400 line and **Replay Page** on a page it can replay. Neither is
-  in the main menu now (Settings, Open Notebook, Import; Finger, Left-Handed). Refresh keeps its place over Zen Mode
+  in the main menu now (Settings, Notebook Explorer, Import; Finger, Left-Handed). Refresh keeps its place over Zen Mode
   (`ghostMargin`). The row is 44 dp on the Manta: upright the white space at the foot is 131 dp (175 before); turned,
   the picker box has no spare to grow into and stays at its four rows (1.35x before); the Nomad turned fits at fit
   0.11, its tray rows 28 dp (30). Nothing folds.
@@ -58,7 +67,7 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   the rows grow back toward their preferred heights, the tray's turned 26 dp (24 until then). No item in the column was
   marked for Shapes until 2026-10-30: the slot it drew with kept its side bar.
 - **Layout v3** (the owner's mockup, 2026-10-26; where the column's order below differs, this is current). Top to
-  bottom: Menu alone; the ten slots (eight until 2026-10-27); a gap, then the smudge tool and the eraser, a slot's row each, the owner's
+  bottom: Menu alone; the nine slots (ten from 2026-10-27, eight before); a gap, then Fill in (since 2026-11-06, `ToolSlots.FILL`, its slot's tip drawing), the smudge tool and the eraser, a slot's row each, the owner's
   drawings of them (the spudger and the block eraser, `res/drawable/tool_smudge.xml` and `tool_eraser.xml`, traced, the
   Manta's own pixels, never enlarged, centred in the stroke's place, the side bar at the row's right as a slot's, nothing
   else: no dab of held paint, 2026-10-26); the dot, the size slider and the grey strip; the icon block in 44 dp rows
@@ -91,8 +100,16 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   again. The slot count is one number (`ToolSlots.COUNT`): ten since 2026-10-27 (the owner: "we're at 8 now might as
   well have 10"), the two new slots, under the eight, starting on Cheap ballpoint and Permanent marker, two of the
   owner's Brush Studio pens (`ToolSlots.FIRST`); a toolbar kept with eight (the app's, or a notebook's own,
-  `ToolSlots.Toolbar.parse`) keeps them in place and gains the two. Brushes on Bar goes to ten. Ten fit every screen
-  either way up with nothing else dropped (`DrawLayoutChecks.tenSlots`): the tray's rows give way evenly, the rest as
+  `ToolSlots.Toolbar.parse`) keeps them in place and gains the two. Brushes on Bar goes to ten. **Nine since 2026-11-06**
+  (the owner: "the fill in pen should be grouped with the stump and eraser ... so the tray would have 9 spots"): Fill in
+  is a fixed tool over the smudge tool and the eraser (`ToolSlots.FILL`, the Basic tool, never changed, its own size and
+  grey under `FILL`, a grey strip as a slot's, no long press; the fan's ring and Finger Action too), so the column still
+  holds twelve rows. A toolbar kept with ten (`ToolSlots.shrink`, a notebook's own in `Toolbar.parse`) gives up its first
+  Fill in, whose size, grey, selection and finger go to Fill in's place, the slots after it moving up with theirs; with
+  none, its tenth, kept in Recent. Brushes on Bar goes to nine; kits hold nine at most. Nine and three tool rows fit
+  every screen either way up with nothing else dropped (`DrawLayoutChecks.allSlots`; the Nomad's eight rows 34 upright,
+  26 turned). Ten fit every screen
+  either way up with nothing else dropped (`DrawLayoutChecks.tenSlots` then): the tray's rows give way evenly, the rest as
   with eight. Tray rows with eight, then ten: Manta upright 34, 34; Manta turned 34, 32 (the icons, faces and small rows
   a dp shorter); Nomad upright 32, 32; Nomad turned 30, 24 (the least a tray row has, 30 until then; the icons, faces
   and small rows at their least there, as with eight; the smudge tool's and the eraser's drawings scale down to fit,
@@ -201,11 +218,11 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   the other side for the left hand), a grid of the Basic tools the owner drew ("just whatever i drew"), each its
   drawing (`res/drawable/tip_*.xml`, traced vectors sized in the PNGs' px; Springy brush still `res/drawable-nodpi/tip_springy_brush.png` for its grey tip; tip to the right) over its name in
   captions; pens, markers, brushes, then dry media, the mischief among its kin ("mischief in with the other drawn
-  tools"). Three columns, more where three would run off the foot (four on the Nomad turned). The one the slot holds
+  tools"). Four columns (the owner, 2026-11-06: "make it four wide"; three, more on a short screen, until then), the drawings smaller (`DrawLayout.pickerTip`, down to 20 dp) where that fits the height without scrolling: full size on the Manta upright, 23 dp turned, 21 dp on the Nomad upright; the Nomad turned scrolls. Effects last (2026-11-06). The one the slot holds
   has the menu's bar at its right and a bold name. A tap puts it in the slot and selects
   the slot. Under them **Brush Lab** (on the slot's brush; "brush studio could be opened directly from the tiny
-  popup") and **Advanced** (the Tools page on the slot, as before); at its foot the switch **Tools First** (2026-10-28,
-  marked while on): on, the long press opens the Tools page straight away (turned off there). A tap on a slot still only selects it.
+  popup") and **Advanced** (the Tools page on the slot, as before); at its foot the checkbox **Hold Opens Library** (the switch Tools First, 2026-10-28 to 2026-11-06,
+  ticked while on): on, the long press opens the Tools page straight away (turned off there). A tap on a slot still only selects it.
 - **The size slider** (the owner, 2026-10-24: "change the four size options to a quick size slider. I find myself
   wanting to fine tune the size often", `SizeSlider`, `DrawLayout.FACE_ROWS`). A slider against PHILOSOPHY rule 2, by
   the owner's choice (see PHILOSOPHY.md). The picker box's upper-right triangle since 2026-10-27 (above); the left
@@ -244,7 +261,15 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   goes. A notebook's **Nib Preview** (Notebook Settings, Off and On, on by default and in every older notebook; the
   owner, 2026-10-29: "for the dot preview.. have it enabled by default but able to be disabled in the notebook
   settings?") turns these dots off in it; the Dropper's ring and the eraser's ring while erasing stay. A drawing that
-  isn't a notebook shows them.
+  isn't a notebook shows them. A brush that only reworks the marks there (an effect brush: a smudge, Water, Reprint,
+  the Palette knife, Clear water and the Float combs) rings as the eraser does, round, at its own size (the owner,
+  2026-11-04: "just like eraser"; from 2026-11-01 until then its ring was what it changes, `HoverNib.nib`, which the bar
+  row's and Brush Lab's samples still dot). Over dark marks the ink dots are hard to see; they stay ink alone, as the owner chose.
+  While the pen is down nothing is laid over its change, which shows under the pen as it goes (the owner, 2026-11-04:
+  "if the effect is instant no need to use the grey band"; a stump's other half shown before the finish lays it,
+  `ModularStroke.unwritten`; Float's bath in its quick show). From 2026-11-01 to 2026-11-04 such a brush left a
+  **trail** over the area it swept (`MirrorShow.trail`: dots round it, then a darkened band), for brushes whose change
+  waited for the lift; none does now.
   Said "Size: 4.2 mm", and a screen reader's scroll steps it.
 - **One grey for everything** (the owner, 2026-10-24: "let's go with the procreate method", `ToolSwatches.CURRENT`).
   As in Procreate, the grey is not part of a brush: there is one current grey, and every brush and tool that paints
@@ -280,7 +305,11 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   brush line, the Tools page's slots, cards and This Brush, Brush Lab's loop and Open sheet, kits, the library)
   draws the stroke at full darkness whatever grey is in use, black for ink (`WildSample.slotTray`, `WildSample.PREVIEW`).
   A brush whose stroke is light (Blend's White, as the White gel pen, and Crayon Scratch) is a light stroke on a dark ground
-  (`WildSample.darkGround`). Every other tile stays paper (the owner: grey and dark tiles ghost on e-ink).
+  (`WildSample.darkGround`). Every other tile stays paper (the owner: grey and dark tiles ghost on e-ink). A brush that
+  lays little or no paint of its own (`WildSample.smearsMostly`: a smudge, Water, the Palette knife, Reprint) crosses a
+  grey band to show what it does, and ink dots outline the area its stroke works, the hover ring's at each sample
+  (`WildSample.outlined`, 2026-11-01: "theres no preview size.. for area of effect"); the readout over the size slider
+  shows such a brush, and Clear water, as an outline, not a dot of the grey (`WildSample.reworks`).
 - **The Dropper** (the owner, 2026-10-24: "add a dropper tool so people can quickly match color", Phosphor Bold
   `eyedropper`, `DrawLayout.DROPPER`), the left cell under the readout, the Lasso beside it (the owner, 2026-10-24:
   "lasso can move beside picker", beside the wet indicator before, under the grey strip before that). A button, not a hold on the strip, because a hold there would hide a mode
@@ -343,13 +372,11 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   them. Alone on the paper they look exactly as before; where they cross pen, pen now lies on top. Marks drawn before keep
   the kind they were drawn with. Stamp and Spiro tips keep their Medium's kind. The eraser's live plane (Screentone's
   scrape) is the ink layer's Paint plane when it takes paint.
-- **A print over prints replaces them** (the owner, 2026-10-29: "go over that area again and make it the same pattern,
-  but lighter"): a Print Shading or Screentone stroke of its own Blend, not opaque (`ResolvedBrush.replaces`), sets its
-  plane's print tone to its own under its footprint and clears the plane between its dots, so a lighter one over a darker
-  one leaves the lighter pattern; pen (its own plane, over) and washes (under) stay. Its soft edge keeps that much of what
-  was there (`ModularCompose.edge`, the tip's tone read from a pixel's four neighbours), so strokes of one tone side by
-  side print the same dots, no seam; such a stroke composes every pixel it touches (no skip of unchanged ones) and is kept
-  as a smear (`StrokeTones.smeared`). These prints no longer lay light over dark: the clear shows what is under them.
+- **A print over prints darkens only** (the owner, 2026-11-06: "drawing over an area with different pressure can lighten
+  it... like it's an opaque paint. i've found that to be a bit unintuitive"): 2026-10-29's replacing (a lighter Print
+  Shading or Screentone stroke leaving a lighter pattern) is undone. A print builds on the print tone it finds, the darker
+  of the two (`PrintScreen.printed`), so a lighter grey or pressure leaves what is there. Only an opaque print lays light
+  over dark (`ResolvedBrush.lightOver`).
 - **Show Kinds** (the owner, 2026-10-28: "same method as the template view levels... and even the same icons", "maybe in
   the notepad menu", then "per notebook is not necessary, just per page"): the column's eye beside Template Visibility
   (the main menu's row until later that day; its eye closed while a
@@ -399,12 +426,22 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   as the hold is seen, the pen still down (the owner, 2026-10-24: "have the page menu load right away, don't wait for
   pen lift"); so a hold no longer lifts a page to drag, and Page Settings' Move row moves it. The page is that much shorter, so the bar never lies over the drawing. Inside a notebook the same bar has ‹ and › either side of the number (icons
   black on paper, greyed grey-400 where they can't turn), without the Notebook button, under the strip of pages; there the screen has one bar at the
-  top: ‹ Notebooks, the name (two lines at most, a tap renames it), Draw (ink-filled), Use on Cover and Delete Page,
-  the last two their icons alone (`ic_cover_picture`, Phosphor's trash) on the Nomad in portrait.
-- **Zen by gesture** (the owner, 2026-10-30, as MonoPaint's fullscreen): a two-finger double tap on the page turns Zen
-  Mode on or off, the second tap lifting within 350 ms of the first (`DrawingPad.ZEN_TAP_MS`). A lone two-finger tap
-  still undoes, after that wait; the pen landing, a finger's stroke, a page turn or leaving the page does a waiting
-  Undo at once, first. Two undos tapped faster than that are Zen instead (the owner chose this over a two-finger hold).
+  top, Brush Lab's and the Tools page's (`LabUi.PageBar`, 2026-11-03, the owner: "make it consistent across the app"):
+  ‹ Notebooks, the name centred (two lines at most, HEADING down to BODY, a tap renames it; no job line under it since
+  2026-11-06), then Settings (its word in its own case since 2026-11-06, Phosphor list before), Open, Use on Cover and Delete Page, the
+  last two their icons alone (`ic_cover_picture`, Phosphor's trash) on the Nomad in portrait; the bar 68 dp tall
+  (`NotebookLayout.PAGES_BAR`: the name's two lines and the job's), its 12 dp past 56 taken from the margin over it (`pagesTop`), so the page and the settings list keep their room. The shelf's bar the same, "Notebooks" (no job line since
+  2026-11-06), no Back. Favourites (2026-11-06) is first on the shelf; a page preview in the strip has its star (Iconoir
+  star, outline or filled, 20 dp on a paper patch) in a 44 dp corner target, drawn again alone when it changes. The page's ‹ and › either side of it are 72 dp wide and the page's height, their
+  carets 48 dp (`NotebookLayout.CARET`, `CARET_ICON`; 48 dp and 24 dp carets until 2026-11-03, the owner: "the page
+  turn carets should be bigger"). The strip under the page: the front cover, the pages, + and the back cover, a
+  window scrolling round the place shown, nothing pinned (`NotebookStrip.start`; the owner, 2026-11-03: "i just asked
+  that the cover not be sticky on the left"); a hold on the front cover opens Cover Design.
+- **Zen by gesture** (the owner, 2026-10-30, as MonoPaint's fullscreen; three fingers the same day: "i like using
+  the two finger undo repeatedly"): a three-finger double tap on the page turns Zen Mode on or off, the second tap
+  lifting within 350 ms of the first (`DrawingPad.ZEN_TAP_MS`). A two-finger tap undoes at once, as quickly as tapped. A
+  lone three-finger tap still redoes, after that wait; the pen landing, a finger's stroke, a page turn or leaving the
+  page does a waiting Redo at once, first.
 - **The brush line and Zen** (the owner, 2026-10-23: "keep the zen in the bottom left (align a bit better pls) and you
   can put the selected brush indicator to the right along the bottom"). Zen's button (Phosphor circle, unfilled, while
   off, circle fill while on, the owner, 2026-10-24: "change dotted circle for zen: circle unfilled and filled for zen
@@ -416,10 +453,60 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   words take a tap (Brush Lab on the slot). The empty line after them doesn't, so a palm resting at the far corner opens
   nothing (the owner: "i am worried it will be triggered by a palm accidentally.. best to shift it to the left"). With the
   column on the right, all of it is mirrored.
+- **System Settings** (2026-11-04, the owner: "can we add system settings? this would be a new section to adjust a few
+  things (defaults, etc)"; `SystemSettingsPanel`, words `SystemSettings`): the menu's row after Left-Handed opens a
+  popup where the menu was, in its look (2026-11-06, the owner: "it should just pop up over instead of being its own
+  page"; a screen of its own with the Tools page's bar until then): the title over its job and a short list of rows, each its name and
+  `LabButton.chip`s, the chosen one filled; a tap redraws its row's chips alone and saves at once
+  (`PaintPreferences`, read as the drawing screen acts). The app's one settings screen, against "no settings" by the
+  owner's decision (PHILOSOPHY.md): app-wide behaviour only, a few rows. **Automatic Refresh** (Off at first since 2026-11-05; the owner:
+  "the goal should be to prevent having to flash more than relying on it. it takes away from the feeling that it's
+  physical media"): off, no flash of the app's own (`SystemSettings.flashes`): a ghosted page gets the forced grey pass
+  instead, the pen-away pause nothing, a return from another screen and the notebook screens' opening the firmware's
+  clean update alone; Refresh still flashes. **Two-Finger Tap** and **Three-Finger Tap** (`FingerTool.Tap`: Undo,
+  Redo, Refresh, Nothing; Undo and Redo at first), the palm gate (`FingerTool.tapCounts`) first whatever they do.
+  **Edge Strip Hold** (`EdgeHold.Choice`: Trash, Lasso, Nothing; the Trash at first). Not offered: the one-finger edge
+  swipes (the bars' own toggles), the pinch and pan, the riffle along the page bar.
+- **Zen Mode's fan** (the owner's sketch and mockup, 2026-11-04, then four rounds on the Manta that day; `ZenFan`,
+  `ZenFanView`). Zen's button: the dashed circle while off, the circle (unbroken) while on, the X while the fan is open
+  (a brush dot in its place for a round: "sometimes the tool size is bigger than the space available, so it looks
+  cramped"). A tap in Zen Mode opens the fan from the corner, its point `ZenFan.TUCK` 34 dp up and in from the button's
+  middle ("tucked in"; 62 dp until then), the whole fan 4.7 cm (295 dp) at most (3 cm, then "enlarged... by 25%" twice, "a bit teeny for finger use"): the
+  size wedge along the side edge, white; the grey wedge along the foot in the strip's dots, white at the point to black
+  at its arc; between them a white gap 31 dp wide, as wide as the white band between the wedges and a thin arc; outside
+  the arc the column's tools in its order (the slots, Smudge, Eraser), each its row's picture turned outward, its butt
+  on the arc (the Eraser 5 dp out), the one in use with a bar past its tip. Each tool takes taps over its whole sector of
+  the ring and 19 dp past it (about 5.6 × 11.3 mm on the Manta). The size marker sits up the side edge where the wedge is
+  as wide across as the line at 100% (`ZenFan.sizeUp`, `width`; "it should be closer to the size actually shown"), true
+  up to its widest, 139 dp (260 px); broader sizes on the rest of the edge to the toolbar's broadest at its top; below
+  the wedge's corner, the finest. A wedge sets on the lift, its marker following the pen. Only a tap on Zen's circle
+  (or Back) closes it, Zen Mode staying; drawing and picking a tool keep it open (2026-11-06: "Keep tray open when
+  drawing - press to close"). A long press on the button turns Zen Mode on or off at once. Every line in the fan is one width, the button's icons'
+  (`ZenFan.STROKE`; "keep all strokes in that section the same width"). A pick or a lift puts only the boxes that
+  changed on the panel (the old and new bar, the markers), ink and paper through the binary update, as a pick on the
+  column (`SelectionFeedback.updateParts`); a drag moves only its marker's strip. The pad's nib ring stayed off while the
+  fan was open until 2026-11-06 ("the preview dots appear over the fan and basically erase whatever of the fan is
+  under them"); the fast display now keeps off the fan's shape (`DrawingPad.covered`, `ZenFan.mask`: its paper's disc in
+  8 steps each side of the X's row, at most 32 dp past it, and the line), the ring with it, so strokes beside the
+  open fan still show.
+  Since zen-fan-3 (2026-11-06): the gap and the band 60 dp (31 before), as wide as the thin arc's top end is from the
+  Manta's edge, the wedges 183 dp (212) so the tools stay put; the layer button, the droplet and the Lasso are lent
+  into the gap between the wedges (the owner: "putting the layers, droplet and lasso between the two wedges"), squares
+  centred on the diagonal 40, 97 and 154 dp out from the point (`ZenFan.cell`; 48, 114 and 180 until zen-fan-4, the
+  Lasso now inside the wedges' radius), the droplet and the Lasso 40 dp, the layer button 34 (85%); no line under the fan.
+  Its line (2026-11-06, the owner: "align the bottom icons with the dot/nib preview and just have one line there...
+  drop, lasso, and tiny layers"; two strips that morning, with Menu and Zoom): while open, the column's own Dropper,
+  droplet, Lasso and layer button out from the X under the foot, 44 by 32 dp each, then the page bar's ‹, number and ›
+  ("add a small < page# > line to the right of the layers"), their middles level with the dot's
+  (`ZenFan.cell`), lent and given back (`InkWashBar.lend`, `giveBack`), the layer button's icon the others' size; the
+  grey's marker room under the foot down to the line's top (`ZenFan.footRoom`, 8 dp). The Lasso's menu opens beside the fan. The brush's nib and grey (`SwatchReadout`) cover the circle while the fan is open.
+  While open, paper hides the drawing under it: a disc round the X out past the tools' reach (`ZenFan.backdrop`, 348
+  dp), its edge a crisp arc (no anti-aliasing, so no grey fringe on the panel); the page itself untouched, shown again
+  as the fan closes ("when fan is open, maybe obscure outward from the circle, hide the drawings underneath temporarily").
 - **Left-Handed** (2026-10-23): a row of the drawing screen's menu, marked while on (the menu's bar at its right). It puts
   the column on the page's right at once, and with it Zen Mode's corner, the brush line (reading from Zen outward), the
   page bar (the Notebook button at its far end from the column) and every menu and popup beside the column, toward the
-  page. MonoPaint's setting (`PaintPreferences.toolboxRight`), its old Settings window not reachable in My Bad Drawings. The page gets everything between the page bar and the brush line.
+  page. MonoPaint's setting (`PaintPreferences.toolboxRight`), its old Settings window not reachable in Superdood. The page gets everything between the page bar and the brush line.
 - **Import** (2026-10-29; Import PDF and Import Image until then, the owner: "so it'd be just one import thing"): one row
   of the menu's first group, Phosphor `file`. Its picker is a dialog as wide as the screen (the owner: "maybe bigger
   modal ... more like supernote file explorer"): the folder's crumbs under the title (Storage, the Supernote's folders,
@@ -430,7 +517,7 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   ‹ n / m ›, and New Notebook, This Page, Cancel; This Page places that page as a picture.
 - **Icons are Iconoir's** (the owner, 2026-10-29: "i like iconoir"; https://iconoir.com, MIT, v7.10.1): 24 on 24, a 1.5
   stroke, round caps and joins, black on paper, filled only where the meaning is a filled state (the full drop and eye,
-  Zen's circle). Each file names its source in a comment: an Iconoir glyph, or "Drawn for My Bad Drawings in Iconoir's style"
+  Zen's circle). Each file names its source in a comment: an Iconoir glyph, or "Drawn for Superdood in Iconoir's style"
   where Iconoir has none that fits or the owner asked for one ("design replacements for the following: finger, part hand,
   part life (dna), peel masking fluid, clear page, circle dashed (make it dashed), Half, Full (Show Kinds), Faint,
   Refresh (ghost), Lasso, Line Segment, Magnetic Poetry (...words on tiles), Rectangle, Shapes, Stamp, Shape oval";
@@ -449,6 +536,22 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   clear water (`ic_water_brush`), a brush with a dab of paint for one that keeps its paint (`ic_dirty_brush`; its head
   filled with the grey of the paint it holds while it holds some, that paint's darkness snapped to the six greys, never
   paper, `DrawLayout.heldGrey`, `ic_dirty_brush_paint` under it, the mid grey #888 until 2026-10-23), the stump for the rest.
+- **The smudge tool has two tools** (the owner, 2026-10-30: too many look-alike blend tools; "just TWO tools, each
+  using pen pressure the way real media does"). Its chooser (a long press on it, `ToolSlots.smudgeChoices`) shows
+  **Blend** ("press to push") and **Water** ("press to lift"), and first the tool's own brush when it holds something
+  else; no saved smudge brushes (they stay in the library, as do the other Basic smudges: Wash comb, Dirty brush,
+  Clear water, Comb, Gouache water). The four Blend and Water stand for, the Blend stump, Stump, Water brush and Damp
+  tissue, are retired (2026-10-31, `ToolPresets.RETIRED`): off the Tools page and the tool picker (Water in the Water
+  brush's place, with its drawing), their codes read and draw as before, with their own words. **Blend** is the Blend stump with
+  Smudge's **Press to Push**: a light touch softens marks in place (the Blend stump's own), a firm press pushes paint
+  along the stroke (a Smear, the Stump's way). **Water** is the Water brush with **Press to Lift**: a light touch
+  re-wets paint so it runs, a firm press blots it off (the Damp tissue's way). Pressure slides between the two through
+  a usual press (`ResolvedBrush.Carry.pressed`: none to .25 travel, all from .85; the owner's light hand reads about
+  .05 to .25, a usual one .5 to .75, a hard one .88 up, docs/TILT_INPUT.md). Blend is the tool's first brush
+  (`SMUDGE_FIRST`); once, at load, a smudge tool holding the Blend stump or the Stump takes Blend, one holding the Water
+  brush or the Damp tissue takes Water (`ToolSlots.smudgeTwo`); anything else stays. Its icon is Blend's blending stump
+  or Water's water brush. Pictures: `scripts/presssmudge_pictures.sh` (light, usual and firm, over hatching and out of a
+  wash, beside the older tools each end stands for).
 - **A brush that runs out shows its paint in a gauge** (the oil paint spec, Smudge's Paint Load; not on the drawing
   screen's tray since the refocus, 2026-10-24, which put oils that run out in Brush Lab's back room): a tray row whose brush
   runs out of paint has a small upright gauge at its stroke's right end, 6 dp wide and the stroke's height, a 1 dp ink
@@ -555,7 +658,7 @@ The design pass's component rules (the owner's decisions, 2026-10-23). The full 
   png, and possibly layers for photoshop? ie. the diff media layers"), as Notebook Settings' foot has Export Now: a tap
   opens the usual menu beside it, **PDF**, **PNG**, **Layers** (Phosphor `file-pdf`, `image`, `stack`), and the copy is
   made on Export Now's worker, wet paint set first, into EXPORT/<app folder> beside the notebooks' PNG folders, named
-  "<notebook> p5.pdf" / ".png" / ".psd"; the note says "p5.psd in EXPORT/My Bad Drawings" (`PageExport`, `AutoExport.page`).
+  "<notebook> p5.pdf" / ".png" / ".psd"; the note says "p5.psd in EXPORT/Superdood" (`PageExport`, `AutoExport.page`).
   PDF and PNG are that page's own from the notebook's copies, byte for byte the PNG. **Layers** is a Photoshop file
   (`PsdWriter`): Grayscale, 8 bits, 300 dpi, PackBits; bottom first **Paper**, **Template** (the guides where they show),
   then each layer of the page kind by kind as the engine stacks them (**Old Paint**, the base of old pages and paint of
@@ -588,64 +691,80 @@ place: picking a brush on the Tools page, changing it in Brush Lab.
   The Tools page left the bands and lines for the owner's mockup (2026-10-28, below): Brush Lab keeps them.
 
 - **The Tools page** (`ToolsActivity`, `ToolsLayout`, `ToolsPage`, `ToolCard`; the owner's mockup, 2026-10-28, "Tools page
-  v2"): all in Ukulele, on paper with no bands, frames or grid lines (the thin-lines rule above is Brush Lab's now). The
-  bar: ‹ Back, "Tools" (bold), Undo and **Brush Lab** in a rounded 2 dp box (Tweak in Brush Lab, ink-filled, until then).
-  The **scratch pad**, a rounded 2 dp box, at least 220 dp tall on the Manta (120 on the Nomad), the rest of the page
-  after the Library's rows: the tool's name (bold) and its one line (" · even and crisp") in its foot; along its top a
-  change's note ("Kept Fineliner in Recent") and small grey words at the right, **Back to** the slot's first brush,
-  **Load Kit** or **Cut Stamp** while they apply, **Clear** and the drop. This Brush went (its name and line moved into
-  the pad; the sizes and the grey bar are Brush Lab's and the drawing screen's). The small grey label **Toolbar** over
-  the ten slots, two rows of five: each its drawing as the side bar shows it over its name on one line, the selected
-  one bold and underlined (5 dp), a slot changed on this visit a dot after its name. The **Library**: the tabs as words
-  (Tools, Recent, Saved, Kits; the chosen one bold over a 3 dp line), the pages ("‹ 1 / 2 ›") at their right; under
-  them the **chips** (the owner: "instead of dropdown show chips for the categories"; the Style menu, 2026-10-24 to
-  2026-10-28): All, Pens (Fineliner, Dip pen), Markers, Brushes (Brush pen, Dry brush, Hake), Washes (Watercolour, Ink
-  wash), Paint (Gouache, Oils), Dry Media (Pencil, Charcoal, Pastels), Print and Odd Ones (Anything goes), rounded, the
-  chosen one filled, only those the tab has (none under Kits), a row on the Manta upright, wrapping where the width runs
-  out (`ToolsPage.Chip`; kept as the style was, a kept style's name opening on its chip). The grid: four across (three
-  on the Nomad turned), each card its drawing over its name, both at its left; the card holding the slot's tool
-  underlined. Every drawing is cut at its handle end (`DrawLayout.TIP_TRIM`) and scaled to one width in an art box of
-  one height (`ToolsLayout.art`: the owner, "the tool images need to be limited to a certain length only to be uniform
-  with one another"); a brush with no drawing (Brush Lab's) shows its stroke at that size. Under All the Tools tab goes
-  chip by chip, each group from a new row, 8 dp further apart; Recent and Saved keep their order. A long press on a
-  saved card asks in the chips' place to delete it. In landscape the scratch pad and the slots are a column at the
-  left, the Library beside it.
-  **Search** (the owner, 2026-10-28: "it's difficult to find things in the tools library"): a magnifier at the tabs'
-  right, left of the pages, puts a one-line field and × in the chips' place, the keyboard up (`adjustPan`: the page
-  keeps its size, no new layout). The grid shows Tools, Recent and Saved together, each brush once, no tab chosen, no
-  groups, from the first page; every typed word must be somewhere in the card's name, its style's name or label, its
-  chip or its line, any case, any order (`ToolsPage.matches`), else "Nothing found". The grid follows once per pause
-  in the typing (250 ms), redrawn only when its cards change. × or a tab closes and clears it; it isn't kept. The
-  Nomad's tabs are 10 dp apart (14 before) so the magnifier fits its row turned.
-  The slots not selected are drawn in solid grey-600, picture and name (the owner, 2026-10-28: "make the non-selected
-  tools a little grey"); the selected one stays black, bold and underlined. At the Toolbar label's right the chip
-  **Tools First** (`DrawLayout.TOOLS_FIRST`, `PaintPreferences.toolsFirst`, app-wide, off at first), filled while on:
-  then a slot's long press opens this page on the slot, not the picker (whose foot row turns it on).
+  v2"; the redesign, 2026-11-03, the owner: "it's not clear what to do once you're there and it seems like it should
+  just be simpler"): all in Ukulele, on paper with no bands, frames or grid lines (the thin-lines rule above is Brush
+  Lab's now). Top to bottom, what is changed first:
+  - **The bar** (`LabUi.PageBar`, Brush Lab's too): ‹ Back, the title **Toolbar** (bold) over its job in grey captions, both centred in the bar (2026-11-03, as Brush Lab's),
+    "Tap a slot, then a brush for it." (a change's note, "Kept Fineliner in Recent", in its place for 4 s). No Undo: a
+    brush a slot lets go is kept in Recent (`ToolSlots.keep`), a Basic tool is always under its kind, a saved one in
+    Saved, and back on the drawing screen its Undo takes each slot's change back (a kit's as one). **Hold Opens Library**
+    shows at the bar's right only while it is ticked: then the long press skips the picker whose foot row holds it,
+    so this is the one way to turn it off.
+  - **The slots**, one row of tiles across the page, every slot the side column shows (ten on the Manta, eight on the
+    Nomad; a kit raises the bar's count no higher than `ToolSlots.COUNT`), in landscape too (2026-11-03, the owner: "the
+    tool slots list can be smaller, all on one line .. with two rows it's not clear what that does"; two rows of five,
+    each named, until then). Each tile is its drawing alone, as the side bar shows it, in 4 dp padding
+    (`ToolsLayout.SLOT_PAD`), no name (the name row says the selected one's; a screen reader each one's); the selected
+    one inverted, an ink tile with rounded 5 dp corners and its drawing in paper, as a chosen chip ("maybe invert it so
+    it's dark? to make it obvious it's selected"); the others' drawings in solid grey-600 (the owner, 2026-10-28: "make
+    the non-selected tools a little grey"); a slot changed on this visit a grey dot under its tile.
+  - **The name row**: the selected slot's tool, its name (bold) and its one line (" · even and crisp"), and **Edit in
+    Brush Lab** in a rounded 2 dp box at its right, on that slot (Brush Lab in the bar's corner until 2026-11-03).
+  - **The Library**: **Search** (a magnifier and its word) with the pages ("‹ 1 / 2 ›") at the row's right; under it
+    one **filter row** of chips (`ToolsPage.Chip`; tabs over chips until 2026-11-03): Recent, Saved, Pens (Fineliner,
+    Dip pen), Markers, Brushes (Brush pen, Dry brush, Hake), Washes (Watercolour, Ink wash), Paint (Gouache, Oils),
+    Dry Media (Pencil, Charcoal, Pastels), Print, Odd Ones (Anything goes), Effects (the tools that rework the marks there, 2026-11-06), Kits; rounded, the chosen one filled, one
+    row on the Manta upright (spaced as the Nomad's since Effects joined, `ToolsLayout.tightChips`), wrapping where the width runs out. A kind shows its Basic tools; Recent and Saved keep
+    their order, latest first. The chip is kept between visits; the first time it is the kind of the selected slot's
+    tool (faster than All, which it replaces: the cards most like the slot's, its own among them, every other kind one
+    tap away). The grid opens on the page holding the slot's tool: four across (three on the Nomad turned), each card
+    its drawing over its name, both at its left; the card holding the slot's tool underlined. Every drawing is cut at
+    its handle end (`DrawLayout.TIP_TRIM`) and scaled to one width in an art box of one height (`ToolsLayout.art`: the
+    owner, "the tool images need to be limited to a certain length only to be uniform with one another"); a brush with
+    no drawing (Brush Lab's) shows its stroke at that size. A long press on a saved card asks in the search's place to
+    delete it. In landscape the slots' row spans the page; under it the name row over the try strip is a column at the
+    left, the Library beside it. Cards a page: 32 on the Manta either way (24 upright, 36 turned, with two rows of
+    slots), 24 and 15 on the Nomad (16 and 18).
+  - **The try strip** (`TestArea.strip`, Brush Lab's too), at the foot (2026-11-03, the owner: "move the preview area to
+    the bottom"; under the name row until then): "Draw here to try Fill in" and **Clear** over the test page in
+    a 1 dp ink frame, at least 140 dp tall on the Manta (90 on the Nomad), the rest of the page after the Library's
+    rows. It draws with the selected slot's tool at its size and grey, Gravity reading the tilt through its page. No
+    Load Kit (Kits is in the filter row), no Cut Stamp (Stamp ▾ and Brush Lab have it), no Back to, no wet drop.
+  **Search** (the owner, 2026-10-28: "it's difficult to find things in the tools library"): puts a one-line field and ×
+  in its place, the keyboard up (`adjustPan`: the page keeps its size, no new layout). The grid shows the Basic tools,
+  Recent and Saved together, each brush once, no chip chosen, from the first page; every typed word must be somewhere
+  in the card's name, its style's name or label, its kind or its line, any case, any order (`ToolsPage.matches`), else
+  "Nothing found". The grid follows once per pause in the typing (250 ms), redrawn only when its cards change. × or a
+  chip closes and clears it; it isn't kept.
   Opening fast (the owner: slow "just on the first load"): the page is laid out before its first frame (a pre-draw
   listener, no blank frame first); every art box's picture, drawing or stroke, is drawn off the main thread as an
   ALPHA_8 mask and kept for the app's life (`ToolCard`, an `LruCache` of 4 MB, by drawing or brush and size), the grey
   slots the same mask in grey; the drawing screen draws the page's first pictures ahead 3 s after it settles, never
   while the pen is down (`ToolsActivity.warm`). Logcat (tag MonoPaint): "Tools page shown in N ms".
-- **Brush Lab** (`BrushLabActivity`, `LabLayout`, `LabSettings`): a double tap on any slider (within half a second, `BandSlider`) resets it to its choice's default, one Undo step, noted "Reset Size"; the bar (‹ Tools when the Tools page opened it, and it
-  goes back there; "Brush Lab"; Undo at the right). The lab works on the slot that was selected when it opened, from
+- **Brush Lab** (`BrushLabActivity`, `LabLayout`, `LabSettings`): a double tap on any slider (within half a second, `BandSlider`) resets it to its choice's default, one Undo step, noted "Reset Size"; the bar (`LabUi.PageBar`, the Tools page's pattern since 2026-11-03: ‹ Toolbar when the Tools page opened it, and it
+  goes back there; "Brush Lab" over its job, "Tap a part to change it, then try the brush.", centred in the bar as the
+  Tools page's are (the owner, 2026-11-03: "align section name 'BRUSH LAB' in the middle at the top"); Undo at the right). The lab works on the slot that was selected when it opened, from
   the drawing screen or the Tools page, and shows no other (the owner, 2026-10-29: "the active toolbar isn't important
   here, since whatever toolbar slot was selected at the beginning should flow through. that will give the brush lab
   some room"; the **Active in Toolbar** band of ten slots went, its room to the modules, the open card and the scratch
   pad). Then one band: **About This Brush** (its header: the brush's actions in one ordered list,
-  `BrushLabActivity.ACTIONS`: **New**, **Open**, **Save**, the one ink button, **Save as New**, Back to, Cut Stamp, from
+  `BrushLabActivity.ACTIONS`: **New ▾**, **Open**, **Save**, the one ink button, its **As New** box, Cut Stamp, from
   the row's left, no label on either screen (the owner, 2026-10-29: "you can remove the text ABOUT THIS BRUSH and move
   the menu buttons to the left there"; the Manta's said About This Brush until then). Its block: the loop, the name with its
   pencil, under it **Edited** once the brush changed since it was opened or saved and a suggested name to tap, the
-  words, and at the right the drawing screen's **picker box** (`PickerBox`, the same component as the side column's)
+  words (hidden, their room kept, until the loop or the name is tapped; a tap again hides them; 2026-11-03), and at the
+  right the drawing screen's **picker box** (`PickerBox`, the same component as the side column's)
   turned a quarter so it lies across where the four sizes and the grey bar were (the owner, 2026-10-29: "we can use the
   same horizontal picker from the toolbar in place of the pickers there"): the greys black at the left to white at the
   right with their tab above, the sizes fine at the left to broad at the right with their tab under, 28 dp squares (24
-  on the Nomad), 344 dp long (194; 264 until its readout), and at its right the side column's **readout**
+  on the Nomad), 344 dp long (194; 264 until its readout), against the block's right edge, and at its left the side
+  column's **readout**
   (`SwatchReadout`, the same component, `SwatchReadout.show(look, brush, greys)` for both), a square as thick as the
   box: the nib at rest at the size in use, in the grey (the owner, 2026-10-29: "beside the picker show the preview size
-  / shape as in the toolbar"; the side column's sits over its box, so turned with it, it sits at the right), set with
+  / shape as in the toolbar"; at the box's right until 2026-11-03: "put the size preview on the left instead of the
+  right, so the picker can go against the side"), set with
   the box's tabs when the size, the grey or the brush changes; no Sizes window here any more), **Adjust** (the six part modules with their locks
-  and dice, their end words kept; Start from ▾ in its header) beside **Scratch Pad**, a 1 dp line over them, and
+  and dice, their end words kept; Start from ▾ in its header until 2026-11-03) beside the **try strip** (`TestArea.strip`, the Tools page's: "Draw here to try Polite Smear" and Clear over the test page, whose paint dries by itself, so no wet drop since 2026-11-03; Scratch Pad until 2026-11-03), a 1 dp line over them, and
   **Randomize** across the foot, big, ink-filled, its dice beside its word and centred with it as one (the owner,
   2026-10-23: "make RANDOMIZE a black button, align dice with text"; the lab's second ink button), **Anything Goes**
   beside it a smaller plain-words button with its shuffle (the owner, 2026-10-24). One mode, what Advanced was (the
@@ -653,26 +772,30 @@ place: picking a brush on the Tools page, changing it in Brush Lab.
   room's too (Hatch, Stipple, Filled Shape, Stamp, Spiro, Float, Mold, Fading, Lemon Juice), locks always apply, a
   tapped module opens its card. No Tweak It (the owner, 2026-10-29: "let's remove the tweak it section. we can keep
   that on the online version maybe but here it's too confusing"; the web lab keeps it).
-  **New, Open, Save** (the owner's option A, 2026-10-29: "once it's edited, maybe suggest a new name?"): **New** rolls a
-  new brush in the brush's style that no library entry holds. **Open** (on while open) unfolds a sheet under the
+  **New, Open, Save** (the owner's option A, 2026-10-29: "once it's edited, maybe suggest a new name?"): **New ▾** opens
+  the styles under it (headed Start From, the brush's own marked; Start from ▾ in Adjust's header until 2026-11-03) and
+  rolls a new brush in the one picked that no library entry holds. **Open** (on while open) unfolds a sheet under the
   header: a pasted code (Open, and **Cancel**, which closes it with nothing changed; Open again or Back closes it too,
   the owner: "once you click load, you can't shrink that form without entering something"), this brush's code to
   copy, and the **Library**, two rows of its brushes a page (‹ 1/3 ›; six across, four on the Nomad), the one Save
   writes over tabbed; a tap opens one. **Save** writes over the library entry the brush was opened from, in its place,
   its own size and grey moved to the new code, keeping its name unless one was given (typed or the suggestion taken);
-  a brush not opened from the library (the slot's own, New's, a pasted code) is added. **Save as New** always adds a
-  copy, under the suggested name unless one was given, the entry left alone. The slot always holds what is being
-  edited; saving only concerns the library. The suggestion is `BrushNames.name` of the brush as it now is (deadpan,
-  Title Case, its part's word in it), offered only once it's edited and its name isn't that already; the rename field
+  a brush not opened from the library (the slot's own, New's, a pasted code) is added, under the suggested name unless
+  one was given. With its **As New** box ticked (shown only for a library brush; **Save as New** until 2026-11-03)
+  Save adds a copy that way, the entry left alone (`BrushLab.save(asNew)`). The slot always holds what is being
+  edited; saving only concerns the library. The suggestion is `BrushNames.name` of the brush as it now is (a paint
+  colour's, a deadpan form or its part and a name; Title Case; never repeating the library's latest ten in a form or
+  a word), offered only once it's edited and its name isn't that already; the rename field
   opens on it. While a part's choices are open, a tap on another part's module
   switches them to that part's in one step (the owner, 2026-10-23: "if medium picker is open and i tap paper, open the
   paper panel"): the open panel closes, its patch is cleaned (`SelectionFeedback.cleanAfterClose`), and the new one
   opens once the clean has run, so no ghost stays. Its own module, or anywhere else, closes them.
-- **Back to where you started** (the owner: "an easy way"): each screen remembers what every slot held when it opened
+- **Where you started** (the owner: "an easy way"): each screen remembers what every slot held when it opened
   (`ToolSlots.Start`; Brush Lab opened from the Tools page keeps the Tools page's). A slot holding something else has a
-  small grey-800 dot under it on the Tools page (`LoopCard.setChanged`), and a plain-words **↺ Back to
-  Fineliner** (Phosphor's arrow-counter-clockwise) puts the first brush back, its size and grey too; one Undo step.
-- **Nothing unsaved is lost** when a slot's brush is replaced (a pick, a kit, Randomize, Start from, Load, Back to): a
+  small grey-800 dot under it on the Tools page (`LoopCard.setChanged`). Brush Lab's **↺ Back to Fineliner** went
+  2026-11-03 (the owner: Undo and Recent already cover it): Undo takes the slot back step by step, and the first brush
+  is in Recent, Saved or its kind.
+- **Nothing unsaved is lost** when a slot's brush is replaced (a pick, a kit, Randomize, New, Load): a
   brush not in the library and not a Basic tool is kept first in **Recent** (`ToolSlots.keep`; the latest 30, each
   once), said for a moment ("Kept Fineliner in Recent"): beside This Brush's header on the Tools page, under the picker
   box in Brush Lab. A brush Randomize made stays in its slot on Back, saved or not.
@@ -684,7 +807,7 @@ place: picking a brush on the Tools page, changing it in Brush Lab.
   (`res/font/ukulele.ttf`, `ukulele_bold.ttf`, made from the dafont file by `scripts/ukulele_font.py`: 1.12× its size,
   0.07 em between letters, a drawn bold with the regular's advances). It is the app theme's font
   (`res/font/ukulele_family.xml`, `res/values/styles.xml`), so the system's and MonoPaint's menus, dialogs and
-  messages draw in it too; My Bad Drawings' own text gets it from `Theme.face(weight)` and `Theme.style(view, TypeStyle)`.
+  messages draw in it too; Superdood's own text gets it from `Theme.face(weight)` and `Theme.style(view, TypeStyle)`.
   A weight up to 500 draws 400, from 600 up 700.
 - **What it lacks:** Ukulele has only a–z, A–Z, 0–9 and a little punctuation; the script adds : ; , · and … from its
   own period and apostrophe, and anything else (% & * = ×, the arrows) comes from **iA Writer Duo** behind it
@@ -737,9 +860,9 @@ Wherever a brush is being changed, one block says which brush it is, and it is a
 
 - **The block "This brush":** on the left a big live loop of the brush (at full darkness, whatever the grey in use: the loop is a whole brush);
   on the right its name (tap to rename) and its plain words. The brush's own actions sit with it: in Brush Lab, New,
-  Open (a library brush or a share code), Save, Save as New, Back to and Cut Stamp in its header; Undo in the bar. The name and loop appear here,
+  Open (a library brush or a share code), Save with its As New box and Cut Stamp in its header; Undo in the bar. The name and loop appear here,
   once and prominently, not again in a top bar.
-- **Adjust** heads the parts (Tip, Medium, Paper, Drying, Control, Smudge, Erasable), each shown with waves.
+- **Adjust** heads the parts (Control, Tip, Medium, Rework, Drying, After; the order a mark is made, 2026-11-01; Paper's Texture a row of Medium's card), each shown with waves.
 - **Finding a brush is kept apart from changing this one.** Places that offer brushes (Community library, Random,
   the Tools page's tabs, the library) show loops you can try (the Tools page: tray strokes); trying one makes it "This brush".
 - In Brush Lab (app): About This Brush across the band's top, then Adjust under it. In Brush Studio (web): a persistent sidebar holds

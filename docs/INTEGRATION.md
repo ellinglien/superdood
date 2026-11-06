@@ -20,7 +20,7 @@ branch `upstream-lasso`, 2026-10-23).
   path, documents and layers, it adds its own toolbar, a brush engine (the
   "six-part" modular brush) and Brush Lab, a screen for making brushes.
 - **Identity:** installs beside MonoPaint (`applicationId ing.ell.mybaddrawings`, `app.helpyy.inkwash` until 2026-10-30,
-  library folder `My Bad Drawings`, own signing key). Java package is still
+  library folder `Superdood`, `My Bad Drawings` until 2026-11-04, own signing key). Java package is still
   `io.github.mpdairy.monopaint` (see section 6).
 - **Owner's intent:** collaborate with MonoPaint, ideally by offering the
   brush engine as a shared module and sending generic fixes upstream.
@@ -36,13 +36,14 @@ branch `upstream-lasso`, 2026-10-23).
 | of which desktop checks (`app/src/test`) | 208 files, +35,567 / −12 |
 | of which docs (specs, plans, prototypes; finished ones in `docs/archive/`) | 155 files, +89,251 / −67 |
 | Java classes upstream has | 89 |
-| upstream classes Scribulor modified | 49 (+ `viewport_bitmap.c`, `layers.h`, `CMakeLists.txt`) |
-| upstream classes Scribulor deleted | 4 (`AppSettingsDialog`, `ImageImport`, `PaletteEditor`, `PictureFiles`) |
-| upstream classes untouched | 36 |
-| new Scribulor classes | 224 |
+| upstream classes Scribulor modified | 44 (+ `viewport_bitmap.c`, `layers.h`, `CMakeLists.txt`) |
+| upstream classes Scribulor deleted | 26 (+ `selection_preview.c`; listed in section 2) |
+| upstream classes untouched | 19 |
+| new Scribulor classes | 267 |
 
 Section 2's lists were written class by class as each change landed; where they and these counts differ, the counts
-are current (2026-10-27).
+are current. The class counts and section 2's (a) and deleted lists were rechecked 2026-11-05 (branch `tidy-upstream`,
+against `upstream/main` at `5f764ec`); the other rows are from 2026-10-27.
 
 The divergence is mostly *additive*: new classes beside upstream's. The edits
 to upstream files are concentrated in `DrawingPad`, `PaintActivity` and
@@ -55,31 +56,37 @@ Categories: **(a)** upstream, untouched; **(b)** upstream, modified by Scribulor
 **(c)** Scribulor engine, pure Java (no `android.*`), candidate shared module;
 **(d)** Scribulor UI/product layer, Scribulor-only; **(e)** tooling.
 
-### (a) Upstream, untouched (64)
+### (a) Upstream, untouched (19)
 
-Documents and storage: `DrawingBook DrawingStorage
-PngExport RecoveryCodec ExportSize`. Display and e-ink: `DirectEink
-DirtyRegions DotGray DotPattern GrayPalette CanvasViewport
-PageTurnDisplay PanelCoordinates PanelPreviewLayout QuarterTurnLayout Device
-ProbeActivity`. MonoPaint's tools and wet paint: `ToolStrokes
-ToolLibrary ToneDabs Footprint BristleTexture BrushInk PaintRub ShapeStroke
-ShapeGeometry ShapePreview FloodFill WetDroplet WetWorkBudget
-WatercolorWash BlowDryer MaskPeelTouch` (`CanvasGravity` is now reused by Scribulor's gravity: see (b); `BrushInk` and
-`WetWorkBudget` are used, unchanged, by Wet paint: see "Wet paint" at the end). MonoPaint's UI (still
-built, hidden by Scribulor): `Toolbar ToolRail ToolControls ToolIcons
-ToolSettingsPanel SettingsForm SettingsScroller WetnessBar
-LayersPanel SidePanel EdgeBars EdgeSwipe
-PageActionButton PageLabel PageOverview Popups RotationPrompt
-RotationSuggestion ControlHost ControlRaster DropletIcon
-FullscreenController MultiFingerTap ZoomButtonTouch PaintState`. Since Zoom came back (2026-10-19, below) Scribulor uses
+Display and e-ink: `DirtyRegions DotGray DotPattern QuarterTurnLayout CanvasGuide ProbeActivity` (the device checks'
+probe). Input: `MultiFingerTap`. Controls: `ControlHost PageActionButton RotationPrompt RotationSuggestion` (the rotate
+prompt over the page). MonoPaint's tools, kept as the checks' references or for what they still hold: `ToneDabs`
+(`ToolStroke`'s dabs; `StumpChecks` compares Soften with MonoPaint's stump), `PressureStroke` (`stump_pictures.sh`, the
+device benches), `FloodFill`, `WatercolorWash` (only `test_document.sh`'s checks, whose source list no longer compiles),
+`WetWorkBudget` (Wet paint's), `PaintState`, `ToolLibrary` (the colour, modes and presets still loaded and saved with
+the preferences; nothing draws with them since the pen draws with Superdood's slots). Many of the classes this list
+used to name are now modified (section (b) and the change entries below) or deleted:
+
+### Upstream, deleted (26)
+
+`AppSettingsDialog`, `PaletteEditor` (the refocus, 2026-10-24); `ImageImport`, `PictureFiles`, `PngExport` (Superdood's
+own import and export); and, as dead code (2026-11-05, "Tidy: MonoPaint's unused code" below): the hidden toolbar and
+its panels `Toolbar ToolRail ToolSettingsPanel ToolControls SidePanel LayersPanel ToolIcons PaletteSwatch`; the hidden
+header and colour bar `ShadePicker WetnessBar WetDroplet DropletIcon MaskPeelTouch PaintRub PageLabel`; the edge
+swipes and full-screen modes `EdgeBars EdgeSwipe FullscreenController`; `ToolStrokes` (MonoPaint's pen tools, never
+reached), `SelectionPreview` (with `selection_preview.c`), `BristleTexture`, `SettingsScroller`.
+
+Since Zoom came back (2026-10-19, below) Scribulor uses
 `CanvasViewport`, `ZoomButtonTouch`, `MultiFingerTap` and `ViewportBitmap`'s zoomed raster again, unchanged; the first
-three are in `scripts/test_inkwash.sh` as well as `test_document.sh`.
+three are in `scripts/test_inkwash.sh` as well as `test_document.sh`. `CanvasViewport` has since grown the fitted page,
+the width filled sideways and Zen Mode's `cover`, and on the live branches the browser's `whole` (the whole page on any
+screen, a pinch out back to it; 2026-11-01, `ZoomFitChecks.browser`) with its `wide` (a desktop's window filled across, 2026-11-05); all of it off on the Manta unless set.
 
 ### (b) Upstream, modified by Scribulor
 
 | File | What changed, and why |
 |---|---|
-| `ToneDocument` | Block writes (`setTones`, `coverTones`, `smearTones`, `eraseTones`), reads (`strokeBaseTones`, `strokeBasePixels`, `strokeBaseKept`, `layerDarkness`, `compositeToneWithout`, `compositeToneKept`, `baseComposite`, `foundTiles`, `foundComposite`, `visibleLayers`, `touched`, `maskShield`, `maskLiftable`), `restack`/`setLayersVisible`, linked undo (`finishWithPrevious`), tile-at-a-time settle; one place for undo capture; Erasable's per-layer share (`Layer.share`, `begin(erasable)`, the one write rule), the masking fluid's too (`beginFluid`; `maskHatch` hatches only what lifts). The engine writes the page through these. |
+| `ToneDocument` | Block writes (`setTones`, `coverTones`, `smearTones`, `eraseTones`), reads (`strokeBaseTones`, `strokeBasePixels`, `strokeBaseKept`, `layerDarkness`, `compositeToneWithout`, `compositeToneKept`, `baseComposite`, `foundTiles`, `foundComposite`, `visibleLayers`, `touched`, `maskShield`, `maskLiftable`), `restack`/`setLayersVisible`/`setLayersShown` (visibility and opacity as one step, a layer's step, 2026-11-06), linked undo (`finishWithPrevious`), tile-at-a-time settle; one place for undo capture; Erasable's per-layer share (`Layer.share`, `begin(erasable)`, the one write rule), the masking fluid's too (`beginFluid`; `maskHatch` hatches only what lifts). The engine writes the page through these. |
 | `DocumentCodec`, `BookCodec` | TSM5: tagged sections after TSM4's body (Erasable's shares, `ERAS`; wax's, `MSHR`; the kinds of mark, `KIND`; kind planes, `PLNS`, a layer's look in the layers' part; Show Kinds' steps, `KSHN`, a byte), written only when a page needs one; the single-page fast paths open TSM4/TSM5 (see "Erasable", "Resist" and "Kind layers" below). |
 | `DrawingPad` | Draws with Scribulor strokes on ink/wash layer pairs; the finger tool (erase, smudge or a slot's brush); the hovering nib's outline (`HoverNib`); erasing shows paper; pen speed; auto full-refresh at pauses; drying ticker; native area render; the hatch drawn by a static `drawMask` Brush Lab's test page shares; two fingers a tap until they move, then MonoPaint's pinch and pan (`PinchPan`), the page's map from `PageView`. Heaviest edit. |
 | `PaintActivity` | Scribulor bar replaces MonoPaint's controls (upstream ones built but hidden, `53b444a`); automatic names, rename/delete, PNG copy on leaving; Brush Lab and Tools page launch (Tools → Brush Lab → Tools, the slots' start carried through); slots, swatches; the side bar in MonoPaint's tool column place. |
@@ -580,6 +587,40 @@ and Angle greyed where its print has none), `LabLayout` (`shows`: the Nomad's op
 dials; `stacks`; five options are a menu button anywhere), `LabSettings`. Its marks go through `ToneDocument`'s one write
 path: Undo, masking fluid, Erasable and a shaded page apply as to any stroke.
 
+#### Riso, photocopy and soft dither (2026-10-31, branch `explore-screen`): no upstream files touched
+
+Three Print Shading choices appended after Hatching (codes 15 to 17; an older version reads them as None, "Newer
+version"). Engine (Scribulor's own): `PrintScreen` (`Kind.RISO`, `PHOTOCOPY`, `BLUE_NOISE` after Tone's, so no Kind moves,
+`print` maps the option; `Stochastic`'s tiles, a 64-px void-and-cluster blue noise and two 128-px clumpy grains, each made
+on its first brush's resolve; riso's and the photocopy's thresholds kept as floats, a threshold over 1 never inks),
+`PartDial.SCREEN`'s options, `ModularWords`, `BrushLab` (no Angle for the three). Every older print's thresholds are as
+before (`ScreenChecks.oldKinds`, by CRC). Brush Studio's web lab doesn't have them yet: `code-spec-check.cjs` lets their
+test codes wait, as Later's do. Pictures: `scripts/screen_pictures.sh`.
+
+#### Pixels and stitches (2026-11-06, branch `pixels`): no upstream files touched
+
+Two Print Shading choices after Rings (codes 24 and 25, still one base-36 digit; the version before, e8fdf657, reads them
+as None, "Newer version", `test_inkwash.sh`). Unlike every other screen they lay greys, not black dots: a grey a cell of a
+page-fixed grid (`PrintScreen.cells`, `Kind.PIXELS`, `STITCHES`; Pattern Size the cell, turned Angle − 45 so square at the
+default). `ModularCompose.composeCells` composes a rectangle grown to whole cells from the line and body read at each
+cell's centre (`PrintScreen.centre`; the strongest within 2 px, if the centre holds half of it), a pixel whose cell reads as last composed skipped, so a cell
+is laid whole or not at all; `PrintScreen.dark` gives its darkness: one of 8 greys spaced evenly in the panel's dots
+(`DotPattern.pickerTone`), or one cross-stitch in it (threads shared with Later's Cross-Stitch: `LaterMedia.threadCover`,
+`threadShade`, `threadUnder`, extracted, its bytes unchanged). A fill in strips composes `ModularCompose.cellReach` short of
+what is laid and frees that much later (`ModularStroke`). Never lightens (shortcut: no light-over-dark), never kept sharp
+(`SharpStrokes.drawn`), Dot Swell and Patchy Ink grey in Brush Lab. Tools Pixel pen and Stitch pen (`PresetPictures.texture`).
+Checks: `ScreenChecks.cells`. The web lab waits for them as for riso's.
+
+#### Maze, brick, basketweave, waves, honeycomb and rings (2026-11-06, branch `new-screens`): no upstream files touched
+
+Six Print Shading choices appended after Soft Dither (codes 18 to 23, still one base-36 digit; an older version reads
+them as None, "Newer version", checked against 47c1624d in `test_inkwash.sh`). Engine (Scribulor's own): `PrintScreen`
+(`Kind.MAZE` to `RINGS` after `BLUE_NOISE`, so no Kind moves and `print` maps them as it does riso's; each a raw field,
+twice the distance to its lines in half-periods, continuous across its tiles, evened like stipple's (`raw` families 4 to
+9, `even`), so a line thickens with the grey and coverage is the grey; thresholds kept as floats), `PartDial.SCREEN`'s
+options, `ModularWords`, `BrushLab` (they turn with Angle, unlike riso's three). Checks: `ScreenChecks.lined`. The web
+lab waits for them as for riso's (`code-spec-check.cjs`); Brush Studio sets them through the app's model.
+
 #### Halo, shown as Mold (2026-10-18): upstream files touched
 
 Branch `inkwash-halo` (spec `docs/archive/superpowers/specs/2026-10-16-new-modules-design.md`, "Halo in the app"): a Drying
@@ -651,6 +692,46 @@ write their true tones behind the pen while drawing (`QuickStroke.trail`, `Strok
 |---|---|---|
 | `ToneDocument` | +20 | `layerPixels(index, …)`, `layerKept(index, …)`: `strokeBasePixels` and `strokeBaseKept` of a layer no gesture is changing, as it is (a stump's other half). Reads only; no change to the write rule. Generic: any tool that reads a second layer while drawing on one. |
 
+#### Text boxes and Make Ink (2026-11-01, branch `explore-text`): upstream files touched
+
+Typed words over the page, the magnets' pattern. Pure (`test_inkwash.sh`, `TextBoxChecks`, `TextOlderReaderCheck`): new
+`TextBoxes` (a page's boxes, immutable; the layout from iA Writer Duo's own advances, so every copy wraps alike; the
+letters from a process-wide `TextBoxes.Type`; `Over`, the letters laid over a composite's rows; `stamp`; `ink`, Make
+Ink's room; the TEXT section). Android (Scribulor's own): `TextType` (the letters, `Theme.textFace`), `TextMode` (Play's
+Text row, the pen on boxes, the typing popup, the long press menu). Make Ink is a fill whose room carries coverage
+(`FillRegion.Room.cover`), laid by `ModularStroke.print` through `FillTool.print`: the brush as a firm still press over
+the letters, its medium, paper, Print Shading, grey, drying and Later applied, its marks not kept to the letters (a
+wash's Bleed runs past them). It is a fill rather than a Stamp tip's print because a Stamp lays its nib as the line
+only, with its own blotchy inking, while a fill lays line and body both, so a wash is a wash; the box comes off in a
+structural step and the stroke's step is linked to it (`linkSince`), one Undo.
+
+| File | Lines | Why |
+|---|---|---|
+| `ToneDocument` | +28 −7 | `texts()`, `placeTexts`, `setTexts` (a structural step, as `setMirrors`: the whole page redrawn); `Snapshot.texts`, `StackState.texts`; Clear page and `unmarked` count them. Generic: any per-page overlay kept by reference. |
+| `DocumentCodec` | +21 −6 | TSM5's `TEXT` section, written only when a page has boxes; an older reader skips it (`TextOlderReaderCheck`, against `9e447836`); a later version's is skipped here; damage refused. Pages without boxes write as before, byte for byte. |
+| `ModularStroke` | +20 −7 | `print(room)`: `fill` with each lattice point's press times its coverage (`laid`), the room not kept (`keepToRoom` skips without one). Fills lay exactly as before. |
+| `FillRegion` | +6 −1 | `Room.cover` and `share(o)`: a pixel's share of the press (null: all of it). |
+| `FillTool` | +12 | `print`: Make Ink's stroke on the brush's own layer. |
+| `PagePicture` | +6 −4 | `Composite` of a whole page lays its boxes' letters over its rows and marks (not a layer's composite), so PDF, PNG via `NotebookExport.greys`, PSD's merged image and page pictures show them. |
+| `PngExport` | +2 −1 | Stamps the boxes before the magnets. |
+| `DrawingPad` | +39 −5 | `text` (a `TextMode` on the magnets' host): drawn in `render` before the magnets, its touches after `historyTap`, its outline off and on with the magnets', `suspend` and `autoRefresh` wait for it; `makeInk`. |
+| `PaintActivity` | +14 −7 | `TextBoxes.type` set at start; Play's Text row; `menuAt` (a menu beside a page rectangle); Text closed where Words is. |
+| `InkWash`, `InkWashBar`, `DrawLayout`, `Theme`, `PicturePlacer` | small | `InkWash.ink`; Play marked while Text is on; `Theme.textFace`; `PicturePlacer.ring` shared. |
+
+Not done: searchable words in the notebook PDF (the magnets' are), a Text layer in the PSD copy, the dot-size PNG copy,
+live (shared) pages (not on this branch: a box travels only in the page file), more fonts, italics, rotation.
+
+#### Palm taps (2026-11-03, branch `palm-taps`): upstream files touched
+
+A hand resting as the pen draws, landing and lifting quickly, passed for a two- or three-finger tap (Undo, Redo).
+`MultiFingerTap` is untouched; the tap it reports is ignored while the pen is down or near and for
+`FingerTool.PEN_PALM_MS` (0.3 s; 1 s felt too long, the owner 2026-11-03) after it was last seen (`FingerTool.tapCounts`, pure, `FingerToolChecks`). No contact
+size rule: pen proximity only.
+
+| File | Lines | Why |
+|---|---|---|
+| `DrawingPad` | +9 −7 | `penGuardUntil` becomes `penSeen` (when the pen was last seen: hovering, and now also every touch event with the pen among the pointers, so a lift counts); the 250 ms finger guard reads `penSeen + 250`, unchanged; `historyTap` asks `FingerTool.tapCounts` before Undo or Redo. |
+
 ### (c) Scribulor engine: pure Java, UI-free
 
 Checked on the desktop with plain `javac` (`scripts/test_inkwash.sh`), which
@@ -659,9 +740,9 @@ also proves they need no Android.
 | Group | Classes |
 |---|---|
 | Six-part brush model | `BrushPart PartDial PartChoice ModularBrush ModularStyle ModularLocks ModularFeatures ModularVariations ModularWords ModularSizes` |
-| Share codes | `ModularCode` (M codes); `BrushCode`, `WildBrush`, `BrushSetting`, `BrushStyle` read older I/P codes, only to convert them |
-| Resolve and stroke | `ResolvedBrush ModularStroke StrokePoints StrokeMath StrokePaper`; `QuickStroke` (a stroke too heavy to draw live: a flat preview, then the true stroke rendered from its samples); `FlickFling` (Flick's samples past a moving lift, Fling's drops on a hard stop, both in the stroke) |
-| Smudge | `Carry` (a dab-sized reservoir trading paint with the stroke's own layer: Lift, Drag, Smear, Clear Water; Smear's Soften, MonoPaint's blending stump and its combs), `CarryPlane` (that layer as the stroke found it, premultiplied, as smudged so far), `HeldPaint` (the paint a brush with Keeps Paint holds between strokes, and a Paint Load brush's load, per holder), `ClearWater` (Clear Water's run-out at lift, a wash's wet again with Slow drying; its Float twin), `LoadedPaint` (Paint Load: MonoPaint's oil paint mode, a brush's own paint running out along the stroke; a rub's load) |
+| Share codes | `ModularCode` (M codes, the open format in `docs/BRUSH-CODE.md`: `newer` tells a newer version's code, read with stand-ins); `BrushCode`, `WildBrush`, `BrushSetting`, `BrushStyle` read older I/P codes, only to convert them |
+| Resolve and stroke | `ResolvedBrush ModularStroke StrokePoints StrokeMath StrokePaper`; `QuickStroke` (a stroke too heavy to draw live: a flat preview, then the true stroke rendered from its samples); `FlickFling` (Flick's samples past a moving lift, Fling's drops on a hard stop, both in the stroke); `SteadyHand` (Steady Hand and Long Stick: the pen's samples through a tip on a spring, in front of the stroke) |
+| Smudge | `Carry` (a dab-sized reservoir trading paint with the stroke's own layer: Lift, Drag, Smear, Clear Water; Smear's Soften, MonoPaint's blending stump and its combs; Smear's and Clear Water's Press, 2026-10-30, a firm press taking Soften or Lay Down Paint and the wet toward 0), `CarryPlane` (that layer as the stroke found it, premultiplied, as smudged so far), `HeldPaint` (the paint a brush with Keeps Paint holds between strokes, and a Paint Load brush's load, per holder), `ClearWater` (Clear Water's run-out at lift, a wash's wet again with Slow drying; its Float twin), `LoadedPaint` (Paint Load: MonoPaint's oil paint mode, a brush's own paint running out along the stroke; a rub's load) |
 | Stampers and buffers | `FloatTiles LineStamper Placement BodyStamper HakeRibbon BristleSwarm StippleStamper HatchStamper StickGrain PaperGrain PaperNoise` (`FloatTiles` also holds a big stroke's half-resolution lattice and its bilinear stretch; `BristleSwarm` is the bristle tip's hairs, the web lab's swarm; `StippleStamper` and `HatchStamper` the Stipple and Hatch tips' dots and lines, newmods.js's) |
 | Compose and drying | `ModularCompose PrintScreen BodySettle DryingWater WatercolorSession SettlePacer SettleWorker HaloGrowth` (`PrintScreen` is Screen's and Tone's threshold at each page pixel, which the compose writes through; `HaloGrowth` is Halo's veins, shown as Mold, the web lab's newmods.js Halo on 32 px tiles, read from the page apart from its build; `ModularCompose` also holds Blend's rules and `Under`, the page under a stroke as found; `SettlePacer` paces settling after lift and Fast-wet's re-settles, section 5; `SettleWorker` is the thread wet paint works on after lift) |
 | Float | `FloatBath` (suminagashi: floating paint as outlines moved by drops, the pen's pushes and combs, and drift; its log, snapshots for Undo), `FloatScan` (its film at 16 greys), `FloatTrace` (a stroke's own paint traced into rings), `FloatPen` (a stroke on the water), `FloatWater` (the bath on its layer until it prints) |
@@ -675,9 +756,10 @@ also proves they need no Android.
 | Samples (preview images) | `WildSample` (`modular(...)` returns pixels for any size/shape) |
 | Scribulor-specific but pure | `InkWashLayers` (ink over wash layer pairs), `InkWashSizes`, `InkWashShades`, `Assets`, `DrawingNames`, `LayerThumbnail` |
 | Fridge magnets | `Magnets` (a page's word tiles, their geometry, `stamp`, the WORD section), `MagnetDrag`, `WordPacks`, `WordBinLayout` |
+| Text boxes | `TextBoxes` (a page's typed boxes, their layout, the letters over a composite, Make Ink's room, the TEXT section) |
 | Fill | `FillRegion` (the area a tap is in, shut in by the ink layer's crisp lines: the Mischief Lab 2 prototype's "Stay in the lines", in 2 px cells, then drawn at page resolution), `FillTool` (the fill's brush, its walls and its stroke, `ModularStroke.fill`; the bar's taps while it is on), `FilledShape` (Filled Shape: an outline closed at the lift and the area it encloses, non-zero winding, filled through `FillTool.start`) |
 | Pictures in | `PictureImport` (Import Image and Import PDF, 2026-10-22: a picture's greys, laid as ink in one Undo step; the placing frame; a PDF's notebook of locked pages under clear layers, its cap and its file) |
-| Mirrors | `Mirrors` (a page's mirrors: the group they make, the snapping, the cap, Show Guides, Real Mirror's `View`, the MIRR section), `MirrorStroke` (a stroke and its copies, laid as its change reflected or drawn again, one Undo step; Real Mirror's stroke folded into the kept side), `MirrorShow` (what the canvas shows: guides, the reflection, live copies, a placing stroke) |
+| Mirrors | `Mirrors` (a page's mirrors: the group they make, the snapping, the cap, Show Guides, Real Mirror's `View`, the MIRR section), `MirrorStroke` (a stroke and its copies, laid as its change reflected or drawn again, one Undo step; Real Mirror's stroke folded into the kept side), `MirrorShow` (what the canvas shows: guides, the reflection, live copies, a placing stroke, an effect brush's trail) |
 
 Reference implementation: the web prototype
 `docs/brush-lab/prototypes/modular-lab.html` (sources in `modular-lab-src/`);
@@ -688,7 +770,8 @@ lists a reason.
 
 - Toolbar: `InkWashBar` (the one side column), `InkWash` (selection, starts
   every stroke), `ToolSlots`, `ToolSwatches`, `SwatchFace(s)`, `SizeModal`,
-  `SwapStrip`; `SwatchBar` (the selected tool's sizes and greys, in the
+  `SwapStrip`; `ZenFanView` (Zen Mode's fan, over the page; its geometry the pure `ZenFan`);
+  `SwatchBar` (the selected tool's sizes and greys, in the
   column) and `DrawLayout` (pure: the column's order, `COLUMN`, which
   `InkWashBar` builds from, its fitted heights, folding the layers, the tool
   buttons two by two with Fill's cell measured before Fill comes
@@ -700,14 +783,14 @@ lists a reason.
   and `MID` in their places (saved by name). `WildSample.legibleTray` draws a
   thin, sparse tray stroke darker on the bar only.
 - Tools page (tapping the selected slot again): `ToolsActivity`, `ToolsPage`
-  (pure: sections, paging, picks, Undo, the look a tool is tried at),
+  (pure: the filter row, paging, picks, the look a tool is tried at; no Undo since 2026-11-03),
   `ToolsLayout` (pure: every size), `ToolPresets` (pure: 65 presets as M
   codes, five per style).
 - Brush Lab: `BrushLabActivity`, `BrushLab` (pure model), `LabSettings`,
   `LabLibrary`, `LabLayout`, `LabText`, `LabPages`, `LabUi`, `LabButton`,
   `PartCard`, `HandGrid`, `BandSlider`, `SquareSwitch`, `LoopCard`,
-  `BrushTestPad`, `SampleQueue`; `TestArea` (the test page in its frame, Clear,
-  the wet drop and the brush's loop beside its name: Brush Lab's and the Tools page's).
+  `BrushTestPad`, `SampleQueue`; `TestArea` (the try strip, `strip`: its head, Clear,
+  Brush Lab's wet drop, the test page in its frame; the brush's loop beside its name: Brush Lab's and the Tools page's); `LabUi.PageBar` (both pages' bar: Back, the title over its job; the notebook screens' too since 2026-11-03, the shelf's without Back).
 - Android glue: `StrokePanel` (a pen stroke's session on the panel's fastest black/white update, `Device.fastStrokeMode`; the bench only since 2026-10-16),
   `QuickLift` (after a quick stroke's lift, looks in on its render thread every 5 ms, then finishes
   it), `DryingTicker`, `PenSample`, `RasterOverlay`, `DisplayRecovery` (pure: the canvas's fast display through a busy
@@ -773,6 +856,11 @@ lists a reason.
   never the tablet's display settings; the drawing screen is drawn from its views (its page goes straight to the
   panel, which screenshots miss).
 
+- `web/engine/`: the engine compiled to WebAssembly (GC) by TeaVM 0.16.0 (`bash web/engine/build.sh`, its own Gradle
+  build, nothing reaches the APK): test_inkwash.sh's sources, `WebEngine.java` (its exports), shims for the
+  `java.util.concurrent` classes TeaVM lacks (run inline) and `Runtime.maxMemory`; `engine.js` its JS API. Brush
+  Studio and the live probe draw with it; `scripts/web_parity.sh` compares it with the JVM (136 of 137 pixel for pixel).
+
 ## 3. Proposed engine-module boundary
 
 ### What a host (MonoPaint) would call
@@ -780,6 +868,7 @@ lists a reason.
 ```java
 // Brushes travel as strings.
 ModularBrush brush = ModularCode.decode("brave-onion.M24p6...0nz0.1u5hvr4"); // null if invalid
+boolean newer = ModularCode.newer(code);   // from a newer version: some parts stood in (docs/BRUSH-CODE.md)
 String code = ModularCode.encode(brush);
 
 // A stroke is MonoPaint's own DrawingStroke interface: live, or quick when live would lag the pen.
@@ -788,6 +877,7 @@ s.sample(x, y, pressure, tiltX, tiltY, timeMs);   // per pen event
 s.finish();                                         // one undo step
 // A quick stroke (instanceof QuickStroke) renders its true stroke on a thread of its own: lift() at pen-up, then
 // develop(0) now and then until false (it composes the page then); finish() waits and does it at once.
+// A host with one thread (the browser) sets QuickStroke.renderAtLift: the render runs in develop, at lift.
 
 // While a slow-drying wash settles after lift (~10 Hz, paced), and before anything else edits the page:
 long nextMs = wetSession.tick(surface, show);  wetSession.settleNow(surface);
@@ -1723,6 +1813,13 @@ the Manta. No upstream file touched.
 Ghosts (2026-10-26, branch `spiro-ghost`): `MirrorShow.end` says whether a ring went. `DrawingPad` (+3 −2): the guide
 gone at a figure's lift (`finishStroke`) or dropped (`dropRing`, with `refreshSoon`) marks the page `ghosted`, so the
 next auto-refresh is the clean flash; the guide's redraws through the fast session left its old radii on the panel.
+
+Effect trail ghost (2026-11-03, branch `effect-trail-ghost`): `MirrorShow.end` says a trail went too, so an effect
+brush's stroke end marks the page `ghosted`, as the eraser's does. The owner, Newsprint and Photocopier: "a little grey
+area on where the white was ... when i flash it it's gone". The end already rendered and presented the trail's whole
+box again (white in the framebuffer); the panel's grey update leaves the trail's dots taken off over paper part-driven,
+and the driver passes a pixel asked for the value it records, so only the clean flash clears them. No upstream file
+touched. Check: `AreaChecks.trailEnds`.
 ## Spiro's oval and bar tracks (2026-10-26, branch `spiro-tracks`)
 
 The owner: "on oval and rectangle etc would be cool". `PartDial.SPIRO_MODE` gains Oval and Bar (values 2 and 3; Line
@@ -2068,7 +2165,7 @@ and `DocumentStore` (one method less). `DrawLayout`: Fun in the stamp tool's row
 (`EXTRA_ICONS`, `EXTRA_RULES`, `extras()`, `count(extras)`, `rules(extras)`) are gone. Checked in `LibraryCardChecks`,
 `TemplateChecks`, `DrawLayoutChecks`, `NotebookRulesChecks`, `NotebookNamesChecks`.
 
-### Timed Pages in seconds, its countdown; Brushes and Timed Pages as sliders; a page's prompt; Open Notebook (2026-10-21, branch `inkwash-timerpass`)
+### Timed Pages in seconds, its countdown; Brushes and Timed Pages as sliders; a page's prompt; Notebook Explorer (2026-10-21, branch `inkwash-timerpass`)
 `NotebookOptions.minutes` / `MINUTES` / `withMinutes` are now `seconds` / `SECONDS` (Off, 30 s steps to 5 min, minutes to
 an hour) / `withSeconds` (snapped to the nearest stop). `BookOptions` adds `TSEC` (`TIMED_SECONDS`: two bytes), read over
 `TIMD`, which is still written as the nearest old minute choice (`minutesBytes`) for builds before; `readMinutes` reads any
@@ -2081,7 +2178,7 @@ page section, `PRMT` in `DocumentCodec` (UTF-8 `DailyPrompt.line`, skipped by re
 `ToneDocument.prompt` / `setPrompt` (a change to save, not Undo; a page with one isn't `unmarked`). `LibraryCard.slides`
 picks `CardSelector`'s slider screen (the existing `BandSlider`, set on Back) for Brushes and Timed Pages. Upstream files
 touched: `PaintActivity` (`timedLook` shows the countdown and `promptLook`; `dailyPrompt` gives the page its card,
-`promptCard` is the window; the file menu's Open Notebook, `NotebookLayout.OPEN_NOTEBOOK`), `ToneDocument`, `DocumentCodec`;
+`promptCard` is the window; the file menu's Notebook Explorer, `NotebookLayout.OPEN_NOTEBOOK`), `ToneDocument`, `DocumentCodec`;
 `InkWashBar`'s menu, Undo and Redo have no button background, the menu's icon `ic_ph_dots_three_circle` (Phosphor Bold's
 ring, three dots). Checked in `NotebookRulesChecks` (seconds round-trip, a TIMD-only file, the recovery, the countdown),
 `DailyPromptChecks` (the PRMT section), `DrawLayoutChecks`, `LibraryCardChecks`, `NotebookNamesChecks`.
@@ -2310,6 +2407,16 @@ thing"; "more like supernote file explorer"): one **Import** row (`importFile`):
 `importPicture` as before; a PDF to `ImportPicker.pdf`, New Notebook (`importPdf(uri)`, unchanged) or This Page (the
 page drawn by `PdfImport.page`, placed through `importPicture`). Upstream `PaintPreferences.importFolder` (unused
 since `ImageImport` went) remembers the picker's folder, its default now Document (was Download): one line.
+2026-11-01 (branch `live-import`): the placing bar's **Lighter** and **Darker**, a step a tap, three each way
+(`PictureImport.Placing.shade`, `PictureImport.shaded`, `greys(argb, shade)`; paper still the picture's own grey's to
+say), shown by `PicturePlacer` and laid with it (`PicturePlacer.Place.at` takes the shade; `PaintActivity.lay`, one
+argument); the browser's stamp.js the same through `WebEngine.placeShade`, `placeCanShade`, `pictureGreys`, `placeLay`.
+2026-11-02 (branch `live-picture-contrast`): **More Contrast** and **Less Contrast** beside them, three steps each way
+about the middle grey (`PictureImport.toned`: contrast first, then `shaded`, so Lighter still keeps white, Darker
+black). The bar's four steps are one list, `PictureImport.STEPS`, and `Placing.step(i)`/`canStep(i)` (was `shade(by)`,
+`canShade(by)`) move its two dials; `greys(argb, shade, contrast)`, `Place.at` and `PaintActivity.lay` take both (one
+more argument); the browser's through `WebEngine.placeStep`, `placeCanStep` (were `placeShade`, `placeCanShade`) and
+`stampWords().steps`.
 
 | File | Lines | Why |
 |---|---|---|
@@ -4069,3 +4176,1611 @@ heading say Self-Portrait Prompt, `forDay` went.
   the box grows only into spare room), `NotebookOptionsChecks` (its record alone, file and recovery, absent reads off),
   `LibraryCardChecks` (twelve rows, set in its row), `DailyPromptChecks` (headings, where cards are dealt);
   `NomadUiChecks` (device) for the row's place.
+
+## Fill in fills loops, Filled shape merged into it (2026-10-31, branch `fill-merge`): no upstream files touched
+
+The owner: "if you draw a closed shape with that one it should fill in"; asked whether to merge Fill in and Filled
+shape, "i think merge!". `FilledShape.of` now also wraps a Stay in Lines brush at Flood 1 (`fillsLoops`: "Fills",
+`StayIn.reach` endless; Colouring pen's partway floods and Flood 0 never fill a loop); at the lift `close` asks the
+outline `LiftingStroke.inShape` (new default false; `ModularStroke` waits for its shape found off the pen's thread and
+says whether it found one, `MirrorStroke` its primary's) and, in a shape, leaves the stroke as drawn, its flood the
+fill. On open paper it closes and fills as Filled Shape does. `fills` (Filled Shape alone) is unchanged, so the Smudge
+card's blob and `PartChoice.SHAPE` codes are as they were. The Basic tool Filled shape moves to `ToolPresets.RETIRED`
+(its code known, a slot or library holding it keeps it) and leaves `DrawLayout.PICKER`; `tip_filled_shape` went with it.
+- **Upstream files touched:** none.
+- **Checks:** `FilledShapeChecks.fillIn` (a loop on open paper fills in one Undo step; inside an inked box byte for byte
+  the stroke alone; a short line the stroke alone), `ToolPresetsChecks` (127 presets, 28 retired, Marker's engine two),
+  `DrawLayoutChecks` (39 picker tools), `FillChecks` (`STRIPS` without Filled shape's), match lab `fit.js` categories.
+
+#### Live pages, step 4: Undo of your own changes (2026-10-31, branch `live-undo`, probe only)
+
+- **Upstream files touched:** `ToneDocument` (+45): `stepsAfter(serial)` (the Undo steps made since) and `takeBack(steps,
+  changed)`: steps taken back as one new Undo step from their own stored tiles, each pixel only where its layer still
+  holds what the step left there. `PictureImport.lay(..., lighter)` sets greys lighter too (an Undo's change from
+  elsewhere). `PaintActivity.undo/redo` and `DrawingPad` (pen lift time) call `LiveProbe` only while it listens.
+- **Checks:** `LiveUndoChecks`, `LiveChangeChecks.set`.
+
+#### Live pages: measured by an autotest (2026-10-31, branch `live-auto`, probe only)
+
+- **Upstream files touched:** `ToneDocument` (+40): the dirty box's writers all go through `grow`, which also marks
+  16 px blocks once `takeLive` has been asked (Live pages' changes: exactly where the page was written); the magnets'
+  areas too. `DrawingPad`: `isPen` takes a stylus event with no tool type (`adb shell input stylus`, Android 11), the
+  render hook for `LiveProbe` gone. `Magnets.stamp` with an origin.
+- **Checks:** `LiveChangeChecks.live`, `LiveRevealChecks` (200 to 600 ms).
+
+#### Live pages: the guest's drawing screen, the browser app's M1 (2026-11-01, branch `live-m1`, live only)
+
+- **Upstream files touched:** `DrawingPad` (2 lines): the hover ring's timing and dot size read from `HoverNib`
+  (`SHOWN_MS`, `AWAY_MS`, `TICK_SIDE`), which the browser shares. No engine change.
+- **Moved into pure classes, for the browser too:** `StrokeStart` (a tool's stroke as `InkWash` started it: drawn,
+  mirrored, Filled Shape), `DrawLayout.tops`/`partHeight`/`gapHeight`/`gapIndex` (from `InkWashBar`), `lineWords` and
+  `toolName` (from `InkWashBar`), `ToolSwatches.ownPx`, `FingerTool.Choice.of`. New `LiveTools` (the host's tools for
+  a guest), sent by `LiveProbe.shown` before the page and skipped as a change. `web/engine`: `WebEngine` exports the
+  layout, tools, tray strokes, nib, picker box, gestures and view; `engine.js` `page.pen` and `E.T`.
+- **Checks:** `LiveToolsChecks`, `DrawLayoutChecks.tops`, `HoverNibChecks`; `scripts/live-probe/live-check.cjs`.
+
+#### Live pages: long presses, the Tools page and Brush Lab for a guest, the browser app's M2 (2026-11-01, branch `live-m2`, live only)
+
+- **Upstream files touched:** none. No engine change.
+- **Moved into pure classes, for the browser too:** `DrawLayout.Picker` (the tool picker's rows, from
+  `PaintActivity.toolPicker`), `DrawLayout.LONG_PRESS_MS`/`LONG_PRESS_SLOP` (Android 11's, checked on the tablet by
+  `ToolPickerChecks`), `DrawLayout.pickerColumns(width, height)`; `ToolSlots.pick` and `take` (from
+  `PaintActivity.pickBrush` and `slotsReturned`); `LabLayout.moduleWords` (from `PartCard`), `openDials`, `rowKind`,
+  `rolls` (from `LabSettings`), `scrolled` and `fits` (the browser's); `BrushLab.Swap.caption` (from `SwapStrip`),
+  `BrushLab.cellText` (from `HandGrid`), `BrushLab.saveWords` (from `BrushLabActivity`). `web/engine`: `WebEngine`
+  keeps the guest's own store (`keep`, `kept`) and exports the picker, the Tools page (`ToolsPage`) and Brush Lab
+  (`BrushLab`) as JSON with their taps; `build.sh` packs the kits, personalities and names too; `engine.js`
+  `page.scratch`, `page.pen`'s eraser kinds.
+- **Checks:** `DrawLayoutChecks.pickerRows`, `ToolSlotsChecks.pickAndTake`, `LabLayoutChecks.browser`;
+  `scripts/live-probe/m2-check.cjs`.
+
+#### Live pages: the rest of the drawing screen for a guest, the browser app's M4 (2026-11-01, branch `live-m4`, live only)
+
+- **Upstream files touched:** `DrawingPad` (Duplicate's offset and Delete's erase through `LassoPieces.duplicated` and
+  `erase`; `ZEN_TAP_MS` from `MultiFingerTap`), `PaintActivity` (the menu, Play and Shapes read their rows from
+  `DrawLayout`; a `menu` taking `DrawLayout.Row`s; the icons by name, as the drawings are). Behaviour unchanged. No
+  engine change. `ShapeStroke` (upstream, untouched, unused on the Manta) joins the desktop sources with
+  `ShapeGeometry` and `DirtyRegions`: it draws a guest's shapes.
+- **Moved into pure classes, for the browser too:** `DrawLayout.Row`, `fileRows`, `playRows`, `shapeRows`,
+  `shapePicked`, `shapeIcon`, `TEXT`, `REPLAY_PAGE`; `DrawLayout.MirrorRow.rows`, `icon`, `change`, `stopsPlacing`,
+  `kept` (from `MirrorsMenu`); `TextBoxes.menu`, `restyled`, `dragged` and the box menu's words (from `TextMode`);
+  new `LassoPieces` (the floating piece, its grab, Cut, Duplicate, Delete, Paste; from `DrawingPad`);
+  `ToolSlots.toolKey`, `holder`, `dirty`, `clean` (from `InkWash`); `MultiFingerTap.ZEN_TAP_MS`; `Mirrors.TOO_SHORT`.
+  `LiveProbe.toolsChanged`: the tools sent again mid-session when they differ (from `InkWashBar.selectTool`,
+  `brushChanged`, `swatchChanged`, `MirrorsMenu.changed`). `web/engine`: `WebEngine`'s M4 exports (the menus, Mirrors,
+  Shapes, the smudge chooser, the Dropper, the Lasso, Text and Make Ink, Hold to Snap, Zen Mode's cell); `pen` takes
+  the finger and starts a stroke as `InkWash.stroke` does (held paint, Grey Shift); `engine.js` `page.changed()`.
+- **Checks:** `DrawMenusChecks`; `scripts/live-probe/m4-check.cjs`.
+#### Notebooks in the browser, the browser app's M3 (2026-11-01, branch `live-m3`, live only)
+
+**Cut 2026-11-05 (release pare-down):** `/app` (notebooks.js, pages.js, their checks, the relay's and
+LiveHost's `/app`) is gone; `WebBooks` keeps only what `books.js` (the Manta's shelf on a live page) reads: `shelf`,
+`sizeWords`, `menuWords`. The rest of this section and the browser-app sections after it are history (tag `pre-pare-down`).
+
+- **Upstream files touched:** `DrawingFiles.validName` tells a name's signs with `nameSign` (letters, numbers, space,
+  - and _) in place of the regex `[\p{L}\p{N} _-]+`, the same set (`NotebookStripChecks` compares them over every
+  code point to U+1FFFF): TeaVM's regexes have no Unicode classes. `signsAsSpaces` beside it, used by
+  `NotebookMigration.safeName`. No engine change.
+- **Moved into pure classes, for the browser too:** `NotebookStrip` (new; the strip's slots, the turns, the card's
+  place, Delete Page on a stack and a shelf tile's "24 pages · today", from `NotebookScreens` and
+  `PaintActivity.deleteStack`); `CardSheet.offered`, `chosen(screen, book, …)`, `picture` (from `CardSelector.open`);
+  `PageExport.bytes` (a page's copy as bytes, `write` now writes them), `PageExport.FAILED`; `NotebookExport.Plan` (what
+  `update` and the new `pdf` copy: sheets, templates, keys) and `NotebookExport.pdf` (the PDF `update` writes into a
+  folder with no copies yet, straight to a stream: the browser's Export Now); `NotebookPdf.title` (from
+  `AutoExport.title`); `DrawLayout.NEW_PAGE` (from `PageTurner`); `DrawingNames.unused` opened.
+- **`web/engine`:** `WebBooks` (the notebooks' JSON and taps, exported as an object through `WebEngine.books()`: TeaVM
+  exports static functions from the main class only), `WebEngine.adopt`/`settle` (a notebook's page drawn on as a
+  page), `WebEngine.J` package-wide; `engine.js` `E.wrap`. `scripts/live-probe/notebooks.js` draws them; `live.html` at
+  `/app` runs on its own.
+- **Checks:** `NotebookStripChecks`; `scripts/live-probe/m3-check.cjs` (with `M3Fixture.java`: the desktop's notebook,
+  and its copies compared byte for byte).
+
+#### A notebook's settings and its page's tools in the browser (2026-11-01, branch `live-time`, live only)
+
+- **Upstream files touched:** `PaintActivity` (`allowStroke` through `NotebookRules.refusal`, `timedLook`'s countdown
+  through `NotebookRules.shownCountdown`, `chooseTools` through `ToolSlots.withTools`). Behaviour unchanged. No engine
+  change.
+- **Moved into pure classes, for the browser too:** new `ReplayRun` (a replay's copy, veil, player and strokes, from
+  `PageReplay` and `InkWash.replay`); `ToolSlots.withTools`; `StripGesture.plusSlot`/`round`, `NotebookStrip.ghosting`/
+  `hidden` (from `PageTurner`'s Strip); `NotebookLayout.swipe` (from `NotebookScreens.PageView`).
+- **`web/engine`:** `WebBooks` sets every settings row, the sheets' ticks and sliders, a page's rules, and gives the
+  drawing screen its rules, clock (`TimedPages`), cards (`DailyPrompt`), ghosts (`GhostPlane`), previews and the
+  notebook's own toolbar; `WebEngine` records the pen's strokes (`StrokeLog.Recorder`), shows a page's planes
+  (`ToneDocument.shownTone`) and plays `ReplayRun`. `scripts/live-probe/pages.js` (its own module) draws them; a few
+  lines in `live.html`, `notebooks.js` and `m4.js`; `relay.py` serves `pages.js`.
+- **Checks:** `NotebookRulesChecks`, `StripGestureChecks`, `StrokeLogChecks` (`replayRun`); `scripts/live-probe/pages-check.cjs`.
+
+#### The Manta's notebooks from a browser: download, and editing the Manta's copy (2026-11-01, branch `live-books`, live only)
+
+- **Upstream files touched:** `PaintActivity`: `openNotebook(path, card)` goes through a new `openNotebook(path, then)`
+  (the same steps; the notebook is named before `replaceBook` now, so the page shown goes to live guests with its
+  path); `guestAsked` (a guest's open or turn, `LivePage`); `autosaveNow` package-wide (`LiveShare` saves before a
+  browser reads). `DocumentStore.liveLibrary` (reads on its IO thread, after queued saves). No engine change.
+- **Moved into pure classes, shared with the browser app:** `NotebookCovers.of`/`picture` (a cover as the shelf draws
+  it, from `WebBooks`); `NotebookExport.pdf(out, book, name, tiles, today)` and `PageExport.bytes(book, name, place,
+  choice, tiles, today)` (a whole notebook's Export Now and Export Page; `WebBooks.pdf`/`pageCopy` call them).
+- **New, pure:** `LiveBooks` (`GET /books…` behind `LiveHost`'s key: shelf, cover, file, PDF, page copy), `LivePage`
+  (the room's notebook page: shown, open, turn). `LiveHost` takes an optional `LiveBooks` and names downloads
+  (`Content-Disposition`). `LiveProbe` sends `LivePage` before each page shown and lays guests' asks in the relay's
+  order with their changes. Web: `scripts/live-probe/books.js` (its own module), `live.js` `page`/`pageAsk`, a few
+  lines in `live.html` and `m4.js` (Menu's Notebook Explorer and Export Page for a guest), `relay.py` serves `books.js`.
+- **Checks:** `LiveHostChecks` (key, downloads byte for byte against the writers, `LivePage`; `manta`: a stand-in
+  Manta); `scripts/live-probe/books-check.cjs`.
+
+#### Brush Lab's Open, picker box and Grey Shift's set; Show Kinds, the sand timer and the wet indicator in the browser (2026-11-01, branch `live-lab`)
+
+- **Upstream files touched:** `ToneDocument` (+6: `compositeTones` takes Show Kinds' steps, each kind plane at its
+  step's strength as `visibleLayers` gives the screen; the old form passes 0, unchanged). No engine change.
+- **Moved into pure classes, shared with the browser:** `WetLook` (new: what the wet indicator shows and when it looks
+  again, its words and drawings, the blow dryer's frames; `WetIndicator` uses it); `BrushLab.greys`/`Grey` (Grey Shift's
+  set, from `LabSettings.greySet`; `GreySet` takes it, its sizes `LabLayout.GREY_*`); Open's sheet's words and sizes
+  (`LabLayout.PASTE_CODE`… `SHEET_*`, `sheetLabel`, from `BrushLabActivity`); `DrawLayout.kindsFirst`/`kindsName`/
+  `kindsStep`/`kindsSaid`/`KINDS_EYES` (Show Kinds' popup, from `InkWashBar.kindsPopup`); `EraseKind.hiddenNote`/
+  `takenUp` (from `PaintActivity.hiddenNote`/`sayKind`); `SandTimer.labels`/`chosen`/`waits`/`countdown` (from
+  `InkWashBar.timerMenu`, `PaintActivity.timedLook`); `DrawLayout.boxSide` (a picker box's squares at any size, the
+  column's `faceSide` through it); `DrawLayout.NOTE_AGAIN_MS` (from `PaintActivity.note`).
+- **`web/engine`:** `WebEngine` `labSheet`/`labOpenCard`/`labLoad`/`labCardTray`/`labGrey`/`dip`, the lab's look and
+  picker sizes in `lab()`, Grey Shift's row in the open card, `LAB` (the lab's brush as a tool), `kinds`/`shown`/
+  `kindsMenu`/`kindsTap`/`hiddenNote`/`takenUp` (the eraser's kinds less the hidden ones in `pen`), `sandMenu`/`sandSet`/
+  `sandLook`, `wetLook`/`wetWords`/`hurry`/`hurrying`/`hurryTick`, `columnWords`; `WebBooks.onCover`. Web:
+  `scripts/live-probe/extras.js` (its own module); in `live.html` the picker box's drawing and input take a box (the
+  column's or the lab's), a few hooks, and the swap panel's tap outside no longer throws; `relay.py` serves
+  `extras.js` and three drawings.
+- **Checks:** `LabColumnChecks`; `scripts/live-probe/extras-check.cjs`.
+
+#### Files sent up to the Manta (2026-11-01, branch `live-upload`, live only)
+
+- **Upstream files touched:** `DocumentStore`: `create`'s work in `created` (unchanged), used by `liveLibrary`'s new
+  `add`. `PdfImport.run` takes a name and a picture too (a notebook of one page), and its pages' cache file is its
+  own each run (`createTempFile`, so an upload and the Manta's Import can run at once). No engine change.
+- **Pure:** `LiveBooks.add` (`POST /books/add?name=`: type by name and signature, `PictureImport.importable`; a
+  notebook read whole by `BookCodec.read` before anything is written) and `Library.add`/`imported`;
+  `NotebookNames.imported` (an imported file's name, moved from `WebBooks.importName`, which calls it). `LiveHost`
+  answers 413 over `LiveBooks.MOST_ADDED`, 415 for a file that isn't one or doesn't read. `LiveShare` makes pictures
+  and PDFs notebooks through `PdfImport` and reads the Manta's shelf again when it shows.
+- **Web:** `books.js` (the shelf's Import, `sender` for `/app`), one row in `notebooks.js`'s Export Now, one argument
+  in `live.html`. **Checks:** `LiveHostChecks.added`/`imports`; `books-check.cjs` (Import, Send to My Tablet).
+
+#### The Manta's Clear Page, eraser and hidden layers reach guests (2026-11-02, branch `live-clear-sync`, live only)
+
+The owner: "i cleared the page but the desktop version kept the art". Every change the Manta sent went as ink, which a
+receiver lays only where it darkens, so nothing the Manta lightened (Clear Page, the eraser, a layer hidden or made
+fainter, a magnet moved) reached a guest; and a set change (an Undo's, a guest's eraser) was set on the layer drawn on
+only, so a mark on another layer (a wash under ink) stayed.
+- **Upstream files touched:** none. No engine change.
+- **Pure:** `LiveChange.since` (only the pixels that differ from what was last sent, a byte a page pixel; set when one
+  is lighter, as the browser's `Live.changed` decides) and `into` (a change laid by everyone, taken in).
+  `PictureImport.lay`'s `lighter` makes the page show the greys: every shown layer's base and planes erased there, then
+  the grey on the layer drawn on, white leaving the paper; `WebEngine.lay(set)` and `picture` (the browser's own Undo)
+  call it instead of their own copies. `LiveProbe` keeps the room (`room`), sends every change through `since` and
+  takes in each it lays; the steps a set change makes are all counted as laid.
+- **Checks:** `LiveChangeChecks.since`, `LiveUndoChecks.lighter`; `books-check.cjs` (the stand-in Manta's `draw`,
+  `erase`, `hide`, `show`, `clear` over a guest's wash and pen, the browser as the Manta after each).
+- **Open:** Undo of Clear Page while live does nothing (`ToneDocument.takeBack` passes stack steps by). Done 2026-11-03
+  (`live-clear-undo`).
+
+#### A guest reconnects after a drop (2026-11-02, branch `live-reconnect`, live only)
+
+The owner: "when it drops it's unlikely that it is able to reconnect", "when the manta sleeps … it says it will be able
+to reconnect but it doesn't". Found (live-check's new drops, failing before): a connection gone silent (a Wi-Fi or a
+Manta gone without closing it) left a guest Connected forever, as the browser never notices one and the relay's
+heartbeat was a comment, which EventSource never shows; a guest back on a relay started again (the Manta awake) kept
+marks the host erased meanwhile (the Manta's page whole only lays its marks); a guest's mark that didn't reach the
+relay was dropped ("Couldn't send a mark"). Chrome itself keeps retrying refused and unreachable addresses every 3 s.
+- **Upstream files touched:** `PaintActivity` (+1: `share.restore()` in `onCreate`). No engine change.
+- **Pure:** `LivePresence.STILL`/`STILL_LINE` (the heartbeat, an event of its own with an empty data field, every
+  `STILL_MS`; `LiveHost` and `relay.py` send it), `SILENT_MS` (a guest hearing nothing that long listens again),
+  `cutNote` (Connection lost's note says it waits: "Waiting for the Manta, maybe asleep. Back within a minute or two of waking."; Host gone's as before),
+  `guests`. `LiveHost` binds with `SO_REUSEADDR` (the same port at once after a stop). `WebEngine` `LIVE_STILL`,
+  `LIVE_SILENT_MS`, `liveCut` through `cutNote`.
+- **Android:** `LiveShare` starts and stops its server one at a time, in order (a quick away and back could bind before
+  the last let go, and move the port), asks for the same port each start, and keeps sharing (key, port, when) in the
+  app's preferences: the app stopped with it on (an install, a crash) and started within `KEPT_MS` (2 h) shares again
+  with the same key; Stop Sharing and the drawing screen closing forget it. `LiveProbe` keeps the Manta from sleeping
+  by itself while a guest is on the page and drawing (`FLAG_KEEP_SCREEN_ON`; its power button still sleeps it): `AWAKE_MS`
+  (5 min) after a guest came or last drew it sleeps as ever, and guests wait for it to wake.
+- **Web (`live.html`):** a watchdog listens again when the browser gave up or nothing came for `LIVE_SILENT_MS`, while
+  the page is open. Connected again, the page starts over (blank, the relay's history laid again in its order, the
+  guest's own too) and the guest's Undo list stays. Its own changes not taken by a relay wait and go again, in order,
+  once the relay says who listens and the host is on it, and are laid as they come back (echoes, by their sealed bytes).
+- **Checks:** `LiveHostChecks.again` and `words`; `live-check.cjs` (one connection while the relay is there, a relay
+  gone silent, a relay gone and started again empty with the host's erasing and a guest's unsent stroke). The
+  stand-in Manta (`LiveHostChecks.BooksManta`, books-check) names itself on the relay as `LiveProbe` does: a guest's
+  marks now wait while no host is there (Host gone), as the real Manta would never hear them.
+- **Untried on the Manta:** whether its firmware honours `FLAG_KEEP_SCREEN_ON` for its own sleep, and its Wi-Fi's
+  return on waking (logcat `LiveShare`, `LiveProbe`).
+
+#### Live Undo while paint is still wet (2026-11-02, branch `live-undo-oil`)
+
+The owner: "i used the oil … it was set to the wrong size and so i tried to undo it, but it only undid the mark"; a
+dark ridge stayed round the drawing's hair. What stays wet after the lift (wet oils and gouache, a Slow wash settling,
+a Float bath, halos) adds to its stroke's Undo step through `finishContinuation`, which made the step anew: a new
+object and serial. `LiveProbe` holds the step the lift made, so a live Undo pressed while the paint still moved took
+back that stale step, only where the page still matched it: the paint moved since stayed (10k pixels replaying the owner's stroke on the saved page, 3 ticks in).
+- **Upstream files touched:** `ToneDocument.finish` (+6): a continuation keeps the step it continues, its tiles
+  replaced in place, its serial kept (as fading marks already patch a step's tiles). Undo and Redo unchanged.
+- **Checks:** `LiveUndoChecks.wet` (oil at the owner's size, an ink smear and a Slow wash over ink, Water brush over
+  Water pencil, each undone live and the page's own way before any tick, mid-wet and at rest: the page as before
+  the stroke; failing before mid-wet for the oil, the Slow wash and the Water brush).
+
+#### Live Redo of your own Undo; a stale probe file no longer makes the Manta live (2026-11-02, branch `live-redo`)
+
+The owner: "i can't get three finger redo to work". Live, Redo did nothing (`PaintActivity.redo`); and a USB probe's
+`live-probe.txt` (Oct 31, `http://127.0.0.1:8766`) left on the Manta kept `LiveProbe` retrying a dead address every
+second, which counted as live: Undo own-only, Redo off, with Draw Together off.
+- **Upstream files touched:** `PaintActivity.redo` (live: `LiveProbe.redo`, else the page's as before). No engine change:
+  Redo is `ToneDocument.takeBack` of the live Undo's own steps, so it puts back each pixel only where the page still
+  shows what the Undo left (a guest's mark laid since stays), one Undo step, as Undo's rule.
+- **Pure:** new `LiveOwn` (this tablet's own changes and its live Undos, ten each; `made` clears Redo, others' changes
+  don't), out of `LiveProbe`. `LiveProbe.redo` sends what the page shows where it changed as ink, set when one is lighter
+  (`LiveChange.since`); an Undo's goes set as before.
+- **Live means connected:** `LiveProbe.listening()` (own-only Undo and Redo) only while Draw Together is on or the
+  relay's line is open, not while a `live-probe.txt` address is merely retried; its Wi-Fi lock only while connected.
+  The file is still read (USB probes, `autotest.cjs`, run against the release build), so no debug-only gate.
+- **Web (`live.html`):** a guest's Redo the same way (`takeBack`: the Undo's before and after, `Live.takeBack`), kept
+  across a reconnect's start over; a new own change (`keep`) clears it. Shortcut: the browser's rule is still `live.js`'s
+  greys-over-a-rectangle copy (as its Undo since step 4), not `LiveOwn` through TeaVM: its own changes outlive the
+  engine page a reconnect starts again, which steps would not.
+- **Checks:** `LiveUndoChecks.redo` (exact, around a guest's mark, kept by a guest's change, cleared by your own) and
+  `wet` (live Redo as the Undo found the page); `live-check.cjs` (three fingers redo on both, two take it back again).
+
+#### What the page does after the lift reaches guests as it goes (2026-11-02, branch `live-wet-sync`)
+
+The owner: Rob boss (Oils, wet, Drag, keeps paint) on the Manta with a browser guest; the Manta's grey looked darker and
+longer, with faint dotted patches the browser lacked. Found: the Manta sent what the page did on its own after the lift
+(`DryingTicker`'s ticks: wet paint moving, a Slow wash settling, a bath, halos; Later's fading marks stepping) only when
+it ended (`settled` → `PaintActivity.recovery` → `LiveProbe.changed`), so a guest saw a big oil as it was at the lift for
+as long as it moved (15,496 px off 40 ticks in, books-check), and a Fading or Lemon juice mark only once it ended; Cracks
+is one step at its end, so it looked right. The screenshots' other differences are the displays: the Manta shows greys as
+`DotPattern` dots (a grey of 170 half black), the browser as 16 plain greys (`q16`), so the same tones look lighter
+there, and the dotted patches are greys of about 246 to 253, white in 16 greys.
+- **Upstream files touched:** `DrawingPad` (+1: the ticker's `show` tells `LiveProbe.ticked`). No engine change.
+- **Pure:** `LiveChange.TICKS_MS` (400): what ticks change goes at most that often, the ticks since as one change
+  (`LiveProbe.ticked`, never while a stroke is down: its lift sends it all), the rest at once when they end, as before.
+  The browser's own wet paint already went so (`live.html`'s `wetTick`), now on the same number (`WebEngine` `LIVE_TICKS_MS`).
+- **Checks:** `LiveChangeChecks.ticksReach` (the owner's oil at 360 px and a Fading mark: the guest's page the host's in
+  16 greys at every send and at rest); `books-check.cjs` (the stand-in Manta's `oil`, held 40 ticks in and at rest, and
+  the browser's own oil reaching the Manta; `LiveHostChecks.BooksManta.oil`, `go on`, `tones`).
+- **Open:** the browser never steps a guest's own Later marks (Fading, Lemon juice, Cracks…): they stay as laid there
+  and on the Manta.
+
+#### The Manta's own stroke reaches guests while it is drawn (2026-11-05, branch `host-live`)
+
+The owner: "strokes stream mid-stroke from the browser, so i can see them clearly as they're being made... but FROM the
+manta, it's still just on pen lift." The browser sent its strokes in parts (`live.html`'s `sendPart`, every 80 ms); the
+Manta only at the lift, drawn on along its path. Now `LiveProbe.drawing` (after each drawn batch) sends, every
+`LiveChange.PART_MS` (120) and never while the part before is on its way, what the page shows where it was written since
+(`ToneDocument.takeLive`'s blocks, as every change): a `LiveChange.part` (no path, laid at once; later parts join, one
+Undo step), of the stroke's kind (`LiveChange.kinds`, from the stroke being recorded: `StrokeLog.Recorder.medium`), so a
+guest lays every part on that kind's plane as it lays the lift's. Only that box is read on the main thread (0.16 ms median, 1.1 ms worst on the desktop); packed, sealed and
+POSTed on `sending`. The lift's rest goes from `changed` as the stroke's last part, without a path; a stroke that wrote
+nothing to the page before its lift goes as before, drawn on along its path. What the page does after the lift goes as before (`ticked`).
+- **Upstream files touched:** `DrawingPad` (+4: `drawBatch` and the unbatched input call `LiveProbe.drawing`, after the
+  timing that paces settling; `recording()`). No engine change.
+- **Pure:** `LiveChange.PART_MS`, `part(later)` (its kind kept); `StrokeLog.medium` (a brush's kind of mark, for an
+  entry and `Recorder.medium` alike; `LiveProbe.kindOf` went into it).
+- **Checks:** `LiveChangeChecks.hostParts` (a pencil, a felt, a watercolour wash and an oil drawn in parts as the Manta
+  sends them: the guest's page the host's after every part and after the lift, to the pixel, and laid on the kind's
+  plane the host's with each kind hidden; prints the main thread's cost); `live-check.cjs` (the JVM's felt stroke's parts posted 120 ms apart: laid on the phone before the lift, its page
+  and the iPad's the host's after; also `--host`).
+
+#### A notebook that wouldn't open: a Lasso-moved picture's kinds (2026-11-02, branch `kindbase-zero`)
+
+The owner's notebook stopped opening ("Invalid kind section"); `e8731cdc` reads and writes a base kind of 0 as all. The
+cause, pages 14 and 15: a placed picture (paint of no kind) moved by the Lasso is laid back as one piece of every kind
+(`LassoPlanes.place` → `ToneDocument.layKinds`, all pixels alike, so no plane), so the layer held three kinds, no
+`Layer.kind` plane and no `kindBase` (set only when a plane is made); the file wrote that base, 0. Merge
+(`InkWashLayers.merge`) leaves its layer so too (Pen and Paint, no plane), which reopened as all three kinds.
+- **Upstream files touched:** `DocumentCodec` (+2: a layer of more than one kind without a plane writes its kinds as its
+  base, every pixel holding them), `ToneDocument` (`Layer.kind`'s comment: null while every pixel holds the same kinds).
+- **Checks:** `EraseKindChecks.planeless` (the Lasso's picture with a Pen smile: the notebook's layer, written with base
+  7 and reopened as it was; a merged wash and pen line reopened Pen and Paint, failing before).
+
+#### An effect brush's trail drawn cheaply (2026-11-02, branch `newsprint-speed`)
+
+The owner: "the newsprint effect was very sluggish ... took seconds for even the initial grey stroke to show" (Newsprint
+at 90 px: 20 s of drawing, first pixels after 27 s). The darker trail (`bc3a76a3`) read the page under its band a pixel
+at a time (`ToneDocument.compositeTone`, the layer stack walked per pixel), and asked for a box round every disc (each
+band pixel drawn about 16 times). Now `MirrorShow.draw` reads the page a run of 64 at a time where an overlay needs it
+(`Mirrors.Tones.tones`, `MirrorShow.tones`: `compositeTones`), and the trail asks for one box a render, round the
+pixels newly shaded (`MirrorShow.fresh`). The same pixels shown; desktop draw 0.07 to 0.009 ms a sample.
+- **Upstream files touched:** `DrawingPad.drawShow` (+1 −1): passes `MirrorShow.tones(page)` for `page::compositeTone`.
+- **Checks:** `AreaChecks.trailCost` (Newsprint at 90 px over marks: no pixel read alone, the same drawn as read a pixel
+  at a time, boxes under 8 times the band, drawing within 1.5 times the stroke's own time; 16 times and 1.4 M pixels
+  read alone before).
+
+#### A stroke's start makes no surface (2026-11-02, branch `reprint-start`)
+
+The owner: "it doesn't show the grey preview until a split second before the thing is converted". The Manta's log: a
+later Newsprint stroke spent 3.4 s in its start (`create_ms`), the first 6.6 ms. Resolving a Reprint brush (its
+`Carry.paper`) or a wash (`Wet.wash`) made its Paper's whole surface (`BrushTexture.grain`, about 80 ms on this Mac,
+seconds on the Manta), and only the last two are kept: the drawing screen resolves the brush as named for its ring and
+trail at every pen-down (Newsprint names the Library paper; the stroke itself is on the page's surface), and the slots'
+warm-up, hover rings and readouts resolve other brushes in between, so the Library paper was made again each time. Now
+`StrokePaper` makes its grain the first time a mark reads it: resolving a brush makes none, drawing reads the page's.
+The same pixels. Desktop: that resolve 78 to 0.1 ms.
+- **Upstream files touched:** none.
+- **Checks:** `AreaChecks.startCost` (two Newsprint strokes, two other surfaces made before each: the start reads no
+  surface scan; drawing reads none on plain, its own once on laid).
+
+#### Paper beside a reprinted line stays white (2026-11-02, branch `newsprint-white`)
+
+The owner: "newsprint effect.. it turns empty canvas slightly grey". Page 15 of the notebook he sent: a halo of halftone
+dots up to 12 px each side of every line, in the saved page. Not new: as old as Reprint (`c27ab365`); the same before
+the quieter grain (`9c558e48`), `newsprint-speed` and `reprint-start`. Paper that is white as found never printed; what
+did was the faint grey a pencil leaves beside its line (its soft shoulder, Blur's tail, grain specks at tone 254: they
+read as paper), which `Carry.inks` printed two to eight times as dark (the dot gain, the grain lifting a near-white
+pixel by up to .2, Dot Swell), as stray black dots. Now a reprint prints a grey lighter than `Carry.LIGHTEST` (.06,
+tone 240) as paper, as a print's finest highlights drop out. Every Reprint print shares it (the Photocopier's toner
+never inked so light a grey; its pixels are the same). A blurred pencil line under Newsprint at 90 px, rows 7 to 14 px
+from it: mean 249.2 with 88 of 3840 pixels under 250, now 255 and none; the line's own dots the same (352 of 1200). On
+page 15's untouched soft lines: new dots 8 px or more from a mark's core 23, now 1. Pictures:
+`docs/archive/pictures/explore/newsprint/` (`newsprint-before-after.png`, `owner-page-before-after.png`).
+- **Upstream files touched:** none.
+- **Checks:** `ReprintChecks.paperStaysWhite` (Newsprint and the Photocopier over a pen line and a pencil line
+  softened by Blur: paper farther than 8 px stays white, white as found stays white, the line still prints, Newsprint's
+  in dots; 74 px dotted before).
+
+#### The browser shows greys as the Manta does (2026-11-02, branch `web-greys`)
+
+The owner: "yes show greys like the manta" (after `live-wet-sync` found the browser showed tones as 16 plain greys,
+`q16`, so a grey of 170 to 187, half black dots on the Manta, looked light, and 246 to 253, sparse dots there, white).
+Now the browser shows each page tone as the Manta's dot density for it as a smooth grey: `DotPattern.exportGray`, the
+PNG copy's curve, which the notebooks' pictures, covers and page-bar previews already used (`WebBooks.argb`,
+`LiveBooks` `/books/cover`). Smooth, not the panel's dots: the page is drawn scaled (zoom, the window's pixels), where
+an 8 × 8 dot pattern would shimmer and moiré, and the smooth grey is the dots' mean, so it reads as dark. Tone → shown:
+170 → 108 (was 170), 180 → 124 (187), 200 → 151 (204), 230 → 209 (238), 250 → 246 (255), 253 → 251 (255).
+Display only: `S`, what a change sends (`q16` still: `shownRect`, `area`), Undo, exports unchanged.
+- **Web:** `WebEngine.shade(tone)` (`DotPattern.exportGray`); `live.html` `screenGrey` (a 256 table of it) where the
+  page's tones are painted: `pull` (the page, so its zoom and the page bar's current preview), the scratch pad, the
+  readout's dot; `m4.js` (the Lasso's piece, the Dropper's ring), `stamp.js` (Import's picture as it will lie),
+  `extras.js` (Grey Shift's set). The tool trays, cards and the grey strip were already the panel's own dots
+  (`ToneDocument.render`, `ShadeStrip.pixels`), as on the Manta. Pictures:
+  `docs/archive/pictures/explore/web-greys/` (`before.png`, `after.png`: Rob boss, Watercolour washy, Ink wash).
+- **Upstream files touched:** none.
+- **Checks:** `live-check.cjs` (a host change of 180 and 250: the page keeps the tones, shows 124 and 246, the
+  engine's curve); `stamp-check.cjs` (the page shows as it is again: against `WebEngine.shade`; Less Contrast's grey, a few
+  white dots in 64, shown only a little lighter).
+
+#### A guest's change that lightens no longer flattens the Manta's layers; a lost send goes again (2026-11-02, branch `live-guest-fixes`)
+
+A review (2026-11-02, findings 1 and 2). **1 (data loss):** a change is set (`LiveChange.set`) when any pixel of it is
+lighter (`live.js` `changed`, `LiveChange.since`), and `PictureImport.lay`'s `lighter` then erased every shown layer's
+base and planes at every pixel the change carried, the darker ones too, and laid its greys flat on the layer drawn on:
+a guest's smudge or wet oil tick (every 400 ms) flattened the owner's layers, kinds and tones under the whole of it,
+saved, out of live Undo's reach. **2:** `LiveProbe.send` counts a change as sent (`room`) before its POST; a failed one
+was only logged, so later changes left those pixels out and guests kept stale marks until a page turn or reconnect.
+- **Upstream files touched:** none. No engine change.
+- **Pure:** `PictureImport.lay(..., lighter)` erases only where a grey is lighter than the page shows there
+  (`compositeTones`; 254, white as a change sends it, counts as white); a darker one goes on as ink
+  (`PictureImport.inked`, out of `LiveProbe.onLayer` and `WebParity.lay`, which call it now), the other layers left as
+  they are. One place, so the Manta laying a guest's change and the browser laying the Manta's (`WebEngine.lay(set)`)
+  both follow it. The browser's own live Undo (`WebEngine.picture`) passes `exact`: a darker grey is erased and laid too,
+  as a plane over the base would hide ink (`m4-check.cjs`' smudge Undo); a grey the page shows is left as it is (before,
+  the Undo's whole box was flattened).
+  `LiveChange.since`: a pixel not sent yet (255 in the room) goes set too, as what a guest shows there isn't known;
+  `forget` puts a lost change's pixels back to not sent.
+- **Android:** `LiveProbe.send` on a failed or non-200 POST forgets the change's pixels in the room (on the main thread)
+  and keeps its box (`lost`); `changed` sends the lost boxes with the next change, asked within `TICKS_MS` (`ticked`),
+  so a relay that stays away is tried no faster than the page's ticks.
+- **Shortcut:** a guest's darker pixels over the owner's opaque paint lie under its plane, so the Manta shows them a
+  little lighter there (near, as any guest's ink there; `books-check.cjs`: 2046 px over the owner's oil, 0 elsewhere).
+  Upgrade with live pages proper (layers of their own).
+- **Checks:** `LiveUndoChecks.lighter` (a set change's darker and same pixels keep another layer's wash, its lighter
+  ones erase it, one Undo step; exact: the darker erased and laid); `LiveChangeChecks.since` (not sent yet goes set; a forgotten change sent again, set);
+  `books-check.cjs` (the browser's own oil exact where the Manta's page was paper, near over its oil).
+
+#### The relay keeps the page from its last whole; a refused guest send let go (2026-11-03, branch `live-bounds`, live only)
+
+A review (2026-11-02, finding 6). **1:** `LiveHost` (and `relay.py`) kept every change since it started, and a guest
+replays all of it at each listen (joining, and again after `LIVE_SILENT_MS` of silence): wet and fade ticks every
+400 ms, a page whole at every page turn and probe connect, without limit on the Manta's heap and its Wi-Fi time.
+**2:** a guest's send that meets a network failure waits and goes again (live-reconnect); one the relay refuses (a 4xx)
+was already let go with "Couldn't send a mark" (`postNow`'s `!a.ok`), unchecked until now.
+- **Upstream files touched:** none. No engine change.
+- **Relay:** a send with `start=1` empties the history before it is kept (`LiveHost.request`, `relay.py` `do_POST`),
+  behind the key as any send.
+- **Android:** `LiveProbe.shown` sends its page message (`LivePage.SHOWN`) with `start=1` (`post(..., start)`), then its
+  tools always (`sendTools(page, again)`; before, `toolsSent = null` let a tools send still queued make these look the
+  same and skip, which would leave no tools after the start), then the page whole, set over every pixel, in order on
+  `sending`. Everything before the start is drawn over by the page whole or said again (the page, the tools); a guest's
+  ask (open, turn) is the Manta's alone. With no notebook (`app.book` null) there is no page message and the history
+  is kept whole, as before. A start that fails to send leaves the history whole; a page whole that fails goes again
+  (`lost`, live-guest-fixes), after the start.
+- **Shortcut:** while the Manta stays on one page the history still grows (its strokes and ticks) until its next page
+  whole (a turn, an open, the probe connecting again). Upgrade if a long session on one page shows it.
+- **Checks:** `LiveHostChecks.checks` (history from the last start only), `test_relay.py`
+  `test_history_from_the_last_start`; `live-check.cjs` (the stand-in host's tools with `start=1`, then its page whole: the
+  relay keeps those 2, and a guest joining then shows the page as the others; the phone's sends answered by CDP Fetch:
+  a refused one let go with the note and the next mark goes, one meeting a network failure goes again). The stand-in
+  Manta (`LiveHostChecks.BooksManta`, books-check) marks its page message as `LiveProbe` does.
+
+#### Live Undo of your Clear Page (2026-11-03, branch `live-clear-undo`, live only)
+
+The owner: "yes undo of a clear page should work". Live, Undo is own-only (`LiveOwn`), and a Clear page is a structural
+step (its layers swapped for blank ones), which `ToneDocument.takeBack` passed by: the clear was dropped from `LiveOwn`'s
+list and nothing came back. A guest has no Clear page (`live.html`), so only the Manta's.
+- **Upstream files touched:** `ToneDocument` (+75 −27): `Edit.cleared` (set by `clearPage` and `clearAllLayers`;
+  `stackEdit` returns its step); `takeBack`'s tile loop is its own `takeBack(index, target, tiles, …)`, which the new
+  `takeBackClear` calls with each old layer's base and kind planes as tiles over the blank ones (made into planes where
+  missing, with a share, print and kinds where the old had them): each pixel only where the blank layer is still blank,
+  so a mark laid since stays; the layer selected stays. Its steps are tile steps, so live Redo takes them back the same
+  way (clears again around marks laid since) and the page's Undo travels them as one step. `copyTile(tones, alpha, key)`.
+- **Shortcut:** the masking fluid, magnets, text boxes and a rubbed cover the clear took stay off; a layer drawn on with
+  more than one kind since keeps its own kind base. Upgrade if live pages use them.
+- **Unchanged:** `LiveProbe` (the clear was already an own change; its Undo goes set through `sendTakenBack`), the web.
+- **Checks:** `LiveUndoChecks.clear` (Clear page and the page's Clear: wash with a permanent share, ink, a pen plane, a
+  guest's marks laid after; live Undo puts back the rest exactly, theirs kept, the planes and the wash's share back;
+  one page Undo step; live Redo clears again around theirs; failing before: nothing taken back).
+
+#### Draw Together through ell.ing's relay, on any network (2026-11-03, branch `live-relay`, live only)
+
+Many Wi-Fis keep devices apart, so a guest often couldn't reach the Manta's own relay (`LiveHost`). The owner approved a
+relay on ell.ing: the Manta and its guests both connect out to https://ell.ing/mbd/live/.
+- **Upstream files touched:** none. No engine change.
+- **Relay:** `relay.py <port> public <dir>` (deployed as `mbd-live.service` behind nginx's `mbd-live.nginx`, both in
+  superdood.org's server code (not in this repo), its README's deploy steps): rooms by the key's access hash (64 hex, else 403),
+  only `relay.py pack`'s files served (`packed`; `/` is `live.html`), and limits: `MOST_ROOMS` 50, `MOST_ROOMS_EACH` 5
+  a client, `MOST_LISTENERS` 16 a room, `MOST_KEPT` 8 MB of history a room (shortcut: past it changes pass on but aren't
+  kept), `IDLE_S` 2 h for a room no one listens to, `MOST_TRIES` 20 rooms that weren't there a client and
+  `MOST_TRIES_ALL` 1000 in all in 10 minutes (429), the client nginx's `X-Real-IP` hashed with a per-start salt.
+  An empty room a guess made goes when its listener does. Nothing printed in public. Without `public` it is the Mac's
+  relay as before: one room, no limits, the key ignored; it no longer reads `res/` when it isn't there (the server).
+  `STILL_S` names its heartbeat; `X-Accel-Buffering: no` on listens.
+- **Pure:** `LiveHost.RELAY` (the address, the one place in the app), `RELAY_KEY` (10 letters: the relay sees the access
+  hash, `LiveCrypt.ROUNDS`'s weighing), `relayLink`, `reachable` (its page answers 200 within 4 s), `newKey(letters)`.
+- **Android:** `LiveShare.startHost` picks the way at the first start, off the main thread: the relay when `reachable`,
+  with a 10-letter key and its cipher (`relayed`), else `LiveHost` with a 4-letter key as before; kept till sharing
+  stops, and through `restore` (`live_share_relay`). `LiveProbe.start` connects to `RELAY` with `relayed` when there is
+  no host. The window through the relay: ell.ing/mbd's code, the QR code (the relay's link), "Online, while the app
+  is open."; no address or key to type.
+- **Server:** `server.py`'s `TO_RE` takes `https://ell.ing/mbd/live/#` and 10 to 40 letters as well.
+- **Checks:** `test_relay.py` `PublicTest` (a room a key, pack's files only, each limit, nothing printed);
+  `test_server.py` (the relay's links taken, a short key or another host refused); `LiveHostChecks` (`reachable`, the
+  10-letter key, its link a version 3 QR code; `relayed`: the stand-in Manta through a relay at an address);
+  `relay-check.cjs` (relay.py public behind a stand-in nginx at /mbd/live/, the stand-in Manta, a phone guest in
+  headless Chrome: the page from the prefix, the Manta's page on joining, its mark to the guest and the guest's
+  stroke to it, 9 of 9).
+- **Open:** the Manta's notebooks (`/books`, Notebook Explorer, downloads, Import) are `LiveHost`'s only: through the relay
+  Notebook Explorer says "Not connected". A Wi-Fi with a captive page that answers 200 for ell.ing would pick the relay
+  and not connect. Untried on the Manta and on ell.ing.
+
+#### Draw Together's relays see no names (2026-11-03, branch `live-names`, live only)
+
+The owner approved: what a relay learns of who is in a drawing is an opaque id. Before, `from=` was `manta-` and the
+Manta's `System.nanoTime` in hex, or `browser-` and 8 random letters.
+- **Upstream files touched:** none. No engine change.
+- **Pure:** `LivePresence.ID` (16 hex digits, the only `from=` a relay takes; `HOST`, the `manta-` start, gone);
+  `LiveCrypt.hostId(random)`/`hostId()`/`isHost(id)`: the host's id is 8 random hex digits and 8 of SHA-256 of them
+  keyed with a hash of the cipher's key ("MBD live host\n"); `LivePresence.guest(..., crypt)` counts a host by
+  `isHost`. `LiveHost.name` and relay.py's `name` take only `ID`, else `-`.
+- **Android:** `LiveProbe.me` is `crypt.hostId()`, made at each `start`.
+- **Web:** `live.html` (and `probe.html`) `me` is 8 bytes of `crypto.getRandomValues` in hex; `WebEngine.liveSaid`
+  takes the crypt's number (`engine.js`'s `c.n`).
+- **Old pages:** an old guest tab's `browser-…` is `-` on a new relay: its own changes come back laid again, and it sees
+  no host (Host gone) till reloaded; nothing throws on the relay or the Manta. An old Manta on a new relay counts itself
+  a guest: the app and the server's relay.py go out together.
+- **Checks:** `LiveCryptChecks` (a host's id by the JDK's SHA-256; another key's differs); `LiveHostChecks` (ids, an
+  old page's name `-`; the host told only with the key, not another key's, not an old name); `test_relay.py` (a name,
+  an old page's, upper case, one digit more or less: `-`); `relay-check.cjs` (every send and listen the stand-in
+  nginx passes carries a 16-hex id and no name, two ids, only the key tells the host's, 11 of 11); `live-crypt.cjs`
+  `hostId` (the check scripts' stand-in Mantas, which a guest must see as its host).
+
+## The older smudges retired, Filled Shape hidden, one word a dial, chips by what a brush does (2026-10-31, branch `brush-tidy`): no upstream files touched
+
+The design review's three tidy-ups (the owner approved them).
+- **Retired:** the Blend stump, Stump, Water brush and Damp tissue move to `ToolPresets.RETIRED` (Blend and Water
+  replaced them on the smudge tool, 2026-10-30). Water takes the Water brush's row in `DrawLayout.PICKER`, its drawing
+  too; the Watercolour with Masking kit lifts with Water. New `ToolPresets.retired(Brush)` (the retired preset a brush
+  is, by identity, as `find`): `ToolSlots.smudgeTwo` moves a smudge tool still holding one of the four, and
+  `BrushVoice.personality` keeps a retired tool's own words (personalities.txt keeps their lines), so a slot, the
+  smudge tool or the library holding one draws and reads as before.
+- **Filled Shape hidden:** `ModularFeatures.offered` leaves out `PartChoice.SHAPE` as it does Hand Hatch, so no roll,
+  die, swap, variation or Brush Lab chip picks it; `BrushLab.chips` still shows the current choice, so a brush holding
+  it shows its chip. Its codes read and draw as before (`FilledShape.fills` unchanged); `app-features.json` (Studio's
+  Guide) written again without it, and Brush Studio's own chips, Anything Goes and Mix (`studio.js`) leave it out
+  but on a brush holding it. Shapes' **Filled** (MonoPaint's geometric shapes, `ToolSettings.filled`) is
+  another tool and stays.
+- **One word a dial:** `PartDial.REACH` and `PITCH` (a Rake's and Hatch's line spacing) say **Line Spacing**, a
+  Stamp's `STAMP_SPACING` keeps **Spacing**; labels only, keys and codes as they were. The other shared labels are one
+  concept each (Dry Brush, Paint Load; Hand Hatch's Wobble and Taper Out, never shown; Grey Shift's Any Greys).
+- **Chips by what a brush does:** `ToolsPage.Chip.of(ModularBrush)`: Odd Ones for the tool picker's odd ones' choices
+  (Spiro, Stamp, Stay in Lines, Filled Shape, Float, Mold, Fading, Lemon Juice), Print for Screentone or a Print
+  Shading, else the style's kind (`Chip.of(ModularStyle)`, kept for stored chips); `has`, the grid's groups, the
+  search's chip word and the chip a first visit opens on use it.
+- **Upstream files touched:** none.
+- **Checks:** `ToolsPageChecks.chips` (the picker's tools under what they do, a pen through a Print Shading under Print), `DrawLayoutChecks` (Stamp under Odd Ones), `FilledShapeChecks.codes` (not offered, no chip, a brush holding it shows its chip), `PartModelChecks.oneTerm`
+  (a label two dials share is one concept, listed), `HandHatchChecks`, `ToolPresetsChecks.pinned` (every code ROWS and
+  RETIRED held on 2026-10-31 is still one of them and draws its loop pixel for pixel as then), `ToolPresetsChecks` (123 presets, 32 retired), `ToolSlotsChecks` (the one-time
+  move from the retired four), `DrawLayoutChecks` (Water in the picker, the retired Water brush keeps its drawing),
+  `FillChecks.STRIPS` (the four's hashes out, every other as it was), `GreyBarChecks`, `VoiceChecks` (a retired tool's
+  line), and the checks that draw the four find them among the retired (`FloatChecks.find`).
+
+## Later, the seventh part (2026-10-31, branch `brush-later`): no upstream files touched
+
+Roadmap step 7 (`docs/superpowers/specs/2026-10-31-brush-system-roadmap.md`, decided): the mischief out of Drying.
+- **Model:** `BrushPart.LATER` (seventh, after the six every code holds: `BrushPart.SIX`); `PartChoice.LATER_OFF`,
+  `LATER_FLOAT`, `LATER_MOLD`, `LATER_FADE`, `LATER_LEMON` (keys the retired ones': off, float, halo, fade, lemon),
+  `goesWith` (Float only Quick, Mold only Slow, Fading and Lemon Juice Instant, Quick or Slow, nothing Wet), `drying`,
+  `later`/`retired` (the old Drying choice and back). Float's, Mold's, Fading's and Lemon Juice's dials move to Later
+  (`PartDial.part`), with `FLOAT_TIME` (Float's floating time, key `drying`); Mold's Drying Time is Slow's.
+  Drying's `FLOAT`, `HALO`, `FADE`, `LEMON` stay, retired (`ModularFeatures.offered` false), so their codes read.
+- **`ModularBrush`:** `split` (a retired Drying mischief as Drying + Later, as the engine laid it: Quick fresh, Mold on
+  Slow with Flow While Wet 0), run by `normalize`, which also gives a Later that doesn't go with Drying its own drying;
+  `retired`, `joined` (the old form when splitting it gives the brush back exactly, else null); `later`, `floats`,
+  `mischief` (also on an unsplit brush the checks made).
+- **Codes (`ModularCode`):** written via `joined` (old form, byte for byte, whenever it can); otherwise the 8th
+  segment after the nib (`0` without one). Read: the eighth as Later, a ninth is newer. `docs/BRUSH-CODE.md`,
+  `brush-code.json` (now with `later`), `app-features.json` (Studio's Guide, `later` after the six).
+- **Engine:** `ResolvedBrush.laid` (Float and Mold back in Drying as they were always laid; Drying's own dials do
+  nothing under them but Mold's Drying Time), the fade spec from Later, `asQuick` gone (the split Quick is it);
+  `ModularStroke.finish`: a fading or lemon mark on a settling Slow wash settles at lift (`finishNow`) before the clock
+  takes it; `QuickStroke`'s draw-once experiment leaves a Later's Quick as it is. The rest of the engine asks
+  `floats()`/`mischief()` where it asked Drying.
+- **Rolls and names:** the mischief rolls still lay the retired Drying choice, split by the roll's `normalize`, so
+  every roll is what it was (neither Drying nor Later locked); Later's die rolls a mischief that goes with Drying;
+  `ModularVariations` varies the `joined` form; `BrushNames` keys Later as `life.<key>`. Words say drying then Later
+  ("Dries at once. Fades away in 20 s.").
+- **Brush Lab:** `LabLayout(width, height, rows)` and `later()`: four rows of modules, Later alone in the last, only on a
+  brush with a Later (the Nomad's slim modules one line then, for the open card's room); `LabSettings` picks it;
+  `BrushLab.switched` (a Drying that Later doesn't go with drops Later; a Later brings its drying); Drying's chips end
+  with Later's four, to add one; Later's chips are Off and what goes with Drying; `ic_part_later` (an hourglass).
+- **Upstream files touched:** none.
+- **Checks:** `LaterChecks` (the part, its combinations, every Basic and retired code with a mischief reading as Drying +
+  Later and back byte for byte, its eighth-segment form the same brush and the same loop and stroke, combinations that
+  fade, darken and settle, round trips, Brush Lab's adding and dropping, rolls as rare and all old-form), with
+  `OlderLaterCheck` compiled against ae4caeb8 in `test_inkwash.sh` (an older reader: old forms in full, new ones less
+  Later, "newer"); `code-spec-check.cjs` waits (a `shortcut:`) for the web lab's Later.
+## The engine in the browser (2026-10-31, branch `web-wasm`): one engine file touched
+
+Roadmap step 10 (`docs/superpowers/specs/2026-10-31-brush-system-roadmap.md`): Brush Studio and the live probe draw
+with the app's own engine compiled to WebAssembly (`web/engine/`, from the TeaVM pilot, `docs/brush-lab/teavm-pilot/`),
+the lab's JS copy kept for browsers without WebAssembly GC.
+- **Engine:** `QuickStroke.renderAtLift` (static, off on the Manta): no render thread is started; `develop` renders
+  the true stroke from every sample on its caller's thread at lift, the preview showing while the pen is down. Three
+  lines; the Manta's path is unchanged.
+- **Upstream files touched:** none.
+- **Checks:** `QuickStrokeChecks.sameAsLive` (rendered at lift on the pen's thread, every layer the same as on its own
+  thread, every style, Instant, Fast-wet and Drying, 60 and 200 px); `scripts/web_parity.sh` (wasm against the JVM
+  through `engine.js`, the API Studio and the probe use); `WebParity.lay` uses what this branch has (it had the live
+  branches' `compositeTones` and `PictureImport.lay` overload, so the harness didn't compile here).
+
+## Later's media (2026-10-31, branch `later-media`): Salt, Plastic Wrap, Feathering, Foxing
+
+Roadmap, "Added, 2026-10-31: Later's media". Later choices 5 to 8, appended (an older reader sees a Later past its list:
+Off). Each changes a mark after the lift as the physical technique does, by Fading's and Lemon Juice's machinery.
+- **Engine (pure):** `LaterMedia` (new): a technique's finished state over a region of one layer, from the brush's seed
+  and the page position (Salt's starbursts, Plastic Wrap's creases (ridges of gradient noise stretched the way the film pulls), Feathering's halo and hairlines creeping along the valleys of the brush's own paper grain (`PaperGrain`, Paper's Texture and a drink by paper; plain paper gently, along stand-in fibres),
+  Foxing's spots near the mark). `FadingInk`: a mark's `kind` (0 Fading, 1 Lemon Juice, 2 to 5 the media) in place of
+  the lemon flag, `Spec` with its macro dial and seed, the media's timing (each pixel from as laid to finished, later by
+  the mottle and the less it changes), `encode`/`decode` by section. `PartChoice` (`LATER_SALT` to `LATER_FOX`,
+  `clocked`, `goesWith`, `drying`), `PartDial` (`GRAINS`, `CRINKLE`, `THREADS`, `SPOTS`, `SPREAD_IN`), `ResolvedBrush.fade`
+  for any clocked Later, `ModularBrush.joined` (null for a Later with no retired Drying choice), `ModularWords`,
+  `BrushVoice` (and `voice.js`, row for row).
+- **`ToneDocument`:** `fadeSince` hands a media mark to `finished` (its tiles as laid and finished, as far past the
+  stroke as the technique reaches; a tile past the stroke's own joins its last Undo step as it was, so Undo takes back
+  what grew there); `stepFade` patches only the after side of the stroke's own steps and nothing older, and while that
+  step is undone (`Edit.undone`, set in `travel`) changes nothing on the page, so an undone mark never comes back by
+  the clock. `Edit.bytes` is no longer final. Fading and Lemon Juice step exactly as before. The work runs on
+  `laterWork` (at once on the desktop; `DryingTicker` gives the app a worker thread): the lift copies the region and
+  hands it off (about 0.3 ms on the desktop for a 300 px wash), the stroke shows as laid, `fade` takes the mark in
+  once ready (`nextFade` looks again every `ADOPT_MS`), and a `Snapshot` waits for any still out so a save keeps it.
+- **`DocumentCodec`:** a `LATR` section beside `FADE`, the same layout, only while the page has media marks; a reader
+  before it skips it and opens the page as saved. `FADE` is written byte for byte as before.
+- **Brush Lab:** nothing new: Drying's chips end with Later's eight; Later's card shows what goes with the drying.
+- **Upstream files touched:** `ToneDocument`, `DocumentCodec` (as above).
+- **Checks:** `LaterMediaChecks` (tables, codes, words, as laid then finished, determinism, reach, Undo at once, mid-way
+  and at the end, reopened mid-way, a brush without them, the finished state's time); `OlderMediaCheck` and
+  `OlderLaterCheck` compiled against c360ed8e in `test_inkwash.sh` (its codes read as Later Off, newer; a page with a
+  Feathering mark opens as saved; a Fading and Lemon Juice page written byte for byte as that version wrote it).
+  Pictures: `scripts/later_media_pictures.sh`.
+
+## Media (2026-11-01, branch `explore-media`): White chalk, Dip nib, Water pencil; Dissolves
+
+A test branch (the owner's overnight go-ahead). No upstream files touched; engine only, pure Java.
+- **Dissolves** (`PartDial.SOLUBLE`, key `soluble`, Off/On): last of Ink's, Charcoal's and Graphite's dials, in
+  `ModularCode.ADDED` (written only when on, so every older code is byte for byte), never rolled (`ModularStyle`) or
+  varied (option dials never are). On, `ResolvedBrush.soluble`: the mark is `KIND_PAINT` and `ModularStroke.layerOf` puts
+  it on the pair's wash half, where Clear Water's plane is, so the Water brush lifts it and lets it run as a dried wash.
+  The eraser's Paint kind takes it, not Dry Media. `LabLayout.shows`: on the Nomad Dissolves is a spare row after
+  Screen and Fling, shown where it fits.
+- **Paint Load on a line** (`LineStamper`, `LoadedPaint.of(carry, size, nib)`, `StrokePoints.dry`): a line that runs
+  out of its own paint fades as before and runs dry into the dry brush's streaks too (as a flick past the lift does);
+  `dry` is Paint Load's share alone, so Gradient's fade (which shares `own`) never streaks. A line's load goes as much further as it is narrower than `REF_PX` (half to six times), a dip's worth of
+  writing. Bodies (Oil paint, Loaded oils) are unchanged; no Basic tool before had Paint Load on a line.
+- **Presets** (`ToolPresets`, built in `PresetPictures`): White chalk (Charcoal at Blend White), Dip nib (Ink, Drag's
+  Paint Load), Water pencil (4B, Dissolves). Pictures: `scripts/media_pictures.sh` (`MediaPictures`) into
+  `docs/archive/pictures/explore/media`, with what was dropped under `dropped/`.
+## The nibs (2026-11-01, branch `explore-nibs`): no upstream files touched
+
+An overnight exploration: four tips that are each another object in the hand, Tip choices 13 to 16, appended (an older
+reader sees a tip past its list: Round, "Newer version"). Never rolled, never a variation's swap
+(`ModularFeatures.seedOnly`), offered in Brush Lab's Tip chips.
+- **Engine (pure):** `RulingPen` (a blade, its length from the pen's lean, lying along the azimuth, ink spent by the area
+  it inks, dry on the tooth and the blade's nicks, blots where it lands and slows into a turn), `TwigStick` (a knob with a
+  seeded outline turning in the fingers, a blob to start, its rim drying before its core, catches), `FanBrush` (hair tips
+  in an arc across the lean, pressure bringing the outer ones down and splaying it), `Brayer` (a band square to its
+  heading, its ink on a surface round its circumference, `ModularCompose.Under` read ahead as the stroke found the page,
+  Pick Up Paint's share printed again a turn later). Each lays from its distance alone, state in `LineStamper.Meta`, so
+  any batching lays the same marks; `ResolvedBrush` resolves them as patterns (`ResolvedBrush.nib`, new `LineTip` and
+  `BodyTip` values), `ModularStroke` dispatches line and body and their reach; `PartChoice` (`RULING`, `TWIG`, `FAN`,
+  `ROLLER`), `PartDial.PICKUP` (Brayer's), `ModularSizes` (each nib's Medium in every style, its card's size),
+  `ModularWords`, `BrushVoice` and `voice.js` row for row.
+- **Presets:** Ruling pen, Twig pen (Dip pen), Fan brush (Dry brush), Brayer (Print), built in `PresetPictures`.
+- **Not done:** the web lab has no nibs yet (`code-spec-check.cjs` waits for them, as it does for Later); QuickStroke
+  previewed them as it does any pattern (their own footprints since `live-nib-fixes`, below); a ruling pen's or twig's ink doesn't carry to the next stroke (a fresh dip each).
+- **Checks:** `NibChecks` (batching, live, each nib's pressure and tilt, running dry, blots, the brayer's reprint, codes,
+  presets, words, cost a sample beside Round). Pictures: `scripts/nib_pictures.sh`, in `docs/archive/pictures/explore/nibs`.
+
+### Where a nib lands, and previews as wide as the mark (2026-11-02, branch `live-nib-fixes`): no upstream files touched
+
+The owner: the twig pen "leaves a blob often at the beginning of the mark.. also the preview mark is much bigger than
+the mark that is left". Engine and Scribulor classes only (`HoverNib`, `FootprintSweep` are Scribulor's).
+- **The blob.** `TwigStick` dropped a blot (`RulingPen.blot`: a drop of 1.1 to 1.7 times the knob's radius and two or
+  three runs off it) at every touchdown; `RulingPen` blotted at touchdown with a chance of .6 to 1, and its slow-turn
+  blot fired while a stroke's speed was still rising from 0 (`StrokePoints.v` starts at 0). Now a touchdown blob follows
+  Paint Load past its middle (`RulingPen.flooded`, 0 at the presets' .5): the twig lands a dot of 1.1 times its knob as far
+  out as it inks (`inks`: a light touch's drier end, its core), a round start, runs and size growing to the old blob at Paint Load 1 (`blot(..., runs)`); the ruling pen's touchdown
+  blot likewise, and its slow-turn blots wait a blot's spacing from the touchdown (`State.lastBlot` starts at 0).
+  Fan and Brayer had no start blob. `NibChecks.starts`: each preset at its Medium, landing firm at .3/.6/.9, upright and
+  leaning 40°, eight strokes each: its first stretch at most 1.25 times the line's width after it (worst now 1.22) and
+  1.35 times its ink; an overloaded ruling pen still blots where it lands.
+- **The previews.** Both previews read a nib's size from `ModularStroke.lineReach` (the redraw bound: a twig's is
+  2.4 × size + 4, its blob's reach) or a pattern's band (size + 1): the quick stroke's preview (`FootprintSweep.ellipseAt`,
+  every nib is quick at its Medium as its reach passes `QuickStroke.PANEL`), the side column's readout (`atRest`) and the
+  hover ring (`HoverNib.nib`). Each nib now gives its own footprint from the stamper's own geometry (`RulingPen.footprint`:
+  the blade along its azimuth; `TwigStick.footprint`: the knob stretched along the lean, as far as its ink reaches,
+  `inks`; `FanBrush.footprint`: the hairs down far enough to ink, across the lean; the Brayer's band is its size, kept),
+  the stampers reading the same helpers (`RulingPen.hold`, the nibs' tilt read once, `blade`, `thick`, `knob`, `stretch`, `ink`, `half`, `depth`, `hair`;
+  their marks byte for byte but for the starts above). `HoverNib` rings any tip it has no shape of its own for (Hatch,
+  Stamp, Hand Hatch, Spiro, the nibs, the hake's line) with the quick preview's footprint at the natural hold
+  (`FootprintSweep.atRest(r, isLine, p, NATURAL)`), placed lines as far across as `Placement.Geometry` lays them
+  (`FootprintSweep.placedAcross`), not their reach. Unchanged: bristles ring where they land, Stipple as far as it
+  scatters, the quick rule (`QuickStroke.quick`, still from reach).
+- **Measured** (`PreviewWidthChecks`, every Tip at 24 px or a nib's Medium, a light and a usual touch, leaning 40°;
+  preview / laid px): Ruling Pen quick 31/15 → 16/15, ring 46/28 → 28/28; Twig quick 25/10 → 6/10 (light), 26/25 → 20/25
+  (usual), ring 62/12 → 9/12; Fan quick 61/15 → 18/15, 62/36 → 36/36, ring 83 → 26/22; Brayer ring 83/72 → 73/72; Stamp
+  ring 37/24 → 25/24; Hatch ring 27/24 → 25/24; Hand Hatch ring 42 → 25; Split Nib ring 53/28 → 24/28; Rake ring 149/70
+  → 68/70; the rest as they were. The check holds every quick preview and ring within 0.7 to 1.35 times the mark (2 px
+  either way), bar placed lines' quick preview (line by line, `QuickStrokeChecks.placedPreview`), Stipple and Spiro, and
+  bristles' ring. Pictures: `docs/archive/pictures/explore/nibs/nib-starts-before.png`, `nib-starts-after.png`.
+
+## Scrape and Wears Down (2026-10-31, branch `explore-knife`, an overnight experiment)
+
+The module gaps' top-10 items 4 and 6 (`docs/superpowers/specs/2026-10-31-module-gaps.md`). Not merged: a test branch.
+- **Scrape (Smudge choice 7, appended; the Basic tool Palette knife, Watercolor):** a flat blade through the paint there,
+  laying none of its own (`ModularBrush.ownPaint` 0). Not already covered: Lift and Clear Water lift alike wet or dry,
+  Crayon's Scratch is a white line whatever lies under it; none reads how wet the paint is. `Carry.scrape`: the blade
+  across the way it moves, its length from the pen's lean (upright, the knife's tip, a fine line; laid over, the flat),
+  its depth from pressure, a tent along the way so the dabs add up to one even pass; each pixel by how wet it is: wet
+  paint gives up about half, most of it piled in ridges just past the blade's ends (pigment over pigment as a glaze, so
+  a ridge darkens without going black), damp paint nearly all, carried off (sgraffito's light line), a dry mark a 5%
+  burnish. Wetness: `CarryPlane.wetFrom`/`wetnessTile` read it as each tile fills, from
+  `WatercolorSession.wetness`: the wet paint's water by its freshness (`WetWatercolor.wetAt`: `DAMP` and under dry,
+  water at rest damp, gouache and oils wet), and a Slow wash still wet a moment ago (`stillWet`) by how much of its
+  drying was to come (`DryingWater.wetLeft`, `wetMs`); a knife stroke leaves that wash wet for the next
+  (`keepWet`, spent by the stroke's own ms, not the time between strokes).
+- **Wears Down (Round's and Chisel's last dial, `ADDED`):** `StrokePoints.wear`, `fx`/`fy`: the facet, a vector along
+  the lean it was worn at, grown each sample toward the lean held now by `1 − exp(−px × press × wear / 250)`;
+  `LineStamper.nib`: worn, the nib is an oval up to 3.2 times as long along the lean, its point's side where the point
+  was (`Nib.ox`, `oy`), 15% lighter; turning the pen (the facet no longer along the lean) gives back the point. Line
+  media only (a body's paint doesn't wear). **Within a stroke only:** `StrokeLog` replays a page from each stroke's
+  code and samples alone ("the same samples, brush and grey make the same marks"), so wear carried from stroke to
+  stroke would replay differently (a replay starts from whatever the session holds, and other brushes' strokes come
+  between); live pages send pixels, so they need nothing. So a new stroke starts sharp.
+- **Web lab:** `newmods.js` carries Scrape and Wears Down in its tables (codes, words) but draws neither.
+- **Upstream files touched:** `WetWatercolor` (+15: `wetAt`, read only, marked Inkwash).
+- **Checks:** `KnifeChecks` (codes, seed-only, older codes byte for byte; wet, damp and dry under the knife; a worn
+  tip broader across its lean and sharp again once turned; both the same twice; a worn stroke the same after another).
+  Pictures: `scripts/knife_pictures.sh`, kept in `docs/archive/pictures/explore/knife`.
+
+## Steady Hand and Long Stick (2026-10-31, branch `explore-steady`): an experiment
+
+The module gaps spec's top-10 item 2. Control's last two dials, appended (`smooth`, `stick`; 0 off, written only when
+on, so every older code reads them as off and writes byte for byte).
+- **Engine (pure):** `SteadyHand` (new): a stroke in front of the brush's stroke whose samples go through a mass-spring
+  follower: Steady Hand critically damped, its lag time longest when the pen is slow and its lag on the glass held to
+  14 px at full; Long Stick underdamped, its swing under a hand's tremor; at the lift the tip glides onto the pen's last
+  sample. `PartDial` (`STEADY_HAND`, `LONG_STICK`, `follows`), `PartChoice.handDials`, `ModularCode.ADDED`,
+  `BrushPart.keeps` (a Control swap keeps them), `ModularVariations` (off stays off). `QuickStroke.start` wraps every
+  stroke the drawing screen, Brush Lab and a replay start; `InkWash`'s mirror copies and `WildSample`'s samples the same.
+  Never a Spiro's (its ring is its first two samples).
+- **Brush Lab:** the Control card's two rows after Tilt Shading (`BrushLab.handRows`).
+- **Presets:** Long stick (Charcoal): Soft charcoal at Long Stick .8.
+- **Upstream files touched:** none. `DrawingPad` already ticks `HeldPen` for a stroke that `buildsWhileHeld`, which
+  `SteadyHand` says it does so the tip settles onto a resting pen.
+- **Checks:** `SteadyHandChecks` (lands at the lift, determinism, off is the stroke itself, codes, mirrored, quick as
+  live, speed, swing, the lag printed). Pictures: `scripts/steady_hand_pictures.sh` into
+  `docs/archive/pictures/explore/steady/`.
+## Later's print, crafts and ageing (2026-11-01, branch `explore-later2`): Letterpress, Torn Paper, Cross-Stitch, Cracks, Tarnish
+
+An overnight exploration from the module gaps survey (`docs/superpowers/specs/2026-10-31-module-gaps.md`). Later choices
+9 to 13, appended (keys `letterpress`, `torn`, `stitch`, `cracks`, `tarnish`), on Later's media's machinery unchanged:
+worked out off the drawing thread at the lift, shown by the clock, Undo takes the whole stroke, seed-only.
+- **Engine (pure):** `LaterMedia`: `press` (the ink evened to a solid, a squeezed darker rim by a chamfer distance from
+  the edge, a mottled middle, starved where the brush's paper grain dips, as Feathering reads it), `torn` (a ragged
+  edge wandering in and out of the mark's at three scales, an off-white fibrous band inside it, fibres, a contour and a
+  shadow lit from the top left), `stitch` (a grid fixed to the page, 6 to 10 px a cell: a covered cell gets two shaded
+  threads in its mark's grey; the rest of the mark goes), `cracks` (two warped Voronoi networks, the finer only where
+  the paint is darker; cached cell points), `tarnish` (darkens a pale line toward `TARNISH_DARKEST`, unevenly, tone
+  before coverage; written straight into the region). Shared: `inward` (chamfer distance), `widest`. `FadingInk`: kinds
+  6 to 10 (`NEWEST`), their timing rows; `decode` keeps kinds up to `NEWEST` (9a57ae48 keeps up to `FOX`, so it reads
+  past them). `PartChoice` (`LATER_PRESS` to `LATER_TARNISH`, `drying`: Slow for Cracks, Instant for Tarnish, Quick
+  for the rest; `goesWith`: Instant, Quick or Slow), `PartDial` (`IMPRESSION`, `TEAR`, `STITCH` 6 to 10 px, `CRACKS`,
+  `TARNISH`; their times reuse `SPREAD_IN` and `DRY_IN` with their own labels), `ModularWords`, `BrushVoice`.
+- **Brush Lab:** Later's chips in `PartChoice.LATER_SHOWN`'s order (Off and the mischief, then paint media, print, age,
+  craft), not the enum's; Later's swap strip pages at `LabLayout.LATER_MOST` (8): on Quick or Slow, Off, the mischief
+  and the paint media on page one, print, age and craft on page two. Thirteen to a page didn't fit the Nomad's tiles.
+  Drying's chips (four and Later's thirteen) page at 13 as before: two pages of nine.
+- **Presets:** **Metalpoint** (Pencil): Graphite at its hardest, a fine Round, Cold Press at .4, Press Dark at .2, Later
+  Tarnish (`PresetPictures` builds it).
+- **Upstream files touched:** none past Later's media's.
+- **Checks:** `LaterMediaChecks` runs every check over all nine media, and `crafts` (Letterpress pale where the paper
+  dips, Cross-Stitch on an 8 px page grid, Cracks crack more of the darker paint, Tarnish darkens the Metalpoint and
+  stops at `TARNISH_DARKEST`). `test_inkwash.sh` compiles `OlderLaterCheck` and `OlderMediaCheck` against 9a57ae48:
+  the new codes read as Later Off, newer; a page with a Cross-Stitch mark mid-way opens as saved. Pictures:
+  `scripts/later_media_pictures.sh docs/archive/pictures/explore/later2 later2`.
+## Hold to Snap (2026-10-31, branch `explore-snap`, exploration): upstream files touched
+
+A stroke held still 550 ms at its end, pen down, is drawn again by the same brush along the clean shape it was roughly
+drawn as (`docs/superpowers/specs/2026-10-31-hold-to-snap-explore.md`). New: `HoldSnap` (engine side, pure Java: the
+pen's rest, recognition, the rough samples carried along the clean path). The six-part engine is untouched: the pad
+finishes the rough stroke, takes it back and starts the slot's stroke again with the clean samples.
+- **Upstream files touched:** `DrawingPad` (+50: `holdSnap` fed in `sampleEvent`, `snapTick` beside `heldTick`,
+  `snapTo`; `quietPanel` holds `flush` and `beginStrokePreview` back so the snap shows as one update), `WetWatercolor`
+  (+30: `rewet(wake, forget)` and `markDry`; `rewet(wake)`, every existing caller's, is unchanged), `WetCanvas`
+  (`forget`), `WatercolorSession` (`takeBack`).
+- **Checks:** `HoldSnapChecks` (recognition on 1600 rough shapes and 1400 negatives, pauses, the samples carried,
+  the redraw byte for byte against the clean stroke alone, one Undo, wet paint beside it). Pictures:
+  `scripts/snap_pictures.sh`.
+## Undo's tiles in a fixed order (2026-11-01, branch `fix-stroke-race`): upstream files touched
+
+`LaterMediaChecks fading-bytes` failed about half the time on several cores (always in the full script): a page with
+Fading and Lemon Juice marks wrote its `FADE` section in another order from run to run. The pixels were always the same.
+The cause was `ToneDocument.capture`: while bands are open (`openBands`), each band's thread puts the tiles it first
+writes into `before`, a `LinkedHashMap`, under its lock, so the order of the tiles in Undo's step, and in a fading mark
+made from it (`fadeSince`), followed the threads' timing.
+- **`ToneDocument`** (+15): `closeBands` puts the tiles captured while the bands were open back in tile-row order, each
+  row's in its own band's order (a stable sort; every band is one tile row). That is the order one thread running the
+  bands in turn gives, so Undo's steps and a fading mark's file section are the same bytes on any number of cores, and
+  the same as the versions before wrote with one core. Under `before`'s lock, for `sharing` readers. Generic.
+- **Checks:** `LaterMediaChecks.sameBytes` (the fading page drawn twelve times on several cores against once in turn,
+  byte for byte), and in `test_inkwash.sh` its `fading-hash` in two JVMs. `OlderMediaCheck fading` draws in turn
+  (`Cores.shared = false`), since c360ed8e still has the race.
+
+## A smudge's plane seen whole by a quick render (2026-11-02, branch `carry-race`)
+
+`TrailChecks` crashed about once in three full runs (an NPE in `CarryPlane.takeFresh` on a core helper). A quick
+smudge's render composes while the pen is down (`QuickStroke.render`, a trailing smudge whenever it has caught up), and
+its compose asks `CarryPlane.has` at every pixel of its rectangle, while the pen's thread fills tiles further on
+(`reachCarry`). `fillTile` stored a tile's marks, darkness and coverage as plain array stores, so a reader on another
+core could see the coverage (`has` true) before the marks or darkness (null): the JIT and ARM cores (the Mac's and the
+Manta's) reorder them. Since quick strokes composed ahead of the lift with a smudge's plane (a3049ef5, 9beb9076,
+2026-10-16), much likelier once a smudge composed whenever caught up (56aed9d8, 2026-10-23).
+- **`CarryPlane`** (Scribulor's own): a tile is published as filled once all of it is written (`filled`, an
+  `AtomicReferenceArray` of the tiles' coverage, as `PrintScreen` uses, which TeaVM and Android 8 have: a volatile store
+  after the fill, a volatile read in `has`), so a reader that sees it filled sees
+  all of it, or sees it not yet filled (a tile no dab of the render's has reached: the page as found). No lock on the
+  compose's path. The pen's thread's handover (`incoming`'s lock) already orders the tiles a render's dabs reach.
+- **Checks:** `CarrySmudgeChecks.fillRace` (three readers on the tile being filled, 400 planes; failed every run before).
+
+## Reprint, and Smudge shown as Rework (2026-11-01, branch `explore-reprint`, an experiment)
+
+The owner's "every look lives in a brush": a brush meets the page drawing, making ink, and brushing over marks already
+there. Not merged: a test branch.
+- **Reprint (Smudge choice 8, appended, no dials, seed-only; the Basic tools Photocopier and Newsprint, Print):** lays no
+  paint of its own (`ModularBrush.ownPaint` 0). `ResolvedBrush` hands its Medium's Print Shading to the carry
+  (`Carry.print`, with the Paper's `StrokePaper` and Texture) and keeps none for the stroke (`screen` null, so nothing of
+  its own is printed and it isn't Paint to the eraser). `Carry.reprint`: each dab (a quarter radius apart) takes every
+  pixel within its radius, soft at its edge, `reprintAt(pressure)` of the way (smoothstep .02 to .5 of the travel: a
+  light hand part way, a usual one all the way) from its loose paint **as the stroke found it** (`CarryPlane.reprint`:
+  `foundA`, `foundP`) to that paint printed: black where `PrintScreen.ink` inks its darkness, after a dot gain
+  (`1 − (1 − d)^1.6`) and the paper's grain at its Texture (`StrokePaper.height`, moved out of `ModularCompose`), paper
+  where it doesn't. Without a Print Shading: toner, black past .45 ± .06 grit. Each pixel keeps the most any dab took it
+  (`reachedTile`), so back and forth reprints once and the same strokes print the same. Paper stays paper.
+- **Every plane of the pair:** a gesture binds one layer's one plane, so `ModularStroke.alsoWorks` generalises the
+  stump's other half (`alsoBlends`) into `others`: for Reprint every other shown plane of the selected pair's two
+  layers, bases too (pen, dry media, wash, opaque), each a `CarryPlane` and `Carry` of its own, composed at lift in a
+  gesture each linked to the stroke's (`blendOther`, `finishWithPrevious`): one Undo step. Only the stroke's own plane
+  (its Medium's: Pen for an ink) shows under the pen; the others change at the lift, as the eraser's wash does.
+- **Wet paint:** a Slow wash and a Float bath are laid before the stroke as for any other brush; wet paint (the wet
+  canvas) takes the reprint as it takes any other stroke (`WetCanvas.catchUp`): it stays wet, rests as reprinted, and a
+  later Wet stroke moves it, dots and all. Kept (permanent, shielded) paint is left as it is, as the smudges leave it.
+- **Rework:** `BrushPart.CARRY`'s label is Rework (the owner's choice); keys, enum names and codes stay. The web lab
+  and Studio sources still say Smudge (`parts.js`, `newmods.js`, the built pages); `app-features.json` is written from
+  the app, so Studio's Guide says Rework.
+- **Checks:** `ReprintChecks` (codes, the same twice, pen, pencil and wash changed only in its band, back and forth as
+  once, pressure, Undo and Redo, toner, over wet paint, its cost); `OlderLaterCheck` compiled against 9e447836 in
+  `test_inkwash.sh` (Reprint codes read as Smudge Off, newer). Pictures: `scripts/reprint_pictures.sh`.
+
+## Light over dark across kinds (2026-11-01, branch `explore-chalk`): upstream files touched
+
+The owner: "white chalk i tried to draw on black paint but it didnt". Kind planes stack by kind (dry media, washes, pen,
+opaque; each kind's wash half under its ink half), so a light mark on its own plane lay under every darker mark of a
+plane above it: White chalk showed over charcoal and pastel only, not over pen, marker, Fill in, gouache or washes.
+- **The rule:** a gesture that lays over what is there (`ResolvedBrush.laysOver`: Blend's White and Invert, and
+  `laysLight`, the light-over-dark media; not on water, a resist or Later's fading media) says so after it begins
+  (`ModularStroke.begin` → `ToneDocument.layingOver`). At its finish, at every pixel it changed where a plane above its
+  own in the pair holds paint, that paint sinks into the pair's top shown base (`sinkUnder`), composed in the page's
+  order, with each pixel's kinds (`Layer.kind`, kind and permanent bits), Erasable share and print tone; the planes
+  above let it go. The page shows as before with the new marks now over it: a time order where planes have none. Paint
+  drawn later goes on its own plane as ever, so pen over the chalk shows. A plane of a hidden layer, at another opacity
+  (Show Kinds, a Half layer) or holding a mark that fades by the clock stays put, and a mark on the wash half sinks only
+  that half's planes (the pair's ink is never covered by its own wash: `BlendChecks`' white wash under a pen line). One Undo step (`finishWithPrevious`,
+  a gesture a plane), exact.
+- **Erasing:** the chalk stays on its plane, so the Dry Media eraser takes it and the black shows again; the black, now
+  in the base, goes with its own kind's eraser by the base's bitmask rules (where two kinds sank into one pixel, the
+  Erasable rule decides, as on pages from before planes), leaving the chalk.
+- **Not changed:** the composite order, the file and the native renderer; pages drawn before open as they were.
+  Transparent washes only darken (not `laysOver`). The chalk shows over pen once the pen lifts (the sink is at finish).
+- **Upstream files:** `ToneDocument` (`layingOver`, `sinkUnder`, `put`, `fadesOn`; `finish` calls it). Scribulor-side:
+  `ResolvedBrush.laysOver`, `ModularStroke.begin`. Checks: `LightOverDarkChecks.acrossKinds` (White chalk over Fill in,
+  Steady line, Permanent marker, Wet gouache, Grey wash and Soft charcoal; erased both ways; Undo, Redo; pen over it
+  after; a white wash stays black; a white gel pen over gouache); `FillChecks.STRIPS`' three light fills over a pen
+  fill taken again (they now cover it; strips still write what one piece does); `PageExportChecks`' sample page now
+  exports an Old Paint layer (the base: what its light marks covered); a save and open of chalk over pen and wash.
+  Picture:
+  `docs/archive/pictures/explore/chalk/chalk-over-black.png` (`java LightOverDarkChecks chalk <png>`: before on
+  `origin/explore`, after on this branch).
+
+## Surface: the paper belongs to the page (2026-11-01, branch `explore-surface`)
+
+The owner's "Surface moves to the notebook" (docs/superpowers/specs/2026-11-01-surface-design.md): a notebook's
+Surface and a page's own, which every brush meets.
+
+- **Engine (pure Java, desktop-checked):** `BrushTexture` is the surfaces, with `absorbency` (Feathering's table moved
+  here), `fibreLength`, `fibreAngle`; its `grain()` is now made whole by the new `SurfaceGrain` (2048 px, seamless, no
+  repeat across a page: Cold Press, Laid, Canvas, Kraft and Unryu made from nothing, the other scans laid as patches),
+  two kept besides plain, `warm()` making one out of the way. `PaperGrain` takes a grain of any power-of-two side and an
+  optional fibre map; `scan()` reads a 256 px scan as before (Surface tiles, `swatch()`). `PaperNoise.octave` has a
+  rows-only form, for sharing the work. `ModularBrush.onSurface(surface)`: a stroke's copy of its brush on the page's
+  surface at its own Texture; `QuickStroke.begin`/`quickly` and `ModularStroke` call it with `ToneDocument.surface`
+  (null: the brush's own paper, as before). `ResolvedBrush.Wet.wash` reads the surface's absorbency (rim, Bleed,
+  feather, `wets`). A host that never sets a surface draws exactly as before but for the new grains.
+- **Upstream files:** `ToneDocument` (+8: the `surface` field, carried by `Snapshot`; not in the page's bytes) and
+  `WetWatercolor` (+10 −4: `Wash.wets`, the freshness at which a wash's water wets blank paper, upstream's `BLEEDS`
+  constant by default, so `bleedInto` reads the wash's; marked Inkwash). Generic: any host could set a page's paper,
+  and any wash its wetting.
+- **Scribulor-side:** `NotebookOptions.surface` (`SURF`), `DrawingBook` page surfaces (`PSRF`, `BookOptions`,
+  `BookCodec`, `RecoveryCodec`), `LibraryCard`/`CardSheet`/`CardSelector`/`NotebookScreens` (the Surface rows and
+  screens), `PaintActivity.setPageSurface`, `DrawingPad.showPage` → `WildSample.show` (samples on the page's surface,
+  kept per surface), `BrushTestPad`, `BrushLab.chips` (no Paper chips) and `BrushLabActivity` (no swap panel for Paper).
+  No Paper card (the owner, later that day): `BrushPart.SHOWN`/`SHOWN_LATER` drop it and its label reads Texture,
+  `BrushLab.dials(MEDIUM)` adds `TOOTH` (its slider sets the PAPER part, codes byte for byte), `LabLayout` is three rows
+  again (counting the Texture row in Medium's card, `shows`), `ModularWords.INSIDE` (Medium "ink · paint · pencil · texture ·
+  fling", After "fades · spreads · ages"); `docs/brush-lab/app-features.json` regenerated (no Paper part).
+- **Web engine:** TeaVM has no `SplittableRandom`: `SurfaceGrain.Dice` (SplitMix64) makes the same grains in Brush
+  Studio's WebAssembly.
+- **Checks:** `SurfaceChecks`; golden hashes re-pinned where a brush's paper was a scan or its wash pools on Smooth
+  (`LegacyConversionChecks` 5, `ToolPresetsChecks.PINNED` 49, `WetPaintChecks.BEFORE` 24 rows, `FillChecks.STRIPS` 40);
+  thresholds moved where the new grains change a look (`DryingWaterChecks` midway ±3 %, `OilChecks` ±5 px,
+  `LightOverDarkChecks` Dry round, `WildSampleChecks` White chalk and the faint pencil, `GreyBarChecks` a wet wash's
+  median 80 %); `LineStamperChecks`' tilt check at Texture 0, `EdgeRippleChecks` unchanged (Canvas's weave made less
+  regular to keep it).
+
+## Blend reaches oils again; Blur (2026-11-01, branch `explore-smudge`): no upstream files touched
+
+The owner: "blend doesn't seem to work as a smudge tool", "it only seems to work on certain things?". Since kind layers
+(2026-10-27) a stump's other half, the pair's wash, was worked on its Wash plane only (else its base), so Blend never
+reached the Opaque plane where Cover lies (gouache, Rob boss's oils): 0 px moved. `ModularStroke.alsoWorks` now gives
+the stump each paint plane the wash half has (Wash and Opaque), its base when it has neither, as the one base held them
+all before planes. Unchanged, as the kind layers spec says: pen ink and printed dots (Ink on the ink half's Pen and
+Paint planes) stay crisp under Blend; Water lifts the Wash plane only.
+
+**Blur** (the owner: "a simple blur might be good as a third option?"): the smudge tool's third Basic tool
+(`ToolSlots.SMUDGE_TOOLS`, `ToolPresets` under Charcoal, `personalities.txt`), the Blend stump with an Ink medium and no
+Press. No new part or dial: `ModularStroke.blursAll`, a stump (`stump`, the test `alsoBlends` had) of Ink, works every
+plane of the pair as Reprint does (`alsoWorks`, one walk for both), so it blurs pen, pencil, printed dots and paint
+alike. No Basic tool before was a stump of Ink. Checks: `SmudgeReachChecks` (each `ToolSlots.FIRST` brush, 2.5 s, then
+Blend, Water or Blur at a pen's pressure: moved or left, as intended), `ToolSlotsChecks` (the chooser's three),
+`ToolPresetsChecks` (139).
+
+## The paper's grain a little quieter (2026-11-02, branch `live-texture-softer`): no upstream files touched
+
+The owner: "there's a lot of the paper coming through on the base ink wash … we could tone texture down systemwide a
+tiny bit". `StrokePaper` is where every six-part brush's stroke reads the paper's grain (its `fine` and `mid` noises:
+the stampers, the line rules, washes' granulation, Reprint, the wet washes' grain); `StrokePaper.SHOWS` (.85) draws both
+toward their middle, so every brush on every surface keeps its look with the grain 15 % quieter. No dial, part or code
+changes; washes' absorbency (Cold Press as tuned) is untouched. The paper's blooms and blobs (`low`, `blob`), a stick's own
+grain (`StickGrain`, `Crayon`), Later's Feathering (`LaterMedia.height`) and the Surface screen's swatches read as before.
+Grain contrast of a flat fill (std-dev with the strokes' own unevenness, measured at no grain, taken out), Smooth / Cold
+Press / Felt: Ink wash brush 6.5 / 8.2 / 5.6 → 5.5 / 7.0 / 4.7; Soft charcoal's paper share 15.2 → 13.4 (Smooth); HB pencil
+37.4 → 36.1 (its graphite meets the paper's high points by a threshold, so less changes); Grey wash none (no granulation).
+Picture: docs/archive/pictures/explore/texture/grain-before-after.png. Checks re-pinned: `ToolPresetsChecks.PINNED` 61,
+`WetPaintChecks.BEFORE` 36 rows, `FillChecks.STRIPS` 49, `LegacyConversionChecks` 13 pages; `StrokeBasicsChecks` reads
+`SHOWS`; `GravityChecks`' drips never closer than .95 of the mean width (0.995 now); `ErasableChecks` and `MirrorChecks`
+leave out a pen's pixel black at coverage 254, which the eraser reads as a Tone dot (`MirrorChecks.blankButDots`, the rule
+MirrorChecks already used): Everything scrapes those by chance, so a Steady line can leave one (a known collision of
+`PrintScreen.DOT_COVERAGE` with ink, open).
+
+## Brush names: paint colours, more deadpan, a part and a name (2026-11-02, branch `live-brush-names`): no upstream files touched
+
+The owner, of the auto names: "it's ok but seems to repeat quite often"; chosen: all three of more deadpan variety,
+paint-colour names (the main style) and a part with a name. Scribulor's own, pure (`BrushNames`):
+
+- **Kinds**, by the seed (`name`): about 55 in 100 a paint colour's (`coloured`: a [colour] and a [noun] word, about
+  one in four with another [colour] word first; the first word of the first line the brush has there, the rest of the first two, but "any": "Harbour Fog",
+  "Burnt Toast", "Rainy Harbour Fog"); about 30 a deadpan form (`deadpan`: 24 `FORMS`, their words from [deadpan]'s
+  19 lines, 316 words where there were 54); the rest the part and a name of the new `names/folks.txt` (`folk`: "Wash
+  McGrath"). Then the other kinds, the words, the plain words, the first that fits two lines of a card, as before.
+- **No repeats**: `name(b, taken, recent)` passes by a name sharing a deadpan form (`form`, known by its words: no
+  word is in two [deadpan] lines) or a word (`marks`: but the part's and describer's, which alike brushes share) with
+  the library's ten latest (`RECENT`), else takes the first not taken. `BrushLab.suggestion` and New and Randomize
+  (`rollNew`: `described` again with the library; the roll itself unchanged, drawing nothing more) pass the library's
+  newest. 500 rolled saves: before, 10 shapes, one up to 6 times in ten saves in a row, a first word up to 4 times,
+  481 distinct; now 24 forms plus the two kinds, no form twice in ten, a first word at most twice, 500 distinct.
+- **Web:** the browser app's Brush Lab is the Java (TeaVM), so it names this way. Brush Studio asks the engine too
+  (`WebEngine.brushName(code, library)`, `engine.js` `brushName`; `studio.js` `appName` for the suggestion and
+  Randomize); without WebAssembly GC, and in the web lab (`modular-lab-src/parts.js`), the JS copy still names in the
+  older eight forms: a legacy copy, as the lab's Print and Rework words. Its `NAMES_TRAITS` keeps the older list;
+  `BrushNamesChecks.sameAsLab` now holds its [part], [describer] and [fun] to the app's, and pins 19 app codes' new
+  names (`LAB_NAMED`, `SEEDS`) rather than the lab's.
+- **Text:** `docs/TEXT-STYLE.md`'s new brush name. Notebook titles ([title]) unchanged.
+- **Checks:** `BrushNamesChecks` (`traitList`: the new sections, no word in two [deadpan] lines, kind words; `folkList`;
+  `deadpan`: every form made and known; `rolls`: the mix, colours hint by their words, the rest say the part;
+  `variety`: 500 saves as above, deterministic, all fit, none rude); `scripts/live-probe/m2-check.cjs` (an edited
+  brush's suggested name); Studio's `check.cjs` compares with `appName`.
+
+## Make Stamp: on the Lasso's bar, and a hint until the first print (2026-11-02, branch `stamp-flow`): upstream files touched
+
+The owner tried the Stamp and wasn't sure how to use it. Approved: Cut Stamp's button reads **Make Stamp** (a display
+label: `StampNib.CUT`'s words, Brush Lab, the Tools page, the stamp menu, the browser), and the Lasso's bar has it too.
+
+- **One cut.** `ToolSlots.cutStamp(slot, page, …)` and the new `ToolSlots.makeStamp(piece, selected, shown)` end in the
+  one `cutStamp(slot, stamp, nib)` (the nib kept, an Undo step). The Lasso's nib is `LassoPieces.nib(piece)`: the
+  floating piece's own pixels (`tones` over white by `alpha`) through `StampNib.cut`, so a moved, turned or pasted
+  piece cuts as it was lifted. Its slot: the Stamp in use, else the bar's first, else the slot in use becomes
+  the Basic tool Stamp (`basicStamp`, so its row shows the owner's drawing; the eraser's or smudge tool's turn: the
+  first slot).
+- **The bar.** `DrawLayout.LASSO_BAR` is Cut, Duplicate, Make Stamp, Delete. `InkWashBar.lassoBar`'s third word calls
+  `DrawingPad.stampSelection` → `PaintActivity.makeStamp`, which takes the toolbar's fix as Stamp ▾'s rows do, then
+  `stampMade` (shared with `stampCut`): the slot in use (`selectTool` puts the Lasso away and the piece down where it
+  lies), "Stamp cut" beside it; "Nothing to cut" leaves the piece up.
+- **The hint.** `DrawLayout.stampHint(brush, placed)`: while a Stamp is in use and none has been printed
+  (`PaintPreferences.stampPlaced`, key `stamp_placed`), `StampNib.MAKE` ("Lasso a shape, then Make Stamp") for a Stamp
+  with no nib, else `StampNib.PRINT` ("Draw to print the stamp"). `InkWashBar.showBrushLine` sets it; it shows in the
+  foot's corner over the lasting status (`statusCorner`, which keeps Draw Together's words for after). A stroke laid
+  while it shows (`DrawingPad`'s lift → `InkWashBar.laid`) sets the flag, and the hint goes for good. Not in the
+  browser: its guests aren't the owner.
+- **Web.** `WebEngine.lassoWords` adds the cut's words; `lassoStamp(p, selected, shown)` is `makeStamp`, the slot the
+  guest's own, the piece put down; `lassoAct`'s Delete is 3 and Paste 4 (`m4.js`, which gets `ownTools`). Found on
+  the way: `live.html`'s `showRow` drew a slot's stroke into a row 0 wide while Zen Mode hid the column, and the engine
+  threw ("requested new array is too large") for any slot without a drawing; now it draws none there.
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingPad` | +3 −1 | `stampSelection` for the bar's Make Stamp; the lift tells `InkWashBar.laid`. |
+| `PaintActivity` | +18 −2 | `makeStamp`; `stampMade` shared with `stampCut`, which now puts its slot in use. |
+| `PaintPreferences` | +3 | `stampPlaced`, the one-time hint's flag. |
+
+Checks: `StampChecks.slots` (the piece's nib as Cut Stamp's, a Stamp on the bar takes it, none: the slot in use
+becomes one, an Undo step, the eraser's turn the first slot, the hint's two words and none after), `DrawLayoutChecks.lasso`
+(the bar's four words, the bar's source, the row fits the Nomad's page), `LabLayoutChecks.fits` (Brush Lab's Back to at
+least 95 dp on the Nomad, 100 before: Make Stamp is a letter longer), `scripts/live-probe/stamp-check.cjs` (Make Stamp),
+`m4-check.cjs` (the bar's four words; Make Stamp on slot 8: a Stamp in use, the Lasso put away, the mark kept; Zen Mode after it).
+
+## Brush Studio's codes and tiles through the app's engine (2026-11-02, branch `studio-java`): no upstream files touched
+
+Nine Basic tools (Ruling Pen, Twig Pen, Fan Brush, Brayer: newer tips; Metalpoint, Cracks, Letterpress: After;
+Photocopier, Riso: newer prints) drew wrong in Brush Studio: its brush model is still the lab's JS copy, which drops
+what it doesn't know, and the code it wrote is what the WebAssembly engine drew.
+- **`web/engine`:** `WebEngine.keptCode(app, before, after)`: an edit made in a model that can't hold all of `app`
+  (`before` its own code for it, `after` that edited) keeps what the edit left alone (style, seed, nib, each part's
+  choice and each dial) as `app` has it; `WebEngine.studioSample(code, role, w, h, dark)`: a tile as the app's cards
+  draw it (`WildSample.modular` LOOP, `WildSample.part`).
+- **Studio:** `render.js` `appRead`/`appCode`, every code Studio reads or writes (`studio.js`, `community.js`): a code
+  the lab's model can't hold is kept on its brush (`app`, `app0`), written as is while unedited, through `keptCode`
+  once edited. Plain loops and part waves are `studioSample`'s; the sweep's tilt and drops tiles, paths and the test
+  page as before. Not yet: editing a newer tip, After or print in Studio (the UI is still the lab model's; no After
+  card); without WebAssembly GC an edited one drops them, as before.
+- **Upstream files touched:** none. No app Java changed.
+- **Checks:** `presets-check.cjs` (139 of 139 written back as the app writes them, was 130; the 9 edited keep the rest
+  of their code; Node needs `--liftoff-only` to exit promptly after loading the module); `check.cjs` (Metalpoint loads
+  as written, edited and saved keeps its After across a reload).
+
+## Brush Studio's After card, newer tips and prints, from the app's model (2026-11-03, branch `studio-after`): no upstream files touched
+
+Roadmap step 10: Studio edits what the lab's JS model can't hold, through the app's own model (WebAssembly), not a JS copy.
+- **App (pure, ours):** `BrushLab.chips`, `dials`, `slide` and `settle` (the brush settled after a slide) have static
+  forms on any `ModularBrush`; the lab's own calls go through them, unchanged.
+- **`web/engine`:** `WebEngine.studioParts(app, own)`: each part (`BrushPart.SHOWN_LATER`) as Brush Lab shows it, its
+  choices (`BrushLab.chips`), dials (`BrushLab.dials`: label, value, range, default, options, words) and `held` (Studio's
+  model's code `own` differs there); `WebEngine.studioEdit(app, part, choice, dial, value)`: a choice switched as Brush
+  Lab's chip does (`BrushLab.switched`), a dial as its slider does.
+- **Studio:** `render.js` `appParts`/`appEdit`; the After card always, and any card whose part the lab's model can't hold
+  (a Ruling Pen, a Riso print), is built from `appParts` and edited through `appEdit`; the lab's cards add the app's newer
+  choices and options (Ruling Pen, Twig, Fan, Brayer; Risograph, Photocopy, Soft Dither) as swatches and chips edited the
+  same way. `commit` counts a change the lab's key doesn't see. Not yet (a `shortcut:`): the app's cards have no lock,
+  dice or sweep; Randomize, Mix and Random are the lab's model's (After off). Display text says My Bad Drawings
+  (`Document/My Bad Drawings`, `My Bad Drawings.brushset`); codes unchanged.
+- **Upstream files touched:** none.
+- **Checks:** `presets-check.cjs` (the 9 edited on the app's cards: each part the lab's model can't hold changed, back,
+  a slider moved, written and read back the same, the other parts kept); `check.cjs` (159: seven cards in the app's
+  order; After's choices, a choice and a slider, Undo; Ruling Pen and back; Risograph saved and reopened).
+
+## Brush Studio's ⓘ buttons to the Guide; the app's cards lock and roll (2026-11-03, branch `studio-info`): no upstream files touched
+
+The owner, 2026-11-03: "in the brush studio, can we add i info buttons for the different sections and sliders that links
+to the page on the visual demo?"; then: the app's cards (newer tips, After, the prints) need the lock and dice too.
+- **Guide anchors (`dial-demo-src`, shared with Brush Lab Dials):** `demoTiles` gives each tile a stable `anchor`
+  (`tip-round`, `tip.weight`, a dial with a second label on other choices `carry.press.<first choice>`) and dial tiles
+  their choices (`on`); `view.js` sets it as the tile's id (`g-` in Studio). Brush Lab Dials unchanged otherwise.
+- **Studio, ⓘ (`guide.js`, `studio.js` `infoBtn`):** a small `<button class="icn info">` ("About Tip", "About Size") by
+  each card's name and each dial's name; it opens the Guide at the dial's tile (`guideId`: part, dial and the card's
+  choice), else the part's section (Texture is Medium's), scrolled to, focused and outlined for 1.6 s. After has no
+  Guide section, so its card shows none. **Back to Size** (the Guide's bar) returns to Adjust, on that ⓘ; it shows only
+  after an ⓘ. The tiles are made once (`guideTiles`) for both.
+- **Studio, the app's cards:** a lock and a die on the part and every dial, as the lab's cards (the same `ST.locks`);
+  the dice through the app's model (`appPartAs`, `appRollV`: `studioEdit`, no JS copy). Randomize, Style and New
+  (`rollBrush`) then put back through the app's model what the lab's roll can't (`appRolled`): a locked part the app's
+  model holds (After, a Brayer, a print) as it was, a locked dial on the same choice, After on its choice with its
+  unlocked dials rolled; Random's Anything goes (`wildRoll`) also picks among the app's choices (a Twig, a Riso print,
+  After half the time). Random's locks include After. Mix already kept After. Not yet (the `shortcut:` left): no sweep or
+  before/after for the app's dials (the focus is the lab's model's).
+- **Upstream files touched:** none.
+- **Checks:** `check.cjs` (174, was 159: every card but After and every dial has an ⓘ by its name; each lands on an entry
+  that exists; every dial of every choice the app offers has one, its own tile where the Guide has it; a Tip dial's ⓘ
+  opens its tile in view, marked, with Back to; Back to returns on the ⓘ; Medium's opens its section; a Brayer and an
+  After dial rolled by their dice, the rest kept; a locked dial's die off; a locked Brayer and After's locked dial, then
+  a locked After, survive Randomize; unlocked, After keeps its choice).
+
+## Record and Replay logs every edit (2026-11-03, branch `log-everything`): upstream files touched
+
+The owner: record eraser and smudge strokes and Lasso edits, then "anything that a brush does to affect other stuff on
+the page", so a page can be redrawn from its log (towards resolution-free pages). `StrokeLog` entries now have a kind:
+`PEN`, `SMUDGE`, `FINGER` (brush strokes; the smudge tool's and a finger's as a slot's), `ERASE` (the Eraser, the pen's
+eraser end, the browser's finger: size at its broadest and Erase Kind's kinds), `ERASE_FINGER` (the Manta's finger
+eraser, one size), `LIFT` (a Lasso loop, on half pixels) and `PLACE` (a lifted piece put down where it lies or deleted:
+its lift as entries back, drop and cut, the pose: centre, scale, angle), `CLEAR`. Each entry also keeps its brush's
+paint holder (`ToolSlots.holder`, Keeps Paint) and the drying ticks (`WatercolorSession.tickDrying` while something
+settled) the page took since the entry before.
+- **Recording (shared):** `StrokeLog.Recorder.of(brush, look, eraseKinds, holder, smudge, finger)` for the Manta's
+  `InkWash.stroke` and the browser's `WebEngine.pen`; `Recorder.fingerEraser` for `InkWash.fingerEraser`. A stroke
+  that changed nothing is logged too (it may have laid what was settling or picked up paint; the owner's 3x run saw
+  effect strokes with nothing under them), tied to the step before (`Entry.stepped` false; `ToneDocument.newestStroke`,
+  Live pages' probe, still names only the pen stroke that made the newest step, so Draw Together sends as before).
+  The Lasso logs in `LassoPlanes` (both screens' only way to lift and lay an Inkwash piece): `lift` takes its loop on
+  half pixels and logs it (`ToneDocument.logLift`); `place` logs what it did (`logPlace`) when the page changed and the
+  lift is in this page's log (a piece carried from another page isn't logged). Ticks: `tickDrying` counts on the page
+  (`ToneDocument.ticked`), each logged entry takes the count.
+- **Replay (shared, `ReplayRun`):** each entry's ticks first, then a stroke as `StrokeStart.stroke` starts it unmirrored
+  (the eraser through it too; the brush's holder first), a lift through `LassoPlanes.lift`, a placing through
+  `LassoPlanes.place` on the lifted piece (cut) or a copy of it (Duplicate's, Paste's), posed as logged. A replay runs
+  with a session of its own (`ReplayRun.session`), the Manta's now as the browser's: the drawing screen's held paint,
+  settling wash and tilt stay as they are. `InkWash.replay` (unused) is gone.
+- **Determinism fix:** `EraseBothStroke`'s Tone-dot scrape salt was the page's revision and the first sample's float
+  bits; now which eraser pass it is on the page object (`ToneDocument.erasePasses`, not kept in the file) and the first
+  sample on half pixels. A replay's copy starts its count where the log's first eraser stroke began (the page's count
+  less the log's eraser entries), so it scrapes the same dots; a cancelled finger eraser or an eraser stroke undone and
+  dropped shifts the count for the strokes after it (their dots scrape otherwise; nothing else changes).
+- **File format:** `RPLY` version 2 (each entry its kind and ticks; sizes and greys as doubles, so a replay draws at the
+  size drawn); version 1 reads as before; a version or kind this reader doesn't know reads as no log, and
+  `DocumentCodec` now skips an `RPLY` section longer than `MOST_BYTES` instead of refusing the page. `encode` writes
+  the newest entries that fit `MOST_BYTES` (1 MB: the reader before this one refuses a longer section, so this can't
+  grow until every build in use has the skip); a placing whose lift didn't fit is written with none. `MOST_SAMPLES`
+  60,000 to 100,000 (eraser strokes and loops count).
+- **Not logged:** fill and gradients, shapes, Make Ink, text boxes, magnets, placed pictures (`FloatingSelection`
+  without planes), layer changes (a replay draws on the copy's selected pair), Clear layer, Clean Brush and paint held
+  from before the page's first stroke, mirror copies, a pen held still (Stipple's Build-up), tilt for Runs Downhill,
+  Fading and Lemon Juice's clock (a replay's marks start fresh), what settled after the newest entry. A Stamp's prints
+  are brush strokes, their code naming the nib by id (`StampNib`): not checked once the nib is gone.
+- **Upstream files touched:**
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` | +30 −4 | `logLift`, `logPlace`, `logStroke(recorder, changed)`, `ticked`, `erasePasses`; `newestStroke` skips what didn't make its step. |
+| `DocumentCodec` | +3 −1 | An `RPLY` section past `MOST_BYTES` is skipped, not refused. |
+| `DrawingPad` | +6 −3 | Records a finger's strokes and eraser too; logs a stroke that changed nothing. |
+
+Checks: `StrokeLogChecks` (`replaysAll`: pen, finger, both erasers, one kind, the smudge tool's three, Wet gouache
+worked by a knife and a dirty brush, Newsprint, Photocopier, Letterpress, Cracks, Clear water, washes left 4 ticks and
+to the end, the Lasso's move and turn, Duplicate, Delete, Cut and Paste: replayed on a blank copy, every plane of both
+layers and the fluid byte-equal, from the page and from its file; Undo and Redo hide and show the Paste; `versionOne`,
+`fits`, a stroke that changed nothing); `OlderReplayCheck` in `scripts/test_inkwash.sh` (56dad77f opens such a page as
+saved, without a replay, and saves it again). Gap: samples are fed in one batch per step, so a Fast-wet brush's layer
+coverage can differ where the pen's input was batched otherwise (`QuickStroke`'s note); with the original presented
+every 8 samples, 478 of 648,000 plane bytes differ. Samples off the log's grid (half pixels, 255ths, whole degrees,
+2 s pauses) replay rounded.
+
+### Replay fixes (2026-11-03, branch `log-fixes`): upstream files touched
+
+The owner tried the logged replay on the Manta (`Letters to a Toad`, page 3: a pen stroke, two erasers, 16 Blur
+smudges, a Lasso move, stamps, Grey washes, Newsprint, Ben-Day) and hit two bugs.
+- **Crash** (`IllegalStateException: Finish the current gesture first`, `ToneDocument.fade` from `DryingTicker.fade`):
+  the pad's ticker ran on the page shown, the replay's copy, while a replayed stroke was open between steps (and the
+  copy carried the page's fading marks). The ticker's host is now busy while `app.replay.running()` (as `LiveProbe`
+  and autosave already wait on `app.busy()`), and `ReplayRun`'s copy starts without the page's fades
+  (`placeFades(empty)`). A replay never writes the page, its log or its file (it plays on its own copy, which no save
+  reaches; `onPause` stops it first): `StrokeLogChecks.untouched`, part-way and played out.
+- **"The initial stroke ... showed up with eraser marks":** the veil (`GhostPlane.offMarks`, paper wherever the page
+  shows no mark, from Replay's veil of 2026-10-26) hid, from the first step, every pixel the eraser would take later
+  (646 of the first stroke's 3,085 samples at step 1 on the owner's page). `ReplayRun.veiled`: only a log of pen
+  strokes alone (one from before the eraser and Lasso were logged) plays under it. `StrokeLogChecks.veiledOnlyPens`.
+- **Washes replayed unsettled:** the Manta settles on `SettleWorker` and in wet-paint slices (`WatercolorSession.tick`),
+  never `tickDrying`, so the owner's page logged 0 ticks everywhere. Both now note a natural end on the page
+  (`ToneDocument.settled`): the next entry's ticks are `MOST_TICKS`, "all of it", and a replay ticks until nothing
+  settles. A stroke drawn while a wash still settles there still replays it laid unsettled (partial worker ticks aren't
+  counted). The paced and unpaced ticks settle a Slow wash a few pixels apart (23 bytes of the planes in the check).
+  `StrokeLogChecks.settledThere`.
+- **Left as is:** the owner's page replays with 4% of its pixels apart from the page, chiefly its washes (logged before
+  this fix, 0 ticks), its Later marks (their clock: a replay's start fresh) and, on the desktop, its Stamp prints (the
+  nib isn't there).
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingPad` | +3 −1 | The drying ticker's host is busy while a replay plays. |
+| `ToneDocument` | +3 −1 | `settled`; `ticked` capped. |
+
+### Replay logs shapes, pictures and merges (2026-11-03, branch `log-more`): upstream files touched
+
+The owner asked for Replay to cover fill, shapes, placed pictures and layer changes as well. What the app has of each:
+- **Fill**: no fill tool since the bucket left the bar (2026-10-23); fill is a brush's (Fill in: Stay in Lines and
+  Filled Shape, `FillTool.start` at the lift), so it was logged as a pen stroke already and replays through
+  `StrokeStart`. Now checked (`StrokeLogChecks.more`: a box Fill in starts in, a loop on open paper).
+- **Shapes** (`StrokeLog.SHAPE`): the slot's brush code (its layer), the shape's name, filled, outline width, grey and
+  the drag's two points as floats (`StrokeLog.Shape`, made by `ShapeGeometry.logged`). Logged at the lift by
+  `DrawingPad.continueShape` (`ShapePreview`) and the browser's `shapeEnd` (`ShapeStroke`). What comes before a shape is
+  one helper now, `StrokeStart.shape` (`InkWash.shape`, `WebEngine.shapeDown`, a replay), and the shape is laid by
+  one, `ShapeStroke.lay` (`ShapePreview.finish`, a replay).
+- **Pictures** (`StrokeLog.PICTURE`): `PictureImport.place(page, …)` (the Manta's Place and the browser's `placeLay`)
+  logs the greys (255 for clear: a grey of 255 never darkens a layer, so it is lossless), their place and the layer
+  drawn on. Pixels (`StrokeLog.Pixels`) are kept deflated within `MOST_PIXELS` (a quarter of `MOST_BYTES`, so the
+  entries before still fit); a picture whose bytes don't fit is kept every 2nd pixel each way, then every 4th, and
+  so on, each kept pixel replayed for its square (the check: 1000 × 800 of noise, every 2nd). Its
+  bytes count against `MOST_SAMPLES` at 6 a sample. Replay lays it through `PictureImport.lay`.
+- **Layers** (`StrokeLog.MERGE`): a layer is a page of its own (Stage 3c), so adding, deleting and Show Through
+  steps change no page's pixels and aren't logged. Merge Old Layers (and Merge Down, which no screen offers since the
+  refocus) logs inside `InkWashLayers.mergeAbove`, the one merge both go through: the page's layers just before
+  (opacity, hidden, the one selected) and, for Merge Down, the layer above flattened (tones and coverage, a 2-plane
+  `Pixels`). A replay starts on blank layers like those before the first merge (`Merge.before`), then merges again
+  through `mergeAbove`. The flattening is shared (`InkWashLayers.flattened`). Merge Down replays within rounding (83 of
+  2,376,000 plane bytes in the check: the layer above is merged flattened, a byte a pixel); the rest replays byte for byte.
+- **Format**: version 2 still; kinds 8 to 10 are new, and a version 2 reader without them reads no log (as an unknown
+  version): `OlderReplayCheck` against `1886cebf` opens such a page as saved, without a replay. A page with none of
+  them writes as before.
+- **Not logged**: a live page's changes from another tablet (`LiveProbe`'s `PictureImport.lay`), Make Ink and text.
+
+| File | Change | Why |
+|---|---|---|
+| `ShapeStroke` | +12 | `lay(document, spans, shade)`: a shape's commit, shared with `ShapePreview` and Replay; `logged()`. |
+| `ShapeGeometry` | +2 | `logged(shade, x, y)`: the shape as `StrokeLog.Shape`. |
+| `ShapePreview` | +3 −6 | `finish` through `ShapeStroke.lay`; `logged(x, y)`. |
+| `DrawingPad` | +3 | Logs a slot's shape at its lift. |
+| `ToneDocument` | +5 | `logMade`: a shape, picture or merge as the newest step's entry. |
+
+## System Settings: Automatic Refresh and the touch controls (2026-11-04, branch `system-settings`): upstream files touched
+
+The owner: "i find the frequency of screen flashes to be a bit much.. i think the goal should be to prevent having to
+flash more than relying on it ... can we add system settings? ... one thing it would have is the ability to disable the
+automatic flashes ... also that's where we could allow people to customize the touch controls (2 finger tap, etc)".
+A new screen, `SystemSettingsActivity` (the Tools page's `LabUi.PageBar`, `LabButton.chip` rows), from the menu's app
+group (`DrawLayout.fileRows`' `system` row, after the hand). Its words and the flash gate are the pure `SystemSettings`
+(in the desktop sources and the web engine's, `SystemSettingsChecks`). Saved in `PaintPreferences` under new keys
+only: `auto_refresh` (on), `two_finger_tap` / `three_finger_tap` (`FingerTool.Tap` keys: `undo`, `redo`, `refresh`,
+`nothing`; Undo and Redo at first), `edge_hold` (`EdgeHold.Choice`: `trash`, `lasso`, `nothing`; the Trash at first).
+
+The app's own flashes (the firmware's full refresh, `Ui.flashWindow`'s `screenRefresh`) all ask
+`SystemSettings.flashes(asked, prefs.autoRefresh())`: `DrawingPad.autoRefresh` for a ghosted page (a page turned,
+added or opened, Zen Mode, a pinch or pan ended, the eraser, a Spiro ring or an effect's trail) falls back to its
+forced grey pass; its pen-away pause skips the flash; `DrawingPad.connectDisplay` back from another screen and
+`NotebookScreens.cover` give the window the clean update alone (`Ui.flashWindow(…, flash)`). Refresh (the column's
+button, or a tap set to it) is asked for (`DrawingPad.refreshAsked`) and always flashes.
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingPad` | +12 −5 | The flash gate (`asked`, `flashes()`, `refreshAsked`); a finger tap does its chosen `FingerTool.Tap` (the palm gate, `tapCounts`, first, as before). |
+| `PaintPreferences` | +13 | `autoRefresh`, `twoFingerTap`/`threeFingerTap`, `edgeHold` and their setters. |
+| `PaintActivity` | +2 | The menu's `system` row opens the screen. |
+| `Ui` | +7 | `flashWindow(root, reason, restore, flash)`: the flash or the clean update alone. |
+## A snapped line's end follows the pen (2026-11-04, branch `snap-drag`): upstream files touched
+
+The owner: "i'd love to be able to reposition the final point, so the line can change angle from the original point,
+then on pen lift it's fixed". After Hold to Snap makes a line, the pen moving off its rest (`HoldSnap.moved`, Fling's
+`STILL_PX`) takes the line's end along. `HoldSnap` (engine side, pure) keeps the last snap's shape and samples:
+`line()`, `to(x, y)` (the line from its start to a new end, each rough sample the same share of the way, through
+`along`). The pad takes the brush's line back as a snap takes the rough stroke back, shows the line through the Shapes
+tool's own preview (`ShapePreview`, a `LINE` at the slot's size and grey, the fast binary update, frames coalesced by
+`schedulePreviewFrame`), and at the lift draws it once with the brush along `to(lift)`. Redrawing the brush on every move
+was not tried: a wet brush's whole stroke finished, taken back and drawn again at each frame is too slow for the panel.
+Replay logs the lifted stroke (as a snap's); Draw Together sends the lifted line alone (`drawn` waits while a snap draws
+again, so the rough stroke and the line before the drag are no longer sent first). The browser (`WebEngine`, `m4.js`)
+is unchanged: it snaps as before, without the drag.
+- **Upstream files touched:** `DrawingPad` (+60: `takeBackStroke` and `drawAgain` out of `snapTo`, shared with
+  `dragSnap` and `liftSnapLine`; `sampleEvent` starts the drag; `continueShape`'s lift draws a dragged line; `beginShape`
+  takes the shape's start; `drawn` waits under `quietPanel`; the drying ticker and `stroking` (Live's laying) wait
+  while a shape is shown, for the Shapes tool's drag too).
+- **Checks:** `HoldSnapChecks.dragged` (the start kept, the end at the pen, each sample's share, pressure, tilt and time
+  kept, the points on the new line; a circle doesn't move).
+## Zen Mode's fan (2026-11-04, branch `zen-fan`)
+
+The owner's sketch and mockup: in Zen Mode, the corner button shows the brush's dot (its size and grey, the column's
+`SwatchReadout`); a tap opens a quarter-circle fan from that corner, 3 cm at most: the size wedge along the side edge,
+the grey wedge along the foot (the column's steps, `SwatchBar.setSize` / `setGrey`, shared with the picker box), a
+white gap between them as wide as the white band under a thin arc, and outside the arc the column's tools in its order
+(the slots, Smudge, Eraser), each its row's picture turned outward. The X where the dot was leaves Zen Mode; only a
+touch outside closes the fan (picking a tool keeps it open); a long press on the button turns Zen Mode on or off. Its
+geometry is pure (`ZenFan`, checked by `ZenFanChecks`, in the engine's sources so the browser can use it); the
+browser's Zen button is unchanged for now. No upstream file is touched.
+
+| File | Change | Why |
+|---|---|---|
+| `ZenFan` | new, pure | The fan's geometry in dp: what a point hits, size and grey from a position and their markers' places, the tools' angles, mirroring. |
+| `ZenFanView` | new | Draws the fan over the page (Android's partial grey, no flash of its own; markers through `SelectionFeedback`), takes its touches. |
+| `PaintActivity` | +60 | Zen's button: the dot, the fan, the X, the long press; a touch outside closes the fan; Back closes it first. |
+| `InkWashBar` | +25 −10 | `pick`, `hold` (one long-press path for the rows and the fan), `zenAnchor` so the tools' menus open beside the fan. |
+| `SwatchBar` | +20 −13 | `setSize`, `setGrey`: the picker box's lifts as methods the fan calls too. |
+| `ToolButton` | +2 | `plainIcon`: a row's picture without its mark. |
+| `DrawLayout` | +1 | `ZEN_TOOLS`, the button's words while the fan is closed; `ZEN_HOLD`, the tap's hint while off (2026-11-05: Zen Mode on and off by a hold only, the fan's X now the circle). |
+
+Follow-up (2026-11-04, branch `zen-fan-2`, after the owner tried it): the fan tucked in toward the corner (its point
+the largest dot's radius and the band from the X, `ZenFan.corner`, `dotRadius`), one stroke width (`ZenFan.STROKE`),
+and its redraws small: a drag only its marker's strip in the binary update, a pick or a lift only the changed boxes.
+
+| File | Change | Why |
+|---|---|---|
+| `SelectionFeedback` | +3 −3 | `updateParts` takes a single view too (one patch, its changed pixels split into boxes as a group's parts are), so the fan's picks go out as the column's do; a group's path unchanged. |
+
+Follow-up (2026-11-04, branch `zen-fan-3`): Zen's corner is the brush's dot in every state, the fan's size marker true
+to the line's width, and the nib ring off over the open fan.
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingPad` | +2 −2 | `hoverOutline`: no nib ring while Zen Mode's fan is open (`zenFanOpen`). Upstream-touching: one condition. |
+| `SwatchReadout` | +15 | `ring` (NONE, FAINT, DASHED): Zen's corner draws no paper and its circle; the column's readout unchanged. |
+| `SwatchBar` | +2 | `show` tells the drawing screen (`showZenDot`) whenever the size or grey shown changes. |
+| `PaintActivity` | +20 −6 | The dot is Zen's button in every state, its square the column's width; the icon empty but for the X. |
+| `ZenFan` | +25 −5 | `width`, `sizeUp`, `truest`, `PAGE_PX`: the size marker where the wedge is as wide as the line. |
+
+Follow-up (2026-11-04, branch `zen-fan-4`): the brush dot gone from Zen's button again (`SwatchReadout` back as it was
+before the fan, `SwatchBar.show` no longer calls the drawing screen, `PaintActivity` without `zenDot`), the button's
+dashed circle, circle and X; the fan's tuck a named 34 dp (`ZenFan.TUCK`); the fan a quarter larger (3.75 cm);
+paper under the open fan, a disc round the X (`ZenFan.backdrop`, the view's bounds with it).
+
+Follow-up (2026-11-04, branch `zen-fan-5`): `DrawingPad.cleanArea` (upstream-touching, one call) asks the drawing
+screen to put Zen's button back (`PaintActivity.redrawZen`) after cleaning a closed fan's or popup's area: the clean
+writes the page's pixels through the fast display, over the button, which Android doesn't know to draw again. The
+window's pixels there (page and button) go back through `SelectionFeedback.clean`, the grey mode, as `cleanOffPage` does.
+
+Follow-up (2026-11-04, branch `zen-fan-6`): the fan a quarter larger again, 4.7 cm (`ZenFan`'s sizes only).
+
+Follow-up (2026-11-06, branch `zen-fan-tools`): `DrawingPad.hoverOutline` (upstream-touching, two conditions) shows the
+nib's and the Dropper's rings with the fan open again, the fan now staying open while drawing; the fast display's mask
+(`covered`) keeps them off it. `covered` is now a short list of rectangles (Words' bin, the fan's stepped disc and its
+line of buttons, `ZenFan.mask`), cut from each write by `MagnetDrag.minus(int[], List)`, so strokes beside the open fan
+show. (`ZoomButton.draw` stacked its padlock over the percentage for the fan's side strip; back as it was with `zen-fan-2`, the strip gone.)
+## Vector Ink, phase 1 (2026-11-04, branch `vector-ink`): upstream files touched
+
+The owner: "i just want to zoom in and have it be clean", with erasing that cuts lines; spec
+`docs/superpowers/specs/2026-11-04-vector-ink-design.md` ("Phase 1 as built"). Vector Ink is a Basic tool (`ToolPresets`,
+`VectorInk.CODE`, known by its settings' key, `VectorInk.is`) that draws on the top pair's ink half as lines kept on the
+layer (`ToneDocument.Layer.lines`, an immutable `VectorLines`) and as their pixels at 100%, so every pixel reader is
+unchanged. New, pure, Scribulor's own: `VectorLines` (the stroke model, smoothing, the variable-width anti-aliased
+outline at any scale, the eraser's cut, the bytes) and `VectorInk` (the pen stroke, the eraser's cut, what is refused,
+which layer the zoomed view draws sharp), checked by `VectorInkChecks` (and `OlderVectorCheck` against 04c30e6f, the
+version before, which opens such a page as drawn). Both start through `StrokeStart` (the Manta, the browser, Replay):
+`StrokeStart.drawn` starts `VectorInk.Pen` for its brush, unmirrored; `EraseBothStroke` cuts the pair's lines
+(`VectorInk.Cut`) along its path and keeps the cut with its Undo step. The zoomed view leaves the layer out of the page
+it scales and draws the lines over it at its scale, in plain greys, then the dots (`ViewportBitmap.sharpen`): no second
+composite. The browser (`WebBooks.refusal`) refuses other inks on the layer as the Manta does and shows the 100% pixels at
+every zoom. `VectorInkPictures` (test side, not a check) draws Steady line's pixels and Vector ink at 400% side by side.
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` | +32 −2 | `Layer.lines` (copied with the layer); `lines`, `changeLines` (the lines with the stroke's Undo step, or a step of their own); `Edit.linesLayer/Before/After`, applied by Undo and Redo; `visibleLayers(…, without)`; `layerMarked`. |
+| `DocumentCodec` | +33 −1 | The `LINE` section (a layer's index, length and `VectorLines.encode`), written only when a layer holds lines; an older reader skips it. |
+| `ViewportBitmap` | +54 −6 | `compose(…, without)`; `update(…, lines)`: plain greys where lines are, the lines (`VectorLines.over`), then the dots; `dithered` draws them sharp at a bigger size. |
+| `DrawingPad` | +42 −7 | `sharp()`/`sharpLines()`: the layer the zoomed view leaves out and the lines it draws (the stroke in progress's; none while a pinch or pan moves the view, sharp again at its end); a change renders the whole page once; `layersAbove`; Shapes, Make Ink, the Lasso, Paste and a carried piece refused on Vector Ink's pair. |
+| `PaintActivity` | +5 | `allowStroke` asks `VectorInk.refusal`; a placed picture is refused on Vector Ink's pair. |
+
+2026-11-04, later (branch `vector-ink-medium`, the owner: "Top layer only" on a page with pen marks): Vector Ink finds its
+own pair (`VectorInk.room`: the top pair's ink, or one put on top in the same Undo step, `InkWashLayers.add`, linked with
+`linkSince`), selects the pair it found again after; other inks on its pair go under it (`VectorInk.under`, from
+`StrokeStart.drawn`, `StrokeStart.shape` and Make Ink); the eraser's cut is the page's lines' (`VectorInk.lined`) and
+draws their pixels again where it went. No layers-above check (tracing paper): `DrawingPad.layersAbove` went. Its notes
+show beside the tool in use (`PaintActivity.sayVector`, the label `InkWashBar.sayAt`), never at the brush line's right.
+
+2026-11-04, `vi-autolayer-fixes`: the pair `VectorInk.under` puts in goes with the stroke's step, one Undo and one Redo
+(`ToneDocument.linkToNext`: the last step joined by the next one made while it is still last; +12 −2, generic). Merge
+Old in Page Settings asks `VectorInk.oldLayers` (pairs besides Vector Ink's and the one under them), not `pairs > 1`, so
+the pairs made for Vector Ink stay hidden (`NotebookScreens`, +1 −1).
+
+Vector Ink as a medium (same branch, the owner: "yes add it to the medium list", "in all brush studio locations"; spec
+"Vector Ink as a medium"): `PartChoice.VECTOR` (Medium choice 8, no dials, seed-only); `VectorInk.is` reads the medium;
+`VectorInk.tidy` sets aside what it can't draw sharp, run by `ModularBrush.normalize`; `BrushLab.chips`/`dials`/`handRows`
+show nothing of those parts; `ModularVariations` varies its Size and pressure to size alone; `ResolvedBrush.of` draws it
+in pixels as a plain Ink line (`VectorInk.drawnAs`); `ModularCode` reads the Basic tool's first code as the new one;
+`VectorInk.Pen` sizes each point by its Ink line's pen width (`VectorLines` version 2: width shares). The web lab's
+engine (newmods.js) knows `vector` (drawn as ink, never rolled or swapped to), planes.js puts it on the ink layer, Studio
+leaves it out of its own rolls and the Mix grid, and `WebEngine.studioParts` marks the parts it sets aside as the app's.
+`docs/brush-code.json` and `docs/brush-lab/app-features.json` written again from the enums.
+
+The Lasso and a quicker eraser (branch `vector-ink-2`, spec's section of that name): `VectorLines` parts lines by a region
+(`split`: a grid of an eraser's dabs, or of the Lasso's loop's edges), poses them (`posed`); `VectorInk.Cut` keeps its
+dabs and cuts them together, `VectorInk.relay` draws a layer's pixels again from its lines tile by tile; `LassoPlanes`
+lifts and lays the lines with the pixels; `ToneDocument.compositeToneKept`/`compositeToneWithout` take one more layer
+to leave out; `DrawingPad` no longer refuses the Lasso, Paste or a carried piece on Vector Ink's pair and draws a
+floating piece's lines sharp. `VectorInkBench` (test side, not a check) times the eraser on a busy page.
+
+Never full (branch `vector-ink-full`, spec's section of that name): `VectorLines.thinned` (fewer points), `MOST_POINTS`
+200,000, `Stroke.runs` (an outline passes by runs out of the area); `VectorInk.linedLayers`/`linedMask`/`sharpLayers`
+(several Vector Ink layers, a full one gives way to a new one on top, `room`); `ToneDocument.visibleLayers`' and
+`compositeToneKept`/`compositeToneWithout`'s last argument a set of layers as bits (was one layer, -1 none: now 0
+none), as `ViewportBitmap.compose`'s, `DrawingPad.sharp()`'s and SharpView's `without`; `VectorInk.Cut` and
+`LassoPlanes` over every Vector Ink layer.
+
+| File | Change | Why |
+|---|---|---|
+| `PartChoice` | +6 | `VECTOR`, appended to Medium. |
+| `ModularBrush` | +2 | `normalize` ends with `VectorInk.tidy`. |
+| `ModularCode` | +2 | The Basic tool's first code reads as its new one. |
+| `ResolvedBrush` | +2 | A Vector Ink brush resolves as its Ink line. |
+| `BrushLab` | +12 −1 | `chips`, `dials` and `handRows` for Vector Ink. |
+| `ModularVariations`, `ModularFeatures`, `ModularSizes`, `ModularWords` | small | Never swapped to, seed-only, on the ink layer, sample size, "Sharp at any zoom.". |
+
+#### A stump's other half shown under the pen (2026-11-04, branch `smudge-live-2`)
+
+The owner: a big Blur "doesn't seem to have any effect until i lift the pen". A stump's other places (`ModularStroke.others`:
+Blend's pair wash, Blur's every other plane of the pair) are laid only at the finish (`blendOther`, a gesture binds one
+plane), so the page held none of their smudge while the pen was down. Now the screen shows it, display only: the page,
+Undo, Replay, Draw Together and the finish are as before. `ModularStroke.unwritten` (Scribulor's own) gives each pixel a
+dab changed there its plane as smudged so far (`CarryPlane.tone`/`coverage`, what the finish composes) over the page's
+other layers; `DrawingStroke.unwritten` passed through `SteadyHand`, `MirrorStroke`,
+`FilledShape` and `QuickStroke`. A quick smudge shown under the pen renders at the usual priority (its helpers still quiet).
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` | +27 | `compositeTonesShown`: the composite over a block with given planes standing in. Generic: any preview of planes not yet written. |
+| `DrawingPad` | +80 −6 | Renders the stroke's unwritten area (`renderDirty`), shows it as the eraser's preview shows (`showErased`), under an effect's trail (`drawMirrors` reads it, `drawShow` takes the tones); draws it again from the page at lift. |
+
+#### No effect trail (2026-11-04, branch `band-rule`)
+
+The owner: "if the effect is instant no need to use the grey band". Every effect brush (`WildSample.reworks`) changes
+the page under the pen as it goes (a stump's other half shown by `ModularStroke.unwritten`; Float's bath by its quick
+show), so the effect trail is gone: `MirrorShow.trail` and its shade (`SHADE`, `shaded`), `HoverNib.trail`, the drawing
+screen's trail, `AreaChecks`' trail checks and `TrailPictures`. An effect brush's hover ring is the eraser's
+(`HoverNib.eraser` at its size). Upstream file touched: `DrawingPad` (−12, the trail; the ring's one line).
+
+## Sharp dry brushes, the HB pencil pilot (2026-11-04, branch `pencil-pilot`): upstream files touched
+
+The owner: "start the pencil pilot"; spec `docs/superpowers/specs/2026-11-04-vector-dry-brushes-design.md` ("The pencil
+pilot as built"). A kept stroke is its Replay entry, drawn again finer when zoomed; the page's pixels stay the truth.
+Engine, pure, Scribulor's own and separable: `FineGrid` (a raster finer than the page over part of it), `SharpStrokes`
+(which strokes; one drawn again from its entry onto `SharpStrokes.GridPage`, a `ModularCompose.Page`) and `SharpView`
+(tiles, the match, a worker thread at the lowest priority on the quiet cores). In the engine: `FloatTiles` can hold a
+grid's points; `LineStamper.stamp` lays its page-worked dabs at a grid's points (`toGrid`) and passes over steps that
+can't reach it (`Meta.cull`); `StrokePaper.on(grid)` reads the grain between pixels; the stick grain goes through the
+paper (`StrokePaper.stick`); `QuickStroke.laidAs` and `SteadyHand.steadies` are pulled out for its rule; `StrokeLog`
+entries keep a plane and zoom (`Recorder.keeps`, `kept`, `encodeSharp`, `withSharp`). At one point a pixel every number
+is as before: each of the 140 Basic tools' strokes hashed the same before and after; `SharpChecks` proves a kept
+stroke drawn again lays the plane's bytes. A host asks `SharpView.want` for what its view shows, hears of each tile
+ready, and lays them (`ViewportBitmap`). `SharpBench` and `SharpPictures` (test side, not checks) time the tiles and
+draw 400% and 800%. MonoPaint would take the grid as one generic change to its stampers.
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingPad` | +49 −2 | `feed` gives a kept stroke its samples as the log keeps them; the stroke's zoom and plane to its recorder; `sharpTiles` (`SharpView`), `sharpStep`, `wantSharp` (after what is under way, `wantSharpSoon`), `sharpReady` (the tile's area queued, the usual update, no flash); tiles dropped where the page renders again, all of them at `renderAll`. |
+| `ViewportBitmap` | +34 −10 | `update(…, view, k)`: plain greys where tiles are ready, the tiles (`tiles`: only where the page's pixel still shows what the tile was drawn over), Vector Ink's lines, then the dots. |
+| `DocumentCodec` | +17 −2 | The `SHRP` section beside `RPLY`, written only when the log holds kept strokes; read whatever the order, applied to the log at the end; an older reader skips it. |
+| `ToneDocument` | +4 | `selectedAddress` (the plane a stroke drew on), `addressed`. |
+| `InkWash` | +2 | The pen's stroke of a kept brush is recorded to be fed as kept. |
+
+## Sharp dry brushes, step 1: every qualifying dry brush, and the browser (2026-11-04, branch `sharp-brushes`): upstream files touched
+
+Spec "Step 1 as built". A kept stroke is now drawn again by the page's own stroke on a grid (`ModularStroke.onGrid`:
+its buffers a `FineGrid`'s, composed onto `SharpStrokes.GridPage`), so every tip and body whose stamper lays on a grid
+is kept (`SharpStrokes.takes`: the spec's rule and `drawn`). Each stamper below lays its page-worked marks at a grid's
+points when its buffer has one (`FloatTiles.grid`) and is unchanged without: at one point a pixel each Basic tool's
+strokes hash the same before and after; `SharpChecks.families` checks each kept tool. The browser's engine keeps and
+draws them as the Manta does, on its one thread (`WebEngine.sharpTile`, `sharpArea`; `engine.js` `page.sharp`,
+`E.staysSharp`); the browser app and Brush Studio show them. `SharpTools` (test side, not a check) reports each tool.
+For MonoPaint: the grid stays one generic change to its stampers, the stroke's own code laying on it.
+
+| File | Change | Why |
+|---|---|---|
+| `ModularStroke` | +40 −10 | `onGrid`, `cull`, `widest`; its buffers and rectangles in the grid's points (`bw`, `bh`, `boxOf`), `finish` on a grid. |
+| `LineStamper` | +15 −5 | Its clip in the buffer's points; a drop (splatter) and a crayon's maps on a grid. |
+| `Placement`, `BodyStamper` | +12 −3 | Lines and dabs laid at a grid's points. |
+| `StippleStamper`, `HatchStamper`, `SpiroStamper`, `StampStamper`, `FanBrush`, `RulingPen`, `TwigStick` | small | The same for dots, hatching, segments, prints, hairs, blades and ends. |
+| `ModularCompose` | +3 −3 | Charcoal's stick grain and a crayon's maps read through the paper. |
+| `WebEngine` (web) | +60 | `staysSharp`, `sharpStep`, `sharpTile`, `sharpArea`; strokes kept as the Manta's. |
+
+## Sharp dry brushes, the Stamp (2026-11-04, branch `sharp-bristle-stamp`): upstream files touched
+
+Spec "The Stamp as built". A kept Stamp stroke's entry keeps the ink it started with (`StrokeLog.Entry.ink`, the file's
+`SHRP` version 2, written only when one isn't 1), and drawn again starts with it. The kept clock starts at the first
+sample's own time (a stroke reads only the times between). At one point a pixel each Basic tool's strokes hash the
+same before and after; `SharpChecks.stamps` checks the Stamp.
+
+| File | Change | Why |
+|---|---|---|
+| `StampStamper` | +9 −3 | `startLoad` (the rested rule, pulled out), `Ink.kept`. |
+| `ModularStroke` | +5 −3 | `inkedBy` (pulled out), `stampInk(load)` for a stroke on a grid. |
+| `InkWash` | +1 −1 | A kept stroke's recorder through `SharpStrokes.keep`. |
+| `WebEngine` (web) | +2 −2 | The same, the browser's and Brush Studio's. |
+
+## Sharp dry brushes, the Bristle brush (2026-11-04, branch `sharp-bristle-stamp`): upstream files touched
+
+Spec "The Bristle brush as built". At one point a pixel each Basic tool's strokes hash the same before and after;
+`SharpChecks.bristles` checks it.
+
+| File | Change | Why |
+|---|---|---|
+| `BristleSwarm` | +11 −6 | The swarm's trail field the page's on a grid; each hair's dab laid at the grid's points, its lanes as wide on the page. |
+
+## Export Page's PNG sizes, High Res drawn sharp (2026-11-05, branches `png-sizes`, `png-sizes-2`): upstream files touched
+
+The owner's three: Export Page's PNG opens a menu of **Social** (1080 on the short side), **Page** (the copy as
+before) and **High Res** (2×, sharp), each saved at once. Spec section 8. `PngRender` (Scribulor's own, pure): Social's
+area shrink of the copy's greys; High Res drawn a tile row at a time through `SharpView` (`drawRow`, and `over`, the
+screen's tile laying moved out of `ViewportBitmap`) and `VectorLines.over`, deflated as it goes (`PngRender.Png`, 8-bit
+grey), past `ToneDocument.validSize`. `PageExport.CHOICES` and the browser's `as=k` unchanged (a guest's PNG at Page).
+Upstream's Export PNG window (`PngExport`), which nothing opened, is gone with its folder picker, prefs and dithered
+export. `PngRenderChecks`, `ExportSizeChecks`.
+
+| File | Change | Why |
+|---|---|---|
+| `PngExport` | −375 | Unreachable (`exportPng` had no caller): gone. `SUPERNOTE_FOLDER` moved to `AutoExport`. |
+| `PaintActivity` | +23 −30 | `pngMenu` after Export Page's PNG, `exportPage(…, size)`; `exportPng`, `pickFolder` and its result gone. |
+| `PaintPreferences` | −9 | The export folder, dithered and size prefs (only `PngExport` read them). |
+| `ViewportBitmap` | +1 −39 | `dithered` gone (only `PngExport` used it); `tiles` moved to `SharpView.over`. |
+| `ExportSize` | +20 −26 | Social, Page, High Res, each's menu words; the Supernote-screen and custom sizes gone. |
+| `PageExport`, `AutoExport` | +11 −2, +6 −4 | A PNG's size as a parameter (the old signatures: Page). |
+| `NotebookExport` | +17 −13 | `png(greys, w, h, crc, dpi)`, `greys(composite, …)`, `about` (pHYs, tEXt), `chunk` and `SIGNATURE` shared. |
+| `PagePicture` | +13 −2 | `Composite.of(page, guides, without)`: the copy's composite without Vector Ink's sharp layers. |
+
+2026-11-05, branch `pdf-sharp-2x`: the PDFs' picture of a page with kept dry strokes is High Res's (`PngRender.high(page,
+lines, …, vectors)`, its Vector Ink layers hidden first and drawn as vectors, `PngRender.sharp`), 600 dpi, placed at the
+page's size (`NotebookExport.Png.dpi` from pHYs, `pageWidth`; `NotebookPdf.write` sizes the page, the words and the
+lines' form in page pixels). Scribulor's own files only (`NotebookExport`, `NotebookPdf`, `PngRender`); no upstream file.
+
+2026-11-05, branch `export-sizes`: Layers at the PNG's three sizes, and the browser's (spec section 8). Engine side, all
+Scribulor's own and pure: `PageExport` (`write(OutputStream, …)` streams every copy, the Manta's into the file; `psd(…,
+size)`, `Sharp` for High Res's layers, `sized`, `sizeWords`, `sized(choice)`), `PsdWriter` (`Channel` packed as rows
+come, `write` streams the packed layers and the merged channel), `PngRender` (`shrunk` row by row, `high` into
+`Strips`), `SharpView` (`holds`, `drawn` over a page rectangle), `VectorLines.over` (coverage kept too),
+`PagePicture.Composite.printed(page, from, to, without)`. Browser side: `WebBooks.pageCopy(place, choice, size, today)`
+and `sizeWords`; `LiveBooks`' `books/page` takes `size=` (Page without it).
+
+| File | Change | Why |
+|---|---|---|
+| `PaintActivity` | +9 −9 | `pngMenu` became `sizeMenu(anchor, place, choice)`, for the PNG and Layers. |
+| `PagePicture` | +4 −2 | `Composite.printed(page, from, to, without)`: a Layers layer without Vector Ink's sharp layers. |
+
+## Tidy: MonoPaint's unused code (2026-11-05, branch `tidy-upstream`): upstream files touched
+
+The owner: "just to tidy things up". No behaviour change. A reachability pass (from the manifest's activities, the web
+engine's and the TeaVM pilots' sources, and the desktop checks) found MonoPaint's toolbar, header and colour bar built
+and kept GONE, and DrawingPad's MonoPaint pen branch unreachable (`inkWash` is set before the pad exists). Deleted: the
+22 classes named in section 2's "Upstream, deleted" under this date, `selection_preview.c`, and 24 drawables only they
+used (MonoPaint's tool icons, masking fluid and peel, the header's eraser and page-menu icons; `ic_import`,
+`ic_turn_left`, `ic_turn_right` unused already). Device suites that drove only those controls are deleted
+(`ToolbarChecks`, `ToolPickerChecks`, `ZoomButtonChecks`, `LayerUiChecks`, `AirbrushUiChecks`, `EraseUiChecks`,
+`GradientUiChecks`, `ColorBarChecks`, `ControlFeedbackChecks`, `PaintChecks`, `EdgeBarChecks`, `FullscreenChecks`;
+`layersOnly`, `paintOnly` and `brushOnly` report retired), `ShapeUiChecks` keeps only the pages and Nomad suites'
+harness, and the other suites lose their retired checks of those controls. Desktop: `BristleChecks`, `EdgeSwipeChecks`
+(both only in `test_document.sh`).
+
+| File | Change | Why |
+|---|---|---|
+| `PaintActivity` | +38 −565 | The header, colour bar, page panels and overview, the toolbar's and edge bars' hooks, the eyedropper's and gradient's state gone; the rotate prompt's button built on its own (`rotateButton()`); `saveToolState` still saves the colour and presets. |
+| `DrawingPad` | +52 −434 | MonoPaint's pen branch (its tools through `ToolStrokes`), its lasso, flood fill, gradients, eyedropper picking and wet canvas (`dryWet`, `wet`, `advanceWet`) gone; the Dropper keeps the eyedropper's gesture. |
+| `SettingsForm` | +1 −183 | Only `style`, `HINT` and `CLOSE` left: nothing builds a form any more. |
+| `Ui` | −36 | `selectedFrame`, `emptyDashes`, `setDimmed`, `onProgress` (the swatch's, the header's, the forms'). |
+| `PageReplay`, `LiveProbe` | −1 each | No `dryWet` to call. |
+| `CMakeLists.txt` | −1 file | `selection_preview.c` out of the native library. |
+
+Left in place, as the checks or the preferences still use them: `ToolStroke`, `ToneDabs`, `PressureStroke`,
+`FloodFill`, `WatercolorWash`, `PaintState`, `ToolLibrary`, `PageOverview` (its thumbnail, `DrawingBrowser`'s);
+`ToolButton`'s `alwaysDot`, `markerBelow` and `headerIcon` and `ControlHost.toolbarTurn` (now never set, kept to leave
+`ToolButton` and `ControlHost` as they were). Generic: none.
+
+### The eraser takes what is under it on every pair (2026-11-05, branch `erase-all`): upstream files touched
+
+`EraseBothStroke` (Scribulor's own) erases every shown layer at lift, not only the selected pair's two; its preview
+(`erasedTones`) composites every shown layer as the eraser leaves it. A hidden layer keeps its marks; Vector Ink's
+layers are cut and drawn again from their lines as before (`VectorInk.Cut`), not erased pixel by pixel. `VectorInk.eraserPair`
+(erase-hb) is removed: with every shown pair erased at lift it had nothing left to do.
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingPad` | comments only | The eraser's preview shows the page as the eraser leaves it, not what lies beneath the selected pair. |
+
+Generic: none. Engine boundary unchanged (`ToneDocument` untouched).
+
+### Send: a page's copies to a phone on the Wi-Fi (2026-11-05, branch `send-phone`)
+
+The owner: "a lightweight quick share option that doesn't require server space ... export a page or a notebook to a
+computer or a phone easily". Export Page's menu's last row, **Send**.
+- **Upstream files touched:** `PaintActivity` (+14: `exportMenu`'s Send row, `sendPage`). No engine change.
+- **Pure:** `LiveSend` (new): a 128-bit token (base64url, 22 letters), ten minutes (`LIFE_MS`), the page's copies as
+  Export Page offers them (`PageExport.bytes` at each `ExportSize`) and the notebook's PDF (`NotebookExport.pdf`), from
+  one snapshot; `serve` answers `GET /get/<token>` (a plain page, superdood.org's look, no script) and `/get/<token>/<n>`
+  (made then, one at a time, streamed chunked: a maker failing first is a 500, cut off after has no last chunk).
+  `LiveHost.send` (volatile): checked before the key, any other path as before (the key's 403).
+- **Android:** `LiveShare.send`: the Draw Together host when it runs on the Wi-Fi, else a `LiveHost` of its own with no
+  web app and no notebooks; its window (`ways`, split out of Draw Together's: the pickup's code and the QR code)
+  closes at ten minutes (wall time) and closing it ends the link and stops that host; `startHost` gives a host started
+  again (back from sleep) the open Send's files; `off` closes it with the drawing screen.
+- **Server:** `server.py`'s `TO_RE` takes a private address's `/get/` and 22 letters; the Found page says "Opening the files".
+- **Checks:** `LiveSendChecks` (each file the writers' bytes; wrong, short, late tokens, other numbers and paths 404; the
+  host's other routes still keyed; failures; escaping); `test_server.py` (Send's link taken, its variants refused, Found's words).
+- **Open:** off the Wi-Fi (a phone on cell data) needs the file relayed (superdood.org's relay, sealed with a key in the
+  link's #, size-capped); not done. No notebook-level Send (Export Now is a button, not a menu). Untried on the Manta.
+### A quicker eraser preview (2026-11-05, branch `erase-speed`): upstream files touched
+
+The owner: "a bit sluggish with a long erase stroke". The Manta's stroke timing put it in the preview's render: about
+2.3 µs a pixel against HB pencil's 0.05, renders up to 0.66 s. `ToneDocument.compositeToneKept` went over every place of
+the page's stack per pixel (every pair since erase-all), looking each layer up again. `compositeTonesKept` does a row:
+the shown layers gathered once, then layer by layer along the row, passing by a pixel a layer holds nothing at (which
+leaves the result as it was). The same tones (`EraseBench`'s hash of every frame's preview, before and after).
+`EraseBench` (test side, not a check): 0.17 to 0.02 µs a pixel on the desktop. The big single renders are one box round
+an event's samples, every pixel the stroke has been over inside it shown again: now about a ninth of the time.
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` | +29 −8 | `compositeTonesKept`, a row at a time; `compositeToneKept` is one pixel of it. |
+
+Generic: none. Engine boundary unchanged.
+
+## Sharp dry brushes, Screentone (2026-11-05, branch `sharp-more`): upstream files touched
+
+Spec "Screentone as built". Screentone and screened prints are kept sharp; `PrintScreen.ink` (Scribulor's own) takes a
+page position, its analytic screens read between pixels (`between`). At one point a pixel each Basic tool's strokes
+hash the same before and after; `SharpChecks.screentone` checks the dots.
+
+| File | Change | Why |
+|---|---|---|
+| `ModularCompose` | +2 −1 | The screen asked at the point's page position (`StrokePaper.indexX`, `pageHeight`): itself off a grid. |
+
+## Sharp dry brushes, Shapes (2026-11-05, branch `sharp-more`): upstream files touched
+
+Spec "Shapes as built". A shape's log entry keeps its plane and is drawn again at the grid's points
+(`SharpStrokes.lay`; `GridPage` keeps coverage once a shape lays opaque grey; `SharpView.drawn` returns the
+`GridPage`, `holds` compares raw tone and coverage). `StrokeLog`'s `SHRP` version 3 when a shape is kept. At one point
+a pixel nothing changes: 3,000 random shapes' spans hash the same before and after; `SharpChecks.shapes`.
+
+| File | Change | Why |
+|---|---|---|
+| `ShapeGeometry` | +13 −4 | `on(grid, …)`: the same shape at a fine grid's points (scaled, shifted, the corner stopped at the page's edge); on the page, unchanged. |
+| `ToneDocument` | +1 −1 | `rawTone` package-visible, for the match's raw tone. |
+| `DrawingPad` | +2 −1 | A shape's log entry keeps its plane (`sharp(selectedAddress(), 1, 1)`). |
+| `WebEngine` (web) | +2 −1 | The same, the browser's `shapeEnd`. |
+
+Text boxes and magnets stay pixels when zoomed (Android-drawn letters at page pixels; spec "Shapes as built").
+
+## Prints darken only again (2026-11-06, branch `texture-no-lighten`): upstream files touched
+
+Undoes 212af5da's "print over prints replaces them" (and its twins e6b3bc5d, 4649308f's padding): a Print Shading or
+Screentone stroke darkens only, as before 2026-10-29. Textures as Paint (same commit) stay. `ScreenChecks` checks a
+light pass over a hard one never lightens it.
+
+| File | Change | Why |
+|---|---|---|
+| `ModularCompose` | −35 | `replaces`, `edge`, `nowLine`/`nowBody` gone: prints use `PrintScreen.printed` (the darker). |
+| `ModularStroke` | +2 −3 | No smear tones for prints. |
+| `ResolvedBrush` | +3 −8 | `replaces()` gone; `lightOver` for a screen: only an opaque print. |
+| `SharpView`, `SharpStrokes` | −15 | No one-pixel padding for a print's edge; `GridPage.smearTones` throws again. |
+| `WebEngine` (web), `WebParity` | +1 −1 each | Parity scene marks on the brush's own plane. |
+
+Generic: none. Engine boundary unchanged.
+## Wet opaque paint's spread covers (2026-11-06, branch `oil-spread-cover`): upstream files touched
+
+The owner: "for the oil.. yes, spread cover like the stroke". A wet opaque stroke covers in full (`paintTone`), but its
+spread was written with `setTones`, so over blank paper it covered only by its darkness and marks beneath showed through
+a pale spread at full darkness. `WetPaintChecks.spreadCovers` checks it, and that a wash's coverage is as before.
+
+| File | Change | Why |
+|---|---|---|
+| `WetWatercolor` | +22 −1 | Hook marked "Inkwash": with `paintOnly`, `paintMask`'s opaque paint records the most pigment laid (`coverInk`); a frame's tones are then written with `coverTones`, each non-water pixel covering by its pigment's share of `coverInk` (at least what it covers now); water pixels keep their coverage, as `setTones`. Upstream (no `paintOnly`) and a canvas with no opaque paint write as before. Generic: any opaque wet canvas could cover this way. |
+## Favourites (2026-11-06, branch `favourites`): upstream files touched
+
+A page's star in Notebook Explorer copies its stack to the end of the Favourites notebook (`NotebookStrip.FAVOURITES`);
+the page and its copy carry the same int mark, a new options record `PFAV` (and recovery section `TSRA`), passed by
+older readers. Superdood's own: `NotebookStrip` (the name, unstar), `NotebookScreens` (the star, Settings' word),
+`BookOptions`, `RecoveryCodec`, `PaintActivity.star`.
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingBook` | +~55 −10 | Each page's mark (`faves`, beside `surfaces`, moving with its page through add, delete, move, layers, `take`/`restore`); `copyStack` and `append` (a stack into another book, its bytes its own); `Taken.fave`; the snapshot's `pageFaves`. |
+| `BookCodec` | +2 −1 | Writes and reads the marks (`Covers.pageFaves`). |
+| `DocumentStore` | +40 −10 | `rewrite` takes a change that may delete the notebook instead; `favourite` (made at the first star) and `unfavourite`, on the IO queue. |

@@ -17,14 +17,55 @@ const emptyRect = r => !r || r[2] < r[0] || r[3] < r[1];
 function grow(r, s) { if (!s || emptyRect(s)) return r; if (s[0] < r[0]) r[0] = s[0]; if (s[1] < r[1]) r[1] = s[1]; if (s[2] > r[2]) r[2] = s[2]; if (s[3] > r[3]) r[3] = s[3]; return r; }
 const now = () => performance.now();
 
-// ---------- a drawing surface: the paper's noise (as port.js's surface, same seed order), the page and the stroke buffers ----------
+// ---------- the app's paper noise (PaperNoise, PaperGrain.PLAIN), byte for byte: tileable value noise from a seed ----------
+// Two octaves (a coarse lattice and a half-strength fine one) stretched to 0-255, in the Java's float arithmetic.
+function paperNoise(side, coarse, fine, seed) {
+  const sum = new Float32Array(side * side), F = Math.fround;
+  const octave = (cell, weight, sd) => {
+    const cells = side / cell, lattice = new Float32Array(cells * cells), blend = new Float32Array(cell), row = new Float32Array(cells + 1);
+    for (let y = 0; y < cells; y++) for (let x = 0; x < cells; x++) {
+      let hsh = (Math.imul(x, 0x1f123bb5) + Math.imul(y, 0x05491333) + sd) | 0;
+      hsh ^= hsh >>> 16; hsh = Math.imul(hsh, 0x45d9f3b); hsh ^= hsh >>> 16; hsh = Math.imul(hsh, 0x45d9f3b); hsh ^= hsh >>> 16;
+      lattice[y * cells + x] = F((hsh & 65535) / 65535);
+    }
+    for (let i = 0; i < cell; i++) { const t = F((i + .5) / cell); blend[i] = F(F(t * t) * F(3 - 2 * t)); }
+    for (let y = 0; y < side; y++) {
+      const y0 = ((y / cell) | 0) * cells, y1 = (((y / cell) | 0) + 1) % cells * cells, ty = blend[y % cell];
+      for (let x = 0; x < cells; x++) row[x] = F(weight * F(lattice[y0 + x] + F(F(lattice[y1 + x] - lattice[y0 + x]) * ty)));
+      row[cells] = row[0];
+      for (let x = 0, at = y * side; x < side; x++, at++) { const a = row[(x / cell) | 0], b = row[((x / cell) | 0) + 1]; sum[at] = F(sum[at] + F(a + F(F(b - a) * blend[x % cell]))); }
+    }
+  };
+  octave(coarse, 1, seed); octave(fine, .5, (Math.imul(seed, 31) + 7) | 0);
+  let low = sum[0], high = sum[0];
+  for (const v of sum) if (v < low) low = v; else if (v > high) high = v;
+  const out = new Uint8Array(side * side), scale = F(255 / F(high - low));
+  for (let i = 0; i < out.length; i++) out[i] = Math.trunc(F(F(F(sum[i] - low) * scale) + .5));
+  return out;
+}
+let PAPER_NOISE = null;
+// The plain paper's fine and mid grain (widened 1.22 about the middle, PaperGrain.PLAIN_SPREAD), its blooms (low) and blobs.
+function paperOf(w, h) {
+  const P = PAPER_NOISE ??= { fine: paperNoise(256, 4, 2, 0x5eed9a17), mid: paperNoise(256, 8, 4, 0x5eed0d1d), low: paperNoise(512, 64, 32, 0x5eedb100), blob: paperNoise(512, 16, 8, 0x5eedb10b) };
+  const n = w * h, out = { fine: new Float32Array(n), mid: new Float32Array(n), low: new Float32Array(n), blob: new Float32Array(n) };
+  const widen = v => clamp(Math.fround(.5 + Math.fround(1.22 * Math.fround(v / 255 - .5))));
+  for (let y = 0; y < h; y++) for (let x = 0, i = y * w; x < w; x++, i++) {
+    const g = (y & 255) * 256 + (x & 255), b = (y & 511) * 512 + (x & 511);
+    out.fine[i] = widen(P.fine[g]); out.mid[i] = widen(P.mid[g]); out.low[i] = P.low[b] / 255; out.blob[i] = P.blob[b] / 255;
+  }
+  return out;
+}
+// ---------- a drawing surface: the app's paper (paperOf; seed is kept for callers, unused), the page and the stroke buffers ----------
 function modSurface(w, h, seed) {
-  const r = rng(seed), n = w * h;
-  const s = { w, h, fine: valueNoise(w, h, 1.7, r), mid: valueNoise(w, h, 6, r), low: fbm(w, h, 44, r), blob: valueNoise(w, h, 16, r),
-    L: new Float32Array(n), W: new Float32Array(n), D: new Float32Array(n), page: new Float32Array(n).fill(PAPER_TONE), base: new Float32Array(n).fill(PAPER_TONE) };
+  const n = w * h;
+  const s = Object.assign({ w, h }, paperOf(w, h), {
+    L: new Float32Array(n), W: new Float32Array(n), D: new Float32Array(n), page: new Float32Array(n).fill(PAPER_TONE), base: new Float32Array(n).fill(PAPER_TONE) });
   s.scratch = s.L;
   return s;
 }
+// A covering write's coverage on the stroke's plane (planes.js; the app's ToneDocument.coverTones): the most of what the
+// stroke found there, its darkness and c (0 to 1), after the pixel's tone is written. Nothing on a page of one plane.
+function planeCover(s, i, c) { if (s.cov) s.cov[i] = Math.max(s.covBase[i], 1 - s.page[i] / PAPER_TONE, c); }
 // Buffers only some brushes need, made the first time they're asked for.
 function lazyBuf(s, name, fill) { if (!s[name]) { s[name] = new Float32Array(s.w * s.h); if (fill) s[name].fill(fill); } return s[name]; }
 function clearBuf(s, buf, r, v = 0, pad = 0) {
@@ -36,6 +77,56 @@ function withScratch(surf, buf, fn) { const keep = surf.scratch; surf.scratch = 
 // kept (made by the first stroke that isn't wholly erasable): per pixel, the tone the eraser leaves; keptBase, as the
 // stroke found it. Without one, the eraser leaves paper everywhere, as before.
 function blankPage(s) { s.page.fill(PAPER_TONE); s.base.fill(PAPER_TONE); if (s.fill) s.fill.fill(0); s.kept = null; s.keptBase = null; }
+
+// ---------- a pointer as the Manta's pen (ToolSettings.travel, PenSample, DrawingPad's finger) ----------
+// The Manta's raw pen pressure becomes the strokes' pressure travel (0 to 1) through a knee: .05 to .30, a usual press,
+// takes .625 of it; .30 to .78, a full press, the rest. A browser pen (an Apple Pencil, a Wacom; pointerType "pen") reports
+// 0 to 1 the same way, so it goes through the same curve and a press feels as it does on the Manta.
+const PEN_KNEE = .30, PEN_KNEE_TRAVEL = (PEN_KNEE - .05) / .40, PEN_FULL = .78;
+function penTravel(pressure) {
+  if (!Number.isFinite(pressure)) pressure = 0;
+  return clamp(pressure <= PEN_KNEE ? (pressure - .05) / .40 : PEN_KNEE_TRAVEL + (1 - PEN_KNEE_TRAVEL) * (pressure - PEN_KNEE) / (PEN_FULL - PEN_KNEE));
+}
+// An Apple Pencil (any browser pen) pressed as the Manta's pen: its pressure goes through a Pencil curve first, then the
+// Manta's. The owner's iPad findings (Paintmageddon, which felt best): the lightest touch still draws (floor), and the
+// Pencil's usual presses are lighter than the Manta's, so a usual Pencil press (usual) lands on the Manta's (PEN_KNEE)
+// and a firm one (firm) on its full press (PEN_FULL); straight lines between, 0 to 0 and 1 to 1. One table, three
+// candidates side by side on the tuning page (scripts/live-probe/pencil.html); PENCIL is the one used.
+const PENCIL_CURVES = {
+  manta: { floor: 0, usual: PEN_KNEE, firm: PEN_FULL },   // the Manta's curve alone
+  between: { floor: .08, usual: .25, firm: .6 },
+  paintmageddon: { floor: .15, usual: .2, firm: .45 }     // floor .15 as Paintmageddon; its wide response
+};
+let PENCIL = PENCIL_CURVES.between;
+function pencilPressure(p, C = PENCIL) {
+  if (!(p > 0)) return p;
+  p = Math.max(C.floor, Math.min(1, p));
+  return p <= C.usual ? PEN_KNEE * p / C.usual : p <= C.firm ? PEN_KNEE + (PEN_FULL - PEN_KNEE) * (p - C.usual) / (C.firm - C.usual)
+    : PEN_FULL + (1 - PEN_FULL) * (p - C.firm) / (1 - C.firm);
+}
+// A pointer event as a stroke sample [x, y, travel, ms, tiltX, tiltY] at page point x, y; L, the stroke's state ({});
+// curve, the Pencil curve (PENCIL_CURVES).
+// A pen with pressure: its pressure through penTravel, its tilt (tiltX/tiltY, or Safari's altitudeAngle/azimuthAngle),
+// signed degrees as Supernote's. A finger, a mouse or a stylus with no pressure (iPad's capacitive styli report "touch"
+// with 0): pressure from the hand's way, as a Manta stroke at that speed: ramping in over its first 30 px from a light
+// landing, about a usual press (.65) at an easy pace, heavier slow and lighter quick, upright.
+function pointerSample(e, L, x, y, curve = PENCIL) {
+  const dt = L.lastT !== undefined ? Math.max(1, e.timeStamp - L.lastT) : 16, dd = L.lastX !== undefined ? Math.hypot(x - L.lastX, y - L.lastY) : 0;
+  L.sp = (L.sp || 0) * .8 + (dd / dt) * .2; L.d = (L.d || 0) + dd;
+  L.lastT = e.timeStamp; L.lastX = x; L.lastY = y;
+  // A pen that has pressed stays a pen to its lift: the Pencil reports 0 as it leaves the glass, which read as a mouse
+  // (about .7) left a blob at every line's end.
+  if (e.pointerType === "pen" && e.pressure > 0) L.pressed = true;
+  const pen = e.pointerType === "pen" && L.pressed;
+  if (!pen) return [x, y, (.25 + .45 * smooth(L.d / 30)) * clamp(1.15 - .2 * L.sp, .55, 1.1), e.timeStamp, NaN, NaN];
+  let tx = e.tiltX || 0, ty = e.tiltY || 0;
+  if (!tx && !ty && e.altitudeAngle !== undefined && e.altitudeAngle < Math.PI / 2 - 1e-3) {
+    const t = Math.tan(e.altitudeAngle);
+    tx = Math.atan(Math.cos(e.azimuthAngle || 0) / t) / DEG; ty = Math.atan(Math.sin(e.azimuthAngle || 0) / t) / DEG;
+  }
+  const tilted = tx || ty;
+  return [x, y, penTravel(pencilPressure(e.pressure, curve)), e.timeStamp, tilted ? tx : NaN, tilted ? ty : NaN];
+}
 
 // ---------- tilt, as BrushDirection.java (copied from brush-experiments) ----------
 const MIN_LEAN = Math.tan(5 * DEG);
@@ -77,17 +168,20 @@ function turnToward(a, target, k) {
 }
 // The port's addPoint, plus tilt, a smoothed travel direction and the running peak pressure.
 function addPt(pts, x, y, p, t, tx, ty) {
-  if (!addPoint(pts, x, y, p, t)) return false;
+  // Kept as the app's StrokePoints keeps them, floats, so distances, speeds and headings agree to the bit.
+  const F = Math.fround;
+  if (!addPoint(pts, F(x), F(y), F(p), t)) return false;
   const q = pts[pts.length - 1], o = pts[pts.length - 2];
-  q.tx = tx; q.ty = ty;
-  q.pk = Math.max(o ? o.pk : 0, p);
+  q.tx = Number.isFinite(tx) ? F(tx) : tx; q.ty = Number.isFinite(ty) ? F(ty) : ty;
+  q.pk = Math.max(o ? o.pk : 0, q.p);
   if (o) {
-    const seg = q.d - o.d, ux = (q.x - o.x) / seg, uy = (q.y - o.y) / seg;
-    if (o.ux === undefined) { o.ux = ux; o.uy = uy; q.ux = ux; q.uy = uy; }
+    q.d = F(q.d); q.v = F(q.v);
+    const seg = Math.hypot(q.x - o.x, q.y - o.y), ux = (q.x - o.x) / seg, uy = (q.y - o.y) / seg;
+    if (o.ux === undefined) { o.ux = q.ux = F(ux); o.uy = q.uy = F(uy); }
     else {
       const k = 1 - Math.exp(-seg / 12);
-      let sx = o.ux + (ux - o.ux) * k, sy = o.uy + (uy - o.uy) * k; const m = Math.hypot(sx, sy) || 1;
-      q.ux = sx / m; q.uy = sy / m;
+      const sx = o.ux + (ux - o.ux) * k, sy = o.uy + (uy - o.uy) * k, m = Math.hypot(sx, sy) || 1;
+      q.ux = F(sx / m); q.uy = F(sy / m);
     }
   }
   return true;
@@ -330,7 +424,7 @@ let WET = null, WET_D = 0;   // while a Fast-wet body stamps: each pixel's dista
 function stampBody(surf, b, pts, size, from, meta, final) {
   const { w, h, scratch: buf, fine, mid } = surf;
   let rect = [w, h, 0, 0];
-  const flatHead = b.head === "flat", tilt = b.tilt || 0, softK = lerp(lerp(0.08, 0.012, clamp(b.cover || 0)), 0.6, b.soft);
+  const flatHead = b.head === "flat", tilt = b.tilt || 0, softK = lerp(lerp(0.08, 0.012, b.crisp ? 1 : clamp(b.cover || 0)), 0.6, b.soft);
   if (flatHead) return stampHake(surf, b, pts, size, meta, softK);
   const hairs = []; if (b.streaks > 0) { const rnd = rng(b.seed ^ 0x51ed); for (let i = 0; i < 130; i++) hairs.push(rnd()); }
   const liveGran = b.fast && b.gran > 0, gran = b.gran, amount = b.amount ?? 1, ellipse = b.aspect !== undefined && b.aspect < 1;
@@ -726,33 +820,41 @@ function stampPlaced(surf, b, body, pts, size, bodySize, final, from, win) {
 }
 
 // ===================================================================================================================
-// Bristle swarm (marble-and-bristle): hairs that read each other's fading trails. Hairs capped at 32. Stateful: fed the
-// samples not yet walked, one step per px of travel; final at lift. Stamps into the buffer it's given.
+// Bristle swarm (marble-and-bristle; the app's BristleSwarm): hairs that read each other's fading trails, at most 32.
+// Stateful: fed the samples not yet walked, final at lift. A brush of 10 px radius or less steps as the prototype (each
+// segment in steps of at most a pixel); a bigger one is the small swarm scaled up, k page px a unit, stepping every k px
+// of travel, each hair laid from where it was the step before. A dry hair inks only the head's lanes it still holds
+// enough for (streaks along the stroke before it skips the paper's grain); a big head's tufts leave a few lanes bare.
 // ===================================================================================================================
 const SW_CELL = 2, SW_PT = (() => { const a = new Float32Array(400); for (let k = 0; k < a.length; k++) a[k] = Math.pow(.93, k); return a; })();
+const SW_LANES = 256, SW_BARE = .08, SW_LANE_DRIFT = .3, SW_LANE_RUN = 30;
 function swHash(i, s) { let h = Math.imul(i, 0x1f123bb5) ^ s; h ^= h >>> 16; h = Math.imul(h, 0x45d9f3b); h ^= h >>> 16; return (h & 65535) / 65536; }
 function swNoise(x, s) { const i = Math.floor(x), t = smooth(x - i); return lerp(swHash(i, s), swHash(i + 1, s), t); }
 function hashInts(h, ...v) { for (const x of v) h = Math.imul(h ^ (x | 0), 16777619); return h >>> 0; }
-function swarmStart(surf, b, R, p0) {
-  // A big brush is the small swarm scaled up: the hairs move in units of a 10 px brush, k page px each, so a 120 px
-  // bristle brush looks like a 20 px one enlarged, not like ropes. At 10 px and under, k = 1: the prototype exactly.
+// How many times further than the prototype a load (Paint Load, 0-1) carries: 2 at the middle, 3/4 at 0, 12 at 1.
+const swCarry = load => 2 * Math.pow(4, 2 * load - 1);
+// The hand's Pressure -> size on the head: a light touch gathers the hairs, pressing spreads them; 1 with the cell off.
+const swPress = (b, pp) => !b.pressure ? 1 : lerp(1 - .6 * b.pressure, 1 + .5 * b.pressure, pp);
+// step: page px between the buffer's points (2 on a big stroke's lattice); a lane is at least a point and a quarter wide.
+function swarmStart(surf, b, R, p0, step = 1) {
   R = Math.max(2, R);
   const k = Math.max(1, R / 10), Ri = R / k;
-  const N = Math.max(6, Math.min(32, Math.round(b.hairs || 24)));
-  const seed = hashInts(b.seed, Math.round(p0.x * 4), Math.round(p0.y * 4));
-  const r = rng(seed), hairs = [];
+  const N = Math.max(6, Math.min(32, Math.round(b.hairs ?? 24)));
+  const r = rng(hashInts(b.seed, Math.round(p0.x * 4), Math.round(p0.y * 4))), hairs = [];
   for (let i = 0; i < N; i++) {
     const u0 = ((i + .5) / N * 2 - 1) + (r() - .5) * (2 / N);
     hairs.push({ u0, u: u0 * Ri * .35, w: 0, a: (.25 - Math.pow(r(), 1.3)) * Ri, load: 1, thirst: .6 + .8 * r(),
-      rb: Math.max(.55, Ri * .1) * (.75 + .5 * r()), ns: (r() * 4294967296) >>> 0, x: p0.x, y: p0.y, F: 0, n: 0 });
+      rb: Math.max(.55, Ri * .1) * (.75 + .5 * r()), ns: (r() * 4294967296) >>> 0, x: p0.x, y: p0.y, fx: p0.x, fy: p0.y, F: 0, n: 0 });
   }
   const cell = SW_CELL * k, gw = Math.ceil(surf.w / cell), gh = Math.ceil(surf.h / cell), coh = b.cohesion, spr = b.spreadH;
   if (!surf.swField || surf.swField.length < gw * gh) { surf.swField = new Float32Array(Math.ceil(surf.w / SW_CELL) * Math.ceil(surf.h / SW_CELL)); surf.swLast = new Int32Array(surf.swField.length); }
   surf.swField.fill(0, 0, gw * gh); surf.swLast.fill(0, 0, gw * gh);
-  const th = lerp(.55, 1.15, spr);
-  return { surf, b, R: Ri, k, cell, N, hairs, gw, gh, field: surf.swField, last: surf.swLast, step: 0, dirx: 0, diry: 0, done: 1,
+  const th = lerp(.55, 1.15, spr), laneSeed = (b.seed | 0) ^ 0xb415, lr = rng(laneSeed >>> 0), lanes = new Float64Array(SW_LANES);
+  for (let i = 0; i < SW_LANES; i++) lanes[i] = lr();
+  return { surf, b, R: Ri, k, cell, N, hairs, gw, gh, field: surf.swField, last: surf.swLast, step: 0, dirx: 0, diry: 0, done: 1, next: 0,
     cs: Math.cos(th), sn: Math.sin(th), sd: Ri * .5 + 2.5, gain: lerp(-.9, 1.0, coh) * .6 * Math.sqrt(Ri / 8), sat: lerp(1.2, 4.2, coh),
-    drain: .0009 * b.dryness ** 3 };
+    drain: .0009 * b.dryness ** 3 / swCarry(b.load ?? .5), lanes, laneSeed, laneWidth: Math.max(1.25 * step, .45 * k), bare: SW_BARE * smooth((k - 1.5) / 3),
+    laneQ: new Float64Array(SW_LANES), laneAt: new Int32Array(SW_LANES).fill(-1), dab: 0 };
 }
 function swField(S, x, y) {
   const gx = (x / S.cell) | 0, gy = (y / S.cell) | 0;
@@ -761,27 +863,37 @@ function swField(S, x, y) {
   return age >= SW_PT.length ? 0 : S.field[c] * SW_PT[age];
 }
 function swDeposit(S, x, y, amt) {
-  const gx0 = (x / S.cell) | 0, gy0 = (y / S.cell) | 0;
+  const gx0 = Math.trunc(x / S.cell), gy0 = Math.trunc(y / S.cell);
   for (let gy = gy0 - 1; gy <= gy0 + 1; gy++) for (let gx = gx0 - 1; gx <= gx0 + 1; gx++) {
     if (gx < 0 || gy < 0 || gx >= S.gw || gy >= S.gh) continue;
     const c = gy * S.gw + gx, age = S.step - S.last[c], kk = (gx === gx0 && gy === gy0) ? amt : amt * .4;
     S.field[c] = (age >= SW_PT.length ? 0 : S.field[c] * SW_PT[age]) + kk; S.last[c] = S.step;
   }
 }
-function swHair(S, buf, x, y, rb, dark, thr, rect) {
-  const { w, h, fine, mid } = S.surf, R = Math.ceil(rb + 1);
-  const x0 = Math.max(0, Math.floor(x - R)), x1 = Math.min(w - 1, Math.ceil(x + R)), y0 = Math.max(0, Math.floor(y - R)), y1 = Math.min(h - 1, Math.ceil(y + R));
+// One hair's round dab, or a big brush's swept from (fx, fy); a dry one inks only the lanes it still holds enough for.
+function swHair(S, buf, x, y, fx, fy, rb, dark, thr, d, cx, cy, nx, ny, rect) {
+  const { w, h, fine, mid } = S.surf, reach = Math.ceil(rb + 1), sx = x - fx, sy = y - fy, ss = sx * sx + sy * sy;
+  const held = thr < 1.2 ? thr - .1 : 9, laned = S.bare > 0 || held < .85, lw = S.laneWidth, along = d / (SW_LANE_RUN * S.k);
+  S.dab++;
+  const x0 = Math.max(0, Math.floor(Math.min(x, fx) - reach)), x1 = Math.min(w - 1, Math.ceil(Math.max(x, fx) + reach));
+  const y0 = Math.max(0, Math.floor(Math.min(y, fy) - reach)), y1 = Math.min(h - 1, Math.ceil(Math.max(y, fy) + reach));
   for (let py = y0; py <= y1; py++) for (let px = x0; px <= x1; px++) {
-    const ex = px + .5 - x, ey = py + .5 - y;
-    let cov = rb + .5 - Math.sqrt(ex * ex + ey * ey);
+    let ex = px + .5 - x, ez = py + .5 - y;
+    if (ss > 0) { const t = clamp(((px + .5 - fx) * sx + (py + .5 - fy) * sy) / ss); ex = px + .5 - (fx + t * sx); ez = py + .5 - (fy + t * sy); }
+    let cov = rb + .5 - Math.sqrt(ex * ex + ez * ez);
     if (cov <= 0) continue;
     if (cov > 1) cov = 1;
+    if (laned) {
+      const lane = Math.floor(((px + .5 - cx) * nx + (py + .5 - cy) * ny) / lw) & (SW_LANES - 1);
+      if (S.laneAt[lane] !== S.dab) { S.laneAt[lane] = S.dab; S.laneQ[lane] = S.lanes[lane] + SW_LANE_DRIFT * (swNoise(along, Math.imul(lane, 0x9e3779b1) ^ S.laneSeed) - .5); }
+      if (!(S.laneQ[lane] < Math.min(1 - S.bare, (held - .35) / .5))) continue;
+    }
     const i = py * w + px;
     // A dry hair skips the paper's high points: it inks only where the tooth is below what it still holds.
     if (thr < 1.2) { const s = (thr - (fine[i] * .62 + mid[i] * .38)) * 8 + .5; if (s <= 0) continue; if (s < 1) cov *= s * s * (3 - 2 * s); }
     const v = cov * dark;
     if (v > buf[i]) buf[i] = v;
-    if (WET) WET[i] = WET_D;
+    if (WET) WET[i] = d;
   }
   if (x0 < rect[0]) rect[0] = x0; if (y0 < rect[1]) rect[1] = y0; if (x1 > rect[2]) rect[2] = x1; if (y1 > rect[3]) rect[3] = y1;
 }
@@ -789,47 +901,55 @@ function swStep(S, buf, px, py, v, p, d, lean, rect, own = 1) {
   const b = S.b, R = S.R, k = S.k, hairs = S.hairs, N = S.N, spr = b.spreadH, dry = b.dryness;
   const dx = S.dirx, dy = S.diry, nx = -dy, ny = dx, cs = S.cs, sn = S.sn, sd = S.sd * k, gain = S.gain, sat = S.sat;
   const sv = clamp(v / 2.2), pp = clamp((p - .3) / .7), ramp = smooth(d / k / (R * 1.5));
-  const Rs = R * (.42 + .38 * ramp + spr * (.55 * pp + .5 * sv));
-  const wander = .025 * R * spr * (.4 + sv), wl = R * 2.5;
+  const Rs = R * (.42 + .38 * ramp + spr * (.55 * pp + .5 * sv)) * swPress(b, pp);
+  const wander = .025 * R * spr * (.4 + sv), wl = R * 2.5, root = Math.sqrt(sat);
   const f = s => { const q = s / sat; return s / (1 + q * q); };
   for (const hr of hairs) {
     const x = px + (nx * hr.u + dx * hr.a) * k, y = py + (ny * hr.u + dy * hr.a) * k;
     const sL = swField(S, x + (dx * cs - nx * sn) * sd, y + (dy * cs - ny * sn) * sd);
     const sR = swField(S, x + (dx * cs + nx * sn) * sd, y + (dy * cs + ny * sn) * sd);
     const sC = swField(S, x + dx * sd, y + dy * sd);
-    let F = gain * (f(sR) - f(sL)) / Math.sqrt(sat);
+    let F = gain * (f(sR) - f(sL)) / root;
     if (sC > sat * 1.8) F += (sR >= sL ? -1 : 1) * Math.abs(gain) * .4;
     F += (swNoise(d / k / wl, hr.ns) - .5) * 2 * wander;
     F -= .009 * (hr.u - hr.u0 * Rs);
     const over = Math.abs(hr.u) - Rs; if (over > 0) F -= .3 * over * Math.sign(hr.u);
     hr.F = F;
   }
-  for (const hr of hairs) { hr.w = hr.w * .8 + hr.F; hr.u += hr.w; hr.x = px + (nx * hr.u + dx * hr.a) * k; hr.y = py + (ny * hr.u + dy * hr.a) * k; }
+  // A big brush's hair is laid from where it was the step before (not on the first step: every hair begins at the first sample).
+  const swept = k > 1 && S.step > 0;
+  for (const hr of hairs) { hr.fx = hr.x; hr.fy = hr.y; hr.w = hr.w * .8 + hr.F; hr.u += hr.w; hr.x = px + (nx * hr.u + dx * hr.a) * k; hr.y = py + (ny * hr.u + dy * hr.a) * k; }
   for (let i = 0; i < N; i++) { const hi = hairs[i]; let n = 0; for (let j = 0; j < N; j++) { const hj = hairs[j]; if (Math.abs(hj.u - hi.u) < (hi.rb + hj.rb) * .8) n++; } hi.n = n - 1; }
-  const dk = handDark(b, p, v, lean) * own;
-  WET_D = d;
+  const dk = handDark(b, p, v, lean) * own, grow = (.7 + .7 * pp) * (1 + 1.2 * (b.tiltSize || 0) * lean);
   for (const hr of hairs) {
     hr.load = Math.max(0, hr.load - S.drain * k * hr.thirst * (1 + .6 * sv));
     const held = hr.load + dry * .3 * (pp - .4) - dry * dry * .2 * sv;
     const thr = dry <= 0 ? 9 : held + .1;
     if (thr <= -.05) continue;
     const dark = lerp(.42, 1, clamp(hr.n / 3)) * lerp(.72, 1, clamp(hr.load * 1.4)) * dk * (b.amount ?? 1);
-    swHair(S, buf, hr.x, hr.y, hr.rb * k * (.7 + .7 * pp) * (1 + 1.2 * (b.tiltSize || 0) * lean), dark, thr, rect);
+    swHair(S, buf, hr.x, hr.y, swept ? hr.fx : hr.x, swept ? hr.fy : hr.y, hr.rb * k * grow, dark, thr, d, px, py, nx, ny, rect);
   }
   for (const hr of hairs) swDeposit(S, hr.x, hr.y, 1);
   S.step++;
 }
 function swarmFeed(S, pts, buf) {
-  const rect = [S.surf.w, S.surf.h, 0, 0];
+  const rect = [S.surf.w, S.surf.h, 0, 0], tilts = S.b.tiltSize || S.b.tDark;
   for (let k = Math.max(1, S.done); k < pts.length; k++) {
     const p0 = pts[k - 1], p1 = pts[k], seg = p1.d - p0.d;
     if (seg <= 0) continue;
     const ux = (p1.x - p0.x) / seg, uy = (p1.y - p0.y) / seg;
     if (S.dirx === 0 && S.diry === 0) { S.dirx = ux; S.diry = uy; }
-    const T = (S.b.tiltSize || S.b.tDark) ? tiltOf(p1.tx, p1.ty) : null, lean = T ? T.lean : 0;
-    const n = Math.max(1, Math.ceil(seg / S.k));
-    for (let s = 1; s <= n; s++) {
-      const t = s / n;
+    const T = tilts ? tiltOf(p1.tx, p1.ty) : null, lean = T ? T.lean : 0;
+    let steps, t0 = 0, dt = 0;
+    if (S.k === 1) steps = Math.max(1, Math.ceil(seg));
+    else {
+      if (S.next === 0) S.next = p0.d + S.k;
+      steps = Math.max(0, Math.floor((p1.d - S.next) / S.k) + 1);
+      t0 = (S.next - p0.d) / seg; dt = S.k / seg;
+      S.next += steps * S.k;
+    }
+    for (let s = 0; s < steps; s++) {
+      const t = S.k === 1 ? (s + 1) / steps : t0 + s * dt;
       const hx = S.dirx + (ux - S.dirx) * .2, hy = S.diry + (uy - S.diry) * .2, m = Math.hypot(hx, hy) || 1;
       S.dirx = hx / m; S.diry = hy / m;
       swStep(S, buf, lerp(p0.x, p1.x, t), lerp(p0.y, p1.y, t), lerp(p0.v, p1.v, t), lerp(p0.p, p1.p, t), lerp(p0.d, p1.d, t), lean, rect, p1.own === undefined ? 1 : lerp(p0.own, p1.own, t));

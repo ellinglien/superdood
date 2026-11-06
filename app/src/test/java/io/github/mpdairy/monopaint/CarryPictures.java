@@ -34,7 +34,7 @@ public final class CarryPictures {
         return b.normalize();
     }
     /** The ready-made Stump (Tools page, Charcoal): Charcoal, Smear, Own paint 0, Pick up .7, Lay down .6. */
-    static ModularBrush stump() { for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals("Stump")) return p.brush().parts; throw new AssertionError("no Stump"); }
+    static ModularBrush stump() { for (ToolPresets.Preset p : ToolPresets.withRetired()) if (p.name.equals("Stump")) return p.brush().parts; throw new AssertionError("no Stump"); }
 
     /** A stroke as the drawing screen starts one: what still settles laid first, then live or quick. */
     static void stroke(ToneDocument d, WatercolorSession session, ModularBrush b, double size, double darkness, double[][] path) {

@@ -52,6 +52,10 @@ final class ModularSizes {
     static final double SPIRO = 132;
     /** Hatching's Medium in every style ({@link HandHatchStamper}): its strokes about this long, 5 mm on the Manta's panel, whatever the style's pens. */
     static final double HATCHING = 60;
+    /** The nibs' Medium in every style (explore-nibs), page px: a ruling pen's blade laid flat, a twig's knob, a fan's breadth, a brayer's roller. */
+    static final double RULING = 30, TWIG = 24, FAN = 60, BRAYER = 72;
+    /** A nib's Medium ({@link #RULING} to {@link #BRAYER}); 0 for other tips. */
+    static double nib(PartChoice tip) { return tip == PartChoice.RULING ? RULING : tip == PartChoice.TWIG ? TWIG : tip == PartChoice.FAN ? FAN : tip == PartChoice.ROLLER ? BRAYER : 0; }
 
     private ModularSizes() { }
 
@@ -62,11 +66,11 @@ final class ModularSizes {
      */
     static boolean inks(ModularBrush b) {
         PartChoice m = b.choice(BrushPart.MEDIUM);
-        return m == PartChoice.INK || m == PartChoice.CHARCOAL || m == PartChoice.GRAPHITE || m == PartChoice.RESIST || m == PartChoice.TONE || m == PartChoice.CRAYON;
+        return m == PartChoice.INK || m == PartChoice.CHARCOAL || m == PartChoice.GRAPHITE || m == PartChoice.RESIST || m == PartChoice.TONE || m == PartChoice.CRAYON || m == PartChoice.VECTOR;
     }
     /** Its size at {@code preset}: Medium its style's size for its medium (Anything goes: the app's own; a Stamp's {@link #STAMP}, a Spiro's {@link #SPIRO}), Small .4 of it, Larger 1.4 times, Large twice; 1.5–360 px. */
     static double size(ModularBrush b, InkWashSizes.Preset preset) {
-        double m = b.stamps() ? STAMP : b.choice(BrushPart.TIP) == PartChoice.SPIRO ? SPIRO : b.choice(BrushPart.TIP) == PartChoice.HAND_HATCH ? HATCHING : b.choice(BrushPart.MEDIUM) == PartChoice.TONE ? TONE : b.choice(BrushPart.MEDIUM) == PartChoice.CRAYON ? CRAYON : b.style.wild ? (inks(b) ? ANYTHING_GOES_INK : ANYTHING_GOES_PAINT) : b.style.size(b.choice(BrushPart.MEDIUM));
+        double m = b.stamps() ? STAMP : b.choice(BrushPart.TIP) == PartChoice.SPIRO ? SPIRO : b.choice(BrushPart.TIP) == PartChoice.HAND_HATCH ? HATCHING : nib(b.choice(BrushPart.TIP)) > 0 ? nib(b.choice(BrushPart.TIP)) : b.choice(BrushPart.MEDIUM) == PartChoice.TONE ? TONE : b.choice(BrushPart.MEDIUM) == PartChoice.CRAYON ? CRAYON : b.style.wild ? (inks(b) ? ANYTHING_GOES_INK : ANYTHING_GOES_PAINT) : b.style.size(b.choice(BrushPart.MEDIUM));
         double share;
         switch (preset) {
             case SMALL: share = SMALL; break;
@@ -131,6 +135,7 @@ final class ModularSizes {
         PartChoice m = b.choice(BrushPart.MEDIUM), t = b.choice(BrushPart.TIP);
         double s;
         if (m == PartChoice.INK) s = ref / (13 + 14 * b.part(BrushPart.MEDIUM).get(PartDial.WET));
+        else if (m == PartChoice.VECTOR) s = ref / 13.0;
         else if (m == PartChoice.CHARCOAL) s = ref / 9.0;
         // Crayon's tooth and ragged edge are fixed to the page (3 and 7 px): a ninth of a tile reads as salt, not wax;
         // a fifth is about its Medium on a card, so its clumps and broken edge read (the owner, 2026-10-22: "the
@@ -145,6 +150,9 @@ final class ModularSizes {
         if (t == PartChoice.SPIRO) s = ref * ((int) b.part(BrushPart.TIP).get(PartDial.SPIRO_MODE) != 0 ? .09 : .3);
         // Hatching's strokes, a few rows of them, fill about a quarter of the tile.
         if (t == PartChoice.HAND_HATCH) s = ref * .25;
+        // A nib broad enough to show what it is: a ruling pen's band and a twig's knob, a fan's hairs and a brayer's band wider.
+        if (t == PartChoice.RULING || t == PartChoice.TWIG) s = ref * .2;
+        if (t == PartChoice.FAN || t == PartChoice.ROLLER) s = ref * .3;
         if (role == BrushPart.PAPER) s *= 1.7;
         if (role == BrushPart.HAND && s < ref / 7.0) s *= 1.8;
         return (float)Math.max(2, s);

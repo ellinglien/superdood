@@ -14,10 +14,12 @@ public final class PictureImportChecks {
     static final int W = 300, H = 400;
 
     public static void main(String[] args) throws IOException {
-        greys(); laying(); placed(); fitting(); frame(); cap(); pdfNotebook(); pickers();
+        greys(); laying(); placed(); fitting(); frame(); shades(); contrast(); cap(); pdfNotebook(); pickers();
         System.out.println("PASS: picture import: greys are brightness over white (black 0, white and see-through clear, half-seen black mid grey), the own templates' too; "
                 + "laid on the layer drawn on as ink is, one Undo step, never lighter than a mark there; placed on the layer drawn on, the eraser takes it and the line drawn before alike, Undo takes it away; fitted inside the page, centred, its shape kept; "
                 + "moved, resized by its corner and pinched with its shape kept, never smaller than 48 px or lost off the page; "
+                + "Lighter and Darker three steps each way, black kept by Darker, white by Lighter, paper clear by the picture's own grey; "
+                + "More and Less Contrast three steps each way about the middle grey, held to black and white, before Lighter or Darker; "
                 + "a PDF's pages capped at 124 (two layers each, one page left for the blank after the last), pairs that pass 200 MB refused; "
                 + "a PDF's notebook opens on its first clear layer, each page a stack of two with the PDF's page locked at the bottom, no blank page added after the last, nor taken; "
                 + "Import's picker shows a folder at a time: at the top the Supernote's folders, Pictures and Download; in one its folders A to Z, then its pictures and PDFs (any case) newest first, hidden ones skipped; it opens in the last folder used");
@@ -121,6 +123,66 @@ public final class PictureImportChecks {
         PictureImport.Frame panned = f.scaled(1, cx, cy, 30, -20);
         check(Math.abs(panned.x - f.x - 30) < .01 && Math.abs(panned.y - f.y + 20) < .01, "and follows the fingers");
         check(f.onHandle(f.x + f.w, f.y + f.h) && f.onHandle(f.x + f.w - 60, f.y + f.h + 40) && !f.onHandle(f.x + f.w / 2, f.y + f.h / 2), "the handle at its lower right");
+        // The pointers on it (PicturePlacer's and the browser's): a drag moves it, from the handle resizes it, a second pointer pinches.
+        PictureImport.Placing p = new PictureImport.Placing(f);
+        p.down(cx, cy);
+        check(p.dragging() && !p.pinching() && p.moved(cx + 30, cy - 20, 0, 0) && p.frame.x == f.moved(30, -20).x && p.frame.w == f.w, "a drag moves it");
+        p.up();
+        check(!p.dragging() && !p.moved(cx + 90, cy, 0, 0), "lifted, nothing moves it");
+        p = new PictureImport.Placing(f);
+        p.down(f.x + f.w, f.y + f.h);
+        p.moved(f.x + 500, f.y + 10, 0, 0);
+        check(Math.abs(p.frame.w - 500) < .01 && p.frame.x == f.x, "from the handle it resizes");
+        p = new PictureImport.Placing(f);
+        p.down(cx - 50, cy);
+        check(p.pinch(cx - 50, cy, cx + 50, cy) && p.pinching() && !p.pinch(0, 0, 1, 1), "a second pointer: a pinch, once");
+        p.moved(cx - 100, cy, cx + 100, cy);
+        check(Math.abs(p.frame.w - 2 * f.w) < .5 && Math.abs(p.frame.x + p.frame.w / 2 - cx) < .5, "the fingers apart twice as far: twice as wide, about their middle");
+        p.lifting();
+        check(!p.dragging() && !p.moved(cx, cy, cx + 10, cy), "a pinch's finger lifted: nothing moves it until both have");
+        int[] hd = f.handle(), r = f.rect();
+        check(hd[0] + hd[2] == 2 * r[2] && hd[2] - hd[0] == Math.round(PictureImport.Frame.HANDLE / 2) * 2, "the handle's square on its corner");
+    }
+
+    static void shades() {
+        check(PictureImport.shaded(128, 0) == 128, "no step, as it is");
+        check(PictureImport.shaded(0, 1) == 76 && PictureImport.shaded(0, -1) == 0, "Lighter greys black, Darker keeps it");
+        check(PictureImport.shaded(128, -1) == 90 && PictureImport.shaded(128, 1) > 128, "a mid grey goes either way");
+        for (int g = 0; g < 256; g += 15) for (int s = -2; s <= 2; s++)
+            check(PictureImport.shaded(g, s + 1) >= PictureImport.shaded(g, s) && PictureImport.shaded(g, s) >= 0 && PictureImport.shaded(g, s) <= 255, "each step Lighter is lighter: " + g + " at " + s);
+        // Paper stays clear whatever the step: what is paper is the picture's own grey's to say.
+        int[] g = PictureImport.greys(new int[]{0xffffffff, 0xfff7f7f7, 0xff000000}, -3, 0);
+        check(g[0] == -1 && g[1] == PictureImport.shaded(247, -3) && g[2] == 0, "Darker leaves paper clear: " + Arrays.toString(g));
+        check(Arrays.equals(PictureImport.greys(new int[]{0xff404040}, 0, 0), PictureImport.greys(new int[]{0xff404040})), "no step, as greys");
+        PictureImport.Placing p = new PictureImport.Placing(PictureImport.Frame.fitted(100, 50, W, H));
+        check(p.shade() == 0 && p.contrast() == 0 && p.canStep(0) && p.canStep(1) && p.canStep(2) && p.canStep(3), "a picture begins as it is");
+        for (int i = 0; i < PictureImport.SHADES; i++) check(p.step(0), "Lighter, step " + (i + 1));
+        check(!p.canStep(0) && !p.step(0) && p.shade() == PictureImport.SHADES && p.contrast() == 0, "three steps Lighter at most, contrast untouched");
+        for (int i = 0; i < 2 * PictureImport.SHADES; i++) check(p.step(1), "Darker, step " + (i + 1));
+        check(!p.step(1) && p.shade() == -PictureImport.SHADES && p.canStep(0), "three steps Darker at most, Lighter again from there");
+        for (int i = 0; i < PictureImport.SHADES; i++) check(p.step(2), "More Contrast, step " + (i + 1));
+        check(!p.canStep(2) && !p.step(2) && p.contrast() == PictureImport.SHADES && p.shade() == -PictureImport.SHADES, "three steps More Contrast at most, the shade untouched");
+        for (int i = 0; i < 2 * PictureImport.SHADES; i++) check(p.step(3), "Less Contrast, step " + (i + 1));
+        check(!p.step(3) && p.contrast() == -PictureImport.SHADES && p.canStep(2), "three steps Less Contrast at most, More again from there");
+        check(Arrays.asList(PictureImport.STEPS).equals(Arrays.asList("Lighter", "Darker", "More Contrast", "Less Contrast")), "the bar's steps, each dial up then down");
+    }
+
+    static void contrast() {
+        check(PictureImport.toned(77, 0, 0) == 77 && PictureImport.toned(PictureImport.MIDDLE, 0, 3) == PictureImport.MIDDLE && PictureImport.toned(PictureImport.MIDDLE, 0, -3) == PictureImport.MIDDLE, "no step, as it is; the middle grey stays put");
+        check(PictureImport.toned(64, 0, 1) == 37 && PictureImport.toned(192, 0, 1) == 219, "More Contrast spreads the greys from the middle");
+        check(PictureImport.toned(0, 0, -1) == 38 && PictureImport.toned(255, 0, -1) == 217, "Less Contrast draws black and white to it");
+        check(PictureImport.toned(10, 0, 1) == 0 && PictureImport.toned(245, 0, 3) == 255, "held between black and white");
+        for (int g = 0; g < 256; g += 15) for (int c = -3; c < 3; c++) {
+            int lo = PictureImport.toned(g, 0, c), hi = PictureImport.toned(g, 0, c + 1);
+            check(g < PictureImport.MIDDLE ? hi <= lo : hi >= lo, "each step More spreads further: " + g + " at " + c);
+        }
+        // Contrast first, then Lighter or Darker: Lighter still keeps white, Darker black, each step still lighter.
+        check(PictureImport.toned(0, 1, -1) == PictureImport.shaded(38, 1) && PictureImport.toned(0, 1, -1) == 103, "Less Contrast then Lighter: black to 38, then 103");
+        check(PictureImport.toned(255, 3, -3) < 255 && PictureImport.toned(10, -3, 3) == 0, "Lighter lifts what Less Contrast greyed; More Contrast's black stays black under Darker");
+        for (int g = 0; g < 256; g += 15) for (int c = -3; c <= 3; c++) for (int s = -3; s < 3; s++)
+            check(PictureImport.toned(g, s + 1, c) >= PictureImport.toned(g, s, c), "each step Lighter is lighter at any contrast: " + g + " at " + s + ", " + c);
+        int[] g = PictureImport.greys(new int[]{0xffffffff, 0xfff7f7f7, 0xff404040}, 1, 2);
+        check(g[0] == -1 && g[1] == PictureImport.toned(247, 1, 2) && g[2] == PictureImport.toned(64, 1, 2), "laid toned, paper still clear: " + Arrays.toString(g));
     }
 
     static void cap() {
@@ -176,6 +238,7 @@ public final class PictureImportChecks {
             check(opened.current().locked() && opened.current().tone(20, 50) == 0, "its PDF page under it, locked");
             check(!BlankPages.opened(opened) && opened.count() == 6 && opened.stacks().count() == 3, "no blank page added after the last, nor taken");
             check(opened.lastAdded() != null && opened.lastAdded().toEpochDay() == 20000, "made on its day");
+            check(opened.options().equals(NotebookOptions.NEW) && opened.current().surface == BrushTexture.FINE_SPECK, "a new notebook's options: on Fine");
             boolean threw = false;
             try { PictureImport.writeBook(new ByteArrayOutputStream(), W, H, new ArrayList<>(), pages.get(0), CoverDesign.DEFAULT, 1); } catch (IOException e) { threw = true; }
             check(threw, "no pages, no notebook");

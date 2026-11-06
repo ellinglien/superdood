@@ -11,6 +11,21 @@ final class EdgeHold {
     static final int KEY_ONE = 301, KEY_TWO = 300;
 
     enum Act { NONE, ENTER, LEAVE }
+    /**
+     * What the pen is while the strip is held, chosen in System Settings (the owner, 2026-11-04): the Trash (as always),
+     * the Lasso, or Nothing. Keys are kept: never change them.
+     */
+    enum Choice {
+        TRASH("trash", "Trash"), LASSO("lasso", DrawLayout.LASSO), NOTHING("nothing", "Nothing");
+        final String key, label;
+        Choice(String key, String label) { this.key = key; this.label = label; }
+        /** The choice kept as {@code key}; the Trash for none or one that doesn't read. */
+        static Choice saved(String key) {
+            for (Choice c : values()) if (c.key.equals(key)) return c;
+            return TRASH;
+        }
+    }
+    static final String KEY = "edge_hold";
 
     private boolean one, two, holding, waiting;
 

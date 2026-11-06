@@ -30,7 +30,7 @@ public final class ModularLabChecks {
     /** What a change draws again (e-ink): a slide only its part, a new brush every part; the lab's order of the parts. */
     static void redraws() {
         BrushLab lab = lab(2, 11);
-        lab.pickStyle(ModularStyle.named("Watercolor"));
+        lab.newBrush(ModularStyle.named("Watercolor"));
         check(BrushLab.redraw(null, lab.parts()).all, "Nothing shown yet: every part");
         ModularBrush before = lab.parts().copy();
         PartDial macro = lab.parts().part(BrushPart.TIP).choice.macro;
@@ -51,12 +51,27 @@ public final class ModularLabChecks {
         lab.randomize();
         check(BrushLab.redraw(old, lab.parts()).all, "Randomize: every part");
         check(BrushLab.redraw(lab.parts(), null).nothing(), "An old brush has no modules");
-        check(BrushPart.SHOWN.equals(Arrays.asList(BrushPart.TIP, BrushPart.MEDIUM, BrushPart.PAPER, BrushPart.LIFE, BrushPart.HAND, BrushPart.CARRY)), "The lab shows Tip, Medium, Paper, Drying, Control, Smudge");
+        check(BrushPart.SHOWN.equals(Arrays.asList(BrushPart.HAND, BrushPart.TIP, BrushPart.MEDIUM, BrushPart.CARRY, BrushPart.LIFE))
+                && BrushPart.SHOWN_LATER.equals(Arrays.asList(BrushPart.HAND, BrushPart.TIP, BrushPart.MEDIUM, BrushPart.CARRY, BrushPart.LIFE, BrushPart.LATER)),
+                "The lab shows the parts in the order a mark is made: Control, Tip, Medium, Affects Page, Drying, After (Paper's Texture on Medium's card, 2026-11-01)");
+        StringBuilder labels = new StringBuilder();
+        for (BrushPart p : BrushPart.SHOWN_LATER) labels.append(p.label).append(' ');
+        check(labels.toString().equals("Control Tip Medium Affects Page Drying After ") && BrushPart.PAPER.label.equals("Texture") && BrushPart.PAPER.name().equals("PAPER") && BrushPart.LATER.name().equals("LATER"),
+                "Later reads After, Paper its one dial, Texture (Surface is the notebook's word); the constants are the codes': " + labels);
+        check(lab.dials(BrushPart.MEDIUM).contains(PartDial.TOOTH), "Medium's card holds Paper's Texture");
+        // Drying offers only how long the mark stays wet; After offers every Later, whatever the drying (switched brings its own).
+        for (PartChoice drying : new PartChoice[]{PartChoice.NONE, PartChoice.FAST_WET, PartChoice.DRYING, PartChoice.WET_PAINT}) {
+            lab.choose(BrushPart.LIFE, drying);
+            check(lab.chips(BrushPart.LIFE).equals(Arrays.asList(PartChoice.NONE, PartChoice.FAST_WET, PartChoice.DRYING, PartChoice.WET_PAINT)), drying + ": Drying's chips are Instant, Quick, Slow, Wet: " + lab.chips(BrushPart.LIFE));
+            java.util.List<PartChoice> after = new java.util.ArrayList<>();
+            for (PartChoice c : PartChoice.LATER_SHOWN) if (ModularFeatures.offered(c)) after.add(c);
+            check(lab.chips(BrushPart.LATER).equals(after), drying + ": After's chips are every offered Later: " + lab.chips(BrushPart.LATER));
+        }
         check(PartChoice.SMUDGE.label.equals("Smear") && PartChoice.SMUDGE.key.equals("smudge"), "Smudge's choice reads Smear; its code is unchanged");
     }
     static void parts() {
         BrushLab lab = lab(2, 3);
-        lab.pickStyle(ModularStyle.named("Dip pen"));
+        lab.newBrush(ModularStyle.named("Dip pen"));
         lab.choose(BrushPart.TIP, PartChoice.HAKE);
         check(lab.parts().choice(BrushPart.TIP) == PartChoice.HAKE && lab.status.equals("Tip: Hake"), "A choice chip swaps the part: " + lab.status);
         lab.startSlide(); lab.slide(PartDial.ANGLE, 50); lab.endSlide(PartDial.ANGLE);
@@ -71,26 +86,30 @@ public final class ModularLabChecks {
     }
     static void locks() {
         BrushLab lab = lab(2, 4);
-        lab.pickStyle(ModularStyle.named("Watercolor"));
+        lab.newBrush(ModularStyle.named("Watercolor"));
         lab.toggleLock(BrushPart.PAPER);
         ModularBrush.Part paper = lab.parts().part(BrushPart.PAPER).copy();
         for (int i = 0; i < 10; i++) { lab.randomize(); check(lab.parts().part(BrushPart.PAPER).sameAs(paper), "A locked part survives Randomize"); }
     }
     static void codes() {
         BrushLab lab = lab(2, 6);
-        lab.pickStyle(ModularStyle.named("Hake"));
+        lab.newBrush(ModularStyle.named("Hake"));
         String code = lab.code();
         check(code.contains(".Mc"), "A six-part brush's code is an M code: " + code);
         BrushLab other = lab(2, 7);
         check(other.load(code) && other.parts() != null && ModularCode.encode(other.parts()).equals(code), "and loads");
         check(other.load("dapper-fig.I610gavij3f7q16o0000006m00.e1") && other.code().startsWith("dapper-fig.Md"), "An I code loads as its six parts");
-        check(!other.load("brave-onion.Mz0_0_0_0_0_0.1") && other.status.equals("Not a brush code. Paste all of it."), "A bad code says so");
+        check(!other.load("brave-onion.M0_0_0_0_0.1") && other.status.equals("Not a brush code. Paste all of it."), "A bad code says so");
+        // docs/BRUSH-CODE.md: a newer version's code loads what this one knows and says so in the lab's note; one of a new shape says it needs one.
+        check(other.load("brave-onion.Mz0_0_0_0_0_0.1") && other.brush().name().equals("brave-onion") && BrushImport.NEWER.equals(other.note()), "A newer version's code loads and says some parts differ");
+        check(other.load(ModularCodeChecks.BRAVE_ONION) && !BrushImport.NEWER.equals(other.note()), "a code of this version says nothing of it");
+        check(!other.load("brave-onion.N0_0.1") && other.status.equals(BrushImport.NEEDS_NEWER), "A code of a newer shape says it needs a newer version");
         check(other.load(ModularCodeChecks.BRAVE_ONION) && other.brush().name().equals("brave-onion"), "The web lab's codes load");
         check(other.rename("Brave Onion II") && other.parts().name.equals("Brave Onion II"), "Rename");
     }
     static void undo() {
         BrushLab lab = lab(2, 8);
-        lab.pickStyle(ModularStyle.named("Marker"));
+        lab.newBrush(ModularStyle.named("Marker"));
         String before = lab.code();
         lab.choose(BrushPart.TIP, PartChoice.SPLIT_NIB);
         lab.undo();
@@ -101,20 +120,20 @@ public final class ModularLabChecks {
         for (ModularStyle style : ModularStyle.all()) {
             for (long seed = 0; seed < 8; seed++) {
                 BrushLab lab = lab(2, 100 + seed);
-                lab.pickStyle(style);
+                lab.newBrush(style);
                 shows(lab);
             }
             BrushLab lab = lab(2, 9);
-            lab.pickStyle(style);
+            lab.newBrush(style);
             for (BrushPart part : BrushPart.values()) {
                 for (PartChoice choice : lab.chips(part)) {
                     lab.choose(part, choice);
                     for (PartDial dial : lab.dials(part)) {
                         if (dial.choice()) for (int option = dial.choices.length - 1; option >= 0; option--) lab.choose(dial, option);
                         else {
-                            double[] r = lab.parts().choice(part).range(dial);
+                            double[] r = lab.parts().choice(dial.part).range(dial);
                             lab.startSlide(); lab.slide(dial, r[0]); lab.slide(dial, r[1]); lab.endSlide(dial);
-                            check(lab.parts().part(part).get(dial) == r[1], "A slider reaches its range's end: " + dial);
+                            check(lab.parts().part(dial.part).get(dial) == r[1], "A slider reaches its range's end: " + dial);
                         }
                         lab.roll(dial);
                         shows(lab);
@@ -125,7 +144,7 @@ public final class ModularLabChecks {
             }
         }
         BrushLab lab = lab(2, 10);
-        lab.pickStyle(ModularStyle.named("Dip pen"));
+        lab.newBrush(ModularStyle.named("Dip pen"));
         lab.choose(BrushPart.TIP, PartChoice.BRISTLES);
         lab.choose(BrushPart.CARRY, PartChoice.DRAG);
         BrushLab decoded = lab(2, 11);
@@ -159,13 +178,17 @@ public final class ModularLabChecks {
                 int now = 0;
                 for (BrushLab.Swap swap : swaps) {
                     ModularBrush t = swap.brush.parts;
-                    if (swap.now) { now++; check(swap.brush.sameAs(lab.brush()) && swap.choice == b.choice(part), "The current tile is the brush: " + part); continue; }
-                    check(t.choice(part) == swap.choice && swap.choice != b.choice(part) && ModularFeatures.offered(swap.choice) && swap.choice != PartChoice.CUSTOM, "A tile switches its part to an offered choice: " + swap.choice);
-                    for (BrushPart other : BrushPart.values()) check(other == part || t.part(other).sameAs(b.part(other)), "A tile changes only its part: " + swap.choice + " " + other);
+                    // Drying's tiles end with Later's (LaterChecks): a tile switches its choice's part, and Drying and Later go together.
+                    BrushPart sp = swap.choice.part;
+                    if (swap.now) { if (sp == part) now++; check(swap.brush.sameAs(lab.brush()) && swap.choice == b.choice(sp), "The current tile is the brush: " + part); continue; }
+                    check(t.choice(sp) == swap.choice && swap.choice != b.choice(sp) && ModularFeatures.offered(swap.choice) && swap.choice != PartChoice.CUSTOM, "A tile switches its part to an offered choice: " + swap.choice);
+                    boolean wet = sp == BrushPart.LIFE || sp == BrushPart.LATER;
+                    // Vector Ink sets aside what it can't draw sharp (VectorInk.tidy): its tile changes those too.
+                    for (BrushPart other : BrushPart.values()) check(other == sp || wet && (other == BrushPart.LIFE || other == BrushPart.LATER) || swap.choice == PartChoice.VECTOR || t.part(other).sameAs(b.part(other)), "A tile changes only its part: " + swap.choice + " " + other);
                     if (part == BrushPart.HAND) check(t.part(part).get(PartDial.GAIN) == b.part(part).get(PartDial.GAIN) && t.part(part).get(PartDial.DIR) == b.part(part).get(PartDial.DIR), "A hand tile keeps Response and Fast is");
                     check(t.name.equals(b.name) && t.seed == b.seed, "A tile is the brush, named as it is");
                 }
-                check(now == 1, "One tile is the part's choice now: " + part);
+                check(now == (part == BrushPart.PAPER ? 0 : 1), "One tile is the part's choice now (Paper has none): " + part);
                 check(swaps.size() == lab.chips(part).size(), "A tile per chip: " + part);
             }
             BrushLab.Swap other = null;
@@ -181,7 +204,7 @@ public final class ModularLabChecks {
         check(ModularWords.firstSentences("A. B. C.", 1).equals("A. B.") && ModularWords.firstSentences("A. B. C.", 3).equals("A. B. C.")
                 && ModularWords.firstSentences("A. B. C.", 9).equals("A. B. C."), "First sentences: at least two");
         BrushLab lab = lab(2, 12);
-        lab.pickStyle(ModularStyle.named("Watercolor"));
+        lab.newBrush(ModularStyle.named("Watercolor"));
         lab.choose(BrushPart.LIFE, PartChoice.NONE);
         check(ModularWords.swapNote(lab.parts(), BrushPart.LIFE).equals("dries at once") && ModularWords.swapNote(lab.parts(), BrushPart.TIP).isEmpty(), "Swap notes");
     }
@@ -198,7 +221,7 @@ public final class ModularLabChecks {
     /** Advanced's open card: greyed dials, the hand grid's cells, rows and locks, and the Fast switch. */
     static void advanced() {
         BrushLab lab = lab(2, 13);
-        lab.pickStyle(ModularStyle.named("Dip pen"));
+        lab.newBrush(ModularStyle.named("Dip pen"));
         lab.choose(BrushPart.MEDIUM, PartChoice.INK);
         lab.startSlide(); lab.slide(PartDial.WET, 0); lab.endSlide(PartDial.WET);
         check(!lab.active(PartDial.LINE) && !lab.active(PartDial.BLEED) && !lab.active(PartDial.BLOOM) && lab.active(PartDial.WET) && lab.active(PartDial.POOL), "Ink at Wet 0 greys Line, Bleed and Bloom");
@@ -209,7 +232,7 @@ public final class ModularLabChecks {
         check(lab.active(PartDial.BLOOM), "and not at .8");
         for (ModularStyle style : ModularStyle.all()) {
             BrushLab each = lab(2, 400);
-            each.pickStyle(style);
+            each.newBrush(style);
             for (BrushPart part : BrushPart.values()) for (PartDial dial : each.dials(part)) each.active(dial);
         }
         // The hand grid: a cell cycles off, some, full, off; the hand is named for its cells.
@@ -271,10 +294,11 @@ public final class ModularLabChecks {
         check(!ModularWords.plainWords(b).isEmpty(), "This brush has words");
         for (BrushPart part : BrushPart.values()) {
             List<PartChoice> chips = lab.chips(part);
-            check(chips.contains(b.choice(part)), "A part's chips include its choice: " + b.choice(part));
+            // Paper picks no paper (the surface spec, 2026-11-01): no chips, its card its Texture alone.
+            check(part == BrushPart.PAPER ? chips.isEmpty() : chips.contains(b.choice(part)), "A part's chips include its choice: " + b.choice(part));
             check(part != BrushPart.HAND || b.choice(part) == PartChoice.CUSTOM || !chips.contains(PartChoice.CUSTOM), "Custom shows only when it's the hand");
             for (PartDial dial : lab.dials(part)) {
-                check(b.part(part).has(dial) && ModularFeatures.shown(dial), "A shown dial is its choice's: " + dial);
+                check(b.part(dial.part).has(dial) && ModularFeatures.shown(dial) && (dial.part == part || part == BrushPart.MEDIUM && dial == PartDial.TOOTH), "A shown dial is its choice's (Medium's card: Paper's Texture too): " + dial);
                 double[] r = b.choice(part).range(dial);
                 check(r[0] < r[1] && !dial.shown(b.part(part).get(dial)).isEmpty(), "A dial has a range and a value: " + dial);
                 double[] band = b.style.band(b.choice(part), dial);

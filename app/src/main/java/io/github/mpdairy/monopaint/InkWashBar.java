@@ -27,24 +27,24 @@ import java.util.function.Supplier;
 /**
  * The drawing screen's one toolbar: a narrow column down the drawing hand's side, beside the page with no rule between
  * them (the owner's Scribbler Style, {@link Theme}). Top to bottom (layout v3, the owner's mockup, 2026-10-26): Menu
- * alone; the tray (the owner's "B Pen tray", 2026-10-19): the ten tool slots as {@link SlotTile} rows, each its
+ * alone; the tray (the owner's "B Pen tray", 2026-10-19): the nine tool slots as {@link SlotTile} rows, each its
  * brush's stroke lying across it, like a pen in a tray, no number, the brush at its Medium size whatever the slot's
  * ({@link ToolSwatches#picture}), or, for a Basic tool the owner drew, its picker drawing, its tip out of the row's edge
  * ({@link DrawLayout#drawing}, 2026-10-26); a gap, then the smudge tool and the eraser, a row each, the owner's drawings of them
  * ({@link #showIcon}); the selected tool's size slider beside its grey strip, its size and grey in one dot over them
  * ({@link SwatchBar}, 2026-10-24); the icon block under them (icons alone, no grey behind them; layout v4, 2026-10-26):
- * the Dropper and the Lasso (the owner, 2026-10-24: "lasso can move beside picker"), Refresh ({@link #ghost}); the wet indicator ({@link #wet})
- * and the sand timer, Show Kinds ({@link #kinds}, Template Visibility in its popup), Shapes ({@link #shapes}) and Play
- * ({@link #play}); a Timed Pages page's countdown ({@link #countdown}). The refocus, 2026-10-24: the stamp tool, Magnetic
+ * the Dropper and the Lasso (the owner, 2026-10-24: "lasso can move beside picker"), Refresh ({@link #ghost}); the wet indicator ({@link #wet});
+ * a Timed Pages page's countdown ({@link #countdown}); the layer button under the picker box ({@link #layers}). The sand timer,
+ * Show Kinds ({@link #kindsPopup}) and Play are the menu's rows since 2026-11-06 ({@code PaintActivity.fileMenu}). The refocus, 2026-10-24: the stamp tool, Magnetic
  * Poetry, Mirrors and the layers left the column; 2026-10-28 undo and redo (two and three fingers), Shapes and Play (the
  * menu's Play row; both back 2026-10-30), and the Trash (the Lasso's bar deletes, {@link #lassoBar}). In the order {@link DrawLayout#COLUMN} gives, all on one axis inside one margin ({@link
  * DrawLayout#edge}). What is in use or on has an ink bar down its side ({@link DrawLayout#SIDE_BAR}): the slot, the tool,
- * the Dropper, the Lasso or Shapes while taken up, Play while a toy is on, the grey in use one beside the strip. Space parts the groups, no rules. The items share the column's height ({@link DrawLayout}): shorter
+ * the Dropper, the Lasso or Shapes while taken up, the grey in use one beside the strip. Space parts the groups, no rules. The items share the column's height ({@link DrawLayout}): shorter
  * together when it is short. Tapping a tool
  * selects it, and a tray row never does more (the owner, 2026-10-19); a long press is how the bar is changed (the
  * owner, 2026-10-19: "instead of edit buttons, we use long press as a way to customize"): on a row it opens the tool
  * picker on its slot ({@code PaintActivity.toolPicker}, its Advanced the Tools page, {@link ToolsActivity}), on the eraser Clear page ({@link PageClear}); a long press on the smudge tool opens a chooser of
- * smudge brushes beside it ({@link ToolSlots#smudgeChoices}). The page bar under the page ({@link #turner}) is built
+ * its two, Blend and Water, beside it ({@link ToolSlots#smudgeChoices}). The page bar under the page ({@link #turner}) is built
  * here and placed by the drawing screen. A short label beside the column names a brush when it changes. See
  * PHILOSOPHY.md.
  */
@@ -53,23 +53,22 @@ final class InkWashBar {
     static final long THUMBNAILS_MS = 800;
     final LinearLayout view;
     private final PaintActivity app;
-    /** The column's tools: the ten slots, then the eraser and the smudge tool (see {@link InkWash#ERASER}, {@link InkWash#SMUDGE}). */
+    /** The column's tools: the nine slots, then the eraser, the smudge tool, the stamp tool and Fill in (see {@link InkWash#ERASER}, {@link InkWash#SMUDGE}, {@link ToolSlots#FILL}). */
     private final ToolButton[] tools = new ToolButton[ToolSlots.TOOLS];
     /** The column's three gaps. */
     private final List<View> gaps = new ArrayList<>();
     /** Menu, whose file menu is made ahead ({@link PaintActivity#prepareFileMenu}). Zen Mode's button is the drawing screen's, under the column's foot ({@link DrawLayout#ZEN}). */
     final ToolButton menu;
-    /** The wet indicator's row, the sand timer beside it (the owner, 2026-10-28). */
-    private final LinearLayout wetRow;
     /** A Timed Pages page's time left, m:ss, at the column's top ({@link NotebookRules#countdown}); gone with Timed Pages off. */
     private final TextView clock;
     /**
      * The countdown's row: a Timed Pages page's countdown as before, or the sand timer's ({@link SandTimer}) while it
      * runs. Its icon (the owner, 2026-10-27: "just have a sand timer icon, press it to have it open a menu and you can
-     * set a timer") beside the wet indicator; its tap, or its countdown's, opens {@link #timerMenu}.
+     * set a timer") the menu's Sand Timer row since 2026-11-06 ({@link #sandShown}); its tap, or its countdown's, opens {@link #timerMenu}.
      */
     private final LinearLayout timerRow;
-    private final ToolButton sandTimer;
+    /** Whether the sand timer can be set now (the countdown's row is its and idle): the menu shows its row. */
+    boolean sandShown;
     private final WetIndicator wet;
     /** The selected tool's size slider, grey strip and Dropper. */
     final SwatchBar swatches;
@@ -92,7 +91,7 @@ final class InkWashBar {
     /** The slots' tray strokes and the smudge chooser's loops, drawn off the main thread, so a change never holds up the pen. */
     private final SampleQueue samples = new SampleQueue();
     /** What each slot's button shows: its brush and its row's size ({@link #showBrush(int, boolean)}); null until drawn. */
-    private final String[] trayShown = new String[ToolSlots.COUNT];
+    private final String[] trayShown = new String[ToolSlots.TOOLS];
     /** The smudge chooser's page. */
     private int smudgePage;
     /**
@@ -110,29 +109,16 @@ final class InkWashBar {
      * toolbar, set apart so a finger can press it easily"; on the page bar that morning).
      */
     final ToolButton ghost;
-    /**
-     * Show Kinds ({@link EraseKind#SHOW_KINDS}; the owner, 2026-10-28: from the menu to the column, where Play was): a tap
-     * its popup beside it ({@link #kindsPopup}); always the open eye (the owner, 2026-10-29: "use the open eye icon instead of closed").
-     */
-    final ToolButton kinds;
-    /**
-     * Shapes ({@link DrawLayout#SHAPES}; the owner, 2026-10-30: "move shapes button to below visibility and timer"), the
-     * small row's left cell under Show Kinds: a tap its menu beside it ({@code PaintActivity.shapesMenu}), for the slot in
-     * use; its side bar while Shapes is on.
-     */
-    final ToolButton shapes;
-    /**
-     * Play ({@link DrawLayout#PLAY}, Phosphor confetti; the owner, 2026-10-30: "move fun button beside it"), Shapes' row's
-     * right cell: the toys' menu beside it ({@code PaintActivity.playMenu}); its side bar while a toy is on ({@link #modesChanged}).
-     */
-    final ToolButton play;
     /** Refresh's row, at the column's foot over Zen Mode ({@link DrawLayout#ghostMargin}). */
     private final LinearLayout ghostRow;
-    /** Shapes and Play's row, under Show Kinds and the sand timer. */
-    private final LinearLayout playRow;
-    /** The column's last small row: Show Kinds (Template Visibility beside it until 2026-10-28, now in its popup). */
+    /** The layer button under the picker box ({@link DrawLayout#LAYERS_ROW}): a tap's third of it picks the layer ({@link PaintActivity#pickLayer}). */
+    final ToolButton layers;
+    /** The layer it shows and whether its pair is hidden ({@link #showLayer}); -1 before the first page. */
+    private int layerShown = -1;
+    private boolean layerHidden;
+    /** The column's last small row: the wet indicator (the sand timer, Show Kinds and Play over it until 2026-11-06). */
     private final LinearLayout templateRow;
-    /** The eraser's mark's paint ({@link #drawEraserMark}), and Nothing's strike in the finger's menu. */
+    /** The eraser's mark's paint ({@link #drawEraserMark}). */
     private final Paint markPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     /** Zoom on the page bar ({@link ZoomButton}, {@link PageTurner}): its padlock beside its percentage. */
     final ZoomButton zoom;
@@ -143,19 +129,16 @@ final class InkWashBar {
      * when the column is on the right.
      */
     final LinearLayout brushLine;
-    /** The open notebook's name, very small in the foot's far corner, as wide as its words ({@link DrawLayout#bookName}); touches go through it. */
-    final TextView bookName;
+    /** The lasting status ({@link #statusCorner(String)}), very small in the foot's far corner, as wide as its words ({@link DrawLayout#statusCorner}); touches go through it. */
+    final TextView statusCorner;
     private final Caption brushName;
     private final TextView noteText;
     /** The brush line's words for a brush, by {@link Brush#identity}: {its name and caption, what the screen reader hears}. Main thread only. */
     private final java.util.Map<String, String[]> lineWords = new java.util.LinkedHashMap<String, String[]>(16, .75f, true) {
         @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, String[]> eldest) { return size() > 3 * ToolSlots.COUNT; }
     };
-    /** {@code brush}'s line words ({@link #lineWords}): they resolve the brush (its textures the first time), so a tap reads them made. */
-    private static String[] lineWordsOf(Brush brush) {
-        ToolPresets.Preset preset = ToolPresets.find(brush);
-        return new String[]{DrawLayout.brushWords(brush.name(), preset == null ? null : preset.line, ModularWords.caption(brush.parts)), brush.name() + ". " + BrushVoice.about(brush.parts)};
-    }
+    /** {@code brush}'s line words ({@link #lineWords}, {@link DrawLayout#lineWords}): they resolve the brush (its textures the first time), so a tap reads them made. */
+    private static String[] lineWordsOf(Brush brush) { return DrawLayout.lineWords(brush); }
     /**
      * Tool {@code slot}'s line words made in the background, so picking it puts the line on the
      * panel at once in one update, with nothing worked out on the tap (the owner, 2026-10-25: "make Scribulor's as snappy").
@@ -173,7 +156,7 @@ final class InkWashBar {
     /** The page bar along the page's top ({@link PageTurner}), the drawing screen puts it over the page. */
     final PageTurner turner;
     /** Each slot's tray stroke as its row shows it, for the finger's choices in the menu; null until drawn. */
-    private final Bitmap[] trays = new Bitmap[ToolSlots.COUNT];
+    private final Bitmap[] trays = new Bitmap[ToolSlots.TOOLS];
 
     InkWashBar(PaintActivity app) {
         this.app = app;
@@ -195,9 +178,6 @@ final class InkWashBar {
         clock.setMaxLines(2);
         clock.setAutoSizeTextTypeUniformWithConfiguration(8, Math.round(TypeStyle.LABEL.sp), 1, android.util.TypedValue.COMPLEX_UNIT_SP);
         clock.setOnClickListener(v -> app.countdownTapped());
-        sandTimer = app.iconButton(SandTimer.NAME, R.drawable.ic_sand_timer, app::countdownTapped);
-        sandTimer.setBackground(null);
-        sandTimer.setVisibility(View.INVISIBLE);  // its cell kept, so the wet indicator stays put
         timerRow = LabUi.row(app);
         timerRow.setGravity(Gravity.CENTER);
         timerRow.addView(clock, new LinearLayout.LayoutParams(-1, -1));
@@ -206,7 +186,7 @@ final class InkWashBar {
         menuRow.addView(menu[0], tile(fitted.menuRow(), fitted.menuRow()));
         for (int t = 0; t < ToolSlots.TOOLS; t++) {
             int tool = t;
-            ToolButton button = app.iconButton(toolName(tool), R.drawable.ic_eraser_block, () -> choose(tool)).bar();
+            ToolButton button = app.iconButton(DrawLayout.toolName(tool), R.drawable.ic_eraser_block, () -> choose(tool)).bar();
             // No Button background: its pressed ripple drew the row again through Android, frame after frame, on every tap;
             // and no press outline: its box on the pen's down and off 200 ms after were two more grey updates, queued
             // before and after the mark's on the panel (2026-10-24). The press is the new side bar itself, in the binary
@@ -215,21 +195,15 @@ final class InkWashBar {
             button.marked = tool == app.inkWash.selected;
             // A tray row's long press: the tool picker beside it (a tap only selects it; the owner, 2026-10-25: "long press on any
             // slot to open. single tap selects the tool"); while its brush holds paint, Clean Brush first (the refocus, 2026-10-24: behind the long press alone, the slots' paint dab and gauge gone).
-            if (tool < ToolSlots.COUNT) button.setOnLongClickListener(v -> { if (!app.busy()) { app.pad.words.close(); if (app.inkWash.dirty(tool)) cleanMenu(tool); else app.toolPicker(tool, v); } return true; });
+            button.setOnLongClickListener(v -> { hold(tool); return true; });
             tools[tool] = button;
         }
         // Layout v3 (the owner's mockup, 2026-10-26, DrawLayout.COLUMN): under the tray the smudge tool and the eraser, a
         // row each, their drawings; the dot, the slider and the grey strip; under them the icon block (layout v4), the
-        // Dropper and the Lasso, Refresh; then the small rows, Show Kinds and the sand timer, Shapes and Play (2026-10-30), the wet indicator.
+        // Dropper and the Lasso, Refresh; then the wet indicator's small row.
         ghostRow = LabUi.row(app);
-        wetRow = LabUi.row(app);
-        playRow = LabUi.row(app);
         templateRow = LabUi.row(app);
-        for (LinearLayout row : new LinearLayout[]{ghostRow, wetRow, playRow, templateRow}) row.setGravity(Gravity.CENTER_HORIZONTAL);
-        // A long press on the eraser: what it takes, and Clear page, beside it.
-        tools[InkWash.ERASER].setOnLongClickListener(v -> { eraserMenu(); return true; });
-        // A long press on the smudge tool: picked, and its chooser of smudge brushes beside it (the owner: quick to pick, options on hold).
-        tools[InkWash.SMUDGE].setOnLongClickListener(v -> { if (!app.busy()) { if (app.inkWash.selected != InkWash.SMUDGE) choose(InkWash.SMUDGE); tapSmudge(); } return true; });
+        for (LinearLayout row : new LinearLayout[]{ghostRow, templateRow}) row.setGravity(Gravity.CENTER_HORIZONTAL);
         tools[InkWash.ERASER].overlay = this::drawEraserMark;
         // The stamp tool has no cell (the Tools page picks it); its button keeps its state, off the column.
         // The Dropper (2026-10-24), beside the Lasso: a tap takes it up, or puts it down.
@@ -248,19 +222,22 @@ final class InkWashBar {
             @Override public boolean rubbed(double travel) { return app.inkWash.rub(travel); }
             @Override public void covered(RectF area) { }
         }, dropper, this::opacityMenu);
-        // Show Kinds: its popup beside it.
-        kinds = app.iconButton(EraseKind.SHOW_KINDS, R.drawable.ic_ph_eye_fill, this::kindsPopup).slow();
         lasso = app.iconButton(DrawLayout.LASSO, R.drawable.ic_ph_lasso, this::tapLasso).bar();
-        ghost = app.iconButton(DrawLayout.REFRESH, R.drawable.ic_ph_ghost, () -> { if (app.pad != null) app.pad.flashSoon("Refresh button"); });
+        ghost = app.iconButton(DrawLayout.REFRESH, R.drawable.ic_ph_ghost, () -> { if (app.pad != null) app.pad.refreshAsked("Refresh button"); });
         ghost.iconHalf = DrawLayout.ICON_SIDE / 2;
-        shapes = app.iconButton(DrawLayout.SHAPES, R.drawable.ic_ph_shapes, this::tapShapes).bar();
-        // Play: the toys' menu beside it, marked by its side bar while one is on.
-        ToolButton[] played = new ToolButton[1];
-        played[0] = app.iconButton(DrawLayout.PLAY, R.drawable.ic_ph_confetti, () -> { if (!app.busy()) app.playMenu(played[0]); }).slow();
-        play = played[0];
-        // A menu's button: an icon alone, no button grey (the owner, 2026-10-21); the Lasso, Refresh, Shapes and Play too.
-        for (View plain : new View[]{kinds, lasso, ghost, shapes, play}) plain.setBackground(null);
+        // A menu's button: an icon alone, no button grey (the owner, 2026-10-21); the Lasso and Refresh too.
+        for (View plain : new View[]{lasso, ghost}) plain.setBackground(null);
         ghostRow.addView(ghost, item(fitted.icon));
+        // The layer button: where the pen lifts on it picks the layer (DrawLayout.layerAt), its whole height in thirds.
+        float[] liftY = {0};
+        ToolButton[] layer = new ToolButton[1];
+        layer[0] = app.iconButton(DrawLayout.layerSaid(2, false), R.drawable.layer_middle, () -> app.pickLayer(DrawLayout.layerAt(liftY[0], 0, layer[0].getHeight())));
+        layers = layer[0];
+        layers.setBackground(null);
+        layers.setOnTouchListener((v, e) -> { liftY[0] = e.getY(); return false; });
+        // Its hold: each layer's eye (the owner, 2026-11-06: "long press should bring up the visibility options"), in the fan too.
+        layers.setOnLongClickListener(v -> { layersPopup(); return true; });
+        layerActions(layers, app::pickLayer);
         // The droplet while a Slow wash is still settling; a tap lays it now.
         wet = new WetIndicator(app, new WetIndicator.Host() {
             @Override public boolean wet() { return app.inkWash.session.wet(); }
@@ -272,15 +249,8 @@ final class InkWashBar {
             @Override public void update(View indicator, Runnable change) { app.selectionFeedback.update(indicator, change); }
         });
         app.inkWash.session.wetChanged = wet::changed;
-        // Under the icon block, Show Kinds and the sand timer side by side, then the wet indicator on its own line (the owner,
-        // 2026-10-29: "move the wet indicator to its own line, moving the visibility button there"; beside the timer until then).
-        // Shapes and the sand timer, then Show Kinds and Play under them (the owner, 2026-10-30: "move shapes button to below
-        // visibility and timer, and move fun button beside it", then "because the fun button looks a bit like the shapes
-        // button .. let's swap the location of the visibility and shapes buttons").
-        wetRow.addView(shapes, tile(fitted.half(), fitted.wet));
-        wetRow.addView(sandTimer, tile(fitted.half(), fitted.wet));
-        playRow.addView(kinds, tile(fitted.half(), fitted.wet));
-        playRow.addView(play, tile(fitted.half(), fitted.wet));
+        // Under the icon block the wet indicator on its own line (the owner, 2026-10-29: "move the wet indicator to its own line").
+        // The sand timer, Show Kinds and Play the menu's rows since 2026-11-06 (the owner: "move the timer, visibility, and mischief tools to the dropdown").
         templateRow.addView(wet, tile(fitted.half(), fitted.wet));
         showModes();
         // The page bar (notebooks), over the page.
@@ -305,36 +275,33 @@ final class InkWashBar {
         LinearLayout.LayoutParams notePlace = new LinearLayout.LayoutParams(-2, -1);
         notePlace.setMarginStart(app.dp(DrawLayout.NOTE_GAP));
         brushLine.addView(noteText, notePlace);
-        // A tap on the name: Brush Lab on the slot in use (the owner, 2026-10-22: "tapping the name or the preview there should open the brush studio").
-        brushName.setOnClickListener(v -> { int tool = app.inkWash.selected; if (!app.busy() && tool < ToolSlots.COUNT) app.openBrushLab(tool); });
-        // Only the words take a tap, not the empty line after them, where a resting palm may be (the owner, 2026-10-23).
-        brushName.setOnTouchListener((v, e) -> e.getActionMasked() == MotionEvent.ACTION_DOWN && !onWords(brushName, e.getX()));
+        // No tap on the name (the release pare-down, 2026-11-05): Brush Lab is a slot's long press's Edit Brush alone.
+        statusCorner = captionLine(new TextView(app));
+        statusCorner.setClickable(false);
         showBrushLine();
-        bookName = captionLine(new TextView(app));
-        bookName.setClickable(false);
         // The column, top to bottom (DrawLayout.COLUMN).
         for (DrawLayout.Part part : DrawLayout.COLUMN) {
             switch (part) {
                 case TIMER: view.addView(timerRow, item(DrawLayout.TIMER)); break;
                 case MENU: view.addView(menuRow, new LinearLayout.LayoutParams(-1, -2)); break;
                 case GAP: gap(); break;
-                // The tray: the ten slots.
+                // The tray: the nine slots.
                 case TRAY: for (int t = 0; t < ToolSlots.COUNT; t++) view.addView(tools[t], trayTile(fitted)); break;
-                // The smudge tool and the eraser, a tray row each, their drawings on it.
-                case TOOLS: for (int t : new int[]{InkWash.SMUDGE, InkWash.ERASER}) view.addView(tools[t], trayTile(fitted)); break;
+                // Fill in, the smudge tool and the eraser, a tray row each, their drawings on it (Fill in's its slot's was, 2026-11-06).
+                case TOOLS: for (int t : DrawLayout.AFTER_TRAY) view.addView(tools[t], trayTile(fitted)); break;
                 case BLOCK: {
                     // The Dropper and the Lasso beside it (the owner, 2026-10-24: "lasso can move beside picker"), Refresh.
                     LinearLayout pickRow = LabUi.row(app);
                     pickRow.setGravity(Gravity.CENTER_HORIZONTAL);
                     pickRow.addView(swatches.dropper);
                     pickRow.addView(lasso);
-                    // Show Kinds and the sand timer, Shapes and Play, the wet indicator, under them (the owner, 2026-10-29: "move the
-                    // wet droplet icon, timer and visibility buttons above the ghost button"); Refresh at the column's foot (PLAY).
-                    for (View row : new View[]{pickRow, wetRow, playRow, templateRow}) view.addView(row, new LinearLayout.LayoutParams(-1, -2));
+                    // The wet indicator under them (the owner, 2026-10-29: "move the wet droplet icon ... above the ghost button"); Refresh at the column's foot (PLAY).
+                    for (View row : new View[]{pickRow, templateRow}) view.addView(row, new LinearLayout.LayoutParams(-1, -2));
                     break;
                 }
                 case FACES: view.addView(swatches.view, new LinearLayout.LayoutParams(-1, -2)); break;
                 case PLAY: view.addView(ghostRow, ghostPlace(fitted)); break;
+                case LAYERS: view.addView(layers, item(fitted.layers)); break;
                 case STRETCH: view.addView(new View(app), new LinearLayout.LayoutParams(1, 0, 1)); break;
                 default: break;
             }
@@ -352,11 +319,6 @@ final class InkWashBar {
         LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(-1, -2);
         place.bottomMargin = app.dp(at.ghostMargin());
         return place;
-    }
-    /** Where the {@code g}th gap is in {@link DrawLayout#COLUMN}. */
-    private static int gapIndex(int g) {
-        for (int i = 0, seen = 0; i < DrawLayout.COLUMN.length; i++) if (DrawLayout.COLUMN[i] == DrawLayout.Part.GAP && seen++ == g) return i;
-        throw new IllegalArgumentException("gap " + g);
     }
     /** Adds a gap, {@link DrawLayout#gap} tall. */
     private void gap() { View gap = new View(app); gaps.add(gap); view.addView(gap); }
@@ -419,22 +381,26 @@ final class InkWashBar {
     /** Every item at {@code at}'s size. */
     private void place(DrawLayout at) {
         menu.setLayoutParams(tile(at.menuRow(), at.menuRow()));
-        // The picker box's gaps, over it (from the eraser) and under it (to the Dropper and the Lasso), half the others (the
-        // owner, 2026-10-29: "a little more snug ... tighten that up by 50%"); the room they give goes to the foot.
-        for (int g = 0; g < gaps.size(); g++) {
-            DrawLayout.Part next = DrawLayout.COLUMN[gapIndex(g) + 1], last = DrawLayout.COLUMN[gapIndex(g) - 1];
-            boolean snug = next == DrawLayout.Part.FACES || last == DrawLayout.Part.FACES;
-            gaps.get(g).setLayoutParams(new LinearLayout.LayoutParams(1, app.dp(snug ? at.gap / 2 : at.gap)));
-        }
+        // The gaps, the picker box's snug (DrawLayout.gapHeight).
+        for (int g = 0; g < gaps.size(); g++) gaps.get(g).setLayoutParams(new LinearLayout.LayoutParams(1, app.dp(at.gapHeight(g))));
         // A slot's row for the slots, the smudge tool and the eraser (the stamp tool has no place in the column).
         for (int t = 0; t < ToolSlots.TOOLS; t++) tools[t].setLayoutParams(t == InkWash.STAMP ? tile(at.half(), at.icon) : trayTile(at));
-        for (View cell : new View[]{wet, kinds, sandTimer, shapes, play}) cell.setLayoutParams(tile(at.half(), at.wet));
+        wet.setLayoutParams(tile(at.half(), at.wet));
         swatches.apply(at, right);
         for (View cell : new View[]{swatches.dropper, lasso}) cell.setLayoutParams(tile(at.half(), at.icon));
         // Refresh the whole row, a finger's target (52 dp tall on the Manta, the column's inside wide).
         ghost.setLayoutParams(item(at.icon));
         ghostRow.setLayoutParams(ghostPlace(at));
+        // The layer button: its row, its icon as tall as it holds up to LAYERS_ICON.
+        layers.setLayoutParams(item(at.layers));
+        layers.setVisibility(at.layers > 0 ? View.VISIBLE : View.GONE);
+        sizeLayers(at.layers);
         turner.place(at, right);
+    }
+    /** The layer button's icon for a row {@code tall} dp tall: as tall as it holds, up to {@link DrawLayout#LAYERS_ICON}. */
+    private void sizeLayers(int tall) {
+        layers.iconHalf = Math.min(DrawLayout.LAYERS_ICON, tall - 2 * DrawLayout.TRAY_TOP) / 2;
+        layers.iconHalfWidth = layerHalfWidth(app, layers.iconHalf);
     }
     /**
      * The Lasso's and the Dropper's buttons as cells of the tool grid ({@link SlotTile} rows, icon in place of a
@@ -445,34 +411,13 @@ final class InkWashBar {
         // Every half-row cell's icon one square (DrawLayout.ICON_SIDE), its row the square and SlotTile's pad above and below
         // it; the left cell's bar at its left, the right's at its right, so each pair sits evenly about the column's axis.
         int iconHalf = DrawLayout.ICON_SIDE / 2 + DrawLayout.TRAY_TOP;
-        for (ToolButton b : new ToolButton[]{lasso, swatches.dropper, kinds, sandTimer, shapes, play}) { b.iconHalf = iconHalf; b.iconHalfWidth = halfWidth; }
+        for (ToolButton b : new ToolButton[]{lasso, swatches.dropper}) { b.iconHalf = iconHalf; b.iconHalfWidth = halfWidth; }
         // The Dropper and the Lasso in the icon block, the Dropper's left: the Dropper's bar at its left, the Lasso's right.
         lasso.iconOnly(face(null, app.getDrawable(R.drawable.ic_ph_lasso), true, false), face(null, app.getDrawable(R.drawable.ic_ph_lasso), false, false));
         swatches.dropper.iconOnly(face(null, app.getDrawable(R.drawable.ic_ph_eyedropper), true, true), face(null, app.getDrawable(R.drawable.ic_ph_eyedropper), false, true));
-        // Show Kinds, the left cell: its bar's room at its left, as the Dropper's and Shapes'.
-        SlotTile.Face open = face(null, app.getDrawable(R.drawable.ic_ph_eye_fill), false, true);
-        kinds.iconOnly(open, open);
-        // The sand timer as they are, beside the wet indicator (the owner, 2026-10-28: "shrink the hourglass to match the other icon sizes").
-        SlotTile.Face timer = new SlotTile.Face(app, null, app.getDrawable(R.drawable.ic_sand_timer), app.dp(DrawLayout.ICON_FULL), false, false, Double.NaN, -1);
-        sandTimer.iconOnly(timer, timer);
-        // Shapes and Play, a small row's cells: Shapes' bar at its left, Play's at its right, as the Dropper's and the Lasso's.
-        shapes.iconOnly(face(null, app.getDrawable(R.drawable.ic_ph_shapes), true, true), face(null, app.getDrawable(R.drawable.ic_ph_shapes), false, true));
-        play.iconOnly(face(null, app.getDrawable(R.drawable.ic_ph_confetti), true, false), face(null, app.getDrawable(R.drawable.ic_ph_confetti), false, false));
-        modesChanged();
-    }
-    /** A toy turned on or off (Magnetic Poetry's bin, the page's mirrors or a mirror being placed): Play's side bar follows. */
-    void modesChanged() {
-        boolean on = DrawLayout.playOn(app.pad != null && app.pad.words.open(), app.mirrors.on());
-        play.mark(on);
-        play.setContentDescription(DrawLayout.PLAY + (on ? ", on" : ""));
-    }
-    /** A tap on Shapes: its menu beside it, for the slot in use (the first when the eraser, the smudge tool or the stamp tool is). */
-    private void tapShapes() {
-        if (app.busy()) return;
-        app.shapesMenu(app.inkWash.selected < ToolSlots.COUNT ? app.inkWash.selected : 0, shapes);
     }
     /**
-     * A tap on Show Kinds (the owner, 2026-10-28: "just one popup where you can adjust the visibility of each type at the
+     * A tap on the menu's Show Kinds (the column's eye until 2026-11-06; the owner, 2026-10-28: "just one popup where you can adjust the visibility of each type at the
      * same time. use the eyes as the button below the names"): Pen, Paint and Dry Media side by side, light as the
      * eraser's ({@link #lightRow}), each kind's step's eye ({@link PageTurner#STEP_ICONS}) under its name; a tap on an eye
      * steps that kind on, Full, Half, Faint, Hidden. Template first while the page has guides (the owner, 2026-10-28:
@@ -480,43 +425,84 @@ final class InkWashBar {
      * ("keep it open until the person has set things like they want"), until the pen goes down elsewhere or a second
      * tap on Show Kinds.
      */
-    private void kindsPopup() {
+    void kindsPopup() {
         if (app.busy() || app.pad.document == null) return;
         if (label != null && labelContent == kindsContent) { hideLabel(); return; }
         app.pad.finishStroke();
         LinearLayout row = new LinearLayout(app);
         row.setBackground(Theme.menu(app));
-        int fine = app.dp(Theme.FINE), pad = app.dp(DrawLayout.LIGHT_PAD);
+        int fine = app.dp(Theme.FINE);
         row.setPadding(fine, fine, fine, fine);
         // Each column as wide as the widest name, so none is cut off (the owner, 2026-10-29: "some words are cut off").
         row.setMeasureWithLargestChildEnabled(true);
-        for (int c = guides() < 0 ? 1 : 0; c < EraseKind.LABELS.length; c++) {
+        for (int c = DrawLayout.kindsFirst(guides()); c < EraseKind.LABELS.length; c++) {
             int choice = c;
-            LinearLayout column = new LinearLayout(app);
-            column.setOrientation(LinearLayout.VERTICAL);
-            column.setGravity(Gravity.CENTER_HORIZONTAL);
-            TextView name = Theme.menuRow(new TextView(app), false);
-            name.setText(choice == 0 ? NotebookLayout.TEMPLATE : EraseKind.LABELS[choice]); name.setSingleLine(true); name.setGravity(Gravity.CENTER);
-            name.setPadding(pad, 0, pad, 0);
-            column.addView(name, new LinearLayout.LayoutParams(-2, app.dp(DrawLayout.LIGHT_ROW)));
-            android.widget.ImageView eye = new android.widget.ImageView(app);
-            eye.setScaleType(android.widget.ImageView.ScaleType.CENTER);
-            Runnable shown = () -> {
-                int step = choice == 0 ? Math.max(guides(), 0) : EraseKind.step(app.shownKinds(), choice);
-                eye.setImageDrawable(app.getDrawable(PageTurner.STEP_ICONS[step + 1]));
-                eye.setContentDescription(choice == 0 ? DrawLayout.templateSaid(step) : EraseKind.stepNote(choice, step));
-            };
-            shown.run();
-            eye.setOnClickListener(v -> {
-                if (choice == 0) { if (app.book != null) app.showGuides(app.book.options().withNextGuidesStep().guidesShown); }
-                else app.showKind(choice, (EraseKind.step(app.shownKinds(), choice) + 1) % NotebookOptions.GUIDE_STEPS.length);
-                shown.run();
-            });
-            column.addView(eye, new LinearLayout.LayoutParams(-1, app.dp(DrawLayout.KINDS_EYE)));
+            LinearLayout column = eyeCell(DrawLayout.kindsName(choice), true, false, () -> DrawLayout.kindsStep(choice, app.shownKinds(), guides()),
+                    step -> DrawLayout.kindsSaid(choice, step), step -> {
+                        if (choice == 0) { if (app.book != null) app.showGuides(app.book.options().withNextGuidesStep().guidesShown); }
+                        else app.showKind(choice, step);
+                    }, null);
             row.addView(column, new LinearLayout.LayoutParams(0, -2, 1));
         }
         kindsContent = row;
         showLabel(row, true, 0, templateRow);
+    }
+    /**
+     * The layer button's hold (the owner, 2026-11-06: "long press should bring up the visibility options"): its three
+     * layers, Layer 3 over 2 over 1 as the button stacks them, light as Show Kinds' popup, each its name, the one drawn on
+     * marked, and its eye ({@link InkWashLayers#stepOf}); a tap on an eye steps that layer Full, Half, Faint, Hidden
+     * ({@link PaintActivity#layerStep}), a tap on a name picks that layer ({@link PaintActivity#pickLayer}) and closes it. A
+     * layer the page has yet to make shows Full. Beside the button, or Zen Mode's fan while it holds the button; a second
+     * hold closes it, as the pen elsewhere does.
+     */
+    void layersPopup() {
+        if (app.busy() || app.pad == null || app.pad.document == null) return;
+        if (label != null && labelContent == layersContent) { hideLabel(); return; }
+        app.pad.finishStroke();
+        LinearLayout list = new LinearLayout(app);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setBackground(Theme.menu(app));
+        int fine = app.dp(Theme.FINE);
+        list.setPadding(fine, fine, fine, fine);
+        int drawn = layerInUse();
+        for (int l = InkWashLayers.LAYERS; l >= 1; l--) {
+            int layer = l;
+            list.addView(eyeCell(DrawLayout.layerNote(layer), false, layer == drawn, () -> InkWashLayers.stepOf(app.pad.document, layer),
+                    step -> DrawLayout.layerStepNote(layer, step), step -> app.layerStep(layer, step), () -> { hideLabel(); app.pickLayer(layer); }),
+                    new LinearLayout.LayoutParams(-1, -2));
+        }
+        layersContent = list;
+        showLabel(list, true, 0, layers);
+    }
+    /** The layer button's hold's popup, while it shows. */
+    private View layersContent;
+    /**
+     * A light popup's cell (Show Kinds', the layer button's): {@code name} over ({@code over}) or beside its eye, the step's
+     * ({@link PageTurner#STEP_ICONS}), {@code chosen} marked; a tap on the eye {@code next} the step after {@code step}'s
+     * (Hidden going back to Full), the eye then showing it, said by {@code said}; a tap on the name {@code picked} (null: none).
+     */
+    private LinearLayout eyeCell(String name, boolean over, boolean chosen, java.util.function.IntSupplier step, java.util.function.IntFunction<String> said,
+                                 java.util.function.IntConsumer next, Runnable picked) {
+        LinearLayout cell = new LinearLayout(app);
+        cell.setOrientation(over ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        cell.setGravity(over ? Gravity.CENTER_HORIZONTAL : Gravity.CENTER_VERTICAL);
+        int pad = app.dp(DrawLayout.LIGHT_PAD), eyeSide = app.dp(DrawLayout.KINDS_EYE);
+        TextView words = Theme.menuRow(new TextView(app), chosen);
+        words.setText(name); words.setSingleLine(true); words.setGravity(over ? Gravity.CENTER : Gravity.CENTER_VERTICAL | Gravity.START);
+        words.setPadding(pad, 0, pad, 0);
+        if (picked != null) words.setOnClickListener(v -> picked.run());
+        cell.addView(words, over ? new LinearLayout.LayoutParams(-2, app.dp(DrawLayout.LIGHT_ROW)) : new LinearLayout.LayoutParams(0, eyeSide, 1));
+        android.widget.ImageView eye = new android.widget.ImageView(app);
+        eye.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+        Runnable shown = () -> {
+            int at = step.getAsInt();
+            eye.setImageDrawable(app.getDrawable(PageTurner.STEP_ICONS[at + 1]));
+            eye.setContentDescription(said.apply(at));
+        };
+        shown.run();
+        eye.setOnClickListener(v -> { next.accept((step.getAsInt() + 1) % NotebookOptions.GUIDE_STEPS.length); shown.run(); });
+        cell.addView(eye, over ? new LinearLayout.LayoutParams(-1, eyeSide) : new LinearLayout.LayoutParams(eyeSide, eyeSide));
+        return cell;
     }
     /** Show Kinds' popup, while it shows. */
     private View kindsContent;
@@ -528,15 +514,17 @@ final class InkWashBar {
     /** A tap on the Lasso: taken up (from the edge strip's hold too); in use with nothing floating and one kept, Paste beside it ({@link DrawLayout#lassoTap}). */
     private void tapLasso() {
         if (app.busy() || !lasso.isEnabled()) return;
+        // A piece the edge strip (or Duplicate) left floating would put the Lasso away once done, so the pen's next loop drew ink (the owner, 2026-11-05).
+        app.pad.keepLasso();
         DrawLayout.LassoTap tap = DrawLayout.lassoTap(app.pad.lassoOn && !app.pad.lassoDeletes, app.pad.hasSelection(), app.pad.hasKept());
         if (tap == DrawLayout.LassoTap.TAKE_UP) takeUpLasso(false);
         else if (tap == DrawLayout.LassoTap.MENU)
-            app.menu(lasso, "lasso menu", new String[]{DrawLayout.LASSO_PASTE}, new int[]{R.drawable.ic_ph_clipboard}, new Runnable[]{app.pad::pasteSelection}, 160);
+            app.menu(anchor(lasso), "lasso menu", new String[]{DrawLayout.LASSO_PASTE}, new int[]{R.drawable.ic_ph_clipboard}, new Runnable[]{app.pad::pasteSelection}, 160);
     }
     /**
      * The Lasso's bar over the floating piece (the owner, 2026-10-28: "in supernote there is just one lasso tool...
      * select something and then when the bounding box appears, above it is a toolbar offering choices for what to do with
-     * it"): Cut, Duplicate ("duplicate instead of copy", later that day) and Delete ({@link DrawLayout#LASSO_BAR}) in a light row ({@link #lightRow}), just over {@code
+     * it"): Cut, Duplicate ("duplicate instead of copy", later that day), Make Stamp (2026-11-02) and Delete ({@link DrawLayout#LASSO_BAR}) in a light row ({@link #lightRow}), just over {@code
      * piece}, the piece's frame and knob in the root's app coordinates ({@link DrawingPad#lassoBar}), under it with no room
      * over it, on the page; null: gone (the piece put down, cut or deleted, or the pen moving it). The pen on it keeps it
      * ({@link #penDown}); a locked page refuses Cut and Delete as the pieces' own ({@link DrawingPad#deleteSelection}).
@@ -546,7 +534,7 @@ final class InkWashBar {
         if (piece == null) { if (shown) hideLabel(); return; }
         if (!shown) lassoContent = lightRow(DrawLayout.LASSO_BAR, -1, DrawLayout.LASSO_BAR.length, false, choice -> {
             if (app.busy()) return;
-            if (choice == 0) app.pad.cutSelection(); else if (choice == 1) app.pad.duplicateSelection(); else app.pad.deleteSelection();
+            if (choice == 0) app.pad.cutSelection(); else if (choice == 1) app.pad.duplicateSelection(); else if (choice == 2) app.pad.stampSelection(); else app.pad.deleteSelection();
         });
         int[] size = labelSize(lassoContent);
         RectF page = Popups.bounds(app.root, app.pad);
@@ -556,23 +544,33 @@ final class InkWashBar {
     }
     /** The Lasso's bar, while it shows. */
     private View lassoContent;
-    /** What was in use when the edge strip's hold began. */
-    private boolean heldTrash, heldLasso, heldDropper;
-    /** The edge strip's two-finger hold ({@link EdgeHold}): the Lasso's loop that deletes while held (left on if it was on), then what was in use. */
+    /**
+     * What was in use when the edge strip's hold began: the hold's own loop already, or a hold that does nothing
+     * ({@code heldTrash}), the other loop, the Dropper; and whether the hold's loop deletes.
+     */
+    private boolean heldTrash, heldLasso, heldDropper, heldDeletes;
+    /**
+     * The edge strip's two-finger hold ({@link EdgeHold}): System Settings' Edge Strip Hold ({@link EdgeHold.Choice}), the
+     * Lasso's loop that deletes (the Trash, at first) or the Lasso's own while held (left on if it was on), then what was
+     * in use, a piece it lifted keeping the Lasso until the piece is done ({@link DrawingPad#lassoBackWhenDone}); Nothing
+     * leaves the pen as it is.
+     */
     void edgeTrash(EdgeHold.Act act) {
         if (app.pad == null) return;
         if (act == EdgeHold.Act.ENTER) {
-            heldTrash = app.pad.lassoOn && app.pad.lassoDeletes || !lasso.isEnabled();
-            heldLasso = app.pad.lassoOn && !app.pad.lassoDeletes; heldDropper = app.pad.dropperOn;
-            if (!heldTrash) takeUpLasso(true);
+            EdgeHold.Choice choice = app.prefs.edgeHold();
+            heldDeletes = choice == EdgeHold.Choice.TRASH;
+            heldTrash = choice == EdgeHold.Choice.NOTHING || app.pad.lassoOn && app.pad.lassoDeletes == heldDeletes || !lasso.isEnabled();
+            heldLasso = app.pad.lassoOn && app.pad.lassoDeletes != heldDeletes; heldDropper = app.pad.dropperOn;
+            if (!heldTrash) takeUpLasso(heldDeletes);
         } else if (act == EdgeHold.Act.LEAVE && !heldTrash) {
-            if (heldLasso) takeUpLasso(false);
-            else { app.pad.lasso(false); if (heldDropper) app.pad.dropper(true); lassoChanged(); }
+            if (heldLasso) takeUpLasso(!heldDeletes);
+            else if (!app.pad.lassoBackWhenDone()) { app.pad.lasso(false); if (heldDropper) app.pad.dropper(true); lassoChanged(); }
         }
     }
     /** The Lasso's loop taken up, lifting a piece or deleting what it rings ({@code deletes}, the edge strip's hold): a piece floating is put down first. */
     private void takeUpLasso(boolean deletes) {
-        closePanel(); app.pad.words.close(); app.pad.dropper(false);
+        closePanel(); app.pad.words.close(); app.pad.text.close(); app.pad.dropper(false);
         if (app.pad.lassoOn) app.pad.lasso(false);
         app.pad.lassoDeletes = deletes;
         app.pad.lasso(true);
@@ -588,12 +586,11 @@ final class InkWashBar {
         // The side bars that move in one update of the column, binary where they are ink and paper, as a tool pick's.
         app.selectionFeedback.updateParts(view, () -> {
             // The edge strip's hold marks the Lasso too: its loop deletes while held.
-            lasso.mark(on); swatches.dropper.mark(dropping); shapes.mark(shaping);
+            lasso.mark(on); swatches.dropper.mark(dropping);
             tools[app.inkWash.selected].mark(!on && !dropping && !shaping);
         });
         if (lasso.isEnabled()) lasso.setContentDescription(DrawLayout.LASSO + (on ? ", in use" : ""));
         swatches.dropper.setContentDescription(DrawLayout.DROPPER + (dropping ? ", in use" : ""));
-        shapes.setContentDescription(DrawLayout.SHAPES + (shaping ? ", in use" : ""));
     }
     /**
      * A tap on the Dropper ({@link DrawLayout#DROPPER}): taken up, the Lasso and Words put away; taken up already, put
@@ -602,7 +599,7 @@ final class InkWashBar {
     private void tapDropper() {
         if (app.busy()) return;
         boolean on = !app.pad.dropperOn;
-        closePanel(); app.pad.words.close();
+        closePanel(); app.pad.words.close(); app.pad.text.close();
         if (on && app.pad.lassoOn) app.pad.lasso(false);
         app.pad.dropper(on);
         lassoChanged();
@@ -622,16 +619,31 @@ final class InkWashBar {
         say(ToolSwatches.greyWords(darkness, brush == null ? tone : ModularSizes.swatch(brush.parts, darkness)), LABEL_MS, swatches.strip());
     }
     /**
-     * Says the open notebook's file {@code name} in the foot's corner as the shelf shows it, no date before a title
-     * ({@link DrawingNames#shown}; the file's name, "2026-10-27_Tome of …", until 2026-10-27), a plain redraw of the small
-     * word; nothing if unchanged.
+     * Says the lasting status in the foot's corner (the owner, 2026-11-02: "remove the notebook name from the bottom
+     * right... use it for system messages (like connected to remote, etc)", as the browser's line does): Draw Together's
+     * "Connected, 1 guest" ({@link LiveProbe}); null, nothing. A plain redraw of the small words; nothing if unchanged.
      */
-    void bookName(String name) {
-        String shown = DrawingNames.shown(name, java.time.LocalDate.now());
-        if (!shown.contentEquals(bookName.getText())) bookName.setText(shown);
+    void statusCorner(String words) {
+        status = words;
+        String shown = hint != null ? hint : words == null ? "" : words;
+        if (!shown.contentEquals(statusCorner.getText())) statusCorner.setText(shown);
     }
-    /** Says {@code text} beside Play, whose menu holds Mirrors (the mirrors' notes). */
-    void sayMirrors(String text, long ms) { say(text, ms, play); }
+    /** The slots the column shows: the notebook's Brushes on Bar, at most the screen's ({@link DrawLayout#trays}). */
+    int slotsShown() { return Math.min(app.rules().slotsShown(), fitted.trays); }
+    /** The lasting status as last said, and the stamp hint shown in its place while there is one ({@link DrawLayout#stampHint}). */
+    private String status, hint;
+    /** The stamp hint for the tool in use now: shown in the foot's corner, or gone. */
+    private void stampHint() {
+        String now = DrawLayout.stampHint(app.inkWash.brush(app.inkWash.selected), app.prefs.stampPlaced());
+        if (!java.util.Objects.equals(now, hint)) { hint = now; statusCorner(status); }
+    }
+    /**
+     * A stroke laid: with the hint showing (a Stamp in use), the first stamp is printed, and the hint goes for good.
+     * shortcut: any stroke laid while a Stamp is in use counts (a finger's too), fine for a one-time hint.
+     */
+    void laid() { if (hint != null) { app.prefs.setStampPlaced(true); stampHint(); } }
+    /** Says {@code text} beside Menu, whose Play row holds Mirrors (the mirrors' notes). */
+    void sayMirrors(String text, long ms) { say(text, ms, menu); }
     /** Lays the column out, its ink rule on the page's side: its right, or its left when {@code right} (the column on the right), and fits it, for the screen as laid out now. */
     void arrange(boolean right) {
         this.right = right;
@@ -671,22 +683,31 @@ final class InkWashBar {
      * Android, each redraw two passes with the blink until then. Settings' Standard Android drawing leaves the firmware's
      * default. Off a Supernote the method is missing: nothing.
      */
-    void partialGrey() { partialGrey(view, brushLine, turner.view, bookName); }
-    /** As {@link #partialGrey()}, for {@code parts}: a popup's content too, so it opens in one grey pass, no flash. */
+    void partialGrey() { partialGrey(view, brushLine, turner.view, statusCorner); }
+    /**
+     * As {@link #partialGrey()}, for {@code parts}: a popup's content too, so it opens in one grey pass, no flash. Every
+     * view inside each part too: a mode is a view's own ({@link Ui#cleanWindow} resets each), and a view inside one, as the
+     * page bar's previews, is redrawn on its own (the owner, 2026-11-05: after a page turn, "the tiny thumbnails blink on
+     * and off briefly": the previews' redraws were the firmware's default, its blink, even unchanged).
+     */
     static void partialGrey(View... parts) {
-        for (View part : parts) try {
-            if (DirectEink.androidDrawing()) View.class.getMethod("resetEinkUpdateMode").invoke(part);
-            else View.class.getMethod("setEinkUpdateMode", int.class, int.class).invoke(part, 3, 7);
-        } catch (ReflectiveOperationException | RuntimeException ignored) { }
+        for (View part : parts) {
+            try {
+                if (DirectEink.androidDrawing()) View.class.getMethod("resetEinkUpdateMode").invoke(part);
+                else View.class.getMethod("setEinkUpdateMode", int.class, int.class).invoke(part, 3, 7);
+            } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            if (part instanceof android.view.ViewGroup)
+                for (int i = 0; i < ((android.view.ViewGroup) part).getChildCount(); i++) partialGrey(((android.view.ViewGroup) part).getChildAt(i));
+        }
     }
 
     // Tools
 
     /** A tap on {@code tool}: selects it; the selected smudge tool again opens its chooser ({@link DrawLayout#tap}); a selected slot again, nothing. */
     private void choose(int tool) {
-        if (app.busy() || !tools[tool].isEnabled()) return;
+        if (app.busy()) return;
         // A tool chosen: the pen draws again, so Words closes, and the Lasso and Shapes are put down.
-        app.pad.words.close();
+        app.pad.words.close(); app.pad.text.close();
         if (app.pad.lassoOn || app.pad.dropperOn || app.pad.shapesOn) { app.pad.shapesOn = false; if (app.pad.lassoOn) app.pad.lasso(false); app.pad.dropper(false); lassoChanged(); }
         switch (DrawLayout.tap(app.inkWash.selected, tool)) {
             case SELECT: selectTool(tool); break;
@@ -694,6 +715,73 @@ final class InkWashBar {
             default: break;
         }
     }
+    /** A tap on {@code tool} elsewhere than its row (Zen Mode's fan, {@link ZenFanView}): as its row's tap. */
+    void pick(int tool) { choose(tool); }
+    /**
+     * A long press on {@code tool}'s row, or on it in Zen Mode's fan: a slot's tool picker beside it (a tap only selects
+     * it; the owner, 2026-10-25: "long press on any slot to open. single tap selects the tool"), Clean Brush first while
+     * its brush holds paint (the refocus, 2026-10-24); the eraser's kinds and Clear page; the smudge tool picked and its
+     * chooser of smudge brushes (the owner: quick to pick, options on hold).
+     */
+    void hold(int tool) {
+        if (tool == InkWash.ERASER) { eraserMenu(); return; }
+        if (app.busy()) return;
+        if (tool == InkWash.SMUDGE) { if (app.inkWash.selected != InkWash.SMUDGE) choose(InkWash.SMUDGE); tapSmudge(); return; }
+        if (tool >= ToolSlots.COUNT) return;
+        app.pad.words.close(); app.pad.text.close();
+        if (app.inkWash.dirty(tool)) cleanMenu(tool); else app.toolPicker(tool, anchor(tool));
+    }
+    /** Zen Mode's fan while open ({@link ZenFanView}): the column is gone, so the menus open beside the fan instead; else null. */
+    View zenAnchor;
+    /** What {@code tool}'s menus open beside: its row, or Zen Mode's fan. */
+    private View anchor(int tool) { return anchor(tools[tool]); }
+    /** What {@code button}'s menus open beside: the button, or Zen Mode's fan, so they never cover it. */
+    private View anchor(View button) { return zenAnchor != null ? zenAnchor : button; }
+    /** The buttons Zen Mode's fan shows in the gap between its wedges, in {@link ZenFan#cell}'s order: the layer button, the droplet, the Lasso. */
+    private View[] zenStrip() { return new View[]{layers, wet, lasso}; }
+    /** Where each lent button was ({@link #lend}): its row, its place in it, its layout; null while home. */
+    private final android.view.ViewGroup[] lentFrom = new android.view.ViewGroup[ZenFan.CELLS];
+    private final int[] lentAt = new int[ZenFan.CELLS];
+    private final android.view.ViewGroup.LayoutParams[] lentPlace = new android.view.ViewGroup.LayoutParams[ZenFan.CELLS];
+    /**
+     * Zen Mode's fan open: the column's own buttons lent to its line (the owner, 2026-11-06), laid on {@code stage} from
+     * child {@code index} over {@code cells} (px, {@link ZenFan#cell}'s order), so each does there just what it does in
+     * the column, its marks and changes included; the layer button's icon the others' size ("tiny layers"), its thirds
+     * still picking. {@link #giveBack} puts them home.
+     */
+    void lend(android.view.ViewGroup stage, int index, RectF[] cells) {
+        View[] buttons = zenStrip();
+        for (int i = 0; i < buttons.length; i++) {
+            View button = buttons[i];
+            lentFrom[i] = (android.view.ViewGroup) button.getParent();
+            lentAt[i] = lentFrom[i].indexOfChild(button); lentPlace[i] = button.getLayoutParams();
+            lentFrom[i].removeView(button);
+            android.widget.FrameLayout.LayoutParams at = new android.widget.FrameLayout.LayoutParams(Math.round(cells[i].width()), Math.round(cells[i].height()), Gravity.TOP | Gravity.START);
+            at.leftMargin = Math.round(cells[i].left); at.topMargin = Math.round(cells[i].top);
+            stage.addView(button, index + i, at);
+        }
+        sizeLayers(Ui.dpOf(app, Math.round(cells[ZenFan.LAYERS].height())));
+        // Moved, the droplet dropped its next look (WetIndicator.onDetachedFromWindow): it looks again.
+        wet.changed();
+    }
+    /** The lent buttons home again, each where it was, last first (should two share a row). */
+    void giveBack() {
+        View[] buttons = zenStrip();
+        for (int i = buttons.length - 1; i >= 0; i--) {
+            if (lentFrom[i] == null) continue;
+            Ui.detach(buttons[i]);
+            lentFrom[i].addView(buttons[i], lentAt[i], lentPlace[i]);
+            lentFrom[i] = null; lentPlace[i] = null;
+        }
+        sizeLayers(fitted.layers);
+        wet.changed();
+    }
+    /** Whether {@code tool} is on in this notebook ({@link #rulesChanged}). */
+    boolean enabled(int tool) { return tools[tool].isEnabled(); }
+    /** {@code tool}'s row's picture without its mark, and its size, dp {width, height} ({@link #showBrush}): Zen Mode's fan draws it; mirrored with the column on the right. */
+    android.graphics.drawable.Drawable rowPicture(int tool) { return tools[tool].plainIcon(); }
+    int[] rowSize(int tool) { return new int[]{2 * tools[tool].iconHalfWidth, 2 * tools[tool].iconHalf}; }
+    boolean mirrored() { return right; }
     /**
      * The open notebook's rules changed (a notebook opened or left, its options changed; {@link NotebookRules}): No Erasing shows
      * the eraser's tile disabled (Undo and Redo give a note, {@code PaintActivity.undo}), Brushes the smudge tool's and only its first slots; a tool selected that is off gives way
@@ -703,17 +791,19 @@ final class InkWashBar {
         boolean noErasing = NotebookRules.eraserOff(rules);
         // The notebook's Brushes on Bar, and the screen's: the Nomad shows eight (DrawLayout.trays).
         int shown = Math.min(rules.slotsShown(), fitted.trays);
-        boolean noSmudge = NotebookRules.smudgeOff(rules, app.inkWash.slots.smudge()), noStamp = NotebookRules.smudgeOff(rules, app.inkWash.slots.stamp());
+        boolean noSmudge = NotebookRules.smudgeOff(rules, app.inkWash.slots.smudge()), noStamp = NotebookRules.smudgeOff(rules, app.inkWash.slots.stamp()),
+                noFill = NotebookRules.smudgeOff(rules, ToolSlots.fill());
         off(tools[InkWash.ERASER], noErasing, "Eraser");
         off(tools[InkWash.SMUDGE], noSmudge, "Smudge");
         off(tools[InkWash.STAMP], noStamp, "Stamp");
+        off(tools[ToolSlots.FILL], noFill, ToolSlots.FILL_TOOL);
         // Moving paint lifts it: the Lasso is off where erasing is (the edge strip's hold too, edgeTrash).
         if (noErasing && app.pad != null && app.pad.lassoOn) app.pad.lasso(false);
         off(lasso, noErasing, DrawLayout.LASSO);
         lassoChanged();
         for (int slot = 1; slot < ToolSlots.COUNT; slot++) tools[slot].setVisibility(slot < shown ? View.VISIBLE : View.GONE);
         int selected = app.inkWash.selected;
-        if (selected == InkWash.ERASER && noErasing || selected == InkWash.SMUDGE && noSmudge || selected == InkWash.STAMP && noStamp || DrawLayout.slotHidden(selected, shown)) selectTool(0);
+        if (selected == InkWash.ERASER && noErasing || selected == InkWash.SMUDGE && noSmudge || selected == InkWash.STAMP && noStamp || selected == ToolSlots.FILL && noFill || DrawLayout.slotHidden(selected, shown)) selectTool(0);
     }
     /** {@code button} disabled and greyed (a tool this notebook has off), or as it was. */
     private void off(ToolButton button, boolean off, String name) {
@@ -722,7 +812,6 @@ final class InkWashBar {
         else if (name.equals("Eraser")) button.setContentDescription(name);
     }
     /** A tool's name before its brush shows: "Brush" (a slot, no number), "Eraser", "Smudge", "Stamp". */
-    private static String toolName(int tool) { return tool == InkWash.ERASER ? "Eraser" : tool == InkWash.SMUDGE ? "Smudge" : tool == InkWash.STAMP ? "Stamp" : "Brush"; }
     /** Selects {@code tool}, a slot, the eraser or the smudge tool, closing any panel; the faces show its sizes and greys. */
     void selectTool(int tool) {
         if (app.pad != null && (app.pad.lassoOn || app.pad.dropperOn || app.pad.shapesOn)) { app.pad.shapesOn = false; if (app.pad.lassoOn) app.pad.lasso(false); app.pad.dropper(false); lassoChanged(); }
@@ -744,6 +833,8 @@ final class InkWashBar {
             // Show Kinds: a brush whose kind isn't Full says so, so nothing is drawn unseen by surprise.
             app.sayKind(tool);
         });
+        // Live: the guests' bars follow this tablet's (LiveProbe.toolsChanged).
+        app.live.toolsChanged();
     }
     /**
      * Slot {@code slot}'s button shows its row ({@link SlotTile#row}): its brush's picker drawing ({@link
@@ -763,13 +854,6 @@ final class InkWashBar {
         line.setEllipsize(android.text.TextUtils.TruncateAt.END);
         line.setGravity(Gravity.CENTER_VERTICAL);
         return line;
-    }
-    /** Whether {@code x} (the view's own) is over {@code line}'s words, not the empty room beside them. */
-    private static boolean onWords(TextView line, float x) {
-        android.text.Layout words = line.getLayout();
-        if (words == null || words.getLineCount() == 0) return true;
-        float left = line.getTotalPaddingLeft() + words.getLineLeft(0), right = line.getTotalPaddingLeft() + words.getLineRight(0);
-        return x >= left && x <= right;
     }
     /**
      * Applies {@code change} to the brush line, put on the panel over the line alone once it is shown, the name's words
@@ -803,17 +887,16 @@ final class InkWashBar {
      * name alone. Put on the panel over the line alone, and only when it changed.
      */
     private void showBrushLine() {
+        stampHint();
         int tool = app.inkWash.selected;
         Brush brush = app.inkWash.brush(tool);
         String[] said = brush == null ? null : lineWords.get(brush.identity());
         if (brush != null && said == null) lineWords.put(brush.identity(), said = lineWordsOf(brush));
-        String words = brush == null ? toolName(tool) : said[0];
-        boolean slot = tool < ToolSlots.COUNT && brush != null;
+        String words = brush == null ? DrawLayout.toolName(tool) : said[0];
         if (words.contentEquals(brushName.getText())) return;
         updateLine(() -> brushName.setText(words));
         // The screen reader hears the brush in full ({@link BrushVoice#about}), not just its card's words.
-        brushName.setContentDescription(brush == null ? words : said[1] + (slot ? " Tap for Brush Lab." : ""));
-        brushName.setClickable(slot);
+        brushName.setContentDescription(brush == null ? words : said[1]);
     }
     /**
      * Shows {@code text} at the brush line's right for {@link DrawLayout#NOTE_MS} (the owner, 2026-10-22: "put it in a
@@ -845,7 +928,8 @@ final class InkWashBar {
      */
     private void showBrush(int slot, boolean now) {
         warmLine(slot);
-        if (slot >= ToolSlots.COUNT) { showIcon(slot); return; }
+        // Fill in's row is drawn as a slot holding it was: the owner's drawing of it.
+        if (slot >= ToolSlots.COUNT && slot != ToolSlots.FILL) { showIcon(slot); return; }
         Brush brush = BrushLab.copyOf(app.inkWash.brush(slot));
         ToolSwatches.Look look = ToolSwatches.picture(brush);
         int halfWidth = trayHalf(fitted), halfHeight = fitted.slot / 2;
@@ -853,7 +937,7 @@ final class InkWashBar {
         Rect row = SlotTile.row(app, 2 * app.dp(halfWidth), 2 * app.dp(halfHeight), right, true);
         int width = row.width(), height = row.height();
         ToolButton button = tools[slot];
-        button.setContentDescription(brush.name());
+        button.setContentDescription(brush.shownName());
         // Drawn again only when what it shows changed (the owner, 2026-10-25: "the brush slots.. they dont need to update
         // so often"): a Tools page or Brush Lab return, a notebook's toolbar, an Undo showed every slot again.
         String shows = brush.identity() + " " + width + "x" + height + (right ? " right" : "");
@@ -914,7 +998,7 @@ final class InkWashBar {
     /** The smudge tool's words, its brush and whether it holds paint (its row shows no dab since 2026-10-26). */
     private void describeSmudge() {
         smudgeHeld = app.inkWash.heldGrey(InkWash.SMUDGE);
-        tools[InkWash.SMUDGE].setContentDescription(toolName(InkWash.SMUDGE) + ": " + app.inkWash.brush(InkWash.SMUDGE).name() + (smudgeHeld >= 0 ? ", holds paint" : ""));
+        tools[InkWash.SMUDGE].setContentDescription(DrawLayout.toolName(InkWash.SMUDGE) + ": " + app.inkWash.brush(InkWash.SMUDGE).name() + (smudgeHeld >= 0 ? ", holds paint" : ""));
     }
     /**
      * The owner's drawing {@code resource} (a PNG at the Manta's pixels or a vector) on paper, {@code width × height} px,
@@ -951,10 +1035,10 @@ final class InkWashBar {
         View row = lightRow(new String[]{DrawLayout.CLEAN, DrawLayout.TOOLS}, -1, 2, true, choice -> {
             hideLabel();
             if (app.busy()) return;
-            if (choice == 1) app.toolPicker(slot, tools[slot]);
+            if (choice == 1) app.toolPicker(slot, anchor(slot));
             else if (app.inkWash.clean(slot)) heldChanged();
         });
-        showLabel(row, true, PageClear.OFFER_MS, tools[slot]);
+        showLabel(row, true, PageClear.OFFER_MS, anchor(slot));
     }
     /**
      * The smudge tool's icon for {@code brush} in the finger's menu ({@link ToolSlots#smudgeKind}, after Photoshop's Blur
@@ -990,7 +1074,7 @@ final class InkWashBar {
      * picker is still blinking ... why is it redrawing?": the row's stroke and the line's preview were two more grey
      * updates after every lift).
      */
-    private void swatchChanged(int tool) { swatches.show(tool); }
+    private void swatchChanged(int tool) { swatches.show(tool); app.live.toolsChanged(); }
 
     // Clear page
 
@@ -1018,7 +1102,7 @@ final class InkWashBar {
             // menu selection other than clear page").
             selectTool(InkWash.ERASER);
         });
-        showLabel(row, true, PageClear.OFFER_MS, tools[InkWash.ERASER]);
+        showLabel(row, true, PageClear.OFFER_MS, anchor(InkWash.ERASER));
     }
 
     /**
@@ -1028,11 +1112,8 @@ final class InkWashBar {
      */
     void timerMenu(int now) {
         app.pad.finishStroke();
-        int[] times = SandTimer.SECONDS;
-        String[] texts = new String[times.length];
-        int chosen = -1;
-        for (int i = 0; i < times.length; i++) { texts[i] = NotebookRules.timeLabel(times[i]); if (times[i] == now) chosen = i; }
-        View row = lightRow(texts, chosen, texts.length, true, choice -> { hideLabel(); app.setSandTimer(times[choice]); });
+        String[] texts = SandTimer.labels();
+        View row = lightRow(texts, SandTimer.chosen(now), texts.length, true, choice -> { hideLabel(); app.setSandTimer(SandTimer.SECONDS[choice]); });
         showLabel(row, true, PageClear.OFFER_MS, timerRow);
     }
     /**
@@ -1060,55 +1141,11 @@ final class InkWashBar {
 
     // Finger
 
-    /** What a finger choice is called: Nothing, Eraser, Smudge, or a slot's brush's name (the slots have no numbers). */
-    String fingerName(FingerTool.Choice choice) { return pans(choice) ? PAN : choice.label(slot -> app.inkWash.brush(slot).name()); }
-    /** The main menu's Finger row, what one finger does now (the owner, 2026-10-27: back in the menu): "Finger Action: Eraser", "Finger Action: Brush pen"; in a No Erasing notebook "Finger Action: Pan". */
-    String fingerRow() { return app.fingerPans() ? "Finger Action: " + PAN : app.inkWash.finger().row(slot -> app.inkWash.brush(slot).name()); }
+    /** What a finger choice is called, System Settings' Finger Action chips (2026-11-06; the menu's Finger row's choices until then): Nothing, Eraser, Smudge, or a slot's brush's name (the slots have no numbers). */
+    String fingerName(FingerTool.Choice choice) { return pans(choice) ? PAN : choice.label(slot -> app.inkWash.brush(slot).shownName()); }
     /** The eraser's choice where No Erasing is on: it pans ({@link PaintActivity#fingerPans}). */
     static final String PAN = "Pan";
     private boolean pans(FingerTool.Choice choice) { return choice == FingerTool.Choice.ERASER && NotebookRules.keeps(app.rules(), true); }
-    /**
-     * A finger choice in its menu ({@link PaintActivity#fingerMenu}; the owner, 2026-10-19: "include brush previews for
-     * brushes"), {@code width × height} pixels: a slot's tray stroke as its row shows it ({@link #trays}), the eraser's
-     * and the smudge tool's own icons, Nothing the hand struck through; each centred, so the names line
-     * up. Null for a slot whose stroke isn't drawn yet.
-     */
-    Drawable fingerIcon(FingerTool.Choice choice, int width, int height) {
-        int tool = choice.tool();
-        Bitmap stroke = choice.slot() ? trays[tool] : null;
-        if (choice.slot() && stroke == null) return null;
-        Drawable icon = choice.slot() ? null : app.getDrawable(choice == FingerTool.Choice.NOTHING ? R.drawable.ic_ph_hand_smudge
-                : pans(choice) ? R.drawable.ic_ph_arrows_out_cardinal
-                : tool == ToolSlots.ERASER ? R.drawable.ic_eraser_block : smudgeIcon(app.inkWash.slots.smudge()));
-        Drawable shown = new FingerIcon(stroke, icon, choice == FingerTool.Choice.NOTHING);
-        shown.setBounds(0, 0, width, height);
-        return shown;
-    }
-    /** A finger choice's picture in its menu: a stroke at its own size, or an icon 24 dp square, centred; Nothing's hand struck through. */
-    private final class FingerIcon extends Drawable {
-        private final Bitmap stroke;
-        private final Drawable icon;
-        private final boolean struck;
-        FingerIcon(Bitmap stroke, Drawable icon, boolean struck) { this.stroke = stroke; this.icon = icon; this.struck = struck; }
-        @Override public void draw(Canvas canvas) {
-            Rect b = getBounds();
-            if (stroke != null) {
-                // At its own size, or narrower to fit, never stretched.
-                float scale = Math.min(1, Math.min(b.width() / (float) stroke.getWidth(), b.height() / (float) stroke.getHeight()));
-                float w = stroke.getWidth() * scale, h = stroke.getHeight() * scale, left = b.exactCenterX() - w / 2, top = b.exactCenterY() - h / 2;
-                canvas.drawBitmap(stroke, null, new RectF(left, top, left + w, top + h), null);
-            }
-            if (icon != null) {
-                int side = app.dp(24), x = Math.round(b.exactCenterX()) - side / 2, y = Math.round(b.exactCenterY()) - side / 2;
-                icon.setBounds(x, y, x + side, y + side);
-                icon.draw(canvas);
-            }
-            if (struck) strike(canvas, b.exactCenterX(), b.exactCenterY());
-        }
-        @Override public void setAlpha(int alpha) { }
-        @Override public void setColorFilter(ColorFilter filter) { }
-        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
-    }
     /**
      * The Eraser tile's mark while it takes one kind ({@link EraseKind#MARKS}: two letters, ink on a paper patch at the
      * row's lower corner on the page side, clear of its side bar); nothing for Everything.
@@ -1127,16 +1164,6 @@ final class InkWashBar {
         canvas.drawText(mark, right - w / 2, bottom - h / 2 + app.dp(3), markPaint);
         markPaint.setTextAlign(Paint.Align.LEFT);
     }
-    /** Nothing's mark: a line struck through the hand at {@code x, y}, ink on a paper edge. */
-    private void strike(Canvas canvas, float x, float y) {
-        float reach = app.dp(13);
-        markPaint.setStyle(Paint.Style.FILL);
-        markPaint.setStrokeCap(Paint.Cap.SQUARE);
-        markPaint.setColor(Theme.PAPER); markPaint.setStrokeWidth(app.dp(7));
-        canvas.drawLine(x + reach, y - reach, x - reach, y + reach, markPaint);
-        markPaint.setColor(Theme.INK); markPaint.setStrokeWidth(app.dp(Theme.RULE));
-        canvas.drawLine(x + reach, y - reach, x - reach, y + reach, markPaint);
-    }
     /** Slot {@code slot}'s (or the smudge or stamp tool's) brush changed: {@code said} beside its tile, its button's sample, and the faces if it is selected. */
     /** {@code text} beside tool {@code tool}'s button for {@code ms} (Cut Stamp's words). */
     void sayAt(int tool, String text, long ms) { say(text, ms, tools[tool]); }
@@ -1148,9 +1175,10 @@ final class InkWashBar {
         Brush[] bar = new Brush[ToolSlots.COUNT];
         for (int i = 0; i < bar.length; i++) bar[i] = app.inkWash.slots.brush(i);
         String step = ToolKits.said(bar, slot);
-        return step != null ? step : app.inkWash.slots.brush(slot).name();
+        return step != null ? step : app.inkWash.slots.brush(slot).shownName();
     }
     void brushChanged(int slot, String said) {
+        app.live.toolsChanged();
         say(said, LABEL_MS, tools[slot]);
         showBrush(slot);
         if (slot == app.inkWash.selected) app.sayKind(slot);
@@ -1160,7 +1188,7 @@ final class InkWashBar {
 
     /** A long press on the smudge tool: its chooser beside it, on the page holding its brush; or closed, if open. */
     private void tapSmudge() {
-        View owner = tools[InkWash.SMUDGE];
+        View owner = anchor(InkWash.SMUDGE);
         boolean open = panel != null && panelOwner == owner;
         closePanel();
         if (open) return;
@@ -1174,8 +1202,8 @@ final class InkWashBar {
         openPanel(owner, content, app.dp(fitted.chooserWidth(choices.size())));
     }
     /**
-     * The chooser's page of smudge brushes ({@link ToolSlots#smudgeChoices}: the Basic tools that smudge, then saved
-     * ones), as the Tools page's cards, the tool's own tabbed; page buttons under them when there are more. A card
+     * The chooser's page of smudge brushes ({@link ToolSlots#smudgeChoices}: Blend and Water, the tool's own first when
+     * it is neither), as the Tools page's cards, the tool's own tabbed; page buttons under them when there are more. A card
      * puts its brush in the smudge tool and closes the chooser.
      */
     private void fillSmudges(LinearLayout content, List<Brush> choices) {
@@ -1196,11 +1224,13 @@ final class InkWashBar {
                 View cell;
                 if (index < choices.size()) {
                     ToolsPage.Card shown = ToolsPage.card(choices.get(index), lineRoom);
-                    LoopCard view = new LoopCard(app, samples, Collections.singletonList(shown.line), shown.name);
+                    // Its kept name, no "effect": every choice of the smudge tool is one (WildSample.shownName).
+                    String name = shown.brush.name();
+                    LoopCard view = new LoopCard(app, samples, Collections.singletonList(shown.line), name);
                     view.onPaper = true;
                     view.setSample(shown.brush.identity(), LabLibrary.sampler(shown.brush));
                     view.setNow(shown.brush.sameAs(now));
-                    view.setContentDescription(shown.name + ": " + BrushVoice.about(shown.brush.parts));
+                    view.setContentDescription(name + ": " + BrushVoice.about(shown.brush.parts));
                     view.setOnClickListener(v -> pickSmudge(shown.brush));
                     cell = view;
                 } else { cell = new View(app); cell.setBackgroundColor(Theme.PAPER); }
@@ -1260,8 +1290,6 @@ final class InkWashBar {
 
     // The stamp tool
 
-    /** The stamp menu's presets: Spacing (a share of the stamp's size) and Ink Fade, as Brush Lab's dials show them. */
-    static final double[] STAMP_SPACINGS = {PartDial.STAMP_SPACING.def, .5, 1}, STAMP_FADES = {0, PartDial.INK_FADE.def, PartDial.INK_FADE.max};
     /**
      * Slot {@code slot}'s stamp menu (a slot holding a Stamp, from its picker's Stamp row; the stamp tool's, beside Menu,
      * until Play's Stamp row went, 2026-10-28): beside its tile, its brush's card (the loop prints its nib), Cut Stamp (the
@@ -1291,27 +1319,20 @@ final class InkWashBar {
         LabButton cut = new LabButton(app, 0, StampNib.CUT, false).menu();
         cut.setOnClickListener(v -> { closePanel(); app.cutStamp(slot); });
         content.addView(cut, new LinearLayout.LayoutParams(-1, app.dp(ToolsLayout.PAGE_BUTTON)));
-        ModularBrush.Part tip = brush.parts.part(BrushPart.TIP);
-        stampRow(content, slot, PartDial.HEAD_TURN, new double[]{0, 1}, tip);
-        stampRow(content, slot, PartDial.STAMP_SPACING, STAMP_SPACINGS, tip);
-        stampRow(content, slot, PartDial.INK_FADE, STAMP_FADES, tip);
+        for (DrawLayout.StampRow row : DrawLayout.stampRows(brush)) stampRow(content, slot, row);
     }
-    /** A dial's label, then a chip for each of {@code values} in the dial's words, the nearest to {@code tip}'s solid; a tap sets it. */
-    private void stampRow(LinearLayout content, int slot, PartDial dial, double[] values, ModularBrush.Part tip) {
-        TextView label = LabUi.text(app, PartChoice.STAMP.labelOf(dial), TypeStyle.MENU);
+    /** A dial's label, then a chip for each preset in the dial's words ({@link DrawLayout#stampRows}), the nearest solid; a tap sets it. */
+    private void stampRow(LinearLayout content, int slot, DrawLayout.StampRow stamp) {
+        TextView label = LabUi.text(app, stamp.label, TypeStyle.MENU);
         label.setTypeface(Theme.face(700));
         // In from the panel's outline, as the card's name is.
         label.setPadding(app.dp(LabText.CAPTION_INSET), label.getPaddingTop(), app.dp(LabText.CAPTION_INSET), label.getPaddingBottom());
         content.addView(label, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout row = LabUi.row(app);
-        double now = tip.get(dial);
-        int nearest = 0;
-        for (int i = 1; i < values.length; i++) if (Math.abs(values[i] - now) < Math.abs(values[nearest] - now)) nearest = i;
-        String[] options = PartChoice.STAMP.optionsOf(dial);
-        for (int i = 0; i < values.length; i++) {
-            double value = values[i];
-            LabButton chip = new LabButton(app, 0, options != null ? options[(int) value] : dial.shown(value), i == nearest).menu();
-            chip.setOnClickListener(v -> setStamp(content, slot, dial, value));
+        for (int i = 0; i < stamp.values.length; i++) {
+            double value = stamp.values[i];
+            LabButton chip = new LabButton(app, 0, stamp.words[i], i == stamp.marked).menu();
+            chip.setOnClickListener(v -> setStamp(content, slot, stamp.dial, value));
             row.addView(chip, new LinearLayout.LayoutParams(0, app.dp(ToolsLayout.PAGE_BUTTON), 1));
         }
         content.addView(row, new LinearLayout.LayoutParams(-1, -2));
@@ -1319,9 +1340,7 @@ final class InkWashBar {
     /** Slot {@code slot}'s brush with {@code dial} at {@code value}: its tile drawn again, the menu drawn again in place (e-ink). */
     private void setStamp(LinearLayout content, int slot, PartDial dial, double value) {
         if (app.busy() || app.toolbarFixed()) return;
-        ModularBrush b = app.inkWash.slots.brush(slot).parts.copy();
-        b.part(BrushPart.TIP).set(dial, value);
-        if (!app.inkWash.slots.use(slot, Brush.of(b))) return;
+        if (!app.inkWash.slots.use(slot, DrawLayout.stamped(app.inkWash.slots.brush(slot), dial, value))) return;
         app.recovery();
         showBrush(slot);
         app.selectionFeedback.update(content, () -> fillStamp(content, slot));
@@ -1429,7 +1448,7 @@ final class InkWashBar {
     private void showLabel(View content, boolean touchable, long ms, View beside) {
         int[] size = labelSize(content);
         int width = size[0], height = size[1];
-        RectF bar = Popups.bounds(app.root, view), level = Popups.bounds(app.root, beside);
+        RectF bar = Popups.bounds(app.root, zenAnchor != null ? zenAnchor : view), level = Popups.bounds(app.root, beside);
         float left = right ? bar.left - app.dp(8) - width : bar.right + app.dp(8);
         showLabel(content, touchable, ms, Popups.rect(Popups.clamp(left, 0, app.root.getWidth() - width),
                 Popups.clamp(level.centerY() - height / 2f, 0, app.root.getHeight() - height), width, height));
@@ -1471,10 +1490,47 @@ final class InkWashBar {
 
     /** The page changed (another page, Undo, a stroke): its preview in the page bar is drawn again once it has been still a moment. */
     void pageChanged() {
-        // Another page, or Undo: its mirrors may be on or off.
-        modesChanged();
+        showLayer();
         turner.pageChanged();
     }
+    /** The owner's layer icons, the layer in use filled: 3 the top, 2 the middle, 1 (and 0, under the three) the bottom. */
+    static int layerIcon(int layer) { return layer >= 3 ? R.drawable.layer_top : layer == 2 ? R.drawable.layer_middle : R.drawable.layer_bottom; }
+    /** The layer icon's half width for its half height {@code half}, dp: the owner's drawing a little wider than tall. */
+    static int layerHalfWidth(Context context, int half) {
+        Drawable stack = context.getDrawable(R.drawable.layer_middle);
+        return Math.round(half * (float) stack.getIntrinsicWidth() / stack.getIntrinsicHeight());
+    }
+    /** The layer the page drawn on is on, for the button: 1 to 3 ({@link InkWashLayers#layer}, a four-pair page's bottom pair shown as layer 1). */
+    int layerInUse() { return app.pad == null || app.pad.document == null ? 2 : Math.max(1, InkWashLayers.layer(app.pad.document)); }
+    /** Whether the pair drawn on is hidden (an old page's; the button hides none). */
+    boolean layerHidden() { return app.pad != null && app.pad.document != null && !InkWashLayers.visible(app.pad.document, InkWashLayers.current(app.pad.document)); }
+    /** The layer button follows the page (another page, Undo and Redo, a stroke that moved the selection, a pick): its icon put on the panel, its words. */
+    void showLayer() {
+        if (app.pad == null || app.pad.document == null) return;
+        int layer = layerInUse();
+        boolean hidden = layerHidden();
+        if (layer == layerShown && hidden == layerHidden) return;
+        layerShown = layer; layerHidden = hidden;
+        layers.setContentDescription(DrawLayout.layerSaid(layer, hidden));
+        Drawable icon = app.getDrawable(layerIcon(layer));
+        if (layers.isShown() && layers.getWidth() > 0) app.selectionFeedback.update(layers, () -> layers.faces(icon, null));
+        else layers.iconOnly(icon, null);
+    }
+    /** Screen-reader actions on a layer button, Layer 1 to Layer 3, each picking its layer as a tap on its third does. */
+    static void layerActions(View button, java.util.function.IntConsumer pick) {
+        button.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+            @Override public void onInitializeAccessibilityNodeInfo(View host, android.view.accessibility.AccessibilityNodeInfo info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                for (int layer = 1; layer <= InkWashLayers.LAYERS; layer++) info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(LAYER_ACTIONS[layer - 1], DrawLayout.layerNote(layer)));
+                info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_LONG_CLICK, DrawLayout.LAYER_VISIBILITY));
+            }
+            @Override public boolean performAccessibilityAction(View host, int action, android.os.Bundle arguments) {
+                for (int layer = 1; layer <= InkWashLayers.LAYERS; layer++) if (action == LAYER_ACTIONS[layer - 1]) { pick.accept(layer); return true; }
+                return super.performAccessibilityAction(host, action, arguments);
+            }
+        });
+    }
+    private static final int[] LAYER_ACTIONS = {View.generateViewId(), View.generateViewId(), View.generateViewId()};
 
     // Panels
 
@@ -1483,11 +1539,12 @@ final class InkWashBar {
      * page bar's blink is; false, changing nothing, when it would change but must {@code wait} (the pen is down).
      */
     boolean countdown(String text, boolean sand, boolean wait) {
-        int shown = text == null ? View.GONE : View.VISIBLE, icon = text == null && sand ? View.VISIBLE : View.INVISIBLE;
-        if (icon == sandTimer.getVisibility() && shown == clock.getVisibility() && (text == null || text.contentEquals(clock.getText()))) return true;
+        int shown = text == null ? View.GONE : View.VISIBLE;
+        boolean icon = text == null && sand;
+        if (icon == sandShown && shown == clock.getVisibility() && (text == null || text.contentEquals(clock.getText()))) return true;
         if (wait) return false;
-        sandTimer.setVisibility(icon);
-        clock.setContentDescription(text == null ? null : text.contains("\n") ? text.replace("\n", ", time left ") : text.equals(TimedSections.DONE) ? text : "Time left " + text);
+        sandShown = icon;
+        clock.setContentDescription(text == null ? null : NotebookRules.countdownSaid(text));
         if (shown != clock.getVisibility() || !clock.isShown() || clock.getWidth() == 0) { clock.setText(text); clock.setVisibility(shown); }
         else app.selectionFeedback.update(clock, () -> clock.setText(text));
         return true;

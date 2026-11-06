@@ -27,10 +27,15 @@ final class StampNib {
     /** The store's key for a nib: this, then its id in base 36. */
     static final String KEY = "stamp_nib_";
     /**
-     * Cut Stamp's words (docs/TEXT-STYLE.md): its button, its hint on the drawing screen, and what an empty lasso says
-     * (mischief-lab-2.html's, for 1.2 s).
+     * Make Stamp's words (docs/TEXT-STYLE.md; Cut Stamp until 2026-11-02): its button, its hint on the drawing screen, and
+     * what an empty lasso says (mischief-lab-2.html's, for 1.2 s).
      */
-    static final String CUT = "Cut Stamp", LASSO = "Draw round the shape to cut", NOTHING = "Nothing to cut", DONE = "Stamp cut";
+    static final String CUT = "Make Stamp", LASSO = "Draw round the shape to cut", NOTHING = "Nothing to cut", DONE = "Stamp cut";
+    /**
+     * The hint in the foot's corner while a Stamp is in use, until the first one is printed (the owner, 2026-11-02, not
+     * sure how to use it; {@link DrawLayout#stampHint}): a Stamp with no nib made yet, then one with its nib.
+     */
+    static final String MAKE = "Lasso a shape, then Make Stamp", PRINT = "Draw to print the stamp";
     static final long NOTHING_MS = 1200, LASSO_MS = 2500;
     /** What a code without its nib prints: a round stamp, 48 px across, its edge antialiased. */
     static final StampNib ROUND = round(48);

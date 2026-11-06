@@ -512,7 +512,7 @@ public final class ResistChecks {
         lab.put(Brush.of(brush(INK)));
         check(lab.chips(BrushPart.MEDIUM).contains(PartChoice.RESIST), "Brush Lab offers Resist among the Medium chips");
         lab.choose(BrushPart.MEDIUM, PartChoice.RESIST);
-        check(lab.dials(BrushPart.MEDIUM).equals(java.util.Collections.singletonList(PartDial.ERASABLE)), "its one dial, Erasable");
+        check(lab.dials(BrushPart.MEDIUM).equals(java.util.Arrays.asList(PartDial.ERASABLE, PartDial.TOOTH)), "its one dial, Erasable (and Paper's Texture, on every Medium card since 2026-11-01)");
         // Its samples show by what refuses to take: a wash over it, the fluid hatched; wax speckled white in it.
         for (String code : new String[]{FLUID, WAX}) {
             int[] card = WildSample.part(brush(code), BrushPart.MEDIUM, 200, 120), loop = WildSample.modular(brush(code), 1, WildSample.Shape.LOOP, 120, 80, false);

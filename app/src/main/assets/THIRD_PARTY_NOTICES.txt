@@ -1,9 +1,10 @@
 Third-party notices
 
-My Bad Drawings is MIT licensed (LICENSE): Copyright (c) 2026 mpdairy for
+Superdood is MIT licensed (LICENSE): Copyright (c) 2026 mpdairy for
 MonoPaint (https://github.com/mpdairy/monopaint), which it is built on, and
-Copyright (c) 2026 Elling Lien for the fork's additions. This file lists the
-other people's work in it, and their terms.
+Copyright (c) 2026 Elling Lien for the fork's additions, the tools' drawings
+among them (res/drawable and res/drawable-nodpi tip_ files, his own, drawn on the
+Manta). This file lists the other people's work in it, and their terms.
 
 ---
 
@@ -37,8 +38,8 @@ SOFTWARE.
 
 Iconoir — Copyright (c) 2021 Luca Burgio — MIT License
 (the app's icons since 2026-10-29, v7.10.1, https://iconoir.com; res/drawable files
-marked "Iconoir" are its glyphs, those "Drawn for My Bad Drawings in Iconoir's style" are
-My Bad Drawings' own, some built from its glyphs)
+marked "Iconoir" are its glyphs, those "Drawn for Superdood in Iconoir's style" are
+Superdood's own, some built from its glyphs)
 
 MIT License
 
@@ -122,7 +123,9 @@ from https://github.com/iaolo/iA-Fonts) — Copyright © 2018 Information
 Architects Inc. with Reserved Font Name "iA Writer"; based on IBM Plex,
 Copyright © 2017 IBM Corp. with Reserved Font Name "Plex". Licensed under the
 SIL Open Font License, Version 1.1; the full license is
-app/src/main/assets/fonts/OFL.txt.
+app/src/main/assets/fonts/OFL.txt. superdood.org's page uses a subset of the two
+(docs/site/duo-regular.woff2 and duo-bold.woff2, ASCII only), a Modified Version
+and so renamed "Superdood Duo", under the same license.
 
 ---
 

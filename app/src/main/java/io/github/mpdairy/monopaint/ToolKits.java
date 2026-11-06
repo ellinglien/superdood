@@ -38,18 +38,22 @@ final class ToolKits {
         }
         /** How many slots it fills. */
         int size() { return brushes.size(); }
-        /** Its brushes as the Basic tools are ({@link ToolPresets}); null where a name isn't one (the checks find it). */
+        /** Its brushes as the Basic tools are ({@link ToolPresets}) or the bar's defaults ({@link #brush}); null where a name is neither (the checks find it). */
         Brush[] tools() {
             Brush[] tools = new Brush[brushes.size()];
-            for (int i = 0; i < tools.length; i++) { ToolPresets.Preset p = preset(brushes.get(i).preset); tools[i] = p == null ? null : p.brush(); }
+            for (int i = 0; i < tools.length; i++) tools[i] = brush(brushes.get(i).preset);
             return tools;
         }
         /** Step {@code i}'s words, numbered as the bar says them: "1 Drop ink". The eraser's step comes last. */
         String said(int i) { return (i + 1) + " " + (i < brushes.size() ? brushes.get(i).job : eraser.job); }
         /** The steps' count, the eraser's included. */
         int steps() { return brushes.size() + (eraser == null ? 0 : 1); }
-        /** What step {@code i} uses: a Basic tool's name, or "Eraser, Dry Media". */
-        String tool(int i) { return i < brushes.size() ? brushes.get(i).preset : ERASER + ", " + EraseKind.LABELS[eraser.eraser]; }
+        /** What step {@code i} uses: a Basic tool's name as shown ("Clear water effect", {@link Brush#shownName}), or "Eraser, Dry Media". */
+        String tool(int i) {
+            if (i >= brushes.size()) return ERASER + ", " + EraseKind.LABELS[eraser.eraser];
+            Brush b = brush(brushes.get(i).preset);
+            return b == null ? brushes.get(i).preset : b.shownName();
+        }
         /** The sheet's title: "Marbling Kit". */
         String title() { return name + " Kit"; }
         /** Whether {@code brush} is one of its brushes, as the Basic tool is. */
@@ -60,6 +64,17 @@ final class ToolKits {
     }
 
     private ToolKits() {}
+
+    /** The one kit left in its own order: the bar's first-launch tools, the owner's bar ({@link ToolSlots#FIRST}). */
+    static final String KEEPS_ORDER = "Default Tools";
+    /** Every other kit loads in the tray's order (the owner, 2026-11-06: "in the same order as in the box"): {@link DrawLayout#compareInTray}. */
+    private static void trayOrder(String name, List<Role> brushes) {
+        if (name.equals(KEEPS_ORDER)) return;
+        brushes.sort((a, b) -> {
+            ToolPresets.Preset x = ToolPresets.named(a.preset), y = ToolPresets.named(b.preset);
+            return x == null || y == null ? Boolean.compare(x == null, y == null) : DrawLayout.compareInTray(x, y);
+        });
+    }
 
     private static List<Kit> all;
     /** Every kit, in the file's order; none when the file is missing. */
@@ -84,7 +99,7 @@ final class ToolKits {
             if (colon <= 0) continue;
             String key = line.substring(0, colon).trim(), value = line.substring(colon + 1).trim();
             if (key.equals("Kit")) {
-                if (name != null && intro != null && !brushes.isEmpty()) kits.add(new Kit(name, intro, brushes, eraser));
+                if (name != null && intro != null && !brushes.isEmpty()) { trayOrder(name, brushes); kits.add(new Kit(name, intro, brushes, eraser)); }
                 name = value; intro = null; brushes = new ArrayList<>(); eraser = null;
             } else if (name == null) {
                 continue;
@@ -97,12 +112,22 @@ final class ToolKits {
                 brushes.add(new Role(key, value, -1));
             }
         }
-        if (name != null && intro != null && !brushes.isEmpty()) kits.add(new Kit(name, intro, brushes, eraser));
+        if (name != null && intro != null && !brushes.isEmpty()) { trayOrder(name, brushes); kits.add(new Kit(name, intro, brushes, eraser)); }
         return kits;
     }
     /** The Basic tool named {@code name} (not a retired one), or null. */
     static ToolPresets.Preset preset(String name) {
         for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals(name)) return p;
+        return null;
+    }
+    /**
+     * The brush a kit's line names: the Basic tool, else one of the bar's first-launch brushes ({@link ToolSlots#FIRST}; the
+     * owner, 2026-11-01: a kit of the default tools, not the Basic tools nearest them), else null.
+     */
+    static Brush brush(String name) {
+        ToolPresets.Preset p = preset(name);
+        if (p != null) return p.brush();
+        for (int i = 0; i < ToolSlots.FIRST.length; i++) if (ToolSlots.FIRST[i][1].equals(name)) return ToolSlots.first(i);
         return null;
     }
     /** The first kit {@code brush} is in (as the Basic tool is), or null. */
@@ -139,9 +164,9 @@ final class ToolKits {
      */
     static String floatNote(ModularBrush b, ModularBrush onWater, boolean floating) {
         if (b == null) return floating ? PRINTED : null;
-        boolean floats = b.choice(BrushPart.LIFE) == PartChoice.FLOAT;
+        boolean floats = b.floats();
         if (floats && !floating && ModularBrush.ownPaint(b.part(BrushPart.CARRY)) < .02) return NOTHING_FLOATING;
-        if (floating && !floats && (onWater == null || onWater.choice(BrushPart.LIFE) != PartChoice.FLOAT)) return PRINTED;
+        if (floating && !floats && (onWater == null || !onWater.floats())) return PRINTED;
         return null;
     }
 }

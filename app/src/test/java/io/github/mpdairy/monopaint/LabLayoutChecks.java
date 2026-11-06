@@ -17,15 +17,39 @@ public final class LabLayoutChecks {
         Assets.install(Assets.folder(Assets.FOLDER));
         Texts texts = texts();
         for (int[] screen : new int[][]{MANTA, NOMAD}) {
-            LabLayout l = new LabLayout(screen[0], screen[1]);
-            fits(l);
-            reads(l, texts);
+            // Three rows of modules: After's on every brush, no Paper (its Texture on Medium's card; 2026-11-01).
+            for (LabLayout l : new LabLayout[]{new LabLayout(screen[0], screen[1])}) {
+                fits(l);
+                reads(l, texts);
+            }
         }
         wraps();
         table();
-        System.out.println("PASS: Brush Lab fits the Manta and the Nomad with nothing scrolling: every region adds up to the screen (About This Brush under the bar, no toolbar band, the column beside the scratch pad, Randomize across the foot), the modules' top and the test area's line up, the six part modules sit two to a row, every part's dials fit its open card, sliders are at least 80 dp, the picker box lies across where the sizes and greys were with its 28 dp squares (24 on the Nomad), the Edited line under the name, a part's swap panel fits beside the column, the Open sheet's library fits, and the test area keeps the most room, more than with the toolbar band and Tweak It; no text is under 12 sp or cut: part names, their descriptions (Manta), the widest choice words, end words, swap notes, captions and the brush's first sentence fit their budgeted lines at the lab's 1.2× text in iA Writer Duo (duospace: m, w and a few more one and a half wide); About This Brush's buttons (New, Open, Save, Save as New) and the bar fit across; slim modules, dial labels (two lines), values, segments (under their label when they don't fit beside it) and the Control grid");
+        browser();
+        System.out.println("PASS: Brush Lab fits the Manta and the Nomad with nothing scrolling: every region adds up to the screen (About This Brush under the bar, no toolbar band, the column beside the scratch pad, Randomize across the foot), the modules' top and the test area's line up, the six part modules sit two to a row, every part's dials fit its open card, sliders are at least 80 dp, the picker box lies across where the sizes and greys were with its 28 dp squares (24 on the Nomad), the Edited line under the name, a part's swap panel fits beside the column, the Open sheet's library fits, and the test area keeps the most room, more than with the toolbar band and Tweak It; no text is under 12 sp or cut: part names, their descriptions (Manta), the widest choice words, end words, swap notes, captions and the brush's first sentence fit their budgeted lines at the lab's 1.2× text in iA Writer Duo (duospace: m, w and a few more one and a half wide); About This Brush's buttons (New ▾, Open, Save, As New, Make Stamp) and the bar, its words centred, fit across; slim modules, dial labels (two lines), values, segments (under their label when they don't fit beside it) and the Control grid");
     }
 
+    /**
+     * The browser's lab and Tools page (the browser app's M2): they fit an iPad and a desktop window, not a phone
+     * (LabLayout.fits); a landscape window gets the lab as tall as it needs, to scroll (LabLayout.scrolled); every dial's
+     * row is the kind LabSettings drew before the move (LabLayout.rowKind), and Erasable alone has no die but Resist's.
+     */
+    static void browser() {
+        for (int[] s : new int[][]{MANTA, NOMAD, {820, 1180}, {1180, 820}, {1024, 768}, {1440, 900}}) check(LabLayout.fits(s[0], s[1]), s[0] + "×" + s[1] + " fits");
+        check(!LabLayout.fits(390, 844) && !LabLayout.fits(360, 740), "A phone in portrait gets the drawing screen only");
+        for (int[] s : new int[][]{{1180, 820}, {1440, 900}, MANTA}) {
+            LabLayout l = LabLayout.scrolled(s[0], s[1]);
+            check(l.spare >= 0 && l.width == s[0] && l.height >= s[1] && (l.height == s[1]) == (new LabLayout(s[0], s[1]).spare >= 0), s[0] + "×" + s[1] + ": the lab laid out as tall as it needs, " + l.height);
+        }
+        for (LabLayout l : new LabLayout[]{new LabLayout(MANTA[0], MANTA[1]), new LabLayout(NOMAD[0], NOMAD[1])})
+            for (PartChoice c : PartChoice.values()) for (PartDial d : c.dials) {
+                LabLayout.RowKind k = l.rowKind(d, c.optionsOf(d));
+                LabLayout.RowKind was = d == PartDial.DIR ? LabLayout.RowKind.SWITCH : !d.choice() ? LabLayout.RowKind.SLIDER : l.menu(d, c.optionsOf(d)) ? LabLayout.RowKind.MENU
+                        : l.stacks(d, c.optionsOf(d)) ? LabLayout.RowKind.STACKED : LabLayout.RowKind.SEGMENTS;
+                check(k == was, c + " " + d + ": its row as before");
+                check(LabLayout.rolls(c, d) == (d != PartDial.ERASABLE || c == PartChoice.RESIST), c + " " + d + ": its die");
+            }
+    }
     /** Whether {@code choice}'s choice dial {@code d} stacks its segments under its label in {@code l} (LabSettings.stacked). */
     static boolean stacks(LabLayout l, PartChoice choice, PartDial d) {
         String[] options = choice.optionsOf(d);
@@ -37,7 +61,7 @@ public final class LabLayoutChecks {
         check(2 * l.side + l.column + l.split + l.right == l.width, at + "the column, the gap and the right side add up to the width");
         // The band: About This Brush's header and block, the head row, the modules (or the test area), Randomize, the band's foot.
         int above = l.top + l.aboutHead + l.about + l.gap + l.headRow + l.gap, bottom = l.gap + l.randomize + l.bottom;
-        check(above + 3 * l.module + 2 * l.moduleGap + bottom + l.spare == l.main && l.spare >= 0, at + "the column adds up to main, " + l.spare + " spare");
+        check(above + l.rows * l.module + (l.rows - 1) * l.moduleGap + bottom + l.spare == l.main && l.spare >= 0, at + "the column adds up to main, " + l.spare + " spare");
         check(above + l.testHeight + bottom == l.main, at + "the head row and the test area add up to main");
         check(l.about >= 2 * l.pad + l.nameHeight() + l.mark + LabLayout.NAME_GAP + l.words && l.about >= 2 * l.pad + l.pickerThick + l.mark && l.mark >= LabText.line(TypeStyle.CAPTION.sp),
                 at + "About This Brush holds the name, the Edited line, the words, the picker box and a note's line: " + l.about);
@@ -49,16 +73,16 @@ public final class LabLayoutChecks {
         // The Open sheet under the header: its rows, the library's head and two rows of cards, above Randomize.
         int sheet = 12 + 44 + 10 + 44 + 10 + LabLayout.SECTION_BAR + l.shelfRows * l.cardHeight + 10 + (int) Math.ceil(LabText.line(TypeStyle.CAPTION.sp)) + 12;
         check(l.top + l.aboutHead + sheet <= l.main - l.randomize - l.bottom && (l.width - 2 * l.side - 32) / l.shelfColumns >= LabLayout.NARROWEST_TILE + 30, at + "the Open sheet fits: " + sheet);
-        check(l.aboutButtons() <= l.width - 2 * l.side || l.backToWidth() >= 100, at + "About This Brush's header holds its buttons from its left, no label, Back to cut to " + l.backToWidth());
-        check(l.adjustHead() <= l.column && l.testHead() <= l.right, at + "the head rows hold Start from ▾ and Clear: " + l.adjustHead() + " / " + l.testHead());
+        check(l.aboutButtons() <= l.width - 2 * l.side, at + "About This Brush's header holds New ▾, Open, Save, As New and Make Stamp from its left, no label: " + l.aboutButtons());
+        check(l.testHead() <= l.right, at + "the try strip's head row holds its words and Clear: " + l.testHead());
         check(LabLayout.bar(l.compact) <= l.width - 2 * l.side, at + "the bar's Back, title, switch and Undo fit: " + LabLayout.bar(l.compact));
         check(l.sampleHeight >= l.sampleMin && l.sampleHeight <= l.sampleMax, at + "a module's sample is " + l.sampleWidth + " x " + l.sampleHeight);
-        for (int row = 0; row < 3; row++)
+        for (int row = 0; row < l.rows; row++)
             check(l.rowHead(row) + l.rowChoice(row) + l.rowMacro(row) <= l.rowMost, at + "row " + row + "'s head and choice leave its sample at least the least");
         check(l.sampleWidth >= 100 && l.moduleWidth >= 150, at + "modules " + l.moduleWidth + " wide, samples " + l.sampleWidth);
         check(l.described == !l.compact, at + "descriptions on the Manta's modules only");
         {
-            check(above + 3 * l.slim + 2 * l.moduleGap + l.pad + l.open + bottom == l.main, at + "the slim modules and the open card add up to main");
+            check(above + l.rows * l.slim + (l.rows - 1) * l.moduleGap + l.pad + l.open + bottom == l.main, at + "the slim modules and the open card add up to main");
             int head = LabLayout.OPEN_HEAD + 10;
             for (BrushPart part : BrushPart.values()) {
                 if (part == BrushPart.HAND) {
@@ -97,6 +121,8 @@ public final class LabLayoutChecks {
                     // A Spiro shows its curve's dials (SpiroStamper.shows): the toy's, its default, the most.
                     ModularBrush.Part part0 = new ModularBrush.Part(choice);
                     for (PartDial d : choice.dials) if (l.shows(choice, d) && SpiroStamper.shows(part0, d)) { dials++; if (stacks(l, choice, d)) stacked++; }
+                    // Medium's card holds Paper's Texture too (2026-11-01).
+                    if (part == BrushPart.MEDIUM) dials++;
                     if (dials == 0) continue;
                     int row = l.dialRow(dials, stacked);
                     check(head + stacked * LabLayout.stackedRow() + (dials - stacked) * row <= l.open, at + choice + "'s " + dials + " dials fit at " + row + "");
@@ -109,10 +135,10 @@ public final class LabLayoutChecks {
             check(l.slider >= 80, at + "a dial's slider is " + l.slider);
         }
         check(l.testWidth >= 360 && l.testHeight >= 700, at + "test area " + l.testWidth + " x " + l.testHeight);
-        // The name, beside its loop and its pencil: every Basic tool's and every style's whole on one line (a longer name
+        // The name, beside its loop and its pencil: every Basic tool's as shown ("Palette knife Effect") and every style's whole on one line (a longer name
         // of one's own takes two lines at 16 sp on the Manta, or ends in "…").
         float longest = 0;
-        for (ToolPresets.Preset p : ToolPresets.all()) longest = Math.max(longest, LabText.width(p.name, TypeStyle.HEADING.sp, 0));
+        for (ToolPresets.Preset p : ToolPresets.all()) longest = Math.max(longest, LabText.width(p.shownName(), TypeStyle.HEADING.sp, 0));
         for (ModularStyle style : ModularStyle.all()) longest = Math.max(longest, LabText.width(style.label, TypeStyle.HEADING.sp, 0));
         check(l.nameWidth >= longest, at + "the name gets " + l.nameWidth + " for " + longest);
         // A swap strip holds 2 (Carry) to 9 (Hand) tiles in the under area. The tiles fill it, so a short, wide strip
@@ -129,9 +155,22 @@ public final class LabLayoutChecks {
                     && panel[2] <= l.main - l.top - l.bottom && panel[2] >= LabLayout.SECTION_BAR + l.swapCell(n)[1],
                     at + n + " swap tiles: the panel " + panel[1] + " x " + panel[2] + " at " + panel[0] + " fits beside the column");
         }
-        // Past thirteen tiles (the fourteen papers) a strip turns in pages of as many each: its head then holds the glyph,
-        // the part's name, the library's page buttons round "2/2" and ✕.
-        check(LabLayout.swapPerPage(13) == 13 && LabLayout.swapPerPage(14) == 7 && LabLayout.swapPerPage(BrushPart.PAPER.choices().size()) == 7, "Fourteen swap tiles: two pages of seven");
+        // Past thirteen tiles (the fourteen papers; Later's past eight) the tray is twice as tall, all on it (2026-11-06,
+        // the owner: "just make the tray twice as tall"), its tiles a page's size as before; past two trays' worth a strip
+        // turns in pages of as many each: its head then holds the glyph, the part's name, the library's page buttons round "2/2" and ✕.
+        check(LabLayout.swapPerPage(13) == 13 && LabLayout.swapPerPage(14) == 14 && LabLayout.swapPerPage(BrushPart.PAPER.choices().size()) == 14
+                && LabLayout.swapPerPage(27) == 9 && !LabLayout.tallSwap(null, 13) && LabLayout.tallSwap(null, 14) && !LabLayout.tallSwap(null, 9)
+                && LabLayout.swapPerPage(BrushPart.LATER, 14) == 14 && LabLayout.swapPerPage(BrushPart.LATER, 17) == 6 && LabLayout.tallSwap(BrushPart.LATER, 9),
+                "Fourteen swap tiles all in the tall tray, Later's too; past two trays, pages");
+        for (int n : new int[]{14, 26}) {
+            int[] tall = l.swapPanel(BrushPart.PAPER, n), cell = l.swapCell(BrushPart.PAPER, n), page = l.swapCell((n + 1) / 2);
+            check(tall[2] <= l.main - l.top - l.bottom && tall[2] <= 2 * l.swap + 2 * n && cell[1] >= page[1] * 9 / 10,
+                    at + n + " swap tiles in the tall tray: the panel " + tall[1] + " x " + tall[2] + " fits, its tiles " + cell[0] + " x " + cell[1] + " (a page's " + page[0] + " x " + page[1] + ")");
+        }
+        for (int n = 9; n <= 16; n++) {
+            int[] tall = l.swapPanel(BrushPart.LATER, n);
+            check(tall[2] <= l.main - l.top - l.bottom, at + n + " of Later's tiles: the tall tray " + tall[2] + " fits the lab's height");
+        }
         float pagedHead = 2 * 10 + 20 + 8 + LabLayout.labelWidth(BrushPart.CARRY.label.toUpperCase(java.util.Locale.ROOT)) + 8 + 2 * l.pageButton + 2 * 4 + LabLayout.labelWidth("2/2") + 44;
         check(pagedHead <= l.right, at + "a paged swap strip's head fits: " + pagedHead + " in " + l.right);
     }
@@ -159,7 +198,7 @@ public final class LabLayoutChecks {
         for (ToolPresets.Preset p : ToolPresets.all()) t.descriptions.add(BrushVoice.about(p.brush().parts));
         for (int i = 0; i < ToolSlots.COUNT; i++) t.captions.addAll(BrushCaptions.describe(ToolSlots.first(i)));
         for (ModularStyle style : ModularStyle.all()) {
-            lab.pickStyle(style);
+            lab.newBrush(style);
             for (int i = 0; i < 400; i++) {
                 lab.randomize();
                 ModularBrush b = lab.parts();
@@ -196,16 +235,16 @@ public final class LabLayoutChecks {
         // A module's head: its name left of the glyph, then (Manta) its fixed description across the head in its budgeted lines.
         LabText.Measure desc = LabText.face(small, 0);
         for (BrushPart part : BrushPart.values()) {
-            String name = part.label.toUpperCase(Locale.ROOT);
+            String name = l.name(part).toUpperCase(Locale.ROOT), slim = l.slimName(part).toUpperCase(Locale.ROOT);
             check(LabText.width(name, LabLayout.NAME_SP, .08f) <= l.nameRoom(), at + part + "'s name " + name + " in " + l.nameRoom());
             if (l.described) check(LabText.fits(ModularWords.inside(part), l.body, desc, l.descLines), at + part + "'s description in " + l.descLines + " lines of " + l.body);
-            check(LabText.width(name, LabLayout.DENSE_SP, .07f) <= l.slimRoom(), at + part + "'s name on a slim module");
+            check(LabText.width(slim, LabLayout.DENSE_SP, .07f) <= l.slimRoom(), at + part + "'s name " + slim + " on a slim module");
         }
         // Its choice, bold, centred, 16 sp down to 13: in as many lines as its row budgets; a slim module's at 12 sp.
         float dense = LabLayout.DENSE_SP;
         LabText.Measure choice = LabText.face(small, 0), slim = LabText.face(dense, 0);
         int slimBody = l.moduleWidth - 2 * LabLayout.MODULE_RULE - 12, openBody = l.openWidth - 16;
-        // A slim module names Control's one strongest response (PartCard.words).
+        // A slim module names Control's one strongest response (LabLayout.moduleWords).
         check(l.slimLines * LabText.line(dense) <= l.slimChoice, at + "a slim module's choice holds " + l.slimLines + " lines");
         for (BrushPart part : BrushPart.values())
             for (String said : part == BrushPart.HAND && l.handResponses() == 1 ? t.handOne : t.choices.get(part)) {
@@ -281,7 +320,8 @@ public final class LabLayoutChecks {
         for (BrushPart part : BrushPart.values())
             for (List<List<String>> strip : t.swaps.get(part)) {
                 // Paged as SwapStrip pages it: every page's grid laid out for a page's tiles.
-                int[] cell = l.swapCell(LabLayout.swapPerPage(strip.size()));
+                if (strip.isEmpty()) continue;
+                int[] cell = l.swapCell(part, LabLayout.swapPerPage(part, strip.size()));
                 for (List<String> caption : strip) {
                     LabText.Caption fitted = LabText.caption(caption, null, cell[0] - 2, cell[1] - 2, l.swapLeast(), l.swapInset());
                     check(fitted.whole, at + part + "'s swap tile " + caption + " on " + (cell[0] - 2) + " x " + (cell[1] - 2));
@@ -313,6 +353,10 @@ public final class LabLayoutChecks {
     /** The spec's Budgets table, as built (2026-10-29: no toolbar band, no Basic, no Tweak It; the picker box across About This Brush). */
     static void table() {
         LabLayout ma = new LabLayout(MANTA[0], MANTA[1]), na = new LabLayout(NOMAD[0], NOMAD[1]);
+        // Affects Page whole on the Manta's modules, "Affects" where it won't fit: the Nomad's slim ones (the owner, 2026-11-02).
+        check(ma.name(BrushPart.CARRY).equals("Affects Page") && ma.slimName(BrushPart.CARRY).equals("Affects Page") && na.slimName(BrushPart.CARRY).equals("Affects")
+                        && ma.name(BrushPart.TIP).equals("Tip") && na.slimName(BrushPart.TIP).equals("Tip"),
+                "Affects Page on the Manta, Affects on a narrow module: " + na.name(BrushPart.CARRY) + ", " + na.slimName(BrushPart.CARRY));
         // Was, Advanced with the toolbar band and Tweak It: 580 x 704, 363 x 409.
         test(ma, 580, TABLE[0]); test(na, 363, TABLE[1]);
         check(ma.about == TABLE[2] && na.about == TABLE[3], "About This Brush " + ma.about + "/" + na.about);
@@ -323,14 +367,18 @@ public final class LabLayoutChecks {
         check(ma.picker == 344 && na.picker == 194 && ma.pickerThick == 72 && na.pickerThick == 64 && ma.readout == 72 && na.readout == 64, "The picker box and its readout (the Nomad's box 264 until the readout, 2026-10-29): " + ma.picker + " x " + ma.pickerThick + ", Nomad " + na.picker + " x " + na.pickerThick);
         check(ma.column == 404 && na.column == 354, "Columns: " + ma.column + "/" + na.column);
         check(ma.swapColumns(9) == 5 && na.swapColumns(9) == 3, "Nine swap tiles: 5 across on the Manta, 3 × 3 on the Nomad");
-        check(ma.rowHead(0) == 98 && ma.rowHead(1) == 58 && ma.rowHead(2) == 78 && na.rowHead(0) == 30 && na.rowHead(1) == 30, "Heads as tall as their row's description: " + ma.rowHead(0) + "/" + ma.rowHead(1) + "/" + ma.rowHead(2) + ", Nomad " + na.rowHead(0) + "/" + na.rowHead(1));
+        check(ma.rowHead(0) == 78 && ma.rowHead(1) == 98 && ma.rowHead(2) == 78 && na.rowHead(0) == 30 && na.rowHead(1) == 30, "Heads as tall as their row's description: " + ma.rowHead(0) + "/" + ma.rowHead(1) + "/" + ma.rowHead(2) + ", Nomad " + na.rowHead(0) + "/" + na.rowHead(1));
     }
-    /** The table's numbers: test heights (Manta, Nomad), About This Brush, modules, samples, open cards. */
+    /**
+     * The table's numbers: test heights (Manta, Nomad), About This Brush, modules, samples, open cards. Three rows of
+     * modules, six cards (2026-11-01: After on every brush, Paper's Texture on Medium's card; seven, in four rows that morning, had
+     * modules 246/171, samples 33/28, open 658/374).
+     */
     static final int[] TABLE = {1004, 702, 131, 106, 330, 223, 117, 80, 744, 444};
     static void test(LabLayout l, int width, int height) {
         check(l.testWidth == width && l.testHeight == height, l.width + " test area " + l.testWidth + " x " + l.testHeight + ", want " + width + " x " + height);
     }
-    static String at(LabLayout l) { return l.width + "x" + l.height + ": "; }
+    static String at(LabLayout l) { return l.width + "x" + l.height + (l.rows > 3 ? " with Later" : "") + ": "; }
 
 
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }

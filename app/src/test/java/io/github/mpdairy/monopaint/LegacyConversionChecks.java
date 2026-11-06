@@ -26,7 +26,9 @@ public final class LegacyConversionChecks {
             {"mellow-plum.P600xjf400c4jzxh00aqhu.hd", "mellow-plum.Md0i000000000f4_1zzjzc4xhaq00_0_000_28e000js_8xj00003m0000000000nz0.hd"},
             {"bouncy-moose.P610hh46000000000000wp.25", "bouncy-moose.Md0i00000000046_1000000000000_0_000_2fd000js_8hh00003m0000000000nz0.25"}};
     // One page re-pinned 2026-10-29 (75350864): a line past 16 px laid on a closer grid (LineStamper, EdgeRippleChecks).
-    static final String EXPECTED = "28ce86fa bbe782e4 113989ec bf1e81e9 f9996c07 ca977a34 1f6245ea 230eb1a3 4ad541f8 87306636 b7a5ed87 3b953b7d 70dac630 40af05d 364ef8de cd3eca39 42bfe783 f0a5e74c 2bab9ffc a8f0042b ed3774be 6dce5018 2220b680 99529471 9ef2ecea cbdfe6b6 b7954af8 9eff9cf9 452060ee 5e919e97 4e785449 ce7bb434 a3d3b325 805196ec 1510b504 91b65910 8cbdecbc a601c5f 591481db 59a0c977 acfeeaab";
+    // Five re-pinned 2026-11-01: the old brushes on a textured paper, drawn again on their surfaces made whole (SurfaceGrain).
+    // 13 re-pinned 2026-11-02: the paper's grain a little quieter under every mark (StrokePaper.SHOWS).
+    static final String EXPECTED = "28ce86fa bbe782e4 113989ec bf1e81e9 f9996c07 ad28f8b e3e67941 270e3e25 a9f9518f 87306636 6a3c3412 edb27490 1a545be2 a16a358b cec84e2c 65c1a2ba 23556826 2b556aa6 144d3fde a8f0042b ed3774be 6dce5018 2220b680 99529471 9ef2ecea cbdfe6b6 b7954af8 9eff9cf9 452060ee 5e919e97 4e785449 ce7bb434 a3d3b325 805196ec 1510b504 91b65910 8cbdecbc a601c5f 591481db 59a0c977 acfeeaab";
 
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));

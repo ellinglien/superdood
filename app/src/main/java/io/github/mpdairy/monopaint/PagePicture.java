@@ -219,21 +219,36 @@ final class PagePicture {
         private final Mirrors.View view;
         private final int height;
         private final int[] source;
-        /** {@code page}'s, on its paper, as it shows (Real Mirror's reflection too). */
-        Composite(ToneDocument.Snapshot page) { this(page.width, page.height, page.layers, page.paper, page.paperPixels, page.mirrors == null ? null : page.mirrors.view()); }
+        /** Inkwash: the page's text boxes' letters over it all ({@link TextBoxes#over}), or null: a whole page's composite only, never a layer's. */
+        private TextBoxes.Over texts;
+        /** {@code page}'s, on its paper, as it shows (Real Mirror's reflection too, and its text boxes). */
+        Composite(ToneDocument.Snapshot page) { this(page.width, page.height, page.layers, page.paper, page.paperPixels, page.mirrors == null ? null : page.mirrors.view()); texts = TextBoxes.over(page.texts); }
         /** As above with the page's template guides under its marks ({@link ToneDocument.Snapshot#shownPaper}): what the copies print. */
-        static Composite printed(ToneDocument.Snapshot page) { return printed(page, 0, Integer.MAX_VALUE); }
+        static Composite printed(ToneDocument.Snapshot page) { Composite c = printed(page, 0, Integer.MAX_VALUE); c.texts = TextBoxes.over(page.texts); return c; }
         /**
          * As {@link #printed(ToneDocument.Snapshot)}, of the page's composite places {@code from} up to {@code to} alone
          * ({@link ToneDocument#stacked}; none: its paper and guides): a layer of a page's Layers copy ({@link PageExport}).
          */
-        static Composite printed(ToneDocument.Snapshot page, int from, int to) {
-            return new Composite(page.width, page.height, page.layers, page.paper, page.shownPaper(), page.mirrors == null ? null : page.mirrors.view(), from, to);
+        static Composite printed(ToneDocument.Snapshot page, int from, int to) { return printed(page, from, to, 0); }
+        /** As above, without the layers whose bits {@code without} sets: High Res's Layers copy, Vector Ink's lines drawn in their place. */
+        static Composite printed(ToneDocument.Snapshot page, int from, int to, int without) {
+            return new Composite(page.width, page.height, page.layers, page.paper, page.shownPaper(), page.mirrors == null ? null : page.mirrors.view(), from, to, without);
         }
         /** {@code layers}, a page {@code width} wide, on {@code paper} (255: white). */
         Composite(int width, List<ToneDocument.Layer> layers, int paper) { this(width, 0, layers, paper, null, null); }
+        /**
+         * Inkwash: {@code page}'s whole composite as a copy shows it (its guides under its marks when {@code guides}, as
+         * {@link #printed(ToneDocument.Snapshot)}), without the layers whose bits {@code without} sets (0: none): High
+         * Res's page under Vector Ink's sharp lines ({@link PngRender#png}).
+         */
+        static Composite of(ToneDocument.Snapshot page, boolean guides, int without) {
+            Composite c = new Composite(page.width, page.height, page.layers, page.paper, guides ? page.shownPaper() : page.paperPixels, page.mirrors == null ? null : page.mirrors.view(), 0, Integer.MAX_VALUE, without);
+            c.texts = TextBoxes.over(page.texts);
+            return c;
+        }
         private Composite(int width, int height, List<ToneDocument.Layer> layers, int paper, byte[] ground, Mirrors.View view) { this(width, height, layers, paper, ground, view, 0, Integer.MAX_VALUE); }
-        private Composite(int width, int height, List<ToneDocument.Layer> layers, int paper, byte[] ground, Mirrors.View view, int from, int to) {
+        private Composite(int width, int height, List<ToneDocument.Layer> layers, int paper, byte[] ground, Mirrors.View view, int from, int to) { this(width, height, layers, paper, ground, view, from, to, 0); }
+        private Composite(int width, int height, List<ToneDocument.Layer> layers, int paper, byte[] ground, Mirrors.View view, int from, int to, int without) {
             this.width = width; this.height = height; this.paper = paper; this.ground = ground; this.view = view;
             source = view == null ? null : new int[width];
             int places = ToneDocument.stackSize(layers.size());
@@ -244,7 +259,7 @@ final class PagePicture {
                 ToneDocument.Layer entry = ToneDocument.stacked(layers, k);
                 if (entry == null) continue;
                 ToneDocument.Layer layer = layers.get(ToneDocument.stackOwner(k));
-                if (layer.visible) { tones[n] = entry.tones; alpha[n] = entry.alpha; opacity[n++] = ToneDocument.stackOpacity(layer, entry); }
+                if (layer.visible && (without >> ToneDocument.stackOwner(k) & 1) == 0) { tones[n] = entry.tones; alpha[n] = entry.alpha; opacity[n++] = ToneDocument.stackOpacity(layer, entry); }
             }
             visible = n;
         }
@@ -263,6 +278,7 @@ final class PagePicture {
                 }
                 out[x] = result;
             }
+            if (texts != null) texts.row(y, out, width);
         }
         /**
          * Row {@code y}'s marks alone, over nothing: each pixel's coverage ({@code cover}, 0 to 255) and its tone times its
@@ -283,6 +299,7 @@ final class PagePicture {
                 }
                 inked[x] = k; cover[x] = c;
             }
+            if (texts != null) texts.marks(y, inked, cover, width);
         }
     }
 

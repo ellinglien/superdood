@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static io.github.mpdairy.monopaint.NotebookStrip.*;
+
 /**
  * The shelf of notebooks and the inside of one (docs/archive/superpowers/specs/2026-10-18-notebooks-design.md, "The screens"),
  * over the drawing screen, turned with it. The shelf: every notebook, the last changed first, its front cover each
@@ -33,9 +35,12 @@ import java.util.concurrent.Executors;
  * file's end, {@link BookPictures}; {@link NotebookCovers}; a plain placeholder until it is made) with its name and
  * "24 pages · Oct 17", New notebook first, page buttons
  * when they don't all fit. Inside a notebook (the open one, {@link PaintActivity#book}; the owner, 2026-10-19:
- * "consolidate these to one bar"): one bar at the top, ‹ Notebooks, the notebook's name (a tap renames it), Open (or a
- * tap on the page, or on the strip's selected preview), Use on Cover (No Picture on the front cover) and Delete Page (not on a cover); the page it shows as
- * big as fits under it, a finger swipe turning it; a strip of the notebook's settings ({@link LibraryCard}), the front cover, its pages, + and the back cover round it;
+ * "consolidate these to one bar"; Brush Lab's and the Tools page's {@link LabUi.PageBar} since 2026-11-03): ‹ Notebooks,
+ * the notebook's name (a tap renames it) over the screen's job, Notebook Settings (its settings, {@link LibraryCard}),
+ * Open (or a tap on the page, or on the strip's selected preview), Use on Cover (No Picture on the front cover) and
+ * Delete Page (not on a cover); the page it shows as big as fits under it, big ‹ and › either side and a finger swipe
+ * turning it; a strip of the front cover, its pages, + and the back cover, scrolling round it (the owner, 2026-11-03:
+ * the covers in the list, not sticky; no settings tile);
  * and along the foot the drawing screen's page bar ({@link PageTurner}, without its Notebook button) to turn it. Every page is
  * shown by its picture ({@link DrawingBook#picture}), never by decoding it; a page without one (changed since, or from
  * an older file) has it made in the background, once. Sizes are {@link NotebookLayout}'s; nothing scrolls. A stack of
@@ -76,7 +81,7 @@ final class NotebookScreens {
     // Inside a notebook, the parts that change as it turns.
     private PageView page;
     private StripView strip;
-    private LabButton open, cover, delete;
+    private LabButton settingsButton, open, cover, delete, previous, next;
     /** The name in the bar (hidden on the settings, which head their list with it). */
     private TextView title;
     /** The settings list ({@link LibraryCard}), in the page's place while {@link #viewing} is {@link #CARD}. */
@@ -85,8 +90,6 @@ final class NotebookScreens {
     private android.widget.ScrollView settingsScroll;
     /** What the list shows now, so it is made again only when that changes (an e-ink update each time). */
     private Object settingsShown;
-    /** Where {@link #viewing} is the notebook's settings ({@link LibraryCard}), before the front cover: not a page, the strip's first tile. */
-    private static final int CARD = Integer.MIN_VALUE + 2;
     /** A card row's own screen while it shows ({@link CardSelector}), else null. */
     private CardSelector selector;
     /** The page bar along the foot, the drawing screen's own ({@link PageTurner}), without its Notebook button. */
@@ -131,6 +134,7 @@ final class NotebookScreens {
         viewing = app.book.valid(at) ? app.book.stacks().of(at) : Math.max(0, Math.min(at, count(app.book) - 1));
         cover(Mode.PAGES);
         build();
+        readFavourites();
     }
     /** Shows the open notebook's settings list. */
     void showCard() {
@@ -139,12 +143,15 @@ final class NotebookScreens {
         viewing = CARD;
         cover(Mode.PAGES);
         build();
+        readFavourites();
     }
     /** As {@link #showCard()}, then card screen {@code screen} over it (the Tools page's Notebook Settings). */
     void showCard(CardSheet.Screen screen) {
         showCard();
         if (app.book != null && screen != null) view.post(() -> { if (viewing == CARD && selector == null) choose(screen, 0); });
     }
+    /** How long after it opens the notebook screen gets its clean window: past a closing menu's last frame on the panel. */
+    static final long MENU_GONE_MS = 400;
     /** Covers the drawing screen: the canvas stops showing itself directly ({@link PaintActivity#canvasCovered}). */
     private void cover(Mode next) {
         boolean leaving = mode == Mode.HIDDEN;
@@ -153,7 +160,11 @@ final class NotebookScreens {
         mode = next;
         view.setVisibility(View.VISIBLE);
         // The page and the column are under partial grey: ink sent straight to the panel stayed over paper here (the owner, 2026-10-30). Their partial grey comes back on return (DrawingPad.returned).
-        if (leaving) Ui.cleanWindow(app.previewFrame.getRootView(), "notebook screen opened", () -> { });
+        // Once a menu that opened it has left the panel too (the firmware shows a window's change about 350 ms late): cleaned
+        // at once, its patch ghosted on, the menu in the top corner (the owner, 2026-10-30). With the firmware's flash: the
+        // clean update alone still left it (the owner, 2026-10-31), as it left big ghosts on the page (DrawingPad.autoRefresh).
+        // Automatic Refresh off (System Settings): no redraw at all.
+        if (leaving) view.postDelayed(() -> Ui.flashWindow(app.previewFrame.getRootView(), "notebook screen opened", () -> { }, SystemSettings.flashes(false, app.prefs.autoRefresh()), true), MENU_GONE_MS);
         app.syncToolbar();
     }
     /** Back to drawing. */
@@ -191,12 +202,6 @@ final class NotebookScreens {
         if (viewing != CARD && !valid(app.book, viewing)) viewing = Math.max(0, Math.min(viewing, count(app.book) - 1));
         updatePages();
     }
-    /** How many pages {@code book} says it has: its stacks. */
-    private static int count(DrawingBook book) { return book.stacks().count(); }
-    /** Whether {@code place} is a stack or a cover of {@code book}. */
-    private static boolean valid(DrawingBook book, int place) { return DrawingBook.isCover(place) || place >= 0 && place < count(book); }
-    private static int after(DrawingBook book, int place) { return book.stacks().after(place); }
-    private static int before(DrawingBook book, int place) { return book.stacks().before(place); }
     /** The page being drawn on is about to be left: its picture made from it now, while it is still decoded. */
     void leavingPage() { if (app.book != null) picture(app.book, app.book.index()); }
 
@@ -223,7 +228,7 @@ final class NotebookScreens {
         }
         return true;
     }
-    /** The notebooks found, the open one as it is now: its pages and cover, first while it has unsaved changes; one never saved and blank isn't shown. */
+    /** The notebooks found, the open one as it is now: its pages and cover, first (after Favourites) while it has unsaved changes; one never saved and blank isn't shown. */
     private List<DocumentStore.Notebook> merged(List<DocumentStore.Notebook> found) {
         List<DocumentStore.Notebook> all = new ArrayList<>();
         DrawingBook book = app.book;
@@ -237,14 +242,14 @@ final class NotebookScreens {
             all.add(new DocumentStore.Notebook(open, when, count(book), book.cover(), null, false, book.width, book.height, book.coverDrawn(DrawingBook.FRONT), null, book.design(), book.options()));
         }
         for (DocumentStore.Notebook n : found) if (!n.path.equals(open)) all.add(n);
-        all.sort((a, b) -> Long.compare(b.modified, a.modified));
+        // Favourites first (the owner, 2026-11-06), then the last changed first.
+        all.sort((a, b) -> NotebookStrip.favourites(a.path) != NotebookStrip.favourites(b.path) ? NotebookStrip.favourites(a.path) ? -1 : 1 : Long.compare(b.modified, a.modified));
         return all;
     }
 
     // Building
 
     private int dp(float v) { return app.dp(v); }
-    private float sp(float v) { return android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, v, app.getResources().getDisplayMetrics()); }
 
     private void build() {
         if (mode == Mode.HIDDEN) return;
@@ -282,10 +287,11 @@ final class NotebookScreens {
         NotebookLayout l = layout;
         LinearLayout column = LabUi.column(app);
         column.setPadding(dp(l.margin), dp(l.margin), dp(l.margin), dp(l.margin));
-        LinearLayout bar = LabUi.row(app);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.addView(text("Notebooks", TypeStyle.HEADING));
-        column.addView(bar, sized(-1, NotebookLayout.BAR));
+        // The page bar of Brush Lab and the Tools page (2026-11-03), no Back: the shelf is the first screen.
+        // No job line under Notebooks since 2026-11-06 (the owner: "it's not necessary").
+        LabUi.PageBar shelfBar = new LabUi.PageBar(app, 0, null, NotebookLayout.BACK, "");
+        shelfBar.line.setVisibility(View.GONE);
+        column.addView(shelfBar.view, sized(-1, NotebookLayout.BAR));
         LinearLayout.LayoutParams gridPlace = sized(-1, 0); gridPlace.weight = 1; gridPlace.topMargin = dp(l.gap);
         if (status != null) {
             TextView words = text(status, TypeStyle.BODY);
@@ -357,17 +363,14 @@ final class NotebookScreens {
         if (notebook != null) tile.setOnLongClickListener(v -> { if (!app.shelfBusy()) app.notebookMenu(face, notebook); return true; });
         return tile;
     }
-    /** "24 pages · Oct 17": its pages, and the day it last changed. */
+    /** "24 pages · Oct 17": its pages, and the day it last changed ({@link NotebookStrip#about}). */
     static String about(DocumentStore.Notebook notebook, LocalDate today) {
         if (notebook.unreadable) return "Can't be read";
-        String pages = notebook.pages == 1 ? "1 page" : notebook.pages + " pages";
-        LocalDate day = notebook.modified == Long.MAX_VALUE ? today : Instant.ofEpochMilli(notebook.modified).atZone(ZoneId.systemDefault()).toLocalDate();
-        String when = day.equals(today) ? "today" : day.equals(today.minusDays(1)) ? "yesterday" : DrawingNames.day(day, today);
-        return pages + " · " + when;
+        return NotebookStrip.about(notebook.pages, notebook.modified == Long.MAX_VALUE ? null : Instant.ofEpochMilli(notebook.modified).atZone(ZoneId.systemDefault()).toLocalDate(), today);
     }
 
     /**
-     * Inside the open notebook: the bar (‹ Notebooks, the name, Open, Use on Cover, Delete Page; the last two their icons
+     * Inside the open notebook: the bar (‹ Notebooks, the name over its job, Notebook Settings, Open, Use on Cover, Delete Page; the last two their icons
      * alone where its words don't fit, {@link NotebookLayout#labelled}), the page, the strip, and the page bar along the
      * foot, the margin round all but it.
      */
@@ -375,24 +378,31 @@ final class NotebookScreens {
         NotebookLayout l = layout;
         LinearLayout screen = LabUi.column(app);
         LinearLayout column = LabUi.column(app);
-        column.setPadding(dp(l.margin), dp(l.margin), dp(l.margin), 0);
-        LinearLayout bar = LabUi.row(app);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        LabButton back = new LabButton(app, R.drawable.ic_ph_caret_left, NotebookLayout.BACK, false);
-        back.setOnClickListener(v -> { if (!app.busy()) app.leaveNotebook(); });
-        bar.addView(back, sized(NotebookLayout.backWidth(), NotebookLayout.BUTTON));
-        // The name, in the bar's room between the buttons, its lines at most; a tap renames it.
-        // The screen's heading (the owner, 2026-10-21: the name heads it, ‹ Notebooks only the way back): heading size,
-        // down to the body size a long name was measured at ({@link NotebookLayout}), so it still fits its lines.
-        title = text(DrawingNames.shown(DrawingFiles.name(app.drawingName), LocalDate.now()), TypeStyle.HEADING);
-        title.setTypeface(Theme.face(700));
-        title.setMaxLines(NotebookLayout.TITLE_LINES); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        column.setPadding(dp(l.margin), dp(l.pagesTop), dp(l.margin), 0);
+        // The page bar of Brush Lab and the Tools page (2026-11-03: "make it consistent across the app"): ‹ Notebooks, the
+        // name centred, the actions at the right.
+        LabUi.PageBar pageBar = new LabUi.PageBar(app, 0, NotebookLayout.BACK, DrawingNames.shown(DrawingFiles.name(app.drawingName), LocalDate.now()), "");
+        // No "Tap a page to open it." under the name since 2026-11-06 (the owner: "it's not necessary").
+        pageBar.line.setVisibility(View.GONE);
+        LinearLayout bar = pageBar.view;
+        pageBar.back.setOnClickListener(v -> { if (!app.busy()) app.leaveNotebook(); });
+        // The name in its lines at most (heading size, down to the body size a long name was measured at, {@link
+        // NotebookLayout#fits}, so it is never cut); a tap renames it.
+        title = pageBar.title;
+        title.setSingleLine(false);
+        title.setMaxLines(NotebookLayout.TITLE_LINES);
         title.setAutoSizeTextTypeUniformWithConfiguration(Math.round(TypeStyle.BODY.sp), Math.round(TypeStyle.HEADING.sp), 1, android.util.TypedValue.COMPLEX_UNIT_SP);
-        title.setGravity(Gravity.CENTER_VERTICAL);
-        title.setContentDescription(title.getText() + ". Rename notebook");
-        title.setOnClickListener(v -> { if (!app.busy()) app.renameNotebook(); });
-        LinearLayout.LayoutParams titlePlace = sized(0, -1); titlePlace.weight = 1; titlePlace.leftMargin = dp(NotebookLayout.BAR_GAP);
-        bar.addView(title, titlePlace);
+        if (!NotebookStrip.favourites(app.drawingName)) {
+            title.setContentDescription(title.getText() + ". Rename notebook");
+            title.setOnClickListener(v -> { if (!app.busy()) app.renameNotebook(); });
+        }
+        // Notebook Settings, left of Open (the owner, 2026-11-03), where the strip's settings tile was: the list in the page's place.
+        // Its word, Settings, since 2026-11-06 (the owner: "instead of an icon only ... we should write SETTINGS"), said Notebook Settings.
+        settingsButton = action(NotebookLayout.SETTINGS, R.drawable.ic_ph_page_star, l.labelled);
+        settingsButton.setContentDescription(DrawLayout.NOTEBOOK_SETTINGS);
+        // In its own case, not the label's caps (the owner: "Settings in normal case is fine").
+        settingsButton.setAllCaps(false);
+        settingsButton.setOnClickListener(v -> { if (!app.busy() && app.book != null) { viewing = CARD; updatePages(); } });
         open = new LabButton(app, 0, NotebookLayout.OPEN, true);
         open.setOnClickListener(v -> draw());
         // On a page: Use on Cover (greyed when it is the cover picture); on the front cover: No Picture.
@@ -401,14 +411,23 @@ final class NotebookScreens {
         cover.setOnClickListener(v -> { if (!app.busy() && app.book != null && viewing != DrawingBook.BACK && viewing != CARD) app.setCoverPicture(viewing == DrawingBook.FRONT ? -1 : app.book.stacks().first(viewing)); });
         delete = action(NotebookLayout.DELETE, R.drawable.ic_ph_trash, l.labelled);
         delete.setOnClickListener(v -> { if (!app.busy()) app.deleteStack(viewing); });
+        bar.addView(settingsButton, after(NotebookLayout.settingsWidth(l.labelled)));
         bar.addView(open, after(NotebookLayout.actionWidth(NotebookLayout.OPEN, true)));
         bar.addView(cover, after(NotebookLayout.coverWidth(l.labelled)));
         bar.addView(delete, after(NotebookLayout.actionWidth(NotebookLayout.DELETE, l.labelled)));
-        column.addView(bar, sized(-1, NotebookLayout.BAR));
+        column.addView(bar, sized(-1, NotebookLayout.PAGES_BAR));
         LinearLayout spread = LabUi.row(app);
         spread.setGravity(Gravity.CENTER);
         page = new PageView();
+        // ‹ and › either side of the page (the owner, 2026-11-03), big for a finger ("the page turn carets should be
+        // bigger"): the page's height and CARET wide, their carets CARET_ICON; greyed at the covers.
+        previous = new LabButton(app, R.drawable.ic_ph_caret_left, null, false); next = new LabButton(app, R.drawable.ic_ph_caret_right, null, false);
+        previous.setIcon(R.drawable.ic_ph_caret_left, NotebookLayout.CARET_ICON); next.setIcon(R.drawable.ic_ph_caret_right, NotebookLayout.CARET_ICON);
+        previous.setContentDescription("Previous page"); next.setContentDescription("Next page");
+        previous.setOnClickListener(v -> turn(-1)); next.setOnClickListener(v -> turn(1));
+        spread.addView(previous, sized(NotebookLayout.CARET, l.pageHeight));
         spread.addView(page, sized(l.pageWidth, l.pageHeight));
+        spread.addView(next, sized(NotebookLayout.CARET, l.pageHeight));
         settings = LabUi.column(app); settingsShown = null;
         settingsScroll = new android.widget.ScrollView(app);
         settingsScroll.addView(settings);
@@ -446,8 +465,8 @@ final class NotebookScreens {
     }
     /**
      * What inside the notebook says of the page shown: the page bar (the page and its count, a cover's word; ‹ and ›), the
-     * cover picture's button (Use on Cover on a page, No Picture on the front cover, none on the back), Delete Page
-     * (never on a cover), the page, the strip.
+     * page's ‹ and › (greyed at the covers), the bar's actions (none on the settings; the cover picture's Use on Cover on a
+     * page, No Picture on the front cover, none on the back; Delete Page never on a cover), the page, the strip.
      */
     private void updatePages() {
         DrawingBook book = app.book;
@@ -459,10 +478,12 @@ final class NotebookScreens {
         turner.show(card ? DrawingBook.FRONT : viewing, n);
         // On the settings the list takes the page's place, headed by the name; the bar keeps ‹ Notebooks.
         page.setVisibility(card ? View.GONE : View.VISIBLE);
+        previous.setVisibility(card ? View.GONE : View.VISIBLE); next.setVisibility(card ? View.GONE : View.VISIBLE);
+        previous.setEnabled(NotebookStrip.turn(book, viewing, -1) != DrawingBook.NONE); next.setEnabled(NotebookStrip.turn(book, viewing, 1) != DrawingBook.NONE);
         settingsScroll.setVisibility(card ? View.VISIBLE : View.GONE);
-        title.setVisibility(card ? View.INVISIBLE : View.VISIBLE);
+        ((View) title.getParent()).setVisibility(card ? View.INVISIBLE : View.VISIBLE);
         if (card) fillSettings(book);
-        open.setVisibility(card ? View.GONE : View.VISIBLE);
+        for (View action : new View[]{settingsButton, open}) action.setVisibility(card ? View.GONE : View.VISIBLE);
         String coverWords = front ? NotebookCovers.NO_PICTURE_BUTTON : NotebookCovers.USE_BUTTON;
         if (layout.labelled) cover.setText(coverWords); else cover.setIcon(front ? R.drawable.ic_cover_picture_off : R.drawable.ic_cover_picture, 24);
         cover.setContentDescription(coverWords);
@@ -477,11 +498,7 @@ final class NotebookScreens {
     }
     private void turn(int by) {
         if (app.book == null) return;
-        // The card comes before the front cover.
-        DrawingBook book = app.book;
-        int to = viewing == CARD ? (by < 0 ? DrawingBook.NONE : DrawingBook.FRONT)
-                : viewing == DrawingBook.FRONT && by < 0 ? CARD
-                : by < 0 ? before(book, viewing) : after(book, viewing);
+        int to = NotebookStrip.turn(app.book, viewing, by);
         if (to == DrawingBook.NONE) return;
         viewing = to; updatePages();
     }
@@ -491,7 +508,7 @@ final class NotebookScreens {
         hide();
         app.drawOnStack(at);
     }
-    /** The strip's slot {@code slot} tapped: a page, a cover or the card shown (the one shown opened), or + adding a page. */
+    /** The strip's slot {@code slot} tapped: a page or a cover shown (the one shown opened), or + adding a page. */
     private void tapStrip(int slot) {
         DrawingBook book = app.book;
         if (book == null || app.busy() || slot < 0 || slot >= slots(book)) return;
@@ -508,19 +525,6 @@ final class NotebookScreens {
         if (place == DrawingBook.FRONT) choose(CardSheet.Screen.COVER, 0);
         else if (place >= 0 && valid(book, place)) showPageSettings(place, false);
     }
-    /**
-     * The strip's slots: the card, the front cover, the pages, + (while there is room), the back cover (the owner,
-     * 2026-10-30: the settings "to the left of the cover"; after the front cover until then).
-     */
-    private static final int ADD = Integer.MIN_VALUE + 1;
-    private static int slots(DrawingBook book) { return count(book) + 3 + (book.count() < DrawingBook.MAX_PAGES ? 1 : 0); }
-    private static int place(DrawingBook book, int slot) {
-        if (slot == 0) return CARD;
-        if (slot == 1) return DrawingBook.FRONT;
-        if (slot <= count(book) + 1) return slot - 2;
-        return slot == slots(book) - 1 ? DrawingBook.BACK : ADD;
-    }
-    private static int slotOf(DrawingBook book, int place) { return place == CARD ? 0 : place == DrawingBook.FRONT ? 1 : place == DrawingBook.BACK ? slots(book) - 1 : place + 2; }
     /** The open notebook was renamed: what shows its name follows. */
     void renamed() { if (mode == Mode.PAGES) build(); else if (mode == Mode.SHELF) load(); }
     /** The page shown, after a page was added at the end: the new one. */
@@ -927,9 +931,10 @@ final class NotebookScreens {
             @Override public boolean onSingleTapUp(MotionEvent e) { NotebookScreens.this.draw(); return true; }
             @Override public boolean onFling(MotionEvent a, MotionEvent b, float vx, float vy) {
                 if (a == null) return false;
-                float dx = b.getX() - a.getX(), dy = b.getY() - a.getY();
-                if (Math.abs(dx) < dp(48) || Math.abs(dx) < Math.abs(dy)) return false;
-                turn(dx < 0 ? 1 : -1);
+                float density = getResources().getDisplayMetrics().density;
+                int by = NotebookLayout.swipe((b.getX() - a.getX()) / density, (b.getY() - a.getY()) / density);
+                if (by == 0) return false;
+                turn(by);
                 return true;
             }
         });
@@ -954,15 +959,12 @@ final class NotebookScreens {
         Bitmap crisp = crisp(book, viewing, w, h);
         if (crisp != null) canvas.drawBitmap(crisp, Math.round(to.left), Math.round(to.top), ink);
         else drawPlace(canvas, book, viewing, inside);
-        if (crisp != null && !DrawingBook.isCover(viewing)) for (int next : new int[]{before(book, viewing), after(book, viewing)}) crisp(book, next, w, h);
+        if (crisp != null && !DrawingBook.isCover(viewing)) for (int near : new int[]{NotebookStrip.before(book, viewing), NotebookStrip.after(book, viewing)}) if (near != DrawingBook.NONE) crisp(book, near, w, h);
     }
 
     // The settings list (LibraryCard)
 
-    private final Paint tileWord = new Paint(Paint.ANTI_ALIAS_FLAG), grey = new Paint();
-    {
-        tileWord.setTypeface(Theme.face(700)); tileWord.setColor(Theme.INK);
-    }
+    private final Paint grey = new Paint();
     /** The template's thumbnail in its row, at its box's pixels; null while it is made (and for Blank and Random). */
     private Bitmap swatch(NotebookTemplate template, int w, int h) {
         if (template == NotebookTemplate.BLANK || template.random()) return null;
@@ -1039,10 +1041,13 @@ final class NotebookScreens {
         LibraryCard.Layout l = LibraryCard.settingsLayout(layout.width - 2 * layout.margin, layout.spreadHeight, name);
         TextView named = text(name, TypeStyle.TITLE);
         named.setTextSize(l.titleSp); named.setMaxLines(l.titleLines);
-        named.setContentDescription(name + ". " + LibraryCard.RENAME);
-        named.setOnClickListener(v -> tapSetting(LibraryCard.Part.NAME));
+        // Favourites is never renamed or deleted (NotebookStrip.FAVOURITES): no Rename, no Delete Notebook.
+        boolean kept = NotebookStrip.favourites(app.drawingName);
+        if (!kept) named.setContentDescription(name + ". " + LibraryCard.RENAME);
+        if (!kept) named.setOnClickListener(v -> tapSetting(LibraryCard.Part.NAME));
         settings.addView(named, sized(-1, -2));
         LabButton rename = new LabButton(app, 0, LibraryCard.RENAME, false);
+        rename.setVisibility(kept ? View.GONE : View.VISIBLE);
         rename.setPadding(0, 0, dp(12), 0);
         rename.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         rename.setOnClickListener(v -> tapSetting(LibraryCard.Part.NAME));
@@ -1064,6 +1069,7 @@ final class NotebookScreens {
         LabButton export = new LabButton(app, 0, PictureImport.EXPORT_NOW, false), delete = new LabButton(app, 0, LibraryCard.DELETE_NOTEBOOK, false);
         export.setOnClickListener(v -> { if (app.book == book && selector == null) app.exportNow(); });
         delete.setOnClickListener(v -> { if (app.book == book && !app.busy() && selector == null) app.deleteNotebook(app.drawingName); });
+        delete.setVisibility(kept ? View.GONE : View.VISIBLE);
         for (LabButton b : new LabButton[]{export, delete}) {
             b.setMinHeight(0); b.setMinimumHeight(0);
             LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-2, dp(LibraryCard.actionHeight(l.rowHeight)));
@@ -1092,26 +1098,9 @@ final class NotebookScreens {
         String key = LibraryCard.key(part), value = LibraryCard.value(part, o, book.design());
         LinearLayout row = row(key, false);
         switch (part) {
-            case PAGE_COLOUR:
-                swatches(row, o.paper, tone -> { if (app.book == book && !app.busy()) app.setNotebookOptions(book.options().withPaper(tone)); });
-                // An older notebook's grey from the slider: kept, no swatch chosen, said as it is.
-                value = NotebookOptions.paperWord(o.paper);
-                break;
-            case TRANSPARENCY: {
-                boolean on = book.tracing().paper != TracingPaper.PLAIN;
-                chips(row, OFF_ON, on ? 1 : 0, i -> { if (app.book == book && !app.busy()) { app.setTracing(LibraryCard.seeThrough(book.tracing(), i == 1)); updatePages(); } });
-                value = String.join(", ", LibraryCard.transparency(book.tracing()));
-                // Page Transparency's five (Page Before or Nearby Pages, Half or Faint): a long press, as elsewhere.
-                row.setOnLongClickListener(v -> { tapSetting(part); return true; });
-                break;
-            }
             case NIB_PREVIEW:
                 chips(row, OFF_ON, o.nibPreview ? 1 : 0, i -> { if (app.book == book && !app.busy() && (i == 1) != book.options().nibPreview) app.setNotebookOptions(book.options().withNibPreview(i == 1)); });
                 value = o.nibPreview ? NotebookRules.ON : NotebookRules.OFF;
-                break;
-            case SELF_PORTRAIT:
-                chips(row, OFF_ON, o.selfPortrait ? 1 : 0, i -> { if (app.book == book && !app.busy() && (i == 1) != book.options().selfPortrait) app.setNotebookOptions(book.options().withSelfPortrait(i == 1)); });
-                value = o.selfPortrait ? NotebookRules.ON : NotebookRules.OFF;
                 break;
             case NO_ERASING:
                 chips(row, OFF_ON, o.noErasing ? 1 : 0, i -> { if ((i == 1) != book.options().noErasing) tapSetting(part); });
@@ -1322,7 +1311,7 @@ final class NotebookScreens {
         int place = pagePlace, bottom = stacks.first(place), tone = tone(book, bottom);
         List<LibraryCard.Part> parts = LibraryCard.pageRows(book.tracing(), stacks.size(place) == 1);
         boolean timeSlider = LibraryCard.timeSlider(book.pageRules(bottom));
-        Object shown = java.util.Arrays.asList(place, book.options(), book.tracing(), tone, book.template(bottom), book.ownTemplate(bottom), book.pageRules(bottom), book.pageSeconds(bottom),
+        Object shown = java.util.Arrays.asList(place, book.options(), book.tracing(), tone, book.template(bottom), book.ownTemplate(bottom), book.pageRules(bottom), book.pageSeconds(bottom), book.surface(bottom),
                 stacks.count(), stacks.size(place), book.cover(), stacks.of(book.index()), book.index(), book.count(), app.drawingName);
         if (pageList != null && shown.equals(pageShown)) return;
         pageShown = shown;
@@ -1366,9 +1355,7 @@ final class NotebookScreens {
         delete.setOnClickListener(v -> { if (!app.busy() && selector == null && place < count(book)) { closePageSettings(); app.deleteStack(place); } });
         export.setOnClickListener(v -> {
             if (app.busy() || selector != null || place >= count(book)) return;
-            Runnable[] choices = new Runnable[PageExport.CHOICES.length];
-            for (int i = 0; i < choices.length; i++) { String choice = PageExport.CHOICES[i]; choices[i] = () -> app.exportPage(place, choice); }
-            app.menu(export, "export menu", PageExport.CHOICES, new int[]{R.drawable.ic_ph_file_pdf, R.drawable.ic_ph_image, R.drawable.ic_ph_stack}, choices, app.prefs.largeSettingsText() ? 176 : 160);
+            app.exportMenu(export, place);
         });
         for (LabButton b : new LabButton[]{export, delete}) {
             b.setMinHeight(0); b.setMinimumHeight(0);
@@ -1398,11 +1385,23 @@ final class NotebookScreens {
                 row.addView(new Thumb(o.withTemplate(template).withPaper(tone)), thumbSize());
                 words(row, value);
                 break;
+            case SURFACE:
+                value = LibraryCard.pageSurface(book.surface(bottom), book.ownSurface(bottom) != 0);
+                words(row, value);
+                break;
             case PAGE_COLOUR:
                 // The notebook's, or a swatch (an older grey: none chosen, said as it is); one Undo step on the page, as Fill page.
                 chips(row, new String[]{LibraryCard.NOTEBOOKS}, tone == o.paper ? 0 : -1, i -> app.shadeStack(place, book.options().paper));
                 swatches(row, tone == o.paper ? -1 : tone, to -> app.shadeStack(place, to));
                 break;
+            case TRANSPARENCY: {
+                boolean on = book.tracing().paper != TracingPaper.PLAIN;
+                chips(row, OFF_ON, on ? 1 : 0, i -> { if (app.book == book && !app.busy()) { app.setTracing(LibraryCard.seeThrough(book.tracing(), i == 1)); updatePages(); } });
+                value = String.join(", ", LibraryCard.transparency(book.tracing()));
+                // Page Transparency's five (Page Before or Nearby Pages, Half or Faint): a long press, as elsewhere.
+                row.setOnLongClickListener(v -> { tapSetting(part); return true; });
+                break;
+            }
             case SHOW_THROUGH:
                 chips(row, LibraryCard.SHOW_STEPS, LibraryCard.stepChip(step), i -> { app.setTracing(book.tracing().withStep(bottom, LibraryCard.chipStep(i))); updatePages(); });
                 // Ghost: this page shows through the page drawn on, in place of the page before (Page Before only; never the page drawn on).
@@ -1419,7 +1418,7 @@ final class NotebookScreens {
                 int first = st.first(place), n = st.size(place);
                 boolean full = n >= PageStacks.MOST || book.count() >= DrawingBook.MAX_PAGES;
                 int drawnOn = !DrawingBook.isCover(book.index()) && st.of(book.index()) == place ? book.index() - first : -1;
-                boolean old = drawnOn >= 0 && app.pad != null && app.pad.document == book.current() && InkWashLayers.pairs(app.pad.document) > 1;
+                boolean old = drawnOn >= 0 && app.pad != null && app.pad.document == book.current() && VectorInk.oldLayers(app.pad.document);
                 String[] words = LibraryCard.layerChips(n, full, old);
                 int layers = n > 1 ? n : 0;
                 chips(row, words, layers > 0 ? drawnOn : -1, i -> layerTapped(place, i, layers, words[i]));
@@ -1437,7 +1436,7 @@ final class NotebookScreens {
             }
         }
         rowEnd(row, key, value, LibraryCard.pageOpens(part), () -> {
-            if (!app.busy() && selector == null) choose(CardSheet.Screen.PAGE_TEMPLATE, bottom);
+            if (!app.busy() && selector == null) choose(part == LibraryCard.Part.SURFACE ? CardSheet.Screen.PAGE_SURFACE : CardSheet.Screen.PAGE_TEMPLATE, bottom);
         });
         return row;
     }
@@ -1495,20 +1494,43 @@ final class NotebookScreens {
         return row;
     }
 
-    /** The strip of pages: the front cover and the card, then a window round the one shown, framed in ink with a tab under it, and + after the last. */
+    /** The strip ({@link NotebookStrip#slots}): the front cover, the pages, + and the back cover, a window scrolling round the one shown, framed in ink with a tab under it. */
     @SuppressLint("ViewConstructor")
     private final class StripView extends View {
-        StripView() { super(app); setContentDescription("Pages"); }
-        /** The strip's slot at place {@code k}: the front cover and the card always first (the owner: the card findable from any page), then a window round the page shown. */
-        private int slotAt(int k) {
-            if (k < 2) return k;
-            int rest = slots(app.book) - 2, at = Math.max(0, slotOf(app.book, viewing) - 2);
-            return 2 + NotebookLayout.window(at, rest, layout.visible - 2) + k - 2;
+        StripView() {
+            super(app); setContentDescription("Pages");
+            // The page shown's star, to a screen reader: Add to Favourites, or Remove from Favourites.
+            setAccessibilityDelegate(new View.AccessibilityDelegate() {
+                @Override public void onInitializeAccessibilityNodeInfo(View host, android.view.accessibility.AccessibilityNodeInfo info) {
+                    super.onInitializeAccessibilityNodeInfo(host, info);
+                    Boolean on = starred(viewing);
+                    if (on != null) info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(STAR_ACTION, on ? NotebookStrip.UNSTAR : NotebookStrip.STAR));
+                }
+                @Override public boolean performAccessibilityAction(View host, int action, android.os.Bundle arguments) {
+                    if (action == STAR_ACTION && starred(viewing) != null) { app.star(viewing); return true; }
+                    return super.performAccessibilityAction(host, action, arguments);
+                }
+            });
         }
-        /** A tap opens the slot's page (or + adds one); a hold on the front cover opens Cover Design, on a page its own template. */
+        /** Whether {@code x}, {@code y} is on the star's corner of the preview under it. */
+        private boolean onStar(float x, float y) {
+            float left = x - start(), across = dp(layout.thumbWidth + layout.stripGap), target = dp(NotebookLayout.starTarget(layout.thumbWidth));
+            float in = left - (int) (left / across) * across;
+            return y < target && in > dp(layout.thumbWidth) - target;
+        }
+        /** The strip's slot at place {@code k}: a window round the place shown, nothing pinned (the owner, 2026-11-03). */
+        private int slotAt(int k) { return NotebookStrip.start(app.book, viewing, layout.visible) + k; }
+        /** A tap opens the slot's page or cover (or + adds a page); a hold on the front cover opens Cover Design, on a page its Page Settings. */
         private final GestureDetector gestures = new GestureDetector(app, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent e) { return true; }
-            @Override public boolean onSingleTapUp(MotionEvent e) { int at = slotAt(e.getX()); if (at >= 0) tapStrip(at); return true; }
+            @Override public boolean onSingleTapUp(MotionEvent e) {
+                int at = slotAt(e.getX());
+                if (at < 0) return true;
+                // The star's corner of a page's preview stars it (Favourites), the rest of it opens it.
+                int place = place(app.book, at);
+                if (starred(place) != null && onStar(e.getX(), e.getY())) app.star(place); else tapStrip(at);
+                return true;
+            }
             @Override public void onLongPress(MotionEvent e) { int at = slotAt(e.getX()); if (at >= 0) holdStrip(at); }
         });
         /** The slot under {@code x}, or −1 between slots and past the last. */
@@ -1542,25 +1564,64 @@ final class NotebookScreens {
                 boolean current = i == viewing;
                 float stroke = dp(current ? Theme.RULE : Theme.BASE);
                 RectF inside = new RectF(box.left + stroke, box.top + stroke, box.right - stroke, box.bottom - stroke);
-                if (i == CARD) {
-                    // The settings: the menus' Settings icon over its word (the owner, 2026-10-21: it reads as the notebook's settings at a glance).
-                    int size = (int) Math.min(dp(28), inside.width() / 2);
-                    Drawable list = Theme.tinted(app, R.drawable.ic_ph_list, Theme.INK);
-                    list.setBounds((int) inside.centerX() - size / 2, (int) inside.centerY() - size, (int) inside.centerX() + size / 2, (int) inside.centerY());
-                    list.draw(canvas);
-                    tileWord.setTextSize(sp(12));
-                    float tw = tileWord.measureText(LibraryCard.SETTINGS);
-                    if (tw > inside.width() - dp(4)) { tileWord.setTextSize(sp(12) * (inside.width() - dp(4)) / tw); tw = tileWord.measureText(LibraryCard.SETTINGS); }
-                    canvas.drawText(LibraryCard.SETTINGS, inside.centerX() - tw / 2, inside.centerY() + dp(4) + tileWord.getTextSize(), tileWord);
-                }
-                else if (DrawingBook.isCover(i)) drawCover(canvas, coverPicture(book, i, inside), fitted(book, inside), i == DrawingBook.BACK, ink);
-                else drawPlace(canvas, book, i, inside);
+                drawPlace(canvas, book, i, inside);
                 outline(canvas, box, stroke, current ? Theme.INK : Theme.GREY_400, false);
+                Boolean on = starred(i);
+                if (on != null) drawStar(canvas, box, on);
                 if (current) canvas.drawRect(box.left, h + dp(NotebookLayout.TAB_GAP), box.right, h + dp(NotebookLayout.TAB_GAP + NotebookLayout.TAB), ink);
             }
         }
     }
 
+    /** Whether page {@code place}'s preview shows its star filled (null: no star, on a cover or in Favourites itself). */
+    private Boolean starred(int place) {
+        DrawingBook book = app.book;
+        if (book == null || place < 0 || place >= count(book) || NotebookStrip.favourites(app.drawingName)) return null;
+        return held(book.fave(book.stacks().first(place)));
+    }
+    /**
+     * The marks Favourites holds, read once each time a notebook's pages show (null until read), then kept as this
+     * screen's stars change them: a copy deleted inside Favourites leaves its page's star empty.
+     */
+    private java.util.Set<Integer> favourites;
+    /** Whether a page marked {@code fave} has its copy in Favourites. */
+    boolean held(int fave) { return NotebookStrip.filled(fave, favourites); }
+    /** Favourites now holds the copy marked {@code fave}, or no longer does. */
+    void held(int fave, boolean in) { if (favourites != null) { if (in) favourites.add(fave); else favourites.remove(fave); } }
+    private void readFavourites() {
+        favourites = null;
+        if (NotebookStrip.favourites(app.drawingName)) return;
+        app.store.favouriteMarks((marks, error) -> app.runOnUiThread(() -> {
+            if (marks == null || mode != Mode.PAGES) return;
+            boolean changed = app.book != null && !marks.equals(favourites);
+            favourites = marks;
+            if (changed) starChanged();
+        }));
+    }
+    /** Favourites' star in {@code box}'s upper right corner, on a paper patch so it shows over a drawing: filled when {@code on}. */
+    private void drawStar(Canvas canvas, RectF box, boolean on) {
+        int icon = dp(NotebookLayout.STAR_ICON), inset = (dp(NotebookLayout.starTarget(layout.thumbWidth)) - icon) / 2;
+        int right = Math.round(box.right) - inset, top = Math.round(box.top) + inset;
+        starPaper.setColor(Theme.PAPER);
+        canvas.drawRect(right - icon - dp(2), top - dp(2), right + dp(2), top + icon + dp(2), starPaper);
+        if (stars[0] == null) { stars[0] = app.getDrawable(R.drawable.ic_ph_star); stars[1] = app.getDrawable(R.drawable.ic_ph_star_fill); }
+        Drawable star = stars[on ? 1 : 0];
+        if (star == null) return;
+        star.setBounds(right - icon, top, right, top + icon);
+        star.draw(canvas);
+    }
+    private final Paint starPaper = new Paint();
+    /** The star's icons, outline and filled, once loaded. */
+    private final Drawable[] stars = new Drawable[2];
+    private static final int STAR_ACTION = View.generateViewId();
+    /** A page's star changed: its preview's star drawn again, once (the strip alone; nothing else on the screen changed). */
+    void starChanged() { if (mode == Mode.PAGES && strip != null) strip.invalidate(); }
+    /** Asks before Remove from Favourites: its copy there goes, and that can't be undone. */
+    void confirmUnstar(Runnable remove) {
+        app.showDialog(new AlertDialog.Builder(app).setTitle(NotebookStrip.UNSTAR + "?").setMessage("This can't be undone.")
+                .setPositiveButton("Remove", (d, w) -> { if (!app.busy()) remove.run(); })
+                .setNegativeButton("Cancel", null));
+    }
     /** Asks before deleting page {@code index}: it can't be undone. */
     void confirmDelete(int index, Runnable delete) {
         app.showDialog(new AlertDialog.Builder(app).setTitle("Delete page " + (index + 1) + "?").setMessage("This can't be undone.")

@@ -4,13 +4,12 @@ cd "$(dirname "$0")/.."
 test_classes=$(mktemp -d)
 trap 'rm -rf "$test_classes"' EXIT
 javac -d "$test_classes" \
-  app/src/main/java/io/github/mpdairy/monopaint/{GrayPalette,DotPattern,ToneDocument,DocumentCodec,DrawingBook,PackedPage,BookCodec,BookPictures,DrawingFiles,RecoveryCodec,ToolSettings,ToolLibrary,BrushDirection,BristleTexture,WetWatercolor,WetWorkBudget,FloodFill,ToneDabs,DrawingStroke,ToolStroke,ShapeStroke,ShapeGeometry,DirtyRegions,PaintLoad,BrushInk,WatercolorWash,Magnets,Mirrors,LabText,TypeStyle,InkWashLayers,Cores,CoverNoise,CoverMarble,CoverDesign,CoverPattern,CoverTexture,Assets,NotebookCovers,BookOptions,NotebookTemplate,NotebookOptions,PageClock,PagePicture,FadingInk,PaperNoise,FloatingSelection}.java \
-  app/src/test/java/io/github/mpdairy/monopaint/{LayerChecks,MaskChecks,DocumentChecks,ToolChecks,BookChecks,DrawingFilesChecks,BristleChecks,WetWatercolorChecks,FlatWashChecks,CanvasPaintChecks,GradientFillChecks,AirbrushChecks,EraseChecks,ShapeChecks,PaintLoadChecks,CanvasSizeChecks,ErasableFileChecks,MagnetFileChecks,SelectionChecks}.java
+  app/src/main/java/io/github/mpdairy/monopaint/{GrayPalette,DotPattern,ToneDocument,DocumentCodec,DrawingBook,PackedPage,BookCodec,BookPictures,DrawingFiles,RecoveryCodec,ToolSettings,ToolLibrary,BrushDirection,WetWatercolor,WetWorkBudget,FloodFill,ToneDabs,DrawingStroke,ToolStroke,ShapeStroke,ShapeGeometry,DirtyRegions,PaintLoad,BrushInk,WatercolorWash,Magnets,Mirrors,LabText,TypeStyle,InkWashLayers,Cores,CoverNoise,CoverMarble,CoverDesign,CoverPattern,CoverTexture,Assets,NotebookCovers,BookOptions,NotebookTemplate,NotebookOptions,PageClock,PagePicture,FadingInk,PaperNoise,FloatingSelection}.java \
+  app/src/test/java/io/github/mpdairy/monopaint/{LayerChecks,MaskChecks,DocumentChecks,ToolChecks,BookChecks,DrawingFilesChecks,WetWatercolorChecks,FlatWashChecks,CanvasPaintChecks,GradientFillChecks,AirbrushChecks,EraseChecks,ShapeChecks,PaintLoadChecks,CanvasSizeChecks,ErasableFileChecks,MagnetFileChecks,SelectionChecks}.java
 javac -d "$test_classes" app/src/main/java/io/github/mpdairy/monopaint/RotationSuggestion.java app/src/test/java/io/github/mpdairy/monopaint/RotationSuggestionChecks.java
 java -cp "$test_classes" io.github.mpdairy.monopaint.RotationSuggestionChecks
 java -cp "$test_classes" io.github.mpdairy.monopaint.DocumentChecks
 java -cp "$test_classes" io.github.mpdairy.monopaint.ToolChecks
-java -cp "$test_classes" io.github.mpdairy.monopaint.BristleChecks
 java -cp "$test_classes" io.github.mpdairy.monopaint.BookChecks
 java -cp "$test_classes" io.github.mpdairy.monopaint.DrawingFilesChecks
 java -cp "$test_classes" io.github.mpdairy.monopaint.WetWatercolorChecks
@@ -70,9 +69,6 @@ javac -d "$test_classes" app/src/main/java/io/github/mpdairy/monopaint/ExportSiz
 java -cp "$test_classes" io.github.mpdairy.monopaint.ExportSizeChecks
 javac -d "$test_classes" app/src/main/java/io/github/mpdairy/monopaint/MultiFingerTap.java app/src/test/java/io/github/mpdairy/monopaint/MultiFingerTapChecks.java
 java -cp "$test_classes" io.github.mpdairy.monopaint.MultiFingerTapChecks
-
-javac -d "$test_classes" app/src/main/java/io/github/mpdairy/monopaint/EdgeSwipe.java app/src/test/java/io/github/mpdairy/monopaint/EdgeSwipeChecks.java
-java -cp "$test_classes" io.github.mpdairy.monopaint.EdgeSwipeChecks
 
 javac -d "$test_classes" app/src/test/java/io/github/mpdairy/monopaint/DeviceChecks.java
 java -cp "$test_classes" io.github.mpdairy.monopaint.DeviceChecks

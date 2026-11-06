@@ -40,6 +40,13 @@ final class SandTimer {
         set(0, now);
         return true;
     }
+    /** At zero while a stroke is down ({@code stroking}) it waits for the lift: no Time's up yet. */
+    boolean waits(long now, boolean stroking) { return on() && remaining(now) <= 0 && stroking; }
+    /** The countdown's row's words where the row is the sand timer's: its countdown while it runs; null, its icon. */
+    String countdown(long now) { return on() ? NotebookRules.countdown(remaining(now)) : null; }
+    /** Its menu's words ({@link #SECONDS} as {@link NotebookRules#timeLabel} says them), and the one set to {@code seconds} (−1: none). */
+    static String[] labels() { String[] t = new String[SECONDS.length]; for (int i = 0; i < t.length; i++) t[i] = NotebookRules.timeLabel(SECONDS[i]); return t; }
+    static int chosen(int seconds) { for (int i = 0; i < SECONDS.length; i++) if (SECONDS[i] == seconds) return i; return -1; }
     /** How long until its countdown says something else or it ends, ms; −1 while off or paused. */
     long nextLook(long now) { return since < 0 ? -1 : Math.max(50, Math.min(remaining(now), NotebookRules.nextCountdown(remaining(now)))); }
 }

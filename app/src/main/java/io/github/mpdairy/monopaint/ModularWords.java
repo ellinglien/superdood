@@ -24,6 +24,9 @@ final class ModularWords {
     /** A Spiro in "This brush": along the line, or round its ring. */
     /** Hatching's sentence: how its strokes build. */
     static final String HATCHES = "Crosses where gone over or held.";
+    /** The nibs' sentences (explore-nibs): what each does that no other tip does. A Brayer with Pick Up Paint off only rolls. */
+    static final String RULES_DRY = "Runs dry, blots where it slows.", TWIG_BLOTS = "Blots, then scratches dry.",
+            FAN_HAIRS = "Hairs part, more touch when pressed.", REPRINTS = "Reprints what it rolls over.", ROLLS = "Rolls an even band.";
     static final String SPIRO_LINE = "Loops along the line.", SPIRO_RING = "Loops round a ring pulled out from the start.",
             SPIRO_OVAL = "Loops round an oval drawn first.", SPIRO_BAR = "Loops round a bar drawn first.";
 
@@ -100,7 +103,7 @@ final class ModularWords {
      */
     static boolean dots(ModularBrush b) {
         ModularBrush.Part m = b.part(BrushPart.MEDIUM);
-        return m.choice == PartChoice.TONE || (int) m.get(SCREEN, 0) > 0 && b.choice(BrushPart.LIFE) != PartChoice.FLOAT;
+        return m.choice == PartChoice.TONE || (int) m.get(SCREEN, 0) > 0 && !b.floats();
     }
     /** The Control grid's darkness column head: "Dots" for a brush that prints dots ({@link #dots}), else "Dark". */
     static String darkHead(ModularBrush b) { return dots(b) ? "Dots" : "Dark"; }
@@ -116,12 +119,14 @@ final class ModularWords {
     static {
         // Flick and Fling (the mischief modules spec, Stage 2) are the Tip's and the Medium's too.
         INSIDE[BrushPart.TIP.ordinal()] = new String[]{"shape", "taper", "angle", "flick"};
-        INSIDE[BrushPart.MEDIUM.ordinal()] = new String[]{"ink", "paint", "charcoal", "pencil", "fling"};
+        INSIDE[BrushPart.MEDIUM.ordinal()] = new String[]{"ink", "paint", "pencil", "texture", "fling"};
         // Paint Load (the oil paint spec) is the Smudge's too.
         INSIDE[BrushPart.CARRY.ordinal()] = new String[]{"lift", "drag", "smear", "load"};
         INSIDE[BrushPart.PAPER.ordinal()] = new String[]{"texture"};
         INSIDE[BrushPart.LIFE.ordinal()] = new String[]{"time", "runs", "drips"};
         INSIDE[BrushPart.HAND.ordinal()] = new String[]{"pressure", "tilt", "speed"};
+        // After holds a dozen ways a mark changes once the pen lifts (2026-11-01): what they do, not their names.
+        INSIDE[BrushPart.LATER.ordinal()] = new String[]{"fades", "spreads", "ages"};
     }
     /**
      * {@link #INSIDE} for {@code part}, "ink · paint · charcoal", a no-break space before each dot so a wrapped line ends
@@ -157,11 +162,11 @@ final class ModularWords {
         String both = SCREEN_WORDS[screen] + " " + lower(base);
         return fits(both) ? both : SCREEN_WORDS[screen];
     }
-    /** The medium's Screen ({@link PartDial#SCREEN}, shown as {@link PrintScreen#LABEL}): 0 none, 1 halftone, 2 engraving, 3 dither, 4 grain, 5 rosette, 6 Ben-Day, 7 crosshatch, 8 wavy lines, 9 mezzotint, 10 diamond dots, 11 stipple, 12 woodcut, 13 scribble, 14 hatching. */
+    /** The medium's Screen ({@link PartDial#SCREEN}, shown as {@link PrintScreen#LABEL}): 0 none, 1 halftone, 2 engraving, 3 dither, 4 grain, 5 rosette, 6 Ben-Day, 7 crosshatch, 8 wavy lines, 9 mezzotint, 10 diamond dots, 11 stipple, 12 woodcut, 13 scribble, 14 hatching, 15 risograph, 16 photocopy, 17 soft dither, 18 maze, 19 brick, 20 basketweave, 21 waves, 22 honeycomb, 23 rings, 24 pixels, 25 stitches. */
     private static int screen(ModularBrush b) { return (int) b.part(BrushPart.MEDIUM).get(SCREEN, 0); }
     /** Each Screen as the Medium card and "This brush" name what it lays ("Halftone ink"), and its caption tag, in option order. */
-    private static final String[] SCREEN_WORDS = {"", "Halftone", "Engraved", "Dithered", "Grained", "Rosette", "Ben-Day", "Crosshatch", "Wavy-line", "Mezzotint", "Diamond-dot", "Stippled", "Woodcut", "Scribbled", "Hatched"},
-            SCREEN_TAGS = {"", "halftone", "engraved", "dithered", "grained", "rosette", "ben-day", "crosshatch", "wavy-line", "mezzotint", "diamond-dot", "stippled", "woodcut", "scribbled", "hatched"};
+    private static final String[] SCREEN_WORDS = {"", "Halftone", "Engraved", "Dithered", "Grained", "Rosette", "Ben-Day", "Crosshatch", "Wavy-line", "Mezzotint", "Diamond-dot", "Stippled", "Woodcut", "Scribbled", "Hatched", "Riso", "Photocopied", "Soft-dithered", "Maze", "Brick", "Basketweave", "Wave", "Honeycomb", "Ringed", "Pixelated", "Stitched"},
+            SCREEN_TAGS = {"", "halftone", "engraved", "dithered", "grained", "rosette", "ben-day", "crosshatch", "wavy-line", "mezzotint", "diamond-dot", "stippled", "woodcut", "scribbled", "hatched", "riso", "photocopied", "soft-dithered", "maze", "brick", "basketweave", "wave", "honeycomb", "ringed", "pixelated", "stitched"};
     /** Tone (shown as Screentone) as "This brush" and captions name it, by its pattern ("Dot screentone"), in {@link PartDial#PATTERN} order. */
     private static final String[] TONE_WORDS = {"Dot screentone", "Line screentone", "Sand screentone", "Gradient screentone", "Crosshatch screentone", "Wavy-line screentone", "Mezzotint screentone", "Stipple screentone", "Woodcut screentone", "Scribble screentone", "Hatched screentone"};
     private static String toneNoun(ModularBrush b) { return TONE_WORDS[(int) b.part(BrushPart.MEDIUM).get(PATTERN)]; }
@@ -196,12 +201,14 @@ final class ModularWords {
             }
             // The wet edge's millimetres are the dial's: the module says only that it is Quick.
             case FAST_WET: return c.label;
-            case FLOAT: return c.label + " " + floatSeconds(b) + " s";
-            // Mold says how long it grows: "Mold 6.6 s" (newmods.js choiceWords).
-            case HALO: return c.label + " " + seconds(b) + " s";
-            // Fading says how soon it goes ("Fading 20 s"); Lemon Juice's time would pass the module's line.
-            case FADE: return c.label + " " + fadeTime(b);
-            case LEMON: return sentence(c.label);
+            case LATER_FLOAT: return c.label + " " + floatSeconds(b) + " s";
+            // Mold says how long it grows: "Mold 6.6 s" (newmods.js choiceWords), Slow's Drying Time.
+            case LATER_MOLD: return c.label + " " + seconds(b) + " s";
+            // Fading says how soon it goes ("Fading 20 s"); Lemon Juice's time would pass the module's line, and Later's
+            // media say only what they are ("Plastic wrap").
+            case LATER_FADE: return c.label + " " + fadeTime(b);
+            case LATER_LEMON: case LATER_SALT: case LATER_WRAP: case LATER_FEATHER: case LATER_FOX:
+            case LATER_PRESS: case LATER_TORN: case LATER_STITCH: case LATER_CRACKS: case LATER_TARNISH: return sentence(c.label);
             case MULTI_LINE: return Math.round(p.get(COUNT)) + " lines";
             // Clear Water's module has room for one word, as Smudge's others: the water it lays.
             case CLEAR_WATER: return "Water";
@@ -216,7 +223,7 @@ final class ModularWords {
     }
 
     /** What a card's macro row says for a choice with no macro dial (Drying's Instant, Smudge's Off). */
-    static String noMacro(PartChoice c) { return c.part == BrushPart.LIFE ? "Dries at once." : c == PartChoice.SHAPE ? "Closes and fills." : "No smudge."; }
+    static String noMacro(PartChoice c) { return c.part == BrushPart.LIFE ? "Dries at once." : c.part == BrushPart.LATER ? "Stays put." : c == PartChoice.SHAPE ? "Closes and fills." : c == PartChoice.REPRINT ? "Reprints marks." : c == PartChoice.VECTOR ? "Sharp at any zoom." : "Moves nothing."; }
 
     /**
      * parts.js captionLines (492–501), unjoined: the style's name, then what is unusual for that style, in display
@@ -228,8 +235,8 @@ final class ModularWords {
         List<String> items = new ArrayList<>();
         ModularStyle style = b.style;
         items.add(style.label);
-        PartChoice life = b.choice(BrushPart.LIFE);
-        if (life == PartChoice.FLOAT) items.add(clearWater(b) ? "clear water" : "float");
+        PartChoice life = b.choice(BrushPart.LIFE), later = b.mischief();
+        if (b.floats()) items.add(clearWater(b) ? "clear water" : "float");
         PartChoice tip = b.choice(BrushPart.TIP);
         // Stipple and Hatch say so first, after the style (newmods.js captionItems).
         if (pattern(tip)) items.add(1, lower(tip.label));
@@ -243,10 +250,11 @@ final class ModularWords {
         // Tone and Crayon smear nothing (they are laid without a smudge): no smudge tag.
         // Paint Load in the smudge's place: "Oils, filbert, runs out".
         boolean crayon = m == PartChoice.CRAYON;
-        if (b.choice(BrushPart.CARRY) != PartChoice.OFF && !tone && !crayon && !(clearWater(b) && b.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER)) items.add(runsOut(b) ? "runs out" : stump(b) ? (combs(b) ? "comb" : "stump") : lower(b.choice(BrushPart.CARRY).label));
+        if (b.choice(BrushPart.CARRY) != PartChoice.OFF && !tone && !crayon && !(clearWater(b) && b.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER)) items.add(runsOut(b) ? (runsDry(b) ? "runs dry" : "runs out") : stump(b) ? (combs(b) ? "comb" : "stump") : lower(b.choice(BrushPart.CARRY).label));
         if (keepsPaint(b) && !tone && !crayon) items.add("keeps paint");
         String erasable = resist || tone ? "" : erasable(b);
         if (!erasable.isEmpty()) items.add(lower(erasable));
+        if (ResolvedBrush.soluble(b)) items.add("water melts it");  // the owner, 2026-11-02: say to use Water over it
         PartChoice paper = b.choice(BrushPart.PAPER);
         if (paper != PartChoice.PLAIN && paper != usual(style, BrushPart.PAPER)) items.add(lower(paper.label));
         if (life == PartChoice.DRYING && settles(b)) { String g = gravityWord(b.part(BrushPart.LIFE)); items.add(g != null ? g : "slow"); }
@@ -261,9 +269,9 @@ final class ModularWords {
         if (tone) items.add(1, lower(toneNoun(b)));
         // Mold after those, before the rest: "Ink wash, mold" (newmods.js captionItems).
         // So do Fading and Lemon Juice: "Anything goes, fading" (newmods.js captionItems).
-        // So does Wet: "Gouache, wet".
-        if (life == PartChoice.HALO || life == PartChoice.FADE || life == PartChoice.LEMON || life == PartChoice.WET_PAINT)
-            items.add(1 + (resist || tone ? 1 : 0) + (blend(b) > 0 ? 1 : 0) + (screen(b) > 0 ? 1 : 0) + (pattern(tip) ? 1 : 0), lower(life.label));
+        // So does Wet: "Gouache, wet"; and Later's media: "Watercolour, salt".
+        if (later == PartChoice.LATER_MOLD || later.clocked() >= 0 || life == PartChoice.WET_PAINT)
+            items.add(1 + (resist || tone ? 1 : 0) + (blend(b) > 0 ? 1 : 0) + (screen(b) > 0 ? 1 : 0) + (pattern(tip) ? 1 : 0), lower(life == PartChoice.WET_PAINT ? life.label : later.label));
         return items;
     }
     /**
@@ -310,7 +318,7 @@ final class ModularWords {
         // Clear water (Float, Smudge's Own paint 0) lays nothing: what it does on the water is all there is to say.
         if (clearWater(b))
             return "Clear water. Taps drop clear rings, dragging combs them" + (b.part(BrushPart.CARRY).get(PICK) > .05 ? "" : " a little") + ".";
-        boolean floats = life.choice == PartChoice.FLOAT;
+        boolean floats = b.floats();
         // Stipple, Hatch, Stamp and Spiro are in the noun ("Ink stipple", "Ink hatching", "Ink stamp", "Ink spiro"): no tip of their own to name.
         String tip = t.choice == PartChoice.ROUND || pattern(t.choice) ? "" : ", " + tipNoun(t);
         String on = floats ? " on water" : b.choice(BrushPart.PAPER) == PartChoice.PLAIN ? "" : " on " + paperWords(b.choice(BrushPart.PAPER));
@@ -334,6 +342,11 @@ final class ModularWords {
         if (t.choice == PartChoice.SPIRO) out.add(new String[]{SPIRO_LINE, SPIRO_RING, SPIRO_OVAL, SPIRO_BAR}[(int) t.get(SPIRO_MODE)]);
         // Hatching says how its strokes build.
         if (t.choice == PartChoice.HAND_HATCH) out.add(HATCHES);
+        // The nibs say their own trick.
+        if (t.choice == PartChoice.RULING) out.add(RULES_DRY);
+        if (t.choice == PartChoice.TWIG) out.add(TWIG_BLOTS);
+        if (t.choice == PartChoice.FAN) out.add(FAN_HAIRS);
+        if (t.choice == PartChoice.ROLLER) out.add(t.get(PICKUP) >= .05 ? REPRINTS : ROLLS);
         // Grey Shift says how its grey shifts (newmods.js plainWords).
         String shifts = SwatchPicker.words(b);
         if (shifts != null) out.add(shifts);
@@ -349,6 +362,8 @@ final class ModularWords {
         // Tone says what the eraser does to it, its one unusual trait.
         boolean tone = m.choice == PartChoice.TONE;
         if (tone) out.add("Scrapes off in streaks.");
+        // Water-Soluble says what water does to it (explore-media).
+        if (ResolvedBrush.soluble(b)) out.add(DISSOLVES);
         // Behind and Invert say what they do to what is there.
         if (blend(b) == 2) out.add("Goes behind marks.");
         if (blend(b) == 3) out.add("Inverts what's under it.");
@@ -438,9 +453,12 @@ final class ModularWords {
      */
     /**
      * A choice's name on its swap tile: its label, Screentone's with a soft break ({@link LabText#SOFT_BREAK}) where
-     * the Nomad's narrow Medium tiles break it into the owner's short form, "Screen" / "Tone".
+     * the Nomad's narrow Medium tiles break it into the owner's short form, "Screen" / "Tone"; Feathering as the verb,
+     * "Feathers", as Drying's twelve tiles are too narrow for it whole.
      */
-    static String tileLabel(PartChoice c) { return c == PartChoice.TONE ? "Screen" + LabText.SOFT_BREAK + "tone" : c.label; }
+    static String tileLabel(PartChoice c) {
+        return c == PartChoice.TONE ? "Screen" + LabText.SOFT_BREAK + "tone" : c == PartChoice.LATER_FEATHER ? "Feathers" : c.label;
+    }
     static String swapNote(ModularBrush b, BrushPart part) {
         ModularBrush.Part p = b.part(part);
         switch (part) {
@@ -450,12 +468,23 @@ final class ModularWords {
             case LIFE:
                 if (p.choice == PartChoice.DRYING) return settles(b) ? "wet " + seconds(b) + " s" : "";
                 if (p.choice == PartChoice.FAST_WET) return "";
-                if (p.choice == PartChoice.FLOAT) return clearWater(b) ? "clear water" : "floats " + floatSeconds(b) + " s";
-                if (p.choice == PartChoice.HALO) return lower(p.choice.label) + " " + seconds(b) + " s";
-                if (p.choice == PartChoice.FADE) return "fades " + fadeTime(b);
-                if (p.choice == PartChoice.LEMON) return "darkens " + fadeTime(b);
                 if (p.choice == PartChoice.WET_PAINT && resolved(b).wet != null) return "stays wet";
                 return "dries at once";
+            case LATER:
+                if (p.choice == PartChoice.LATER_FLOAT) return clearWater(b) ? "clear water" : "floats " + floatSeconds(b) + " s";
+                if (p.choice == PartChoice.LATER_MOLD) return lower(p.choice.label) + " " + seconds(b) + " s";
+                if (p.choice == PartChoice.LATER_FADE) return "fades " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_LEMON) return "darkens " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_SALT) return "salt " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_WRAP) return "crinkles " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_FEATHER) return "wicks " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_FOX) return "ages " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_PRESS) return "prints " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_TORN) return "tears " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_STITCH) return "stitches " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_CRACKS) return "cracks " + fadeTime(b);
+                if (p.choice == PartChoice.LATER_TARNISH) return "tarnishes " + fadeTime(b);
+                return "stays put";
             default: return "";
         }
     }
@@ -511,6 +540,10 @@ final class ModularWords {
             case MULTI_LINE: { long count = Math.round(t.get(COUNT)); return (count != 0 ? count : 3) + "-line rake"; }
             case BRISTLES: return "bristle brush";
             case FILBERT: return "filbert";
+            case RULING: return "ruling pen";
+            case TWIG: return "twig";
+            case FAN: return "fan brush";
+            case ROLLER: return "brayer";
             default: return "round tip";
         }
     }
@@ -537,18 +570,24 @@ final class ModularWords {
         // Keeps Paint says so after the smudge (a dirty brush): "Smears. Keeps paint for the next stroke."
         String keeps = keepsPaint(b) ? " Keeps paint for the next stroke." : "";
         // Paint Load says plainly what it does, and how to load it, in the smudge's place (the oil paint spec).
-        if (runsOut(b)) return "Runs out of paint, then only smudges. Rub a grey to load." + keeps;
+        // A line's runs dry instead, as a dip pen's nib does (explore-media).
+        if (runsOut(b)) return (runsDry(b) ? "Runs dry. Rub a grey to dip." : "Runs out of paint, then only smudges. Rub a grey to load.") + keeps;
         // The Wet brush's ink in water (the wet brush spec) says what it holds, and how to dip it, in the smudge's place.
         if (holdsInk(b)) return "Holds ink between strokes. Tap a grey to dip.";
         switch (b.choice(BrushPart.CARRY)) {
             case LIFT: return "Lifts paint.";
             case DRAG: return "Drags wet paint." + keeps;
-            case SMUDGE: return (stump(b) ? (combs(b) ? "Combs." : "Softens.") : "Smears.") + keeps;
-            case CLEAR_WATER: return "Lifts paint, lets it run.";
+            // Press to Push and Press to Lift say what a firm press does (the owner, 2026-10-30).
+            case SMUDGE: return (stump(b) ? (combs(b) ? "Combs." : pressed(b) ? "Softens, pushes when pressed." : "Softens.") : "Smears.") + keeps;
+            case CLEAR_WATER: return pressed(b) ? "Re-wets paint, lifts it when pressed." : "Lifts paint, lets it run.";
             // Stay in Lines says how far it floods inside the lines (newmods.js plainWords).
             case STAY_IN: { double f = b.part(BrushPart.CARRY).get(FLOOD); return f < .005 ? "Stays inside ink lines." : f > .995 ? "Fills the shape it starts in." : "Floods inside ink lines."; }
             // Filled Shape says what it does at the lift (FilledShape).
             case SHAPE: return "Fills the shape it outlines.";
+            // Scrape says what the paint's wetness makes of it (Carry#scrape).
+            case SCRAPE: return "Pushes wet paint aside, scrapes damp paint pale.";
+            // Reprint says what it does to the marks under it; without a Print Shading, that it prints them as toner (Carry#reprint).
+            case REPRINT: return PrintScreen.of(b.part(BrushPart.MEDIUM)) == null ? "Reprints the marks under it as toner." : "Reprints the marks under it.";
             default: return null;
         }
     }
@@ -565,15 +604,21 @@ final class ModularWords {
         PartChoice c = b.choice(BrushPart.CARRY);
         PartChoice m = b.choice(BrushPart.MEDIUM);
         // Resist and Screentone are laid as a crisp ink line without a smudge, Crayon without one: nothing to run out (ResolvedBrush.asInk).
-        return (c == PartChoice.DRAG || c == PartChoice.SMUDGE) && b.part(BrushPart.CARRY).get(PLOAD, 0) > 0 && b.choice(BrushPart.LIFE) != PartChoice.FLOAT
+        return (c == PartChoice.DRAG || c == PartChoice.SMUDGE) && b.part(BrushPart.CARRY).get(PLOAD, 0) > 0 && !b.floats()
                 && ModularBrush.ownPaint(b.part(BrushPart.CARRY)) > 0 && m != PartChoice.RESIST && m != PartChoice.TONE && m != PartChoice.CRAYON;
     }
     /** Smudge's Clear Water off the water (on Float it is Float's clear water, {@link #clearWater}). */
     /** Wet ink in water (the wet brush spec, {@link ResolvedBrush.Wet#inks}): its brush holds its ink between strokes. */
     static boolean holdsInk(ModularBrush b) { ResolvedBrush.Wet w = b.choice(BrushPart.LIFE) == PartChoice.WET_PAINT ? resolved(b).wet : null; return w != null && w.inks; }
-    static boolean water(ModularBrush b) { return b.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER && b.choice(BrushPart.LIFE) != PartChoice.FLOAT; }
+    static boolean water(ModularBrush b) { return b.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER && !b.floats(); }
     /** A Smear that is mostly MonoPaint's blending stump (Soften from .5): "Softens.", tagged "stump" (parts.js isStump). */
     static boolean stump(ModularBrush b) { return b.choice(BrushPart.CARRY) == PartChoice.SMUDGE && b.part(BrushPart.CARRY).get(SOFTEN, 0) >= .5; }
+    /** Smudge's Press on: Press to Push (a Smear) or Press to Lift (Clear Water), {@link PartDial#PRESS} (parts.js pressed). */
+    /** Water-Soluble's sentence ({@link PartDial#SOLUBLE}). */
+    static final String DISSOLVES = "Dissolves into a wash with water.";
+    /** Paint Load on a line (no body): its ink runs dry into streaks ({@link LineStamper}), "Runs dry.", tagged "runs dry". */
+    static boolean runsDry(ModularBrush b) { return runsOut(b) && ResolvedBrush.of(b, 8, 1).body == null; }
+    static boolean pressed(ModularBrush b) { return b.part(BrushPart.CARRY).get(PRESS, 0) > 0; }
     /** A stump with tines, a Rake or a Split nib: it combs ("Combs.", tagged "comb"). */
     static boolean combs(ModularBrush b) { PartChoice t = b.choice(BrushPart.TIP); return t == PartChoice.MULTI_LINE || t == PartChoice.SPLIT_NIB; }
     /**
@@ -582,20 +627,41 @@ final class ModularWords {
      * floats for its time and drops rings.
      */
     private static String lifeWords(ModularBrush b) {
-        ModularBrush.Part life = b.part(BrushPart.LIFE);
-        if (life.choice == PartChoice.NONE) return "Dries at once.";
-        if (life.choice == PartChoice.FAST_WET) return null;
-        ResolvedBrush r = resolved(b);
-        if (life.choice == PartChoice.FLOAT) {
+        // Later's after the drying's: "Dries at once. Fades away in 20 s." (Float and Mold are ways of drying, so their drying says nothing).
+        String drying = b.floats() ? null : dryingWords(b), later = laterWords(b);
+        return later == null ? drying : drying == null ? later : drying + " " + later;
+    }
+    /** What Later does, or null without one: Float floats for its time and drops rings; Mold, Fading and Lemon Juice plainly. */
+    private static String laterWords(ModularBrush b) {
+        PartChoice later = b.mischief();
+        if (later == PartChoice.LATER_FLOAT) {
             PartChoice carry = b.choice(BrushPart.CARRY);
             boolean combs = carry == PartChoice.DRAG || carry == PartChoice.SMUDGE || carry == PartChoice.CLEAR_WATER;
             return "Floats " + floatSeconds(b) + " s. Taps drop rings" + (combs ? ", dragging combs them" : "") + ".";
         }
         // Mold: what its veins do, for how long (newmods.js plainWords).
-        if (life.choice == PartChoice.HALO) return "Veins bridge nearby marks for " + seconds(b) + " s.";
+        if (later == PartChoice.LATER_MOLD) return "Veins bridge nearby marks for " + seconds(b) + " s.";
         // Fading and Lemon Juice, plainly (the mischief modules spec, Stage 3).
-        if (life.choice == PartChoice.FADE) return "Fades away in " + fadeTime(b) + ".";
-        if (life.choice == PartChoice.LEMON) return "Darkens in as it dries.";
+        if (later == PartChoice.LATER_FADE) return "Fades away in " + fadeTime(b) + ".";
+        if (later == PartChoice.LATER_LEMON) return "Darkens in as it dries.";
+        // Later's media, as a painter would say what the technique does.
+        if (later == PartChoice.LATER_SALT) return "Salt opens pale starbursts as it dries.";
+        if (later == PartChoice.LATER_WRAP) return "Plastic wrap leaves crinkled veins as it dries.";
+        if (later == PartChoice.LATER_FEATHER) return "Feathers into the paper's fibres.";
+        if (later == PartChoice.LATER_FOX) return "Foxes like an old book.";
+        if (later == PartChoice.LATER_PRESS) return "Prints like letterpress, darker at the edges.";
+        if (later == PartChoice.LATER_TORN) return "Turns into torn paper, glued down.";
+        if (later == PartChoice.LATER_STITCH) return "Turns into cross-stitch on a fabric grid.";
+        if (later == PartChoice.LATER_CRACKS) return "Cracks finely as it ages.";
+        if (later == PartChoice.LATER_TARNISH) return "Tarnishes darker, like silverpoint.";
+        return null;
+    }
+    /** How Drying dries, or null when there is nothing to say: {@link #lifeWords}'s. */
+    private static String dryingWords(ModularBrush b) {
+        ModularBrush.Part life = b.part(BrushPart.LIFE);
+        if (life.choice == PartChoice.NONE) return "Dries at once.";
+        if (life.choice == PartChoice.FAST_WET || life.choice.later() != null) return null;
+        ResolvedBrush r = resolved(b);
         // Wet (the wet paint spec): it stays wet until the droplet dries it, and says when it runs.
         if (life.choice == PartChoice.WET_PAINT) {
             if (r.wet == null) return "Dries at once.";
@@ -612,9 +678,13 @@ final class ModularWords {
     /** A Slow brush's drying time, seconds to a tenth, as its dial and module say it. */
     private static String seconds(ModularBrush b) { return fixed(b.dryingMs() / 1000.0, 1); }
     /** Float's floating time, seconds: whole from 10 s, so "Float 16 s" fits the module as "Slow 16.3 s" does. */
-    private static String floatSeconds(ModularBrush b) { double sec = b.dryingMs() / 1000.0; return fixed(sec, sec >= 9.95 ? 0 : 1); }
-    /** Fading's Fades In or Lemon Juice's Dries In as its dial says it: "20 s", "4.0 s". */
-    private static String fadeTime(ModularBrush b) { ModularBrush.Part life = b.part(BrushPart.LIFE); PartDial d = life.choice.dials.get(0); return d.shown(life.get(d)); }
+    private static String floatSeconds(ModularBrush b) { double sec = ResolvedBrush.laid(b).dryingMs() / 1000.0; return fixed(sec, sec >= 9.95 ? 0 : 1); }
+    /** Fading's Fades In or Lemon Juice's Dries In (a Later's time: its last dial) as its dial says it: "20 s", "4.0 s". */
+    private static String fadeTime(ModularBrush b) {
+        ModularBrush.Part later = (b.choice(BrushPart.LIFE).later() != null ? b.copy().split() : b).part(BrushPart.LATER);
+        PartDial d = later.choice.dials.get(later.choice.dials.size() - 1);
+        return d.shown(later.get(d));
+    }
     /** The strongest gravity dial of {@code life} past .15, as its card says it ("drips"), or null (the Gravity Lab's gravWord). */
     static String gravityWord(ModularBrush.Part life) {
         String best = null; double v = .15;
@@ -635,11 +705,11 @@ final class ModularWords {
     /** Clear water (parts.js isClearWater): a Float brush whose Smudge drags with no paint of its own (Smudge's Clear Water too). */
     static boolean clearWater(ModularBrush b) {
         PartChoice carry = b.choice(BrushPart.CARRY);
-        return b.choice(BrushPart.LIFE) == PartChoice.FLOAT && (carry == PartChoice.DRAG || carry == PartChoice.SMUDGE || carry == PartChoice.CLEAR_WATER)
+        return b.floats() && (carry == PartChoice.DRAG || carry == PartChoice.SMUDGE || carry == PartChoice.CLEAR_WATER)
                 && ModularBrush.ownPaint(b.part(BrushPart.CARRY)) < .02;
     }
-    /** Slow's wash keeps settling after lift, as the stroke draws it ({@link ResolvedBrush#settlesAfterLift}): transparent, with Settle. */
-    static boolean settles(ModularBrush b) { return resolved(b).settlesAfterLift; }
+    /** Slow's wash keeps settling after lift, as the stroke draws it ({@link ResolvedBrush#settlesAfterLift}): transparent, with Settle; not under Fading or Lemon Juice, laid settled. */
+    static boolean settles(ModularBrush b) { ResolvedBrush r = resolved(b); return r.settlesAfterLift && r.fade == null; }
     /** The brush as the engine draws it; any size and darkness, since neither changes what settles. */
     private static ResolvedBrush resolved(ModularBrush b) { return ResolvedBrush.of(b, 8, 1); }
 

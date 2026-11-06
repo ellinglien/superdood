@@ -89,11 +89,6 @@ final class BrushTestPad extends View {
     ToneDocument page() { return page; }
     /** A stroke is down (not one working after lift). */
     boolean stroking() { return stroke != null && !quickLift.running(); }
-    /** Finishes a stroke still working after lift, then dries what is wet as it would dry, only sooner, and shows it: the wet indicator's tap. */
-    void dry() {
-        if (quickLift.running()) finishStroke();
-        if (stroke == null && page != null) drying.hurry();
-    }
     /** Cut Stamp: the pen's next stroke on the test page is a lasso, the ink inside it handed to {@code cut} as a nib (null: nothing to cut); null stops waiting. */
     void cutNext(java.util.function.Consumer<StampNib> cut) { this.cut = cut; }
     /** Whether the pen's next stroke is Cut Stamp's lasso. */
@@ -108,6 +103,7 @@ final class BrushTestPad extends View {
         session.settleNow(page);
         session.held.dip(session.holder());
         page = InkWashLayers.blank(page.width, page.height);
+        page.surface = WildSample.surface;
         renderAll();
         refreshSoon();
     }
@@ -130,6 +126,8 @@ final class BrushTestPad extends View {
         // What is drawn stays, top-left anchored: a wash still settling is laid first.
         if (page != null) session.settleNow(page);
         page = page == null ? InkWashLayers.blank(w, h) : InkWashLayers.resized(page, w, h);
+        // The open notebook's surface, as Brush Lab's samples.
+        page.surface = WildSample.surface;
         display = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         display.setHasAlpha(false);
         renderAll();
@@ -365,7 +363,8 @@ final class BrushTestPad extends View {
             refreshSoon();
             if (opened) {
                 opened = false;
-                Ui.cleanWindow(getRootView(), "screen opened", () -> { if (direct != null) input.partialGrey(); });
+                Ui.flashWindow(getRootView(), "screen opened", () -> { if (direct != null) input.partialGrey(); },
+                        SystemSettings.flashes(false, new PaintPreferences(getContext().getSharedPreferences(PaintPreferences.FILE, 0)).autoRefresh()), false);
             }
         } catch (RuntimeException | LinkageError error) {
             Log.w(ProbeActivity.TAG, "Brush Lab's test area uses Android drawing", error);

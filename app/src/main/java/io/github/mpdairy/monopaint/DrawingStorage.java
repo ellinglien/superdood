@@ -80,6 +80,8 @@ final class DrawingStorage {
 
     /** The preference that holds the name whose carry-over finished ({@link #carryOver}). */
     private static final String CARRIED_OVER = "carried_over_to";
+    /** What it holds once done: the name and the rules' round (2: the folders beside it, 2026-11-04), so new rules run once more. */
+    private static final String CARRIED = AppName.NAME + "/2";
     private static volatile boolean carried;
 
     /**
@@ -92,7 +94,7 @@ final class DrawingStorage {
     static void carryOver(Context context) {
         if (carried || AppName.FORMER.length == 0) return;
         android.content.SharedPreferences prefs = context.getSharedPreferences(PaintPreferences.FILE, Context.MODE_PRIVATE);
-        if (AppName.NAME.equals(prefs.getString(CARRIED_OVER, null))) { carried = true; return; }
+        if (CARRIED.equals(prefs.getString(CARRIED_OVER, null))) { carried = true; return; }
         synchronized (DrawingStorage.class) {
             if (carried) return;
             carried = true; // once a launch, done or not: what didn't move is tried again at the next
@@ -110,7 +112,7 @@ final class DrawingStorage {
             File[] now = current.listFiles();
             if (now != null) for (File f : now) scan.add(f.getPath());
             if (!scan.isEmpty()) android.media.MediaScannerConnection.scanFile(context.getApplicationContext(), scan.toArray(new String[0]), null, null);
-            if (done) prefs.edit().putString(CARRIED_OVER, AppName.NAME).apply();
+            if (done) prefs.edit().putString(CARRIED_OVER, CARRIED).apply();
         }
     }
 

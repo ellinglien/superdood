@@ -4,18 +4,21 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Every size on the Tools page, in dp, from the screen (the owner's mockup, 2026-10-28, "Tools page v2"): the bar (Back,
- * labelled, always at its left; "Tools"; Undo; Brush Lab, boxed), then on paper with no frames: the <b>scratch pad</b>
- * (a rounded box, the tool's name and line in its foot, Clear in its corner), the small grey label <b>Toolbar</b> over the
- * ten slots in two rows of five (each its drawing, as the side bar shows it, over its name), then the Library: its tabs
- * as words with the search's magnifier and the pages at their right, the chips under them ({@link ToolsPage.Chip}; a
- * row, or more where the width runs out; while searching, the search's line in their place) and its grid, {@link #COLUMNS} across at most, each card its drawing over its name, both at its left.
- * Every drawing is cut at its handle end ({@link DrawLayout#TIP_TRIM}) and scaled to one width, in an art box of one
- * height ({@link #art}): a slot's {@link #slotArt} × {@link #slotArtHeight}, a card's {@link #cardArt} × {@link
- * #cardArtHeight}; a brush with no drawing shows its stroke at that size. In portrait it is all stacked, the rows the
- * Library gets first and the scratch pad the rest (at least {@link #testLeast}); in landscape the scratch pad and the
- * slots are a column at the left, the Library beside it. Nothing scrolls: the grid is paged. Measures text as {@link
- * LabText} does. Pure, checked on the desktop.
+ * Every size on the Tools page, in dp, from the screen (the redesign, 2026-11-03: what is changed first, the page's job
+ * said in its bar): the bar ({@link LabUi.PageBar}: Back, labelled, at its left; the title "Toolbar" over the one line
+ * saying what to do), then on paper with no frames: the <b>slots</b> in one row across the page (2026-11-03, the owner:
+ * "with two rows it's not clear what that does"), each a tile of its drawing alone, as the side bar shows it, the
+ * selected one inverted ({@link #SLOT_PAD}); the selected slot's tool named in a row with <b>Edit in Brush Lab</b> at its
+ * right; the Library: the search and the pages in a row, the filter row's chips under it ({@link ToolsPage.Chip}; a row,
+ * or more where the width runs out) and its grid, {@link #COLUMNS} across at most, each card its drawing over its name,
+ * both at its left; last, at the foot, the <b>try strip</b> ({@link TestArea#strip}: "Draw here to try Fill in" and
+ * Clear over the test page; the owner: "move the preview area to the bottom"). Every drawing is cut at its handle end
+ * ({@link DrawLayout#TIP_TRIM}) and scaled to one width, in an art box of one height ({@link #art}): a slot's {@link
+ * #slotArt} × {@link #slotArtHeight}, a card's {@link #cardArt} × {@link #cardArtHeight}; a brush with no drawing shows
+ * its stroke at that size. In portrait it is all stacked, the rows the Library gets first and the try strip the rest
+ * (at least {@link #testLeast}); in landscape the slots' row spans the page, under it the name row over the try strip
+ * a column at the left, the Library beside it. Nothing scrolls: the grid is paged. Measures text as {@link LabText}
+ * does. Pure, checked on the desktop.
  */
 final class ToolsLayout {
     /** The bar; a card's least width (the finger's chooser's cards too). */
@@ -24,45 +27,57 @@ final class ToolsLayout {
     static final int COLUMNS = 4;
     /** A line's width ({@link Theme#FINE}): a chip's edge. */
     static final int LINE = 1;
-    /** The tabs' row; the pages' buttons' width ("‹", "›") at its right. */
-    static final int TAB = 40, PAGE_BUTTON = 32;
+    /** The search's row (the search, or its field, and the pages at its right); a page button's width ("‹", "›"). */
+    static final int FIND = 40, PAGE_BUTTON = 32;
     /** A chip's height. */
     static final int CHIP = 30;
     /** An art box's height for its width: the drawings (116 px tall, trimmed about 270 wide) fill it. */
     static final float ART_TALL = .42f;
-    /** A slot's art of its width, and a card's (the mockup's 300 px of 456). */
-    static final float SLOT_ART = .8f, CARD_ART = .66f;
-    /** The blank between a drawing and its name; between the grid's rows, and more where a group starts ({@link ToolsPage#opens}). */
-    static final int NAME_GAP = 4, ROW_GAP = 4, GROUP_GAP = 8;
+    /** A card's art of its width (the mockup's 300 px of 456). */
+    static final float CARD_ART = .66f;
+    /**
+     * A slot's tile: its padding round its art, dp, where the selected one's ink fill shows (inverted as a chosen chip,
+     * its drawing in paper; the owner, 2026-11-03: "maybe invert it so it's dark? to make it obvious it's selected"),
+     * its corners {@link #PAD_RADIUS}; and the row under the tiles for a changed slot's dot.
+     */
+    static final int SLOT_PAD = 4, DOT_ROW = 10;
+    /** The blank between a drawing and its name; between the grid's rows. */
+    static final int NAME_GAP = 4, ROW_GAP = 4;
     /** The blank a name keeps at its card's right, so it never runs into the next card's. */
     static final int NAME_END = 8;
-    /** The scratch pad's corners' radius and its words' row in it (Clear, and Back to, Load Kit or Cut Stamp when the tool has them). */
-    static final int PAD_RADIUS = 5, PAD_ROW = 32;
+    /** Edit in Brush Lab's box's corners' radius. */
+    static final int PAD_RADIUS = 5;
+    /** The selected slot's tool's row (its name and line, Edit in Brush Lab); the try strip's head row (what it is for, Clear). */
+    static final int NAME_ROW = 44, TRY_HEAD = 32;
     /** The brush's name (heading, 20 sp) and its words (caption, 13 sp, grey), and the gap between them: Brush Lab's and the kit sheet's. */
     static final float NAME_SP = TypeStyle.HEADING.sp, WORDS_SP = TypeStyle.CAPTION.sp;
     static final int WORDS_GAP = 4;
     /** The longest first sentence of a brush's words, in characters ({@link BrushVoice#about}; checked): Brush Lab shows it whole. */
     static final int FIRST_SENTENCE = 80;
     /**
-     * The labels: the bar's title and buttons, the slots' label, and Back to ("Back to
-     * Fineliner", the slot's first brush's name). Tweak in Brush Lab until 2026-10-28.
+     * The words: the bar's title (the page's job, "Tools" until 2026-11-03; Brush Lab's Back from here says it too) and
+     * its line; the button opening Brush Lab on the selected slot (Brush Lab in the bar's corner until 2026-11-03); the
+     * try strip's head ("Draw here to try Fill in", Brush Lab's too); the search's button.
      */
-    static final String LAB = "Brush Lab", UNDO = "Undo", TITLE = "Tools", BACK_TO = "Back to ", TOOLBAR = "Toolbar";
+    static final String TITLE = "Toolbar", JOB = "",LAB = "Edit in Brush Lab", TRY = "Draw here to try ",
+            SEARCH = "Search";
 
     final int width, height;
-    /** {@code compact}: the Nomad's sizes; {@code wide}: landscape, the scratch pad and the slots a column at the left. */
+    /** {@code compact}: the Nomad's sizes; {@code wide}: landscape, the name row and the try strip a column at the left. */
     final boolean compact, wide;
-    /** The page's margin at its sides and foot; the blank between things; the label's row over the slots; the blank before the Library (portrait) or beside it (landscape). */
-    final int side, gap, label, apart;
-    /** The left column's width (the scratch pad, the slots), and the Library's; the same in portrait. */
+    /** The chips spaced as the Nomad's ({@link #chipPad(boolean)}): there, or where that keeps the filter row one row (the Manta upright since Effects, 2026-11-06). */
+    private final boolean tightChips;
+    /** The page's margin at its sides and foot; the blank between things; the blank before the Library (portrait) or beside it (landscape). */
+    final int side, gap, apart;
+    /** The left column's width (the name row, the try strip), and the Library's; the same in portrait. */
     final int top, sections;
-    /** The scratch pad. */
+    /** The try strip's test page. */
     final int testWidth, testHeight;
-    /** A slot's width and card height (art, name, underline's room); the ten slots' height, two rows of five. */
-    final int slotWidth, slotCard, slots;
-    /** The slots shown, as many as the side column shows ({@link DrawLayout#trays}), and how many across. */
-    final int slotCount, slotColumns;
-    /** The chips' rows (all of them shown, the most a tab has). */
+    /** A slot's width and height (its tile, the dot's row under it), and the blank between two. */
+    final int slotWidth, slotCard, slotGap;
+    /** The slots shown, all in the one row: as many as the side column shows ({@link DrawLayout#trays}). */
+    final int slotCount;
+    /** The chips' rows (all of them shown). */
     final int chipRows;
     /** The grid: columns, a card's width and height, rows, and the room left under it. */
     final int columns, cardWidth, cardHeight, rows, spare;
@@ -73,7 +88,6 @@ final class ToolsLayout {
         wide = width > height;
         side = compact ? 12 : 24;
         gap = compact ? 10 : 14;
-        label = compact ? 32 : 48;
         apart = compact ? 16 : 24;
         if (wide) {
             // Side by side, the paper between: on the Nomad the Library three cards across at their least.
@@ -83,71 +97,81 @@ final class ToolsLayout {
             top = width - 2 * side;
             sections = top;
         }
+        // Across the whole page, in landscape too: beside the Library ten would be too small to tell apart.
         slotCount = DrawLayout.trays(compact);
-        slotColumns = (slotCount + SLOT_ROWS - 1) / SLOT_ROWS;
-        slotWidth = (top - (slotColumns - 1) * gap) / slotColumns;
-        slotCard = slotArtHeight() + NAME_GAP + nameLine() + DrawLayout.MARK;
-        slots = SLOT_ROWS * slotCard + (SLOT_ROWS - 1) * gap;
+        slotGap = compact ? 4 : 6;
+        slotWidth = (width - 2 * side - (slotCount - 1) * slotGap) / slotCount;
+        slotCard = slotTile() + DOT_ROW;
         testWidth = top;
         columns = LabLayout.clamp(sections / CARD_LEAST, 3, COLUMNS);
         cardWidth = sections / columns;
         cardHeight = cardArtHeight() + NAME_GAP + nameLine() + DrawLayout.MARK;
-        chipRows = chipRows(chipLabels(), sections, compact);
-        int main = height - BAR;
+        tightChips = compact || chipRows(chipLabels(), sections, false) > 1 && chipRows(chipLabels(), sections, true) == 1;
+        chipRows = chipRows(chipLabels(), sections, tightChips);
+        int below = height - BAR - slotsRow();
         if (wide) {
-            // Right: the Library's rows, as many as fit. Left: the scratch pad takes what the slots leave.
-            int rest = main - libraryFixed();
-            rows = Math.max(1, (rest + rowGaps()) / (cardHeight + rowGaps()));
+            // Right: the Library's rows, as many as fit. Left: the try strip takes what the name row leaves.
+            int rest = below - libraryFixed() - side;
+            rows = Math.max(1, (rest + ROW_GAP) / (cardHeight + ROW_GAP));
             spare = rest - grid(rows);
-            testHeight = main - gap - label - slots - side;
+            testHeight = below - NAME_ROW - TRY_HEAD - side;
         } else {
-            // Stacked: the scratch pad at least testLeast; the rows get the rest, and the scratch pad what they leave.
-            int rest = main - gap - label - slots - apart - libraryFixed();
-            rows = Math.max(1, (rest - testLeast() + rowGaps()) / (cardHeight + rowGaps()));
+            // Stacked, the try strip at the foot: at least testLeast; the rows get the rest, and the strip what they leave.
+            int rest = below - NAME_ROW - apart - libraryFixed() - gap - TRY_HEAD - side;
+            rows = Math.max(1, (rest - testLeast() + ROW_GAP) / (cardHeight + ROW_GAP));
             spare = 0;
             testHeight = rest - grid(rows);
         }
     }
-    /** The slots: two rows, of five on the Manta (the owner's "two more brush slots", 2026-10-19; ten from 2026-10-27), of four on the Nomad's eight ({@link DrawLayout#trays}). */
-    static final int SLOT_ROWS = 2;
-    /** The scratch pad's least height: 220 dp on the Manta (about a sixth of it), {@link #TEST_LEAST_COMPACT} on the Nomad. */
-    int testLeast() { return compact ? TEST_LEAST_COMPACT : 220; }
-    static final int TEST_LEAST_COMPACT = 120;
+    /** The try strip's test page's least height: a slim strip, 140 dp on the Manta, {@link #TEST_LEAST_COMPACT} on the Nomad. */
+    int testLeast() { return compact ? TEST_LEAST_COMPACT : 140; }
+    static final int TEST_LEAST_COMPACT = 90;
+    /** The slots' row with the blank over and under it, across the page under the bar. */
+    int slotsRow() { return gap + slotCard + gap; }
     /** A name's line (13 sp). */
     static int nameLine() { return (int) Math.ceil(LabText.line(TypeStyle.CAPTION.sp)); }
-    /** A slot's art box, and a card's: a share of its width, {@link #ART_TALL} of that tall. */
-    int slotArt() { return Math.round(slotWidth * SLOT_ART); }
+    /** A slot's art box (its tile inside its padding) and a card's (a share of its width), {@link #ART_TALL} of that tall. */
+    int slotArt() { return slotWidth - 2 * SLOT_PAD; }
     int slotArtHeight() { return Math.round(slotArt() * ART_TALL); }
+    /** A slot's tile: its art box in its padding. */
+    int slotTile() { return slotArtHeight() + 2 * SLOT_PAD; }
     int cardArt() { return Math.round(cardWidth * CARD_ART); }
     int cardArtHeight() { return Math.round(cardArt() * ART_TALL); }
-    /** The blank between two rows of the grid at most (a group starting). */
-    static int rowGaps() { return ROW_GAP + GROUP_GAP; }
-    /** The grid's height for {@code rows} rows, every row a group's first (the most it takes). */
-    int grid(int rows) { return rows * cardHeight + (rows - 1) * rowGaps(); }
-    /** The Library but its grid: the tabs' row, the chips' rows, the blank over the grid, the page's foot. */
-    int libraryFixed() { return TAB + chips() + gap + side; }
+    /** The grid's height for {@code rows} rows. */
+    int grid(int rows) { return rows * cardHeight + (rows - 1) * ROW_GAP; }
+    /** The Library but its grid: the search's row, the chips' rows, the blank over the grid. */
+    int libraryFixed() { return FIND + chips() + gap; }
     /** The chips' rows' height. */
     int chips() { return chipRows * CHIP + (chipRows - 1) * chipGap(); }
     /** How many cards a page holds. */
     int perPage() { return columns * rows; }
 
-    // The tabs and the chips
+    // The filter row and the search
 
-    /** A chip's padding either side of its word; the blank between chips (and their rows). */
-    int chipPad() { return compact ? 10 : 14; }
-    int chipGap() { return compact ? 5 : 7; }
-    /** Every chip's label, All first. */
+    /** A chip's padding either side of its word (the twelve in one row on the Manta upright, {@link #tightChips}); the blank between chips (and their rows). */
+    int chipPad() { return chipPad(tightChips); }
+    int chipGap() { return chipGap(tightChips); }
+    static int chipPad(boolean compact) { return compact ? 8 : 10; }
+    static int chipGap(boolean compact) { return compact ? 5 : 7; }
+    /** Every chip's label in the filter row, in its order (More Brushes is beside Search: {@link #rowChips}). */
     static String[] chipLabels() {
-        ToolsPage.Chip[] chips = ToolsPage.Chip.values();
+        ToolsPage.Chip[] chips = rowChips();
         String[] labels = new String[chips.length];
         for (int i = 0; i < chips.length; i++) labels[i] = chips[i].label;
         return labels;
+    }
+    /** The filter row's chips: every one but More Brushes, the last, which sits beside Search, and a kind no shown tool is under (Odd Ones since 2026-11-06). */
+    static ToolsPage.Chip[] rowChips() {
+        java.util.List<ToolsPage.Chip> out = new java.util.ArrayList<>();
+        for (ToolsPage.Chip c : ToolsPage.Chip.values())
+            if (c != ToolsPage.Chip.MORE && (!c.kind() || ToolPresets.shown().stream().anyMatch(p -> ToolsPage.Chip.of(p) == c))) out.add(c);
+        return out.toArray(new ToolsPage.Chip[0]);
     }
     /** A chip's width: its word (13 sp, the chosen one's 400 too: it is filled, not bolder), its padding, its edge. */
     static int chipWidth(String label, int pad) { return (int) Math.ceil(LabText.width(label, TypeStyle.CAPTION.sp, 0)) + 2 * pad + 2 * LINE; }
     /** How many rows {@code labels} take as chips across {@code room} dp, each row as many as fit (as {@link LabUi.Wrap}). */
     static int chipRows(String[] labels, int room, boolean compact) {
-        int pad = compact ? 10 : 14, gap = compact ? 5 : 7, rows = 1, x = 0;
+        int pad = chipPad(compact), gap = chipGap(compact), rows = 1, x = 0;
         for (String label : labels) {
             int w = chipWidth(label, pad);
             if (x > 0 && x + w > room) { rows++; x = 0; }
@@ -155,21 +179,8 @@ final class ToolsLayout {
         }
         return rows;
     }
-    /** Tools First's chip ({@link DrawLayout#TOOLS_FIRST}) at the Toolbar label's right: its width, and its foot over the label row's, centred on the label's line. */
-    int switchWidth() { return chipWidth(DrawLayout.TOOLS_FIRST, chipPad()); }
-    int switchFoot() { return Math.max(0, Math.round(gap / 2f + nameLine() / 2f - CHIP / 2f)); }
-    /** The blank between the tabs (the Nomad's 10, 14 before the search's magnifier: its row fits in landscape). */
-    int tabGap() { return compact ? 10 : 24; }
-    /** A tab's width: its word (15 sp, bold: the chosen one's). */
-    static int tabWidth(String label) { return (int) Math.ceil(LabText.width(label, TypeStyle.BODY.sp, 0)); }
-    /** The tabs' row: the four words and the blanks between them. */
-    int tabsWidth() {
-        int w = 0;
-        for (ToolsPage.Tab t : ToolsPage.Tab.values()) w += tabWidth(t.label) + tabGap();
-        return w - tabGap();
-    }
-    /** At the tabs' right: the search's magnifier, a page button's width, then the pages, "‹ 12 / 12 ›". */
-    static int pagerWidth() { return 3 * PAGE_BUTTON + (int) Math.ceil(LabText.width("99 / 99", TypeStyle.CAPTION.sp, 0)) + 2 * 4; }
+    /** At the search's right: a page button's width either side of the pages, "‹ 12 / 12 ›". */
+    static int pagerWidth() { return 2 * PAGE_BUTTON + (int) Math.ceil(LabText.width("99 / 99", TypeStyle.CAPTION.sp, 0)) + 2 * 4; }
 
     // The drawings
 
@@ -208,20 +219,16 @@ final class ToolsLayout {
         return job + 12 + tool <= room;
     }
 
-    // The bar and the scratch pad
+    // The bar, the name row and the try strip
 
     /** A labelled button's width: an icon, its words (a label, caps, tracked) and its padding (as {@link LabButton}). */
     static int buttonWidth(String label) { return (int) Math.ceil(LabText.width(label.toUpperCase(Locale.ROOT), TypeStyle.LABEL.sp, TypeStyle.LABEL.tracking)) + 22 + 8 + 2 * 12 + 2 * LINE; }
-    /** Undo's width: its icon alone on the Nomad. */
-    int undoWidth() { return compact ? 44 : buttonWidth(UNDO); }
-    /** The bar's room for its title: what Back, Undo and Brush Lab leave. */
-    int titleRoom() { return width - 2 * side - LabLayout.backWidth() - 3 * 10 - undoWidth() - buttonWidth(LAB); }
-    /** The wet drop's width beside Clear (Brush Lab's). */
-    int wet() { return compact ? 24 : LabLayout.HEAD_ROW; }
-    /** The scratch pad's words' room, inside its corners: the tool's name and line in its foot, the row in its corner. */
-    int padRoom() { return testWidth - 2 * gap; }
-    /** The most Back to takes in the pad's corner, its name cut with … past it. */
-    int backToWidth() { return padRoom() / 3; }
+    /** The bar's room for its title and line, centred (2026-11-03, as Brush Lab's): what Back leaves on both sides. */
+    int titleRoom() { return width - 2 * side - 2 * (LabLayout.backWidth() + LabLayout.TITLE_GAP); }
+    /** The name row's room for the tool's name and line: what Edit in Brush Lab leaves. */
+    int nameRoom() { return top - buttonWidth(LAB) - gap; }
+    /** As {@link #nameRoom()}, less Reset to Default before Edit in Brush Lab while it shows ({@code reset}): plain words, as Clear ({@code LabButton.quiet}). */
+    int nameRoom(boolean reset) { return nameRoom() - (reset ? (int) Math.ceil(LabText.width(DrawLayout.RESET, TypeStyle.CAPTION.sp, 0)) + 16 : 0); }
     /**
      * {@code plain} (a brush's {@link BrushVoice#about}) as Brush Lab shows it: whole sentences while they fit
      * {@code lines} lines of {@code room} dp, at least the first.

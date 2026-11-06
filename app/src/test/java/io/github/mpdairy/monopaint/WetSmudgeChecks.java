@@ -61,7 +61,7 @@ public class WetSmudgeChecks {
         check(ModularCode.decode(ModularCode.encode(drag)).part(BrushPart.CARRY).get(PartDial.KEEPS) == 1, "Drag's Keeps Paint round-trips");
         ModularBrush water = waterBrush();
         check(water.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER && ModularCode.encode(water).contains("_4") && ModularCode.decode(ModularCode.encode(water)).part(BrushPart.CARRY).sameAs(water.part(BrushPart.CARRY)), "Clear Water is Smudge's choice 4 and round-trips");
-        check(PartChoice.of(BrushPart.CARRY, 7) == null && ModularCode.decode(ModularCode.encode(water).replace("_4i0ll_", "_7i0ll_")) == null, "no Smudge choice past Filled Shape");
+        check(PartChoice.of(BrushPart.CARRY, 9) == null && ModularCode.newer(ModularCode.encode(water).replace("_4i0ll_", "_9i0ll_")), "no Smudge choice past Reprint: a code with one is a newer version's");
     }
     static void rolls() {
         int water = 0, n = 0;
@@ -72,7 +72,7 @@ public class WetSmudgeChecks {
             try { without = s.roll(new Random(9900L * (s.index + 1) + i)); } finally { ModularStyle.waterRolls = true; }
             check(b.part(BrushPart.CARRY).get(PartDial.KEEPS, 0) == 0, "Keeps Paint is never rolled");
             boolean became = b.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER;
-            if (became) { water++; check(s.waterOdds() > 0 && b.choice(BrushPart.LIFE) != PartChoice.FLOAT, s.name + " rolls Clear Water only with odds, never on Float"); }
+            if (became) { water++; check(s.waterOdds() > 0 && b.mischief() != PartChoice.LATER_FLOAT, s.name + " rolls Clear Water only with odds, never on Float"); }
             if (s.waterOdds() > 0) n++;
             // Every other part as rolled without it, and the smudge too when it isn't Clear Water.
             for (BrushPart part : BrushPart.values()) if (part != BrushPart.CARRY || !became) check(b.part(part).sameAs(without.part(part)), s.name + " " + part + " rolls as before");

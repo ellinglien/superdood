@@ -79,7 +79,9 @@ kinds stay in `ERAS`, `PRNT`, `KIND`. Plane opacity isn't kept. A `FADE` mark on
 
 - New marks stack by kind, not by when they were drawn: opaque paint covers pen and washes; pen covers washes and dry
   media; a wash glazes over dry media but lies under opaque paint (it no longer darkens gouache drawn before it).
-- Dry media (pencil, charcoal, crayon, pastel, white chalk) lie under pen: a light pastel no longer covers ink.
+- Dry media (pencil, charcoal, crayon, pastel, white chalk) lie under pen: a light pastel no longer covers ink. (Since
+  2026-11-01, branch `explore-chalk`, a light mark sinks what it covers under it, `ToneDocument.sinkUnder`: see
+  INTEGRATION.md, "Light over dark across kinds".)
 - Paint of no kind (old pages' paint) lies under every new plane: a new White wash lightens old ink lines too.
 - A Half or Faint layer fades each plane by itself: where pen crosses a wash the wash shows a touch more under it.
 - A stump or finger smudge blends only its Medium's plane: pencil smears, pen lines stay crisp; water lifts washes, not

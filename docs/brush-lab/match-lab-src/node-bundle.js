@@ -345,7 +345,8 @@ function useTexture(surf, b) {
       fine[y * surf.w + x] = t[(y & 255) * 256 + (x & 255)];
       const fx = x / 3, fy = y / 3, ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy;
       const at = (u, v) => t[(v & 255) * 256 + (u & 255)];
-      mid[y * surf.w + x] = lerp(lerp(at(ix, iy), at(ix + 1, iy), tx), lerp(at(ix, iy + 1), at(ix + 1, iy + 1), tx), ty);
+      // Rounded to the scan's 256 steps, as the app keeps its mid (PaperGrain.scan).
+      mid[y * surf.w + x] = Math.round(255 * lerp(lerp(at(ix, iy), at(ix + 1, iy), tx), lerp(at(ix, iy + 1), at(ix + 1, iy + 1), tx), ty)) / 255;
     }
     surf.tex[b.texture] = { fine, mid };
   }
@@ -769,14 +770,55 @@ const emptyRect = r => !r || r[2] < r[0] || r[3] < r[1];
 function grow(r, s) { if (!s || emptyRect(s)) return r; if (s[0] < r[0]) r[0] = s[0]; if (s[1] < r[1]) r[1] = s[1]; if (s[2] > r[2]) r[2] = s[2]; if (s[3] > r[3]) r[3] = s[3]; return r; }
 const now = () => performance.now();
 
-// ---------- a drawing surface: the paper's noise (as port.js's surface, same seed order), the page and the stroke buffers ----------
+// ---------- the app's paper noise (PaperNoise, PaperGrain.PLAIN), byte for byte: tileable value noise from a seed ----------
+// Two octaves (a coarse lattice and a half-strength fine one) stretched to 0-255, in the Java's float arithmetic.
+function paperNoise(side, coarse, fine, seed) {
+  const sum = new Float32Array(side * side), F = Math.fround;
+  const octave = (cell, weight, sd) => {
+    const cells = side / cell, lattice = new Float32Array(cells * cells), blend = new Float32Array(cell), row = new Float32Array(cells + 1);
+    for (let y = 0; y < cells; y++) for (let x = 0; x < cells; x++) {
+      let hsh = (Math.imul(x, 0x1f123bb5) + Math.imul(y, 0x05491333) + sd) | 0;
+      hsh ^= hsh >>> 16; hsh = Math.imul(hsh, 0x45d9f3b); hsh ^= hsh >>> 16; hsh = Math.imul(hsh, 0x45d9f3b); hsh ^= hsh >>> 16;
+      lattice[y * cells + x] = F((hsh & 65535) / 65535);
+    }
+    for (let i = 0; i < cell; i++) { const t = F((i + .5) / cell); blend[i] = F(F(t * t) * F(3 - 2 * t)); }
+    for (let y = 0; y < side; y++) {
+      const y0 = ((y / cell) | 0) * cells, y1 = (((y / cell) | 0) + 1) % cells * cells, ty = blend[y % cell];
+      for (let x = 0; x < cells; x++) row[x] = F(weight * F(lattice[y0 + x] + F(F(lattice[y1 + x] - lattice[y0 + x]) * ty)));
+      row[cells] = row[0];
+      for (let x = 0, at = y * side; x < side; x++, at++) { const a = row[(x / cell) | 0], b = row[((x / cell) | 0) + 1]; sum[at] = F(sum[at] + F(a + F(F(b - a) * blend[x % cell]))); }
+    }
+  };
+  octave(coarse, 1, seed); octave(fine, .5, (Math.imul(seed, 31) + 7) | 0);
+  let low = sum[0], high = sum[0];
+  for (const v of sum) if (v < low) low = v; else if (v > high) high = v;
+  const out = new Uint8Array(side * side), scale = F(255 / F(high - low));
+  for (let i = 0; i < out.length; i++) out[i] = Math.trunc(F(F(F(sum[i] - low) * scale) + .5));
+  return out;
+}
+let PAPER_NOISE = null;
+// The plain paper's fine and mid grain (widened 1.22 about the middle, PaperGrain.PLAIN_SPREAD), its blooms (low) and blobs.
+function paperOf(w, h) {
+  const P = PAPER_NOISE ??= { fine: paperNoise(256, 4, 2, 0x5eed9a17), mid: paperNoise(256, 8, 4, 0x5eed0d1d), low: paperNoise(512, 64, 32, 0x5eedb100), blob: paperNoise(512, 16, 8, 0x5eedb10b) };
+  const n = w * h, out = { fine: new Float32Array(n), mid: new Float32Array(n), low: new Float32Array(n), blob: new Float32Array(n) };
+  const widen = v => clamp(Math.fround(.5 + Math.fround(1.22 * Math.fround(v / 255 - .5))));
+  for (let y = 0; y < h; y++) for (let x = 0, i = y * w; x < w; x++, i++) {
+    const g = (y & 255) * 256 + (x & 255), b = (y & 511) * 512 + (x & 511);
+    out.fine[i] = widen(P.fine[g]); out.mid[i] = widen(P.mid[g]); out.low[i] = P.low[b] / 255; out.blob[i] = P.blob[b] / 255;
+  }
+  return out;
+}
+// ---------- a drawing surface: the app's paper (paperOf; seed is kept for callers, unused), the page and the stroke buffers ----------
 function modSurface(w, h, seed) {
-  const r = rng(seed), n = w * h;
-  const s = { w, h, fine: valueNoise(w, h, 1.7, r), mid: valueNoise(w, h, 6, r), low: fbm(w, h, 44, r), blob: valueNoise(w, h, 16, r),
-    L: new Float32Array(n), W: new Float32Array(n), D: new Float32Array(n), page: new Float32Array(n).fill(PAPER_TONE), base: new Float32Array(n).fill(PAPER_TONE) };
+  const n = w * h;
+  const s = Object.assign({ w, h }, paperOf(w, h), {
+    L: new Float32Array(n), W: new Float32Array(n), D: new Float32Array(n), page: new Float32Array(n).fill(PAPER_TONE), base: new Float32Array(n).fill(PAPER_TONE) });
   s.scratch = s.L;
   return s;
 }
+// A covering write's coverage on the stroke's plane (planes.js; the app's ToneDocument.coverTones): the most of what the
+// stroke found there, its darkness and c (0 to 1), after the pixel's tone is written. Nothing on a page of one plane.
+function planeCover(s, i, c) { if (s.cov) s.cov[i] = Math.max(s.covBase[i], 1 - s.page[i] / PAPER_TONE, c); }
 // Buffers only some brushes need, made the first time they're asked for.
 function lazyBuf(s, name, fill) { if (!s[name]) { s[name] = new Float32Array(s.w * s.h); if (fill) s[name].fill(fill); } return s[name]; }
 function clearBuf(s, buf, r, v = 0, pad = 0) {
@@ -788,6 +830,56 @@ function withScratch(surf, buf, fn) { const keep = surf.scratch; surf.scratch = 
 // kept (made by the first stroke that isn't wholly erasable): per pixel, the tone the eraser leaves; keptBase, as the
 // stroke found it. Without one, the eraser leaves paper everywhere, as before.
 function blankPage(s) { s.page.fill(PAPER_TONE); s.base.fill(PAPER_TONE); if (s.fill) s.fill.fill(0); s.kept = null; s.keptBase = null; }
+
+// ---------- a pointer as the Manta's pen (ToolSettings.travel, PenSample, DrawingPad's finger) ----------
+// The Manta's raw pen pressure becomes the strokes' pressure travel (0 to 1) through a knee: .05 to .30, a usual press,
+// takes .625 of it; .30 to .78, a full press, the rest. A browser pen (an Apple Pencil, a Wacom; pointerType "pen") reports
+// 0 to 1 the same way, so it goes through the same curve and a press feels as it does on the Manta.
+const PEN_KNEE = .30, PEN_KNEE_TRAVEL = (PEN_KNEE - .05) / .40, PEN_FULL = .78;
+function penTravel(pressure) {
+  if (!Number.isFinite(pressure)) pressure = 0;
+  return clamp(pressure <= PEN_KNEE ? (pressure - .05) / .40 : PEN_KNEE_TRAVEL + (1 - PEN_KNEE_TRAVEL) * (pressure - PEN_KNEE) / (PEN_FULL - PEN_KNEE));
+}
+// An Apple Pencil (any browser pen) pressed as the Manta's pen: its pressure goes through a Pencil curve first, then the
+// Manta's. The owner's iPad findings (Paintmageddon, which felt best): the lightest touch still draws (floor), and the
+// Pencil's usual presses are lighter than the Manta's, so a usual Pencil press (usual) lands on the Manta's (PEN_KNEE)
+// and a firm one (firm) on its full press (PEN_FULL); straight lines between, 0 to 0 and 1 to 1. One table, three
+// candidates side by side on the tuning page (scripts/live-probe/pencil.html); PENCIL is the one used.
+const PENCIL_CURVES = {
+  manta: { floor: 0, usual: PEN_KNEE, firm: PEN_FULL },   // the Manta's curve alone
+  between: { floor: .08, usual: .25, firm: .6 },
+  paintmageddon: { floor: .15, usual: .2, firm: .45 }     // floor .15 as Paintmageddon; its wide response
+};
+let PENCIL = PENCIL_CURVES.between;
+function pencilPressure(p, C = PENCIL) {
+  if (!(p > 0)) return p;
+  p = Math.max(C.floor, Math.min(1, p));
+  return p <= C.usual ? PEN_KNEE * p / C.usual : p <= C.firm ? PEN_KNEE + (PEN_FULL - PEN_KNEE) * (p - C.usual) / (C.firm - C.usual)
+    : PEN_FULL + (1 - PEN_FULL) * (p - C.firm) / (1 - C.firm);
+}
+// A pointer event as a stroke sample [x, y, travel, ms, tiltX, tiltY] at page point x, y; L, the stroke's state ({});
+// curve, the Pencil curve (PENCIL_CURVES).
+// A pen with pressure: its pressure through penTravel, its tilt (tiltX/tiltY, or Safari's altitudeAngle/azimuthAngle),
+// signed degrees as Supernote's. A finger, a mouse or a stylus with no pressure (iPad's capacitive styli report "touch"
+// with 0): pressure from the hand's way, as a Manta stroke at that speed: ramping in over its first 30 px from a light
+// landing, about a usual press (.65) at an easy pace, heavier slow and lighter quick, upright.
+function pointerSample(e, L, x, y, curve = PENCIL) {
+  const dt = L.lastT !== undefined ? Math.max(1, e.timeStamp - L.lastT) : 16, dd = L.lastX !== undefined ? Math.hypot(x - L.lastX, y - L.lastY) : 0;
+  L.sp = (L.sp || 0) * .8 + (dd / dt) * .2; L.d = (L.d || 0) + dd;
+  L.lastT = e.timeStamp; L.lastX = x; L.lastY = y;
+  // A pen that has pressed stays a pen to its lift: the Pencil reports 0 as it leaves the glass, which read as a mouse
+  // (about .7) left a blob at every line's end.
+  if (e.pointerType === "pen" && e.pressure > 0) L.pressed = true;
+  const pen = e.pointerType === "pen" && L.pressed;
+  if (!pen) return [x, y, (.25 + .45 * smooth(L.d / 30)) * clamp(1.15 - .2 * L.sp, .55, 1.1), e.timeStamp, NaN, NaN];
+  let tx = e.tiltX || 0, ty = e.tiltY || 0;
+  if (!tx && !ty && e.altitudeAngle !== undefined && e.altitudeAngle < Math.PI / 2 - 1e-3) {
+    const t = Math.tan(e.altitudeAngle);
+    tx = Math.atan(Math.cos(e.azimuthAngle || 0) / t) / DEG; ty = Math.atan(Math.sin(e.azimuthAngle || 0) / t) / DEG;
+  }
+  const tilted = tx || ty;
+  return [x, y, penTravel(pencilPressure(e.pressure, curve)), e.timeStamp, tilted ? tx : NaN, tilted ? ty : NaN];
+}
 
 // ---------- tilt, as BrushDirection.java (copied from brush-experiments) ----------
 const MIN_LEAN = Math.tan(5 * DEG);
@@ -829,17 +921,20 @@ function turnToward(a, target, k) {
 }
 // The port's addPoint, plus tilt, a smoothed travel direction and the running peak pressure.
 function addPt(pts, x, y, p, t, tx, ty) {
-  if (!addPoint(pts, x, y, p, t)) return false;
+  // Kept as the app's StrokePoints keeps them, floats, so distances, speeds and headings agree to the bit.
+  const F = Math.fround;
+  if (!addPoint(pts, F(x), F(y), F(p), t)) return false;
   const q = pts[pts.length - 1], o = pts[pts.length - 2];
-  q.tx = tx; q.ty = ty;
-  q.pk = Math.max(o ? o.pk : 0, p);
+  q.tx = Number.isFinite(tx) ? F(tx) : tx; q.ty = Number.isFinite(ty) ? F(ty) : ty;
+  q.pk = Math.max(o ? o.pk : 0, q.p);
   if (o) {
-    const seg = q.d - o.d, ux = (q.x - o.x) / seg, uy = (q.y - o.y) / seg;
-    if (o.ux === undefined) { o.ux = ux; o.uy = uy; q.ux = ux; q.uy = uy; }
+    q.d = F(q.d); q.v = F(q.v);
+    const seg = Math.hypot(q.x - o.x, q.y - o.y), ux = (q.x - o.x) / seg, uy = (q.y - o.y) / seg;
+    if (o.ux === undefined) { o.ux = q.ux = F(ux); o.uy = q.uy = F(uy); }
     else {
       const k = 1 - Math.exp(-seg / 12);
-      let sx = o.ux + (ux - o.ux) * k, sy = o.uy + (uy - o.uy) * k; const m = Math.hypot(sx, sy) || 1;
-      q.ux = sx / m; q.uy = sy / m;
+      const sx = o.ux + (ux - o.ux) * k, sy = o.uy + (uy - o.uy) * k, m = Math.hypot(sx, sy) || 1;
+      q.ux = F(sx / m); q.uy = F(sy / m);
     }
   }
   return true;
@@ -1082,7 +1177,7 @@ let WET = null, WET_D = 0;   // while a Fast-wet body stamps: each pixel's dista
 function stampBody(surf, b, pts, size, from, meta, final) {
   const { w, h, scratch: buf, fine, mid } = surf;
   let rect = [w, h, 0, 0];
-  const flatHead = b.head === "flat", tilt = b.tilt || 0, softK = lerp(lerp(0.08, 0.012, clamp(b.cover || 0)), 0.6, b.soft);
+  const flatHead = b.head === "flat", tilt = b.tilt || 0, softK = lerp(lerp(0.08, 0.012, b.crisp ? 1 : clamp(b.cover || 0)), 0.6, b.soft);
   if (flatHead) return stampHake(surf, b, pts, size, meta, softK);
   const hairs = []; if (b.streaks > 0) { const rnd = rng(b.seed ^ 0x51ed); for (let i = 0; i < 130; i++) hairs.push(rnd()); }
   const liveGran = b.fast && b.gran > 0, gran = b.gran, amount = b.amount ?? 1, ellipse = b.aspect !== undefined && b.aspect < 1;
@@ -1478,33 +1573,41 @@ function stampPlaced(surf, b, body, pts, size, bodySize, final, from, win) {
 }
 
 // ===================================================================================================================
-// Bristle swarm (marble-and-bristle): hairs that read each other's fading trails. Hairs capped at 32. Stateful: fed the
-// samples not yet walked, one step per px of travel; final at lift. Stamps into the buffer it's given.
+// Bristle swarm (marble-and-bristle; the app's BristleSwarm): hairs that read each other's fading trails, at most 32.
+// Stateful: fed the samples not yet walked, final at lift. A brush of 10 px radius or less steps as the prototype (each
+// segment in steps of at most a pixel); a bigger one is the small swarm scaled up, k page px a unit, stepping every k px
+// of travel, each hair laid from where it was the step before. A dry hair inks only the head's lanes it still holds
+// enough for (streaks along the stroke before it skips the paper's grain); a big head's tufts leave a few lanes bare.
 // ===================================================================================================================
 const SW_CELL = 2, SW_PT = (() => { const a = new Float32Array(400); for (let k = 0; k < a.length; k++) a[k] = Math.pow(.93, k); return a; })();
+const SW_LANES = 256, SW_BARE = .08, SW_LANE_DRIFT = .3, SW_LANE_RUN = 30;
 function swHash(i, s) { let h = Math.imul(i, 0x1f123bb5) ^ s; h ^= h >>> 16; h = Math.imul(h, 0x45d9f3b); h ^= h >>> 16; return (h & 65535) / 65536; }
 function swNoise(x, s) { const i = Math.floor(x), t = smooth(x - i); return lerp(swHash(i, s), swHash(i + 1, s), t); }
 function hashInts(h, ...v) { for (const x of v) h = Math.imul(h ^ (x | 0), 16777619); return h >>> 0; }
-function swarmStart(surf, b, R, p0) {
-  // A big brush is the small swarm scaled up: the hairs move in units of a 10 px brush, k page px each, so a 120 px
-  // bristle brush looks like a 20 px one enlarged, not like ropes. At 10 px and under, k = 1: the prototype exactly.
+// How many times further than the prototype a load (Paint Load, 0-1) carries: 2 at the middle, 3/4 at 0, 12 at 1.
+const swCarry = load => 2 * Math.pow(4, 2 * load - 1);
+// The hand's Pressure -> size on the head: a light touch gathers the hairs, pressing spreads them; 1 with the cell off.
+const swPress = (b, pp) => !b.pressure ? 1 : lerp(1 - .6 * b.pressure, 1 + .5 * b.pressure, pp);
+// step: page px between the buffer's points (2 on a big stroke's lattice); a lane is at least a point and a quarter wide.
+function swarmStart(surf, b, R, p0, step = 1) {
   R = Math.max(2, R);
   const k = Math.max(1, R / 10), Ri = R / k;
-  const N = Math.max(6, Math.min(32, Math.round(b.hairs || 24)));
-  const seed = hashInts(b.seed, Math.round(p0.x * 4), Math.round(p0.y * 4));
-  const r = rng(seed), hairs = [];
+  const N = Math.max(6, Math.min(32, Math.round(b.hairs ?? 24)));
+  const r = rng(hashInts(b.seed, Math.round(p0.x * 4), Math.round(p0.y * 4))), hairs = [];
   for (let i = 0; i < N; i++) {
     const u0 = ((i + .5) / N * 2 - 1) + (r() - .5) * (2 / N);
     hairs.push({ u0, u: u0 * Ri * .35, w: 0, a: (.25 - Math.pow(r(), 1.3)) * Ri, load: 1, thirst: .6 + .8 * r(),
-      rb: Math.max(.55, Ri * .1) * (.75 + .5 * r()), ns: (r() * 4294967296) >>> 0, x: p0.x, y: p0.y, F: 0, n: 0 });
+      rb: Math.max(.55, Ri * .1) * (.75 + .5 * r()), ns: (r() * 4294967296) >>> 0, x: p0.x, y: p0.y, fx: p0.x, fy: p0.y, F: 0, n: 0 });
   }
   const cell = SW_CELL * k, gw = Math.ceil(surf.w / cell), gh = Math.ceil(surf.h / cell), coh = b.cohesion, spr = b.spreadH;
   if (!surf.swField || surf.swField.length < gw * gh) { surf.swField = new Float32Array(Math.ceil(surf.w / SW_CELL) * Math.ceil(surf.h / SW_CELL)); surf.swLast = new Int32Array(surf.swField.length); }
   surf.swField.fill(0, 0, gw * gh); surf.swLast.fill(0, 0, gw * gh);
-  const th = lerp(.55, 1.15, spr);
-  return { surf, b, R: Ri, k, cell, N, hairs, gw, gh, field: surf.swField, last: surf.swLast, step: 0, dirx: 0, diry: 0, done: 1,
+  const th = lerp(.55, 1.15, spr), laneSeed = (b.seed | 0) ^ 0xb415, lr = rng(laneSeed >>> 0), lanes = new Float64Array(SW_LANES);
+  for (let i = 0; i < SW_LANES; i++) lanes[i] = lr();
+  return { surf, b, R: Ri, k, cell, N, hairs, gw, gh, field: surf.swField, last: surf.swLast, step: 0, dirx: 0, diry: 0, done: 1, next: 0,
     cs: Math.cos(th), sn: Math.sin(th), sd: Ri * .5 + 2.5, gain: lerp(-.9, 1.0, coh) * .6 * Math.sqrt(Ri / 8), sat: lerp(1.2, 4.2, coh),
-    drain: .0009 * b.dryness ** 3 };
+    drain: .0009 * b.dryness ** 3 / swCarry(b.load ?? .5), lanes, laneSeed, laneWidth: Math.max(1.25 * step, .45 * k), bare: SW_BARE * smooth((k - 1.5) / 3),
+    laneQ: new Float64Array(SW_LANES), laneAt: new Int32Array(SW_LANES).fill(-1), dab: 0 };
 }
 function swField(S, x, y) {
   const gx = (x / S.cell) | 0, gy = (y / S.cell) | 0;
@@ -1513,27 +1616,37 @@ function swField(S, x, y) {
   return age >= SW_PT.length ? 0 : S.field[c] * SW_PT[age];
 }
 function swDeposit(S, x, y, amt) {
-  const gx0 = (x / S.cell) | 0, gy0 = (y / S.cell) | 0;
+  const gx0 = Math.trunc(x / S.cell), gy0 = Math.trunc(y / S.cell);
   for (let gy = gy0 - 1; gy <= gy0 + 1; gy++) for (let gx = gx0 - 1; gx <= gx0 + 1; gx++) {
     if (gx < 0 || gy < 0 || gx >= S.gw || gy >= S.gh) continue;
     const c = gy * S.gw + gx, age = S.step - S.last[c], kk = (gx === gx0 && gy === gy0) ? amt : amt * .4;
     S.field[c] = (age >= SW_PT.length ? 0 : S.field[c] * SW_PT[age]) + kk; S.last[c] = S.step;
   }
 }
-function swHair(S, buf, x, y, rb, dark, thr, rect) {
-  const { w, h, fine, mid } = S.surf, R = Math.ceil(rb + 1);
-  const x0 = Math.max(0, Math.floor(x - R)), x1 = Math.min(w - 1, Math.ceil(x + R)), y0 = Math.max(0, Math.floor(y - R)), y1 = Math.min(h - 1, Math.ceil(y + R));
+// One hair's round dab, or a big brush's swept from (fx, fy); a dry one inks only the lanes it still holds enough for.
+function swHair(S, buf, x, y, fx, fy, rb, dark, thr, d, cx, cy, nx, ny, rect) {
+  const { w, h, fine, mid } = S.surf, reach = Math.ceil(rb + 1), sx = x - fx, sy = y - fy, ss = sx * sx + sy * sy;
+  const held = thr < 1.2 ? thr - .1 : 9, laned = S.bare > 0 || held < .85, lw = S.laneWidth, along = d / (SW_LANE_RUN * S.k);
+  S.dab++;
+  const x0 = Math.max(0, Math.floor(Math.min(x, fx) - reach)), x1 = Math.min(w - 1, Math.ceil(Math.max(x, fx) + reach));
+  const y0 = Math.max(0, Math.floor(Math.min(y, fy) - reach)), y1 = Math.min(h - 1, Math.ceil(Math.max(y, fy) + reach));
   for (let py = y0; py <= y1; py++) for (let px = x0; px <= x1; px++) {
-    const ex = px + .5 - x, ey = py + .5 - y;
-    let cov = rb + .5 - Math.sqrt(ex * ex + ey * ey);
+    let ex = px + .5 - x, ez = py + .5 - y;
+    if (ss > 0) { const t = clamp(((px + .5 - fx) * sx + (py + .5 - fy) * sy) / ss); ex = px + .5 - (fx + t * sx); ez = py + .5 - (fy + t * sy); }
+    let cov = rb + .5 - Math.sqrt(ex * ex + ez * ez);
     if (cov <= 0) continue;
     if (cov > 1) cov = 1;
+    if (laned) {
+      const lane = Math.floor(((px + .5 - cx) * nx + (py + .5 - cy) * ny) / lw) & (SW_LANES - 1);
+      if (S.laneAt[lane] !== S.dab) { S.laneAt[lane] = S.dab; S.laneQ[lane] = S.lanes[lane] + SW_LANE_DRIFT * (swNoise(along, Math.imul(lane, 0x9e3779b1) ^ S.laneSeed) - .5); }
+      if (!(S.laneQ[lane] < Math.min(1 - S.bare, (held - .35) / .5))) continue;
+    }
     const i = py * w + px;
     // A dry hair skips the paper's high points: it inks only where the tooth is below what it still holds.
     if (thr < 1.2) { const s = (thr - (fine[i] * .62 + mid[i] * .38)) * 8 + .5; if (s <= 0) continue; if (s < 1) cov *= s * s * (3 - 2 * s); }
     const v = cov * dark;
     if (v > buf[i]) buf[i] = v;
-    if (WET) WET[i] = WET_D;
+    if (WET) WET[i] = d;
   }
   if (x0 < rect[0]) rect[0] = x0; if (y0 < rect[1]) rect[1] = y0; if (x1 > rect[2]) rect[2] = x1; if (y1 > rect[3]) rect[3] = y1;
 }
@@ -1541,47 +1654,55 @@ function swStep(S, buf, px, py, v, p, d, lean, rect, own = 1) {
   const b = S.b, R = S.R, k = S.k, hairs = S.hairs, N = S.N, spr = b.spreadH, dry = b.dryness;
   const dx = S.dirx, dy = S.diry, nx = -dy, ny = dx, cs = S.cs, sn = S.sn, sd = S.sd * k, gain = S.gain, sat = S.sat;
   const sv = clamp(v / 2.2), pp = clamp((p - .3) / .7), ramp = smooth(d / k / (R * 1.5));
-  const Rs = R * (.42 + .38 * ramp + spr * (.55 * pp + .5 * sv));
-  const wander = .025 * R * spr * (.4 + sv), wl = R * 2.5;
+  const Rs = R * (.42 + .38 * ramp + spr * (.55 * pp + .5 * sv)) * swPress(b, pp);
+  const wander = .025 * R * spr * (.4 + sv), wl = R * 2.5, root = Math.sqrt(sat);
   const f = s => { const q = s / sat; return s / (1 + q * q); };
   for (const hr of hairs) {
     const x = px + (nx * hr.u + dx * hr.a) * k, y = py + (ny * hr.u + dy * hr.a) * k;
     const sL = swField(S, x + (dx * cs - nx * sn) * sd, y + (dy * cs - ny * sn) * sd);
     const sR = swField(S, x + (dx * cs + nx * sn) * sd, y + (dy * cs + ny * sn) * sd);
     const sC = swField(S, x + dx * sd, y + dy * sd);
-    let F = gain * (f(sR) - f(sL)) / Math.sqrt(sat);
+    let F = gain * (f(sR) - f(sL)) / root;
     if (sC > sat * 1.8) F += (sR >= sL ? -1 : 1) * Math.abs(gain) * .4;
     F += (swNoise(d / k / wl, hr.ns) - .5) * 2 * wander;
     F -= .009 * (hr.u - hr.u0 * Rs);
     const over = Math.abs(hr.u) - Rs; if (over > 0) F -= .3 * over * Math.sign(hr.u);
     hr.F = F;
   }
-  for (const hr of hairs) { hr.w = hr.w * .8 + hr.F; hr.u += hr.w; hr.x = px + (nx * hr.u + dx * hr.a) * k; hr.y = py + (ny * hr.u + dy * hr.a) * k; }
+  // A big brush's hair is laid from where it was the step before (not on the first step: every hair begins at the first sample).
+  const swept = k > 1 && S.step > 0;
+  for (const hr of hairs) { hr.fx = hr.x; hr.fy = hr.y; hr.w = hr.w * .8 + hr.F; hr.u += hr.w; hr.x = px + (nx * hr.u + dx * hr.a) * k; hr.y = py + (ny * hr.u + dy * hr.a) * k; }
   for (let i = 0; i < N; i++) { const hi = hairs[i]; let n = 0; for (let j = 0; j < N; j++) { const hj = hairs[j]; if (Math.abs(hj.u - hi.u) < (hi.rb + hj.rb) * .8) n++; } hi.n = n - 1; }
-  const dk = handDark(b, p, v, lean) * own;
-  WET_D = d;
+  const dk = handDark(b, p, v, lean) * own, grow = (.7 + .7 * pp) * (1 + 1.2 * (b.tiltSize || 0) * lean);
   for (const hr of hairs) {
     hr.load = Math.max(0, hr.load - S.drain * k * hr.thirst * (1 + .6 * sv));
     const held = hr.load + dry * .3 * (pp - .4) - dry * dry * .2 * sv;
     const thr = dry <= 0 ? 9 : held + .1;
     if (thr <= -.05) continue;
     const dark = lerp(.42, 1, clamp(hr.n / 3)) * lerp(.72, 1, clamp(hr.load * 1.4)) * dk * (b.amount ?? 1);
-    swHair(S, buf, hr.x, hr.y, hr.rb * k * (.7 + .7 * pp) * (1 + 1.2 * (b.tiltSize || 0) * lean), dark, thr, rect);
+    swHair(S, buf, hr.x, hr.y, swept ? hr.fx : hr.x, swept ? hr.fy : hr.y, hr.rb * k * grow, dark, thr, d, px, py, nx, ny, rect);
   }
   for (const hr of hairs) swDeposit(S, hr.x, hr.y, 1);
   S.step++;
 }
 function swarmFeed(S, pts, buf) {
-  const rect = [S.surf.w, S.surf.h, 0, 0];
+  const rect = [S.surf.w, S.surf.h, 0, 0], tilts = S.b.tiltSize || S.b.tDark;
   for (let k = Math.max(1, S.done); k < pts.length; k++) {
     const p0 = pts[k - 1], p1 = pts[k], seg = p1.d - p0.d;
     if (seg <= 0) continue;
     const ux = (p1.x - p0.x) / seg, uy = (p1.y - p0.y) / seg;
     if (S.dirx === 0 && S.diry === 0) { S.dirx = ux; S.diry = uy; }
-    const T = (S.b.tiltSize || S.b.tDark) ? tiltOf(p1.tx, p1.ty) : null, lean = T ? T.lean : 0;
-    const n = Math.max(1, Math.ceil(seg / S.k));
-    for (let s = 1; s <= n; s++) {
-      const t = s / n;
+    const T = tilts ? tiltOf(p1.tx, p1.ty) : null, lean = T ? T.lean : 0;
+    let steps, t0 = 0, dt = 0;
+    if (S.k === 1) steps = Math.max(1, Math.ceil(seg));
+    else {
+      if (S.next === 0) S.next = p0.d + S.k;
+      steps = Math.max(0, Math.floor((p1.d - S.next) / S.k) + 1);
+      t0 = (S.next - p0.d) / seg; dt = S.k / seg;
+      S.next += steps * S.k;
+    }
+    for (let s = 0; s < steps; s++) {
+      const t = S.k === 1 ? (s + 1) / steps : t0 + s * dt;
       const hx = S.dirx + (ux - S.dirx) * .2, hy = S.diry + (uy - S.diry) * .2, m = Math.hypot(hx, hy) || 1;
       S.dirx = hx / m; S.diry = hy / m;
       swStep(S, buf, lerp(p0.x, p1.x, t), lerp(p0.y, p1.y, t), lerp(p0.v, p1.v, t), lerp(p0.p, p1.p, t), lerp(p0.d, p1.d, t), lean, rect, p1.own === undefined ? 1 : lerp(p0.own, p1.own, t));
@@ -2066,6 +2187,19 @@ function heldDensity(d, washK, f) {
   const x = d * washK;
   return x <= KNEE ? d * (1 - f) : strength((1 - f) * laid(x)) / washK;
 }
+// Light over dark (the app's ResolvedBrush.lightOver): how opaque a light grey lays over darker marks. A dry stick's or
+// pencil's line and an opaque print, all of it; a pen's line or a Marker's flat ink, none at mid grey or darker, easing
+// up to all of it by a grey of 150 (of 255); anything else (transparent ink, washes, a Blend, Resist or smudge) darkens only.
+function lightOver(R) {
+  const gray = 255 * (1 - R.shade);
+  if (!(gray > 0) || (R.blend && R.blend !== "own") || R.resist || R.carry) return 0;
+  if (R.screen) return R.cover > 0 && (R.line || R.body) ? 1 : 0;
+  if (R.rule !== "ink") return R.line ? 1 : 0;
+  const pen = R.lineInk && R.line && R.parts.w < .5, marker = R.markerInk && R.body && !R.line;
+  if (!(pen || marker) || !(R.life === "none" || R.life === "wet" && pen) || R.fade || R.halo || R.float || !(gray > 128)) return 0;
+  const t = Math.min(1, (gray - 128) / 22);
+  return t * t * (3 - 2 * t);
+}
 function composeStroke(st, rect, phase) {
   const { surf, R } = st, { w, fine, mid } = surf, L = surf.L, page = surf.page, base = surf.base;
   const x0 = Math.max(0, rect[0]), y0 = Math.max(0, rect[1]), x1 = Math.min(surf.w - 1, rect[2]), y1 = Math.min(surf.h - 1, rect[3]);
@@ -2079,18 +2213,31 @@ function composeStroke(st, rect, phase) {
   const hold = R.hold, spread = R.spread, grade = R.grade;
   // Erasable: the stroke's paint over the kept tones too, as much as it won't erase (all of it for ink, none for pencil).
   const kept = surf.kept && st.e < 1 ? surf.kept : null, kb = kept ? surf.keptBase : null, ke = 1 - st.e;
+  // Light over dark: where the page under it is darker than its grey, its line lays that grey by its reach (lit of it
+  // opaque, the rest darkening), and a light pen's body covers as opaque paint does.
+  const lit = lightOver(R), lightShare = R.parts.inkShare * R.load, litBody = lit > 0 && rule === "ink";
+  // The page under it (planes.js planesUnder: the planes stacked; on one plane, its base), and what each pixel's write
+  // covers (cv: -1 transparent, as its darkness), the found coverage (the app's held) for light over dark.
+  const U = surf.under || base, CB = surf.covBase, behind = R.blend === "behind";
+  let cv = -1;
   // The stroke's tone at pixel i of row y over under (its line coverage c, its body d).
   const toneOf = (under, i, y, c, d) => {
     let tone = under, gray = tint && under < paint ? paint + (under - paint) * tint : paint;
+    const light = lit > 0 && paint > U[i];
     if (d > 0) {
+      const cover = light && litBody ? lit : R.cover;
+      let reach;
       if (preview) {
         const t = previewWash(under, R.previewShade);
-        tone = cover > 0 ? lerp(t, lerp(under, gray, Math.min(1, d)), cover) : t;
+        reach = Math.min(1, d);
+        tone = cover > 0 ? lerp(t, lerp(under, gray, reach), cover) : t;
       } else {
         const dd = Math.min(1.6, d), glaze = under * (1 - Math.fround(laid(dd * washK)));
-        tone = cover > 0 ? lerp(glaze, lerp(under, gray, Math.min(1, dd / body)), cover) : glaze;
+        reach = Math.min(1, dd / body);
+        tone = cover > 0 ? lerp(glaze, lerp(under, gray, reach), cover) : glaze;
         if (relief && relief[i]) tone = clamp(tone + relief[i], 0, 255);
       }
+      if (cover > 0) cv = Math.max(cv, cover * reach * (behind ? blankOf(U[i]) : 1));
     }
     if (c > 0) {
       let a = c;
@@ -2110,17 +2257,58 @@ function composeStroke(st, rect, phase) {
         a = c * smoothstep(1 - depth - soft, 1 - depth + soft, hp) * (1 - .5 * fl * fl) + c * .15 * spread;
       }
       if (keep) a *= keep[i];
-      if (a > 0) tone = tone * (1 - Math.fround(a * inkK));
+      const k = light ? Math.min(1, a * lightShare) : 0, held = CB ? CB[i] : 0;
+      if (k > 0 && lit < 1) { const dark = tone * (1 - Math.fround(a * inkK)); tone = dark + (tone + (paint - tone) * k - dark) * lit; cv = Math.max(cv, held + (1 - held) * k * lit); }
+      else if (k > 0) { tone += (paint - tone) * k; cv = Math.max(cv, held + (1 - held) * k); }
+      else if (a > 0 && !light) tone = tone * (1 - Math.fround(a * inkK));
     }
     return tone;
   };
   for (let y = y0; y <= y1; y++) for (let i = y * w + x0, e = y * w + x1; i <= e; i++) {
     const c = L[i], d = Bsrc[i], under = base[i];
-    if (c <= 0 && d <= 0) { page[i] = under; if (kept) kept[i] = kb[i]; continue; }
+    if (c <= 0 && d <= 0) { page[i] = under; if (kept) kept[i] = kb[i]; if (CB && surf.cov) surf.cov[i] = CB[i]; continue; }
+    cv = -1;
     page[i] = toneOf(under, i, y, c, d);
+    if (cv >= 0) planeCover(surf, i, cv);
     if (kept) { const k0 = kb[i]; kept[i] = k0 + (toneOf(k0, i, y, c, d) - k0) * ke; }
   }
 }
+// The app's lattice (ModularStroke.latticePx, FloatTiles.expand): a stroke whose marks reach wider than 50 px (a pen's,
+// ink, charcoal or graphite, 100 px; never a pattern's) is worked out on every other pixel each way and stretched back,
+// the Manta's speed for big strokes, its edges a pixel softer. Here every pixel is worked out and the compose reads the
+// odd ones as the stretch makes them: the mean of the two or four lattice points around.
+function swarmReach(b, radius) {
+  const Rp = Math.max(2, radius), k = Math.max(1, Rp / 10), R = Rp / k, press = !b.pressure ? 1 : 1 + .5 * b.pressure;
+  return 2 * (1.15 * Rp * (.8 + 1.05 * b.spreadH) * press + Math.max(.55, R * .1) * 1.25 * k * 1.4 * (1 + 1.2 * (b.tiltSize || 0)));
+}
+function strokeReach(R) {
+  let line = R.line ? R.inkSize * (1 + .6 * R.pen.pressure) * (1 + 1.06 * (R.pen.fuzz || 0)) : 0;
+  if (R.linePlaced) line = Math.max(line, R.placeSize);
+  if (R.line && R.lineTip === "bristles") line = swarmReach(R.lineSwarm, R.inkSize / 2);
+  const body = !R.body ? 0 : R.bodyTip === "bristles" ? swarmReach(R.bodySwarm, R.bodySize / 2) : R.bodySize;
+  return Math.max(line, body);
+}
+// Where the lattice starts, px (ModularStroke.latticePx; checks of every pixel set it to Infinity, as LatticeChecks.everyPixel).
+let LATTICE_PX = 50;
+const latticed = R => !R.pat && strokeReach(R) > (R.lineInk || R.rule === "charcoal" || R.rule === "graphite" ? Math.max(LATTICE_PX, 100) : LATTICE_PX);
+function stretchLattice(surf, src, dst, x0, y0, x1, y1) {
+  const w = surf.w, lw = (surf.w + 1) >> 1, lh = (surf.h + 1) >> 1, at = (lx, ly) => src[(2 * Math.min(ly, lh - 1)) * w + 2 * Math.min(lx, lw - 1)];
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const lx = x >> 1, ly = y >> 1, p = at(lx, ly);
+    dst[y * w + x] = !(x & 1) ? (!(y & 1) ? p : Math.fround((p + at(lx, ly + 1)) * .5))
+      : !(y & 1) ? Math.fround((p + at(lx + 1, ly)) * .5) : Math.fround((p + at(lx + 1, ly) + at(lx, ly + 1) + at(lx + 1, ly + 1)) * .25);
+  }
+}
+const composeEvery = composeStroke;
+composeStroke = function (st, rect, phase) {
+  if (!st.lattice) return composeEvery(st, rect, phase);
+  // Over the rect asked (its callers read and restore only that), which the stampers' own margins already pad.
+  const s = st.surf, x0 = Math.max(0, rect[0]), y0 = Math.max(0, rect[1]), x1 = Math.min(s.w - 1, rect[2]), y1 = Math.min(s.h - 1, rect[3]);
+  const L = s.L, W = s.W, D = s.D, sl = lazyBuf(s, "latL"), sw = lazyBuf(s, "latW"), sd = lazyBuf(s, "latD");
+  stretchLattice(s, L, sl, x0, y0, x1, y1); stretchLattice(s, W, sw, x0, y0, x1, y1); stretchLattice(s, D, sd, x0, y0, x1, y1);
+  s.L = sl; s.W = sw; s.D = sd;
+  try { composeEvery(st, [x0, y0, x1, y1], phase); } finally { s.L = L; s.W = W; s.D = D; }
+};
 const quantTone = v => Math.round(v / 17) * 17;
 // The page on a canvas: 16 greys, as the Manta shows them.
 function showPage(ctx, surf, rect) {
@@ -2145,7 +2333,7 @@ const FLOAT_STILL = 3, FLOAT_HOLD = 150;   // Float: within 3 px of pen-down, a 
 const firstAt = (pts, d) => { let k = 1; while (k < pts.length - 1 && pts[k].d < d) k++; return k; };
 class Stroke {
   constructor(surf, B, size, shade, host) {
-    this.surf = surf; this.R = resolve(B, size, shade); this.host = host || null; this.e = this.R.erase;
+    this.surf = surf; this.R = resolve(B, size, shade); this.host = host || null; this.e = this.R.erase; this.lattice = latticed(this.R);
     useTexture(surf, { texture: this.R.paper });
     surf.base.set(surf.page);
     // The first paint that isn't wholly erasable gives the page its kept tones (paper: until now everything erased).
@@ -2260,7 +2448,7 @@ class Stroke {
     const R = this.R, s = this.surf, pts = this.pts;
     return withScratch(s, buf, () => {
       if (R.lineTip === "hake") return stampHake(s, R.lineHake, pts, R.inkSize, this.mL, R.lineHake.softK);
-      if (R.lineTip === "bristles") { this.swL ??= swarmStart(s, R.lineSwarm, R.inkSize / 2, pts[0]); return swarmFeed(this.swL, pts, buf); }
+      if (R.lineTip === "bristles") { this.swL ??= swarmStart(s, R.lineSwarm, R.inkSize / 2, pts[0], this.lattice ? 2 : 1); return swarmFeed(this.swL, pts, buf); }
       if (R.linePlaced) { s.wetBuf = R.body ? s.W : null; const r = stampPlaced(s, R.pen, R.placeBody, pts, R.inkSize, R.placeSize, final, from, win); if (this.mL.widest < R.lineReach) this.mL.widest = R.lineReach; return r; }
       return stampLine(s, R.pen, pts, R.inkSize, final, from, clip, this.mL, win);
     });
@@ -2268,7 +2456,7 @@ class Stroke {
   stampW(buf, final, from) {
     const R = this.R, s = this.surf, pts = this.pts;
     return withScratch(s, buf, () => {
-      if (R.bodyTip === "bristles") { this.swW ??= swarmStart(s, R.bodySwarm, R.bodySize / 2, pts[0]); return swarmFeed(this.swW, pts, buf); }
+      if (R.bodyTip === "bristles") { this.swW ??= swarmStart(s, R.bodySwarm, R.bodySize / 2, pts[0], this.lattice ? 2 : 1); return swarmFeed(this.swW, pts, buf); }
       if (R.bodyTip === "placed") { s.wetBuf = null; return stampPlaced(s, R.bodyPen, R.bodyGeom, pts, R.bodyLineSize, R.bodyPlaceSize, final, from, null); }
       return stampBody(s, R.body, pts, R.bodySize, from, this.mW, final);
     });
@@ -2381,9 +2569,11 @@ class Stroke {
       const p0 = pts[k - 1], p1 = pts[k], seg = p1.d - p0.d, sp = C.spacing;
       while (this.cd <= p1.d) {
         const t = seg > 0 ? clamp((this.cd - p0.d) / seg) : 1, x = lerp(p0.x, p1.x, t), y = lerp(p0.y, p1.y, t), pr = lerp(p0.p, p1.p, t);
-        if (C.soften < 1) grow(rect, this.carryDab(x, y, pr));
-        if (C.soften > 0) {
-          const len = Math.hypot(p1.x - p0.x, p1.y - p0.y), sr = this.stumpDab(x, y, pr, len > 0 ? (p1.x - p0.x) / len : 0, len > 0 ? (p1.y - p0.y) / len : 0);
+        // Press to Push: a firm press works less as a stump, more as the smear.
+        const sf = softenAt(C, pr);
+        if (sf < 1) grow(rect, this.carryDab(x, y, pr, sf));
+        if (sf > 0) {
+          const len = Math.hypot(p1.x - p0.x, p1.y - p0.y), sr = this.stumpDab(x, y, pr, len > 0 ? (p1.x - p0.x) / len : 0, len > 0 ? (p1.y - p0.y) / len : 0, sf);
           if (sr) grow(rect, sr);
         }
         this.cd += sp;
@@ -2398,7 +2588,7 @@ class Stroke {
   // darker and longer streaks; more Lay down, stronger right behind the line and a shorter tail. Lift takes twice as
   // readily and soaks up 1 − Lay down of what it holds (a damp brush), so the track lightens. Opaque
   // Lift has no pass (its cover hides the page): what it covers tints its paint (composeStroke). Pressure scales it.
-  carryDab(x, y, pr) {
+  carryDab(x, y, pr, soften = this.R.carry.soften) {
     const C = this.R.carry, s = this.surf, base = s.base, w = s.w, r = C.r, S = C.stride, N = C.n, side = 2 * N + 1, K0 = s.keptBase;
     this.cbuf ??= new Float32Array(side * side).fill(NaN);
     // Keeps Paint: the paint the surface's brush kept from its last stroke, as this reservoir holds it; Clear Water: the
@@ -2407,11 +2597,13 @@ class Stroke {
     if (C.kind === "water" && !this.found) { this.found = Float32Array.from(base); this.wet = new Float32Array(w * s.h); }
     const press = .45 + .55 * pr, buf = this.cbuf, edge = Math.max(1, r * .3), pass = 1 / C.hits, kept = this.held, wet = this.wet;
     const lift = C.kind === "lift" || C.kind === "water";
+    // Press to Lift: a firm press lays less back and leaves less wet, a damp tissue's blot.
+    const share = wetShareAt(C, pr), lay = share < 1 ? C.lay * share : C.lay;
     let take = 1 - Math.pow(1 - Math.min(.95, (lift ? 2 : 1) * C.pick * press), pass);
     // Lift soaks up 1 − Lay down of what it holds over a radius of travel: it stays damp, so it keeps lifting.
-    let give = 1 - Math.pow(1 - C.lay * press, pass), soak = lift ? 1 - Math.pow(C.lay * press, pass) : 0;
+    let give = 1 - Math.pow(1 - lay * press, pass), soak = lift ? 1 - Math.pow(lay * press, pass) : 0;
     // Part stump (Smear's Soften): the reservoir trades the rest.
-    if (C.soften > 0) { take *= 1 - C.soften; give *= 1 - C.soften; }
+    if (soften > 0) { take *= 1 - soften; give *= 1 - soften; }
     const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(w - 1, Math.ceil(x + r)), y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(s.h - 1, Math.ceil(y + r));
     for (let py = y0; py <= y1; py++) {
       const dy = py + .5 - y, jy = (Math.round(dy / S) + N) * side;
@@ -2424,7 +2616,7 @@ class Stroke {
         // A cell's first touch reads the page, so a stroke never smears at its very start; Lift's starts clean, so it lifts at once.
         let bj = buf[j];
         if (bj !== bj) { bj = lift ? C.paper : under; if (kept && kept[j] === kept[j]) bj += (kept[j] - bj) * C.keep; }
-        if (wet && c > wet[i]) wet[i] = c;
+        if (wet && c * share > wet[i]) wet[i] = c * share;
         // Tones: lower is darker. m > 0: the page is darker and the brush takes; m < 0: the brush gives.
         const d = bj - under, m = d * (d > 0 ? take : give) * c;
         base[i] = held ? (under + m) * k / PAPER_TONE : under + m;
@@ -2439,11 +2631,11 @@ class Stroke {
   // is the strength, pressure scales it, spread over this stroke's dabs as MonoPaint's are over its own (.24 r apart). A
   // Rake or Split nib combs: a little stump at each tine, a pixel taken by its nearest, dragging only what it meets
   // behind it, by .7 × strength × (1 − q), so its streaks run on. Returns the rectangle it changed, or null.
-  stumpDab(x, y, pr, ux, uy) {
+  stumpDab(x, y, pr, ux, uy, soften = this.R.carry.soften) {
     const C = this.R.carry, s = this.surf, base = s.base, w = s.w, h = s.h, K0 = s.keptBase, tines = C.tines;
     if (tines && ux === 0 && uy === 0) return null;
     const R = tines ? C.tineReach : C.r, press = .45 + .55 * pr;
-    const wt = clamp(.7 * C.soften * C.pick * press), f0 = 1 - Math.pow(1 - wt, C.spacing / Math.max(.5, .24 * R));
+    const wt = clamp(.7 * soften * C.pick * press), f0 = 1 - Math.pow(1 - wt, C.spacing / Math.max(.5, .24 * R));
     if (!(f0 > 0)) return null;
     const blur = C.blur, pX = Math.round(ux * C.r * .25), pY = Math.round(uy * C.r * .25), own = tines ? 0 : .2, comb = !!tines;
     // Only what the eraser could take moves (as carryDab): over kept tone k the loose paint is the page's tone over k's.
@@ -2589,7 +2781,9 @@ class Stroke {
     for (let y = Math.max(0, r[1]); y <= Math.min(h - 1, r[3]); y++) for (let x = Math.max(0, r[0]); x <= Math.min(w - 1, r[2]); x++) {
       const i = y * w + x; if (!(wet[i] > 0)) continue;
       const k = Math.floor((y - y0) / q) * cw + Math.floor((x - x0) / q), d = (base[i] - f0[i]) / PAPER_TONE;
-      wc[k] += wet[i]; if (d > 0) { lifted[k] += d * C.lay; total += d * C.lay; }
+      // Press to Lift: what a firm press lifted, leaving little wet, mostly stays in the brush.
+      const dl = d * C.lay * (C.press > 0 ? wet[i] : 1);
+      wc[k] += wet[i]; if (d > 0) { lifted[k] += dl; total += dl; }
     }
     if (!(total > 1e-3)) return null;
     const reach = Math.max(1, Math.round(.7 * sig / q)), spread = blur(blur(lifted, cw, ch, reach), cw, ch, reach), water = blur(wc, cw, ch, Math.max(1, reach >> 1));
@@ -2624,6 +2818,13 @@ class Stroke {
     }
   }
 }
+// Press (the app's ResolvedBrush.Carry.pressed): how far pressure travel pr has taken a smudge from its light touch, 0 to
+// its Press: nothing up to .25 (a light hand, .05 to .25), all of it from .85 (a hard one, .88 and up), smooth between.
+// Smear's Soften falls with it (Press to Push), Clear Water's Lay Down Paint and the wet it leaves (Press to Lift).
+const PRESS_LIGHT = .25, PRESS_FIRM = .85;
+const pressedAt = (C, pr) => C.press > 0 ? C.press * smoothstep(PRESS_LIGHT, PRESS_FIRM, pr) : 0;
+const softenAt = (C, pr) => C.press > 0 ? C.soften * (1 - pressedAt(C, pr)) : C.soften;
+const wetShareAt = (C, pr) => C.kind === "water" && C.press > 0 ? 1 - pressedAt(C, pr) : 1;
 // ===================================================================================================================
 // The eraser (the app's EraseBothStroke): each pixel it passes goes, once a stroke, to what can't be erased: the kept
 // tones, paper wherever everything was erasable. However hard it is pressed, it never takes permanent paint (the owner,
@@ -3066,7 +3267,7 @@ const DIALS = {
     headTurn: { label: "Head Follows", choices: ["Stroke", "Page"], def: 0 },
     gap: { label: "Tine Gap", min: 0, max: 1, def: .55 },
     count: { label: "Lines", min: 2, max: 5, def: 3, int: true, fmt: v => String(Math.round(v)) },
-    reach: { label: "Spacing", min: 0, max: 1, def: .6 },
+    reach: { label: "Line Spacing", min: 0, max: 1, def: .6 },
     hairs: { label: "Hairs", min: 6, max: 32, def: 26, int: true, fmt: v => String(Math.round(v)) },
     cohesion: { label: "Clump", min: 0, max: 1, def: .55 },
     splay: { label: "Splay", min: 0, max: 1, def: .45 },
@@ -3106,7 +3307,11 @@ const DIALS = {
     // paint mode): how much paint a full brush holds (off: it never runs out, as before), and the share of it every
     // stroke starts with. Written only when on; a part's roll leaves them off (Oils rolls Paint Load from the seed).
     pload: { label: "Paint Load", min: 0, max: 1, def: 0 },
-    pmin: { label: "Starting Load", min: 0, max: 1, def: .25 }
+    pmin: { label: "Starting Load", min: 0, max: 1, def: .25 },
+    // Smear's and Clear Water's Press (the owner, 2026-10-30; the app's PartDial.PRESS): how far a firm press takes the
+    // brush from what its light touch does. Smear's Press to Push takes Soften toward 0 (softens light, pushes firm);
+    // Clear Water's Press to Lift takes Lay Down Paint and the wet it leaves toward 0 (re-wets light, blots firm). Off, as before.
+    press: { label: "Press to Push", min: 0, max: 1, def: 0 }
   },
   paper: { tooth: { label: "Texture", min: 0, max: 1, def: .5 } },
   life: {
@@ -3150,9 +3355,9 @@ const CHOICES = {
     { k: "off", label: "Off", dials: [], blurb: "Lays its own paint only." },
     { k: "lift", label: "Lift", dials: ["pick", "lay"], macro: "pick", words: ["gentle", "strong"], def: { pick: .2, lay: .3 }, blurb: "Takes paint off as it goes, like a damp brush or a tissue." },
     { k: "drag", label: "Drag", dials: ["pick", "lay", "load", "keep", "pload", "pmin"], macro: "pick", words: ["clean", "smeary"], def: { pick: .6, lay: .7, load: .85 }, blurb: "Drags the paint beneath along: wet into wet." },
-    { k: "smudge", label: "Smear", dials: ["pick", "lay", "load", "soften", "keep", "pload", "pmin"], macro: "pick", words: ["clean", "smeary"], def: { pick: .7, lay: .55, load: .3 }, blurb: "Mostly smears what's there, like a finger or a stump." },
+    { k: "smudge", label: "Smear", dials: ["pick", "lay", "load", "soften", "keep", "pload", "pmin", "press"], macro: "pick", words: ["clean", "smeary"], def: { pick: .7, lay: .55, load: .3 }, blurb: "Mostly smears what's there, like a finger or a stump." },
     // Clear Water (the wet smudge spec): Smudge's fifth choice, so older codes never hold it. Lays only water.
-    { k: "water", label: "Clear Water", dials: ["pick", "lay"], macro: "pick", words: ["gentle", "strong"], def: { pick: .5, lay: .6 }, blurb: "Lays only water: lifts what it touches and lets it run through the wet." }
+    { k: "water", label: "Clear Water", dials: ["pick", "lay", "press"], macro: "pick", words: ["gentle", "strong"], def: { pick: .5, lay: .6 }, labels: { press: "Press to Lift" }, blurb: "Lays only water: lifts what it touches and lets it run through the wet." }
   ],
   paper: ["plain", "cold press", "laid", "felt", "crumpled", "canvas"].map(k => ({ k, label: { plain: "Smooth", "cold press": "Cold Press", laid: "Ribbed" }[k] || k[0].toUpperCase() + k.slice(1), dials: ["tooth"], macro: "tooth", words: ["smooth", "rough"], def: { tooth: k === "plain" ? 0 : .5 } })),
   life: [
@@ -3199,7 +3404,7 @@ function freshPart(part, k) {
 }
 // Dials added after the prototype's, last in their choices' lists (the app's ModularCode.ADDED): written only when one is
 // off its default, so a brush that doesn't use them keeps its code; never rolled, so every roll draws as before.
-const ADDED = new Set(["medium.dust", "medium.erase", "carry.soften", "carry.keep", "carry.pload", "carry.pmin"]);
+const ADDED = new Set(["medium.dust", "medium.erase", "carry.soften", "carry.keep", "carry.pload", "carry.pmin", "carry.press"]);
 // Erasable (the Erasable spec): every medium starts at 1, erases clean (the owner, 2026-10-22: "per-tool things should be
 // erasable unless the user specifies"; until then the real medium's: ink permanent, a wash .4, gouache .3, Oils' paint off).
 // A code that doesn't say reads 1. Resist's dial is wax or fluid (newmods.js).
@@ -3302,7 +3507,7 @@ function resolve(B, size, shade) {
     line: Pa.stampLine, body: Pa.bodyAmt > 0, lineTooth: Pa.pen.tooth, cover, gray: PAPER_TONE * (1 - shade), shade,
     // Drying's light preview grey: the swatch's shade, a wash's as dark as its glaze is to the old 34% one.
     previewShade: mk === "wash" ? WASH_BLACK * shade / GLAZE : shade,
-    hold: m("hold"), spread: m("spread"), grade: m("grade"), lineInk: mk === "ink",
+    hold: m("hold"), spread: m("spread"), grade: m("grade"), lineInk: mk === "ink", markerInk: mk === "wash" && life === "none" && B.style === "Marker",
     windowLen: (L.d.window ?? 6) * 12 + 0.5 * (lineMedium && w < .5 ? inkSize : washSize), drying: L.d.drying ?? .35, settle: life === "dry" ? (L.d.settle ?? 0) : 0,
     takes: life === "dry" ? ["", "drift", "vein"][L.d.takes | 0] : "", plume: L.d.plume ?? .55 };
   R.body = Pa.bodyAmt > 0 ? body : null;
@@ -3317,10 +3522,10 @@ function resolve(B, size, shade) {
   R.lineReach = R.linePlaced ? Math.ceil(Math.max(Pa.bodySize, tk === "multi" ? inkSize * (2 + 1.4 * bb.count) : 0) * .9 + inkSize * 3 + (bb.offset > 0 ? Pa.bodySize * 1.4 + inkSize * 2.5 : 0) + (bb.chaos > 0 ? Pa.bodySize * .6 + inkSize : 0)) : 0;
   if (R.lineTip === "hake") R.lineHake = { seed: bb.seed, mode: "flat", pressure: h("ps"), soft: T.d.soft ?? .2, streaks: t("dry"), gran: 0, angle: bb.angle, headTurn: body.headTurn,
     tilt: body.tilt, fast: false, head: "flat", cover: 0, pDark: h("pd"), pWidth: h("pw"), softK: lerp(.012, .6, T.d.soft ?? .2) };
-  if (R.lineTip === "bristles") R.lineSwarm = { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") };
+  if (R.lineTip === "bristles") R.lineSwarm = { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), load: T.d.load ?? .5, pressure: h("ps"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") };
   R.bodyTip = tk === "bristles" ? "bristles" : (tk === "split" || tk === "multi") && !lineMedium ? "placed" : "body";
   R.bodyStateful = tk === "bristles" || tk === "hake";
-  if (R.bodyTip === "bristles") R.bodySwarm = Object.assign({}, R.lineSwarm || { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") }, { amount: Pa.bodyAmt });
+  if (R.bodyTip === "bristles") R.bodySwarm = Object.assign({}, R.lineSwarm || { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), load: T.d.load ?? .5, pressure: h("ps"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") }, { amount: Pa.bodyAmt });
   if (R.bodyTip === "placed") {
     R.bodyLineSize = washSize * (tk === "split" ? .55 : .22);
     R.bodyPen = Object.assign({}, pen, { lines: tk === "split" ? "split" : "spread", wetGap: 0, dry: t("dry"), aspect: tk === "split" ? t("aspect") : 1, skipStart: 0, skipEnd: 0, pool: 0, splatter: 0 });
@@ -3331,10 +3536,10 @@ function resolve(B, size, shade) {
   // own-paint share, opaque paint's cover too (Smudge spec F1). A body glazes at a third of the swatch, as the app's
   // paint shades (PAINT_DARK); a wash to near black (washStrength: its full body lays .97 of the swatch's grey).
   // Clear Water lays no paint of its own (the app's ModularBrush.ownPaint).
-  const load = C.k === "off" ? 1 : C.k === "water" ? 0 : (C.d.load ?? 1);
+  const load = C.k === "off" ? 1 : C.k === "water" || C.k === "scrape" || C.k === "reprint" ? 0 : (C.d.load ?? 1);
   R.inkK = shade * Pa.inkShare * lineDark * load;
   R.washK = (mk === "wash" ? washStrength(shade) : GLAZE * shade) * load;
-  R.cover = cover * load;
+  R.cover = cover * load; R.load = load;
   R.erase = M.d.erase ?? 1;
   if (life === "float") R.float = floatParts(B, R, load);
   if (C.k !== "off") {
@@ -3343,7 +3548,7 @@ function resolve(B, size, shade) {
     // Dabs 1 + .08 r apart (r / 4 below 15 px): closer than the lab's first r / 4, so a smear streaks smoothly, without combing.
     const spacing = Math.max(1.5, Math.min(r * .25, 1 + r * .08));
     R.carry = { kind: C.k, moves: !(C.k === "lift" && R.cover > 0), pick: C.d.pick ?? .4, lay: C.d.lay ?? .5, paper: PAPER_TONE, r, spacing, hits: r / spacing, stride: r > 30 ? r / 30 : 1, n: Math.ceil(r / (r > 30 ? r / 30 : 1)) + 1,
-      keep: C.k === "drag" || C.k === "smudge" ? (C.d.keep ?? 0) : 0 };
+      keep: C.k === "drag" || C.k === "smudge" ? (C.d.keep ?? 0) : 0, press: C.k === "smudge" || C.k === "water" ? (C.d.press ?? 0) : 0 };
     // Smear's Soften: part or all of it MonoPaint's blending stump (stroke.js stumpDab); a Rake or a Split nib combs, along
     // its tines (as floatParts places them, a Rake's over its lines' band).
     const soften = C.k === "smudge" ? (C.d.soften ?? 0) : 0;
@@ -3661,6 +3866,8 @@ function handWords(B, n = 2) {
 // A Smear that is mostly MonoPaint's blending stump (Soften from .5): "Softens.", tagged "stump"; with tines, "Combs.", "comb".
 const isStump = B => B.carry.k === "smudge" && (B.carry.d.soften ?? 0) >= .5;
 const combs = B => B.tip.k === "multi" || B.tip.k === "split";
+// Smudge's Press on: Press to Push (a Smear) or Press to Lift (Clear Water); the app's ModularWords.pressed.
+const pressed = B => (B.carry.d.press ?? 0) > 0;
 const isClearWater = B => B.life.k === "float" && (B.carry.k === "water" || (B.carry.k === "drag" || B.carry.k === "smudge") && (B.carry.d.load ?? 1) < .02);
 // Smudge's Clear Water off the water, and Keeps Paint on (a dirty brush; not all stump): the wet smudge spec.
 const isWater = B => B.carry.k === "water" && B.life.k !== "float";
@@ -3767,7 +3974,9 @@ function plainWords(B) {
   const strong = marks.sort((a, b) => b[0] - a[0]).slice(0, 2).map(m => m[1]);
   if (strong.length) out.push(cap1(strong.join(", ")) + ".");
   // Smudge Off says nothing (not "undefined").
-  const smudge = floats ? null : { lift: "Lifts paint.", drag: "Drags wet paint.", smudge: isStump(B) ? (combs(B) ? "Combs." : "Softens.") : "Smears.", water: "Lifts paint, lets it run." }[B.carry.k];
+  // Press to Push and Press to Lift say what a firm press does (the owner, 2026-10-30).
+  const smudge = floats ? null : { lift: "Lifts paint.", drag: "Drags wet paint.", smudge: isStump(B) ? (combs(B) ? "Combs." : pressed(B) ? "Softens, pushes when pressed." : "Softens.") : "Smears.",
+    water: pressed(B) ? "Re-wets paint, lifts it when pressed." : "Lifts paint, lets it run." }[B.carry.k];
   // Paint Load says plainly what it does, and how to load it, in the smudge's place (the oil paint spec).
   const carry = smudge ? (runsOut(B) ? "Runs out of paint, then only smudges. Rub a grey to load." : smudge) + (keepsPaint(B) ? " Keeps paint for the next stroke." : "") : null;
   if (carry) out.push(carry);
@@ -3872,13 +4081,19 @@ function namePicks(sec, has, seed, n, ...not) {
 // B's name (BrushNames.name), deadpan, Title Case: about one in five its words, the rest a deadpan form (the next where
 // one won't wrap to two lines of a card), then its words, its plain words, its describer and part; null with none.
 const PLAIN = .2, capWord = w => w[0].toUpperCase() + w.slice(1);
-function brushNameOf(B) {
+// taken (BrushNames.name(b, taken), a library's names): passed by for the next name it would give; all taken, the first.
+function brushNameOf(B, taken = () => false) {
   const w = nameWords(B), plain = plainNameWords(B);
   if (!w.length) return null;
   const s = ((B.seed >>> 0) ^ TRAIT_SALT) >>> 0, tries = w.length === 3 && hash01(s, 7) >= PLAIN ? deadpanForms(w, plain, s) : [];
   tries.push(nameTitled(w), nameTitled(plain));
-  for (const name of tries) if (name.length <= NAME_MAX && nameTwoLines(name)) return name;
-  return nameTitled(plain.length < 3 ? plain : plain.slice(1));
+  let first = null;
+  for (const name of tries) if (name.length <= NAME_MAX && nameTwoLines(name)) {
+    if (!taken(name)) return name;
+    first ??= name;
+  }
+  const last = nameTitled(plain.length < 3 ? plain : plain.slice(1));
+  return first === null || !taken(last) ? last : first;
 }
 // Words with spaces, each capitalized: names are Title Case (BrushNames.titled).
 const nameTitled = ws => ws.map(capWord).join(" ");
@@ -3998,23 +4213,39 @@ function writePart(part, P) {
   }
   return s;
 }
-function readPart(part, seg) {
+// A part's segment; null for an empty one. A newer version's (docs/BRUSH-CODE.md; the app's ModularCode.readPart) reads
+// what this one knows and sets newer.v: a choice past the list is the part's first, fresh; an option past its dial's
+// leaves the dial fresh; characters left over are ignored.
+function readPart(part, seg, newer = {}) {
   if (!seg) return null;
   const ci = parseInt(seg[0], 36);
-  if (!(ci >= 0 && ci < CHOICES[part].length)) return null;
+  if (!(ci >= 0 && ci < CHOICES[part].length)) { newer.v = true; return freshPart(part, CHOICES[part][0].k); }
   const c = CHOICES[part][ci], P = freshPart(part, c.k);
   let at = 1;
   for (const key of c.dials) {
     const sp = DIALS[part][key];
-    if (sp.choices) { if (at >= seg.length) break; const o = parseInt(seg[at++], 36); if (!(o >= 0 && o < sp.choices.length)) return null; P.d[key] = o; continue; }
+    if (sp.choices) { if (at >= seg.length) break; const o = parseInt(seg[at++], 36); if (o < sp.choices.length) P.d[key] = o; else newer.v = true; continue; }
     if (at + 2 > seg.length) break;
     const step = parseInt(seg.slice(at, at + 2), 36); at += 2;
-    if (!(step >= 0 && step <= M_STEPS)) return null;
     P.d[key] = sp.min + step / M_STEPS * (sp.max - sp.min);
   }
+  if (at < seg.length) newer.v = true;
   return P;
 }
-const codeSlug = n => String(n).toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "") || "brush";
+// A name's slug (the app's ModularCode.slug): lower case, digits kept after its first letter (2026-10-31), every run of
+// other characters a hyphen. Older codes, letters only, still match.
+const codeSlug = n => String(n).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^[^a-z]+|-$/g, "") || "brush";
+const CODE_NAME = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
+// A code as written (the app's BrushCode.written): lower case, trimmed, but the shape letter after the first dot.
+function writtenCode(text) {
+  let c = javaTrim(String(text)).toLowerCase();
+  const dot = c.indexOf(".") + 1;
+  if (dot > 0 && dot < c.length) c = c.slice(0, dot) + c[dot].toUpperCase() + c.slice(dot + 1);
+  return c;
+}
+// Whether a code is of a shape this version doesn't know (the app's ModularCode.newer: a letter but B, I, M and P): it
+// doesn't read, and says "Needs a newer version".
+const newerShape = text => text != null && new RegExp("^" + CODE_NAME + "\\.[A-HJ-LNOQ-Z][0-9a-z_.]*$").test(writtenCode(text));
 // A Stamp's nib (newmods.js; the app's ModularCode): its id in base 36 after the six, only for a Stamp with one, so
 // every other code is as before.
 const nibSeg = B => B.tip && B.tip.k === "stamp" && B.nib ? "_" + (B.nib >>> 0).toString(36) : "";
@@ -4023,21 +4254,23 @@ function encodeM(B) {
 }
 // What makes two brushes draw alike: the parts, the seed and a Stamp's nib, not the name or style.
 const brushKey = B => PARTS.map(p => writePart(p, B[p])).join("_") + nibSeg(B) + "." + (B.seed >>> 0).toString(36);
-// Any code: M, B, I/P (with the prototypes' tails and ".x"). Returns { b, from } or null.
+// Any code: M, B, I/P (with the prototypes' tails and ".x"). Returns { b, from, newer } or null; newer: an M code of a
+// newer version, read as far as this one knows (docs/BRUSH-CODE.md: "Newer version, some parts differ").
 function readAnyCode(text) {
   if (text == null) return null;
-  let c = javaTrim(String(text)).toLowerCase();
-  const dot = c.indexOf(".") + 1;
-  if (dot > 0 && dot < c.length) c = c.slice(0, dot) + c[dot].toUpperCase() + c.slice(dot + 1);
-  let m = /^([a-z]+(?:-[a-z]+)*)\.M([0-9a-z])([0-9a-z_]+)\.([0-9a-z]{1,7})$/.exec(c);
+  const c = writtenCode(text);
+  let m = new RegExp("^(" + CODE_NAME + ")\\.M([0-9a-z])([0-9a-z_]+)\\.([0-9a-z]{1,7})$").exec(c);
   if (m) {
-    const style = parseInt(m[2], 36), seed = parseInt(m[4], 36), segs = m[3].split("_");
-    if (style >= STYLE_NAMES.length || seed > 0xffffffff || segs.length < PARTS.length) return null;
-    const B = { name: m[1], seed, style: STYLE_NAMES[style] };
-    for (let i = 0; i < PARTS.length; i++) { const P = readPart(PARTS[i], segs[i]); if (!P) return null; B[PARTS[i]] = P; }
+    const style = parseInt(m[2], 36), seed = parseInt(m[4], 36), segs = m[3].split("_"), newer = { v: false };
+    if (seed > 0xffffffff || segs.length < PARTS.length) return null;
+    // A style past the list is Anything goes; segments past the six and the nib are a newer version's.
+    if (style >= STYLE_NAMES.length) newer.v = true;
+    if (segs.length > PARTS.length + 1) newer.v = true;
+    const B = { name: m[1], seed, style: STYLE_NAMES[style < STYLE_NAMES.length ? style : STYLE_NAMES.indexOf("Anything goes")] };
+    for (let i = 0; i < PARTS.length; i++) { const P = readPart(PARTS[i], segs[i], newer); if (!P) return null; B[PARTS[i]] = P; }
     // A Stamp's nib: a seventh segment (one that doesn't read is no nib).
     if (B.tip.k === "stamp" && segs.length > PARTS.length && /^[0-9a-z]{1,7}$/.test(segs[PARTS.length])) { const id = parseInt(segs[PARTS.length], 36); if (id <= 0xffffffff) B.nib = id; }
-    return { b: normBrush(B), from: "M" };
+    return { b: normBrush(B), from: "M", newer: newer.v };
   }
   m = /^([a-z]+(?:-[a-z]+)*)\.B([0-9a-z])([0-9a-z]+)\.([0-9a-z]{1,7})$/.exec(c);
   if (m) { const b = readB(m); return b ? { b, from: "B" } : null; }
@@ -4177,11 +4410,14 @@ function legacyDiff(code, W = 420, H = 300) {
   const r = readAnyCode(code), old = decode(code);
   if (!r || !old) return { code, ok: false, why: "did not read" };
   const ink = old.kind === "ink", size = ink ? 8 : 120, pad = ink ? 22 : 70;
-  const ps = surface(W, H, 7), pts = loopPoints(W, H, pad);
+  // The same paper for both: the old engine's surface on the app's paper (modSurface's).
+  const ps = Object.assign(surface(W, H, 7), paperOf(W, H)), pts = loopPoints(W, H, pad);
   lay(ps, old, pts, size, ink ? INK_DARK[0] : PAINT_DARK[0]);
   const ms = modSurface(W, H, 7);
   // An old paint (a wash) at the darkness that lays the old black's glaze since washes reach black (the app's ModularSizes.sinceBlack).
-  layStroke(ms, r.b, pts, size, r.b.medium.k === "wash" ? GLAZE / WASH_BLACK : 1, null);
+  // On every pixel, as the old engine works (no lattice).
+  const lat = LATTICE_PX; LATTICE_PX = Infinity;
+  try { layStroke(ms, r.b, pts, size, r.b.medium.k === "wash" ? GLAZE / WASH_BLACK : 1, null); } finally { LATTICE_PX = lat; }
   let diff = 0, marked = 0;
   for (let i = 0; i < W * H; i++) {
     const a = Math.round(PAPER * (1 - ps.wash[i]) * (1 - ps.ink[i]) / 17) * 17, b = Math.round(ms.page[i] / 17) * 17;
@@ -4321,12 +4557,13 @@ function eraseChecks() {
   { const s = modSurface(W, H, 7), alone = modSurface(W, H, 7), white = mk("Gouache", "cover", { erase: 1 });
     layStroke(s, ink, line(40, 120, 320, 120), 6, 1, null); layStroke(alone, ink, line(40, 120, 320, 120), 6, 1, null);
     layStroke(s, white, line(40, 120, 320, 120), 60, .05, null);
-    const hidden = differ(s.page, alone.page); eraseAll(s);
-    t("erasable gouache over ink (" + hidden + " px), erased: " + differ(s.page, alone.page) + " px differ from the ink", hidden > 1000 && differ(s.page, alone.page) === 0); }
+    // The page as it shows (planes.js shownPage): the ink and the gouache are on planes of their own.
+    const hidden = differ(shownPage(s), alone.page); eraseAll(s);
+    t("erasable gouache over ink (" + hidden + " px), erased: " + differ(shownPage(s), alone.page) + " px differ from the ink", hidden > 1000 && differ(shownPage(s), alone.page) === 0); }
   // 5. A finger (Smear, Own paint 0) moves pencil, never permanent ink.
   { const finger = mk("Charcoal", "charcoal", { erase: 1 }, "smudge"); finger.carry.d.load = 0; finger.carry.d.pick = .9;
-    const moved = B => { const s = modSurface(W, H, 7); layStroke(s, B, line(180, 20, 180, 220), 8, 1, null); const was = Float32Array.from(s.page);
-      layStroke(s, finger, line(60, 120, 300, 125), 30, 1, null); let m = 0; for (let i = 0; i < was.length; i++) m += Math.abs(s.page[i] - was[i]); return m; };
+    const moved = B => { const s = modSurface(W, H, 7); layStroke(s, B, line(180, 20, 180, 220), 8, 1, null); const was = Float32Array.from(shownPage(s));
+      layStroke(s, finger, line(60, 120, 300, 125), 30, 1, null); const now = shownPage(s); let m = 0; for (let i = 0; i < was.length; i++) m += Math.abs(now[i] - was[i]); return m; };
     const mi = moved(ink), mp = moved(pencil);
     t("a finger smears pencil (" + mp.toFixed(0) + " tone) and leaves ink (" + mi.toFixed(1) + ")", mp > 2000 && mi < 1); }
   // 6. However hard it is pressed, the eraser leaves permanent ink as it was.
@@ -4461,6 +4698,15 @@ function nameChecks() {
     if (newMods) t("19 app codes name as in the app" + (off.length ? ": " + off.join(", ") : ""), !off.length); }
   return out;
 }
+// The Pencil reports 0 as it leaves the glass: still a pen, lightest, never a mouse's press (a blob at the line's end).
+function penChecks() {
+  const out = [], t = (what, ok) => out.push({ what, ok: !!ok }), L = {};
+  const at = (p, k) => pointerSample({ pointerType: "pen", pressure: p, timeStamp: k * 8 }, L, k * 3, 0)[2];
+  const pressed = [.1, .4, .6, .5, .2].map(at), lifting = at(0, 5);
+  t("a pen's 0 at its lift is lighter than its last press", lifting < pressed[4]);
+  t("a pen that never pressed is read as the hand's way", pointerSample({ pointerType: "pen", pressure: 0, timeStamp: 0 }, {}, 0, 0)[2] > 0);
+  return out;
+}
 function selfTest() {
   const legacy = LEGACY_CODES.map(c => legacyDiff(c));
   const trips = roundTrips();
@@ -4468,8 +4714,9 @@ function selfTest() {
   const float = floatChecks();
   const erase = eraseChecks();
   const names = nameChecks();
-  const ok = legacy.every(l => l.ok) && !trips.length && proto.every(p => p.ok) && float.every(f => f.ok) && erase.every(f => f.ok) && names.every(f => f.ok);
-  return { ok, legacy, trips, proto, float, erase, names };
+  const pen = penChecks();
+  const ok = legacy.every(l => l.ok) && !trips.length && proto.every(p => p.ok) && float.every(f => f.ok) && erase.every(f => f.ok) && names.every(f => f.ok) && pen.every(f => f.ok);
+  return { ok, legacy, trips, proto, float, erase, names, pen };
 }
 
 ;
@@ -4490,7 +4737,7 @@ Object.assign(DIALS.tip, {
   dot: { label: "Dot Size", min: 0, max: 1, def: .35 },
   scatter: { label: "Scatter", min: 0, max: 1, def: .4 },
   jitter: { label: "Uneven Dots", min: 0, max: 1, def: .5 },
-  pitch: { label: "Spacing", min: 0, max: 1, def: .4 },
+  pitch: { label: "Line Spacing", min: 0, max: 1, def: .4 },
   lineW: { label: "Line Weight", min: 0, max: 1, def: .3 },
   hangle: { label: "Line Angle", min: 0, max: 180, def: 45, fmt: v => Math.round(v) + "°" },
   layers: { label: "Layers", min: 1, max: 3, def: 3, int: true, fmt: v => String(Math.round(v)) },
@@ -4554,8 +4801,9 @@ resolve = function (B, size, shade) {
       dark: { pDark: handCell(B, "pd"), sDark: handCell(B, "sd"), tDark: 0 } };
   }
   if (halo) {
-    const L = B.life.d, big = clamp(Math.sqrt((R.line ? R.inkSize : R.bodySize) / 6), 1, 3);
-    R.halo = { reach: Math.round((12 + 68 * (L.reach ?? .5)) * big), growth: L.growth ?? .5, ticks: wetTicksOf(L.drying ?? .55),
+    // Reach within three tip widths, and at most 200 ticks (the app's ResolvedBrush.Halo, the owner's limits).
+    const L = B.life.d, width = R.line ? R.inkSize : R.bodySize, big = clamp(Math.sqrt(width / 6), 1, 3);
+    R.halo = { reach: Math.min(Math.round((12 + 68 * (L.reach ?? .5)) * big), Math.max(1, Math.round(3 * width))), growth: L.growth ?? .5, ticks: Math.min(200, wetTicksOf(L.drying ?? .55)),
       dark: R.line ? clamp(R.inkK) : laid(R.washK * 1.5) };
   }
   return R;
@@ -4700,10 +4948,12 @@ composeStroke = function (st, rect, phase) {
   const w = s.w, x0 = Math.max(0, rect[0]), y0 = Math.max(0, rect[1]), x1 = Math.min(s.w - 1, rect[2]), y1 = Math.min(s.h - 1, rect[3]);
   if (x1 < x0 || y1 < y0) return;
   const page = s.page, base = s.base, P = PAPER_TONE, kept = s.kept && st.e < 1 ? s.kept : null, kb = kept ? s.keptBase : null, ke = 1 - st.e;
+  // The page under it (planes.js): Behind's blankness and Invert's opposite are the page's, not only the stroke's plane's.
+  const U = s.under || base, CB = s.covBase;
   if (!R.resist && (blend === "own" || blend === "behind")) {
     composeOwn(st, rect, phase);
     for (let y = y0; y <= y1; y++) for (let i = y * w + x0, e = y * w + x1; i <= e; i++) {
-      const f = (blend === "behind" ? blankOf(base[i]) : 1) * (rp ? 1 - rp[i] : 1);
+      const f = (blend === "behind" ? blankOf(U[i]) : 1) * (rp ? 1 - rp[i] : 1);
       if (f === 1) continue;
       page[i] = base[i] + (page[i] - base[i]) * f;
       if (kept) kept[i] = kb[i] + (kept[i] - kb[i]) * f;
@@ -4715,7 +4965,7 @@ composeStroke = function (st, rect, phase) {
   s.base = paper; s.kept = null; s.keptBase = null;
   try { composeOwn(st, rect, phase); } finally { s.base = base; s.kept = keepK; s.keptBase = keepKB; }
   const rb = s.resistBase, rk = s.resistKept, rkb = s.resistKeptBase;
-  const to = blend === "lighten" ? (u, a) => u + (P - u) * a : (u, a) => u + (P - 2 * u) * a;
+  const to = blend === "lighten" ? (u, a) => u + (P - u) * a : (u, a, i) => u + (P - (i === undefined ? u : U[i]) - u) * a;
   const tooth = R.resist ? R.lineTooth || 0 : 0, t0 = .25 + .5 * tooth;
   for (let y = y0; y <= y1; y++) for (let i = y * w + x0, e = y * w + x1; i <= e; i++) {
     let a = clamp(1 - page[i] / P); const u = base[i];
@@ -4732,7 +4982,9 @@ composeStroke = function (st, rect, phase) {
       continue;
     }
     const f = rp ? 1 - rp[i] : 1;
-    page[i] = u + (to(u, a) - u) * f;
+    page[i] = u + (to(u, a, i) - u) * f;
+    // White and Invert cover what is under them by the mark (ModularCompose: held + (255 − held) · a).
+    if (CB) planeCover(s, i, CB[i] + (1 - CB[i]) * a * f);
     if (kept) { const k0 = kb[i]; kept[i] = k0 + (to(k0, a) - k0) * ke * f; }
   }
 };
@@ -4750,7 +5002,7 @@ Water.prototype.addWet = function (X0, Y0, rw, rh, D, ...rest) {
   const st = NM_ENDING;
   if (st && st.R.blend === "behind") {
     // A wash behind marks settles only where it landed: its suspended pigment scaled by how blank the page was.
-    const base = st.surf.base, w = st.surf.w; D = Float32Array.from(D);
+    const base = st.surf.under || st.surf.base, w = st.surf.w; D = Float32Array.from(D);
     for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) D[y * rw + x] *= blankOf(base[(y + Y0) * w + x + X0]);
   }
   return addWet0.call(this, X0, Y0, rw, rh, D, ...rest);
@@ -4830,11 +5082,11 @@ Stroke = class extends Stroke0 {
     for (let k = 0; k < held.length; k += 3) { const i = held[k]; s.base[i] = held[k + 1] + (s.base[i] - held[k + 2]) * (1 - rp[i]); }
     return out;
   }
-  carryDab(x, y, pr) { return this.shieldDab(x, y, this.R.carry.r + 1, () => super.carryDab(x, y, pr)); }
-  stumpDab(x, y, pr, ux, uy) {
+  carryDab(x, y, pr, sf) { return this.shieldDab(x, y, this.R.carry.r + 1, () => super.carryDab(x, y, pr, sf)); }
+  stumpDab(x, y, pr, ux, uy, sf) {
     const C = this.R.carry, tines = C.tines ? Math.max(...C.tines.map(Math.abs)) : 0;
     // The stump reads the page a blur and a quarter radius past where it writes, at each tine.
-    return this.shieldDab(x, y, (C.tines ? C.tineReach + tines : C.r) + (C.blur || 0) + .25 * C.r + 2, () => super.stumpDab(x, y, pr, ux, uy));
+    return this.shieldDab(x, y, (C.tines ? C.tineReach + tines : C.r) + (C.blur || 0) + .25 * C.r + 2, () => super.stumpDab(x, y, pr, ux, uy, sf));
   }
   end() {
     const R = this.R, s = this.surf;
@@ -4915,6 +5167,9 @@ function nmChamfer(own, w, h) {
 // Living Ink's Mould, tuned for thin pen lines: sensors 8 px ahead at ±43°, a little wander, food worth five trail; a vein
 // where traffic passes 3 times the band's mean. Scouts that reach another mark carry back to their own stroke (shuttle) and
 // lay a bridge trail as well: bridges darken to .7, the rest of the halo only to .2.
+// The app's: four moves a tick (the lab's two), so veins cross to a mark and darken in half the time (the owner: "mold is
+// very faint / light and slow"); a black pixel is its own stroke's only within 2 px of one it darkened.
+const HALO_MOVES = 4, HALO_OWN_BLACK = 2;
 const HALO_AGENTS = 2400, HALO_TUNE = { sd: 8, sa: 43, wander: .18, food: 5, vein: .7, faint: .2, shuttle: 1, thr: 3 };
 class Halo {
   constructor(s, st, rect) {
@@ -4922,13 +5177,31 @@ class Halo {
     const x0 = Math.max(0, rect[0] - R - 3), y0 = Math.max(0, rect[1] - R - 3), x1 = Math.min(s.w - 1, rect[2] + R + 3), y1 = Math.min(s.h - 1, rect[3] + R + 3);
     const w = x1 - x0 + 1, h = y1 - y0 + 1, n = w * h;
     Object.assign(this, { s, x0, y0, w, h, R, dark: H.dark, e: st.e, behind: st.R.blend === "behind", N: H.ticks, tick: 0, rect: [x0, y0, x1, y1] });
-    // The stroke's own mark (its darkness over what it found, for its own darkness), and other marks as found.
-    const own = this.own = new Float32Array(n), env = this.env = new Float32Array(n);
+    // The stroke's own mark (its darkness over what it found, for its own darkness), and other marks as found: food where
+    // they were mid grey or darker (the app's HaloGrowth.Read, b <= 127).
+    const own = this.own = new Float32Array(n), env = this.env = new Float32Array(n), black = new Uint8Array(n);
+    // Read as the app's page holds them: whole tones, paper 255.
+    const tone = v => v >= PAPER_TONE - .5 ? 255 : Math.round(v);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const g = (y + y0) * W + x + x0, b = s.base[g];
-      own[y * w + x] = clamp((1 - s.page[g] / Math.max(1, b)) / Math.max(.05, H.dark));
-      env[y * w + x] = 1 - b / PAPER_TONE;
+      const g = (y + y0) * W + x + x0, b = tone(s.base[g]), a = tone(s.page[g]);
+      own[y * w + x] = Math.fround(clamp((1 - a / Math.max(1, b)) / Math.max(.05, H.dark)));
+      env[y * w + x] = b <= 127 ? 1 : 0;
+      black[y * w + x] = a === 0 && b === 0 ? 1 : 0;
     }
+    // Black before and after is its own only within HALO_OWN_BLACK px of a pixel it darkened (where it crossed a black
+    // mark); else another black mark, food and never a seed (the app's HaloGrowth.ownBlack: Mold bridges to black marks).
+    const keep = [];
+    for (let i = 0; i < n; i++) {
+      if (!black[i] || own[i] < .5) continue;
+      const x = i % w, y = (i / w) | 0;
+      let near = false;
+      for (let dy = -HALO_OWN_BLACK; dy <= HALO_OWN_BLACK && !near; dy++) for (let dx = -HALO_OWN_BLACK; dx <= HALO_OWN_BLACK && !near; dx++) {
+        const xx = x + dx, yy = y + dy, j = yy * w + xx;
+        near = xx >= 0 && yy >= 0 && xx < w && yy < h && own[j] >= .5 && !black[j];
+      }
+      keep.push(near ? own[i] : 0);
+    }
+    for (let i = 0, k = 0; i < n; i++) if (black[i] && own[i] >= .5) own[i] = keep[k++];
     const dist = this.dist = nmChamfer(own, w, h), band = [];
     for (let x = 0; x < w; x++) { dist[x] = 1e9; dist[(h - 1) * w + x] = 1e9; }
     for (let y = 0; y < h; y++) { dist[y * w] = 1e9; dist[y * w + w - 1] = 1e9; }
@@ -4967,14 +5240,14 @@ class Halo {
   feed(o) {
     for (let y = Math.max(this.y0, o.y0); y < Math.min(this.y0 + this.h, o.y0 + o.h); y++) for (let x = Math.max(this.x0, o.x0); x < Math.min(this.x0 + this.w, o.x0 + o.w); x++) {
       const i = (y - this.y0) * this.w + x - this.x0, j = (y - o.y0) * o.w + x - o.x0;
-      if (o.own[j] > this.env[i]) this.env[i] = o.own[j];
+      if (o.own[j] > .5) this.env[i] = 1;
     }
   }
   // One tick (ten a second): vigour falls as it dries, so growth slows to nothing. Returns the page rectangle changed.
   step() {
     if (this.tick >= this.N) return null;
     const v = Math.pow(1 - this.tick / this.N, 1.4), { T, w } = this, SD = HALO_TUNE.sd, SA = HALO_TUNE.sa * DEG;
-    for (let sub = 0; sub < 2; sub++) for (const a of this.ag) {
+    for (let sub = 0; sub < HALO_MOVES; sub++) for (const a of this.ag) {
       if (a.wait > 0) { if (sub === 0) a.wait--; continue; }
       const bk = HALO_TUNE.shuttle && a.back;
       const F = this.sense(a.x + Math.cos(a.h) * SD, a.y + Math.sin(a.h) * SD, bk);
@@ -5278,7 +5551,7 @@ function newModChecks() {
       "messy-stick.M51eueei000005bd4at_3nbcw00we_0_2tz_1jz_8syjs00y8j900000000nz0.t4mf73", "f.M70i000000000at_000zz0000000000000_3wejs00_000_3lli0i0_0000000000000000000nz0.7"];
     t("old codes re-encode byte for byte", olds.every(c => encodeM(readAnyCode(c).b) === c));
     const ink = mk(), white = mk("round", "ink", { blend: 1 }), seg = c => c.split("_")[1];
-    t("Blend is written only when not the medium's own (" + seg(encodeM(ink)) + " → " + seg(encodeM(white)) + ")", encodeM(ink) === encodeM(readAnyCode(encodeM(ink)).b) && seg(encodeM(white)).endsWith("01") && seg(encodeM(white)).length === seg(encodeM(ink)).length + 1);
+    t("Blend is written only when not the medium's own (" + seg(encodeM(ink)) + " → " + seg(encodeM(white)) + ")", encodeM(ink) === encodeM(readAnyCode(encodeM(ink)).b) && seg(encodeM(white)) === seg(encodeM(ink)) + "zz1");
     const news = [mk("stipple"), mk("hatch"), mk("round", "resist", { erase: 0 }), mk("round", "ink", {}, "halo"), mk("round", "cover", { blend: 2 }), white];
     t("the new choices round-trip (" + news.map((b, i) => encodeM(b).split("_")[[0, 0, 1, 4, 1, 1][i]].replace(/^.*\.M./, "")).join(" ") + ")", news.every(b => { const c = encodeM(b), r = readAnyCode(c); return r && encodeM(r.b) === c; })); }
   // 2. Rolls: with the new rolls off, every roll is as before; on, a brush either is the same or changes one part to a new choice.
@@ -5303,9 +5576,10 @@ function newModChecks() {
   //    second wash then takes there. Wax (Erasable off) stays, and shields what's under it from the eraser.
   { const s = modSurface(W, H, 7), fluid = mk("round", "resist", { erase: 1 }), wax = mk("round", "resist", { erase: 0 }), wash = mk("round", "wash", { wet: .3 });
     layStroke(s, fluid, line(40, 70, 320, 70), 24, 1, null); layStroke(s, wax, line(40, 170, 320, 170), 24, 1, null);
-    const before = Float32Array.from(s.page); layStroke(s, wash, line(10, 120, 350, 120), 300, 1, null);
-    const under = i => Math.abs(s.page[i] - before[i]) < .5, fl = 70 * W + 180, wx = 170 * W + 180, open = 120 * W + 180;
-    t("a wash doesn't take on masking fluid or wax (" + (under(fl) && under(wx)) + "), it does beside them (" + q(s.page[open]) + ")", under(fl) && under(wx) && q(s.page[open]) < 230);
+    // The page as it shows (planes.js shownPage): the wax and the wash are on planes of their own.
+    const before = Float32Array.from(shownPage(s)); layStroke(s, wash, line(10, 120, 350, 120), 300, 1, null);
+    const shown = shownPage(s), under = i => Math.abs(shown[i] - before[i]) < .5, fl = 70 * W + 180, wx = 170 * W + 180, open = 120 * W + 180;
+    t("a wash doesn't take on masking fluid or wax (" + (under(fl) && under(wx)) + "), it does beside them (" + q(shown[open]) + ")", under(fl) && under(wx) && q(shown[open]) < 230);
     const er = new Eraser(s, 60, false); for (let k = 0; k <= 60; k++) er.add([[20 + 5 * k, 70, 1, k * 6, NaN, NaN]]); for (let k = 0; k <= 60; k++) er.add([[20 + 5 * k, 170, 1, 400 + k * 6, NaN, NaN]]);
     t("one eraser pass lifts the fluid (" + s.resist[fl].toFixed(2) + ") and keeps the wax (" + s.resist[wx].toFixed(2) + ")", s.resist[fl] < .01 && s.resist[wx] > .99);
     layStroke(s, wash, line(10, 70, 350, 70), 80, 1, null);
@@ -5570,8 +5844,25 @@ resolve = function (B, size, shade) {
   const R = resolveNM(A, size, shade);
   if (!tone && B.life.k === "float") return R;
   R.screen = screenOf(B.medium); R.settle = 0; R.halo = null;
+  // Screened (the app's ResolvedBrush): the screen inks the mark's darkness, so a grey that fell off at its edge or broke up
+  // in its grain left only the core inked, a squiggle down a stroke meant to fill. Its footprint is crisp and even instead
+  // (no soft edge, dry brush, streaks, tooth, stick fuzz, wet edges or line bled into the wash): screenTone is its tone.
+  const Pa = R.parts, body = Pa.body, pen = R.pen, look = R.look;
+  body.soft = 0; body.crisp = true; body.streaks = 0; body.gran = 0; Pa.diffuse = 0; Pa.lineWet = 0;
+  pen.dry = 0; pen.tooth = 0; pen.fuzz = 0; pen.side = 0; R.lineTooth = 0;
+  look.feather = 0; look.hollow = 0; look.bloom = 0; look.backrun = 0; look.gran = 0;
   return R;
 };
+// A screened mark's darkness over white, 0 to 1, where its line lays coverage c and its body d (the app's
+// ResolvedBrush.screenTone): the line's at its ink, the body's SCREENED_BODY of the swatch's grey at its fullest, the more
+// of the two; even across the tip, so the screen prints one tone over the whole footprint.
+const SCREENED_BODY = .8;
+// How much of a screened mark lies here, whatever its grey (ResolvedBrush.screenReach): screenTone over a light one.
+function screenReach(R, c, d) { return clamp(Math.max(c * R.parts.inkShare * R.load, d > 0 ? Math.min(1, R.parts.bodyAmt > 0 ? d / R.parts.bodyAmt : d) * SCREENED_BODY * R.load : 0)); }
+function screenTone(R, c, d) {
+  const body = d > 0 ? Math.min(1, R.parts.bodyAmt > 0 ? d / R.parts.bodyAmt : d) * SCREENED_BODY * R.shade * R.load : 0;
+  return clamp(Math.max(c * R.inkK, body));
+}
 // The compose: the mark's own darkness over blank paper (and its misregistered pass), through the screen.
 const composeNoScreen = composeStroke;
 composeStroke = function (st, rect, phase) {
@@ -5585,18 +5876,17 @@ composeStroke = function (st, rect, phase) {
   const w = s.w, P = PAPER_TONE, dx = S.misX, dy = S.misY;
   const X0 = Math.max(0, rect[0] - dx), Y0 = Math.max(0, rect[1] - dy), X1 = Math.min(s.w - 1, rect[2] + dx), Y1 = Math.min(s.h - 1, rect[3] + dy);
   if (X1 < X0 || Y1 < Y0) return;
-  const gw = X1 - X0 + 1, gh = Y1 - Y0 + 1, page = s.page, base = s.base, saved = new Float32Array(gw * gh), A = new Float32Array(gw * gh);
-  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) saved[y * gw + x] = page[(y + Y0) * w + x + X0];
-  const paper = s.nmPaper ??= new Float32Array(s.w * s.h).fill(P), keepK = s.kept, keepKB = s.keptBase;
-  s.base = paper; s.kept = null; s.keptBase = null;
-  try { composeOwn(st, [X0, Y0, X1, Y1], phase); } finally { s.base = base; s.kept = keepK; s.keptBase = keepKB; }
-  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { const i = (y + Y0) * w + x + X0; A[y * gw + x] = clamp(1 - page[i] / P); page[i] = saved[y * gw + x]; }
+  // Its darkness is the stroke's own tone wherever its tip lies (screenTone), not the grey the mark would leave, which fell off toward its edge.
+  const gw = X1 - X0 + 1, gh = Y1 - Y0 + 1, page = s.page, base = s.base, A = new Float32Array(gw * gh), Bsrc = phase === "preview" || R.life === "none" ? s.W : s.D;
+  for (let y = 0; y < gh; y++) for (let x = 0, i = (y + Y0) * w + X0; x < gw; x++, i++) { const c = s.L[i], d = Bsrc[i]; if (c > 0 || d > 0) A[y * gw + x] = screenTone(R, c, d); }
   const kept = s.kept && st.e < 1 ? s.kept : null, kb = kept ? s.keptBase : null, ke = 1 - st.e, rp = s.resist, blend = R.blend || "own";
   const lays = blend === "lighten" || blend === "invert", to = (u, bit) => bit ? (blend === "lighten" ? P : blend === "invert" ? P - u : 0) : u;
   if (S.tone) s.dots ??= new Uint8Array(s.w * s.h);
   // The print tone (the app's ToneDocument.Layer.print): what the screened marks would show unscreened, kept on the
   // page, made by the first screened stroke; each builds on it as it found it (st.printBase), so a second prints darker.
   const prints = !S.tone && !lays, pr = prints ? (s.print ??= new Float32Array(s.w * s.h).fill(P)) : null, pb = prints ? (st.printBase ??= Float32Array.from(pr)) : null;
+  // A print darkens only, over prints too (the app's, 2026-11-06). U: the page under it, for an opaque print's light over dark.
+  const lit = lightOver(R) > 0, U = s.under || base;
   const ex = Math.min(s.w - 1, rect[2] + dx), ey = Math.min(s.h - 1, rect[3] + dy);
   for (let y = Math.max(0, rect[1]); y <= ey; y++) for (let x = Math.max(0, rect[0]); x <= ex; x++) {
     const i = y * w + x, gy = y - Y0, gx = x - X0, own = A[gy * gw + gx];
@@ -5604,13 +5894,23 @@ composeStroke = function (st, rect, phase) {
     if ((dx || dy) && gx - dx >= 0 && gy - dy >= 0) a = Math.max(a, SCREEN_GHOST * A[(gy - dy) * gw + gx - dx]);
     if (blend === "behind") a *= blankOf(base[i]);
     if (prints) {
-      const f0 = rp ? 1 - rp[i] : 1, p = printedTone(pb[i], a, R.cover > 0 && own > 0 ? R.cover : 0);
+      // Kept to the grey step, so a second stroke at the same tone (the darker of the two) inks exactly the dots the first did.
+      const f0 = rp ? 1 - rp[i] : 1, p = Math.round(printedTone(pb[i], a, R.cover > 0 && own > 0 ? R.cover : 0));
       pr[i] = pb[i] + (p - pb[i]) * f0;
-      if (pb[i] < P) a = 1 - p / P;
+      if (a > 0) a = 1 - p / P;
     }
     const bit = screenInk(S, a, x, y, s.h, s.low[i]), u = base[i], f = rp ? 1 - rp[i] : 1;
-    const target = bit ? to(u, true) : R.cover > 0 && !lays && own > 0 ? u + (P - u) * R.cover : u;
+    // An opaque light print over darker marks (lightOver): white where the screen's thresholds are highest, its dots'
+    // complement, the share that leaves the page at the print's grey on average (PrintScreen.white).
+    const white = !bit && lit && R.gray > U[i] && own > 0 && screenT(S, x, y) >= 1 - (R.gray - U[i]) / (P - U[i]) * screenReach(R, s.L[i], Bsrc[i]);
+    const target = bit ? to(u, true) : white ? P : R.cover > 0 && !lays && own > 0 ? u + (P - u) * R.cover : u;
     page[i] = u + (target - u) * f;
+    // Its coverage (ModularCompose): Tone's dot DOT_COVERAGE, White's and Invert's ink, a light print's white all of it,
+    // opaque paint its cover, the rest its darkness.
+    if (s.cov) {
+      const c = bit ? (S.tone ? 254 / 255 : lays ? 1 : 0) : white ? 1 : R.cover > 0 && !lays && own > 0 ? R.cover : -1;
+      if (c >= 0 && target !== u) planeCover(s, i, c * f);
+    }
     if (kept) { const k0 = kb[i], t0 = bit ? to(k0, true) : k0; kept[i] = k0 + (t0 - k0) * ke * f; }
     if (S.tone) s.dots[i] = bit ? 1 : 0;
   }
@@ -5803,7 +6103,8 @@ function screenChecks() {
     const pen = Float32Array.from(s.page);
     for (let y = 60; y <= 180; y += 20) layStroke(s, mk("tone", { ttone: .6 }), line(20, y, 340, y), 40, 1, null);
     let dots = 0, kept = 0, lines = 0;
-    for (let i = 0; i < W * H; i++) { if (s.dots[i]) dots++; if (pen[i] < 60) { lines++; if (s.page[i] <= pen[i] + .5) kept++; } }
+    const shown = shownPage(s);   // the pen line is on a plane of its own (planes.js)
+    for (let i = 0; i < W * H; i++) { if (s.dots[i]) dots++; if (pen[i] < 60) { lines++; if (shown[i] <= pen[i] + .5) kept++; } }
     const er = new Eraser(s, 40, false); for (let k = 0; k <= 60; k++) er.add([[20 + 5 * k, 120, 1, k * 6, NaN, NaN]]);
     let after = 0; for (let i = 0; i < W * H; i++) if (s.dots[i]) after++;
     t("Tone lays " + dots + " black dots and keeps the pen line (" + kept + " of " + lines + "); the eraser scrapes some (" + after + " left)", dots > 3000 && kept === lines && after < dots && after > dots * .6); }
@@ -6254,14 +6555,15 @@ function oilChecks() {
   const line = (x0, y0, x1, y1, p = .8, tx = NaN, ty = NaN) => { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 2.5); return Array.from({ length: n + 1 }, (_, k) => ({ x: x0 + (x1 - x0) * k / n, y: y0 + (y1 - y0) * k / n, p, t: k * 4, tx, ty })); };
   const mean = (s, x0, x1, y0, y1) => { let a = 0, n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { a += s.page[y * W + x]; n++; } return a / n; };
   const reach = (s, y) => { let m = 0; for (let x = 0; x < W; x++) if (s.page[y * W + x] < P - 20) m = x; return m; };
-  // Codes: Oil paint as the app writes it; old Drag and Smear codes as before; the Filbert is Tip 9, nothing past it.
+  // Codes: Oil paint as the app writes it; old Drag and Smear codes as before; the Filbert is Tip 9, its dials read on
+  // another tip a newer version's (docs/BRUSH-CODE.md).
   { const olds = ["oils-drag.M90i00000000042_2zz00_2llp600_000_0_0000000000000000000nz0.1vtkv3y", "stump.M50i00000000yat_3eqlj00we_3p6ll00_1nl_1jz_8pthh00x9is00000000nz0.51j8ud",
       "dirty-brush.M60i000000000at_1ulat00770000ee_3qzi00000we_000_1jz_0000000000000000000nz0.20j"];
     const b = oil(), off = cloneBrush(b); off.carry.d.pload = 0;
     t("Oil paint reads and writes as the app's (" + encodeM(b) + "); older Drag and Smear codes as before, Paint Load off",
       encodeM(b) === OIL_PAINT && b.tip.k === "filbert" && Math.abs(b.carry.d.pload - .55) < 1e-3 && b.carry.d.pmin === .25
       && olds.every(c => { const r = readAnyCode(c).b; return encodeM(r) === c && (r.carry.d.pload ?? 0) === 0 && !resolve(r, 60, 1).loaded; })
-      && encodeM(normBrush(off)).split("_")[2].length === OIL_PAINT.split("_")[2].length - 4 && CHOICES.tip.findIndex(c => c.k === "filbert") === 9 && !readAnyCode(OIL_PAINT.replace(".M99", ".M9b"))); }
+      && encodeM(normBrush(off)).split("_")[2].length === OIL_PAINT.split("_")[2].length - 4 && CHOICES.tip.findIndex(c => c.k === "filbert") === 9 && readAnyCode(OIL_PAINT.replace(".M99", ".M9b")).newer); }
   // Rolls: with them off every roll is as before; on, a Filbert or Paint Load now and then (Oils, Anything goes), nothing else.
   { const roll = on => { const keep = Math.random, k0 = NM.oilRolls; Math.random = rng(7171); NM.oilRolls = on;
       try { return Array.from({ length: 1400 }, (_, i) => rollStyle(STYLE_NAMES[i % STYLE_NAMES.length])); } finally { Math.random = keep; NM.oilRolls = k0; } };
@@ -6289,8 +6591,8 @@ function oilChecks() {
     t("a Filbert's first touch: a crescent with Paint Load (" + a + " px), its oval without (" + b + " px)", a > 0 && a < .6 * b && resolve(on, 80, 1).body.crescent && !resolve(off, 80, 1).body.crescent); }
   // Words.
   { const B = oil();
-    t("words: \"" + plainWords(B) + "\", \"" + captionItems(B).join(", ") + "\"", plainWords(B) === "Oil paint, filbert, on canvas. Runs out of paint, then only smudges. Rub a grey to load. Pressure widens."
-      && captionItems(B).join(", ") === "Oils, filbert, runs out" && plainNameWords(B)[2] === "filbert" && ["oily", "loaded"].includes(plainNameWords(B)[1])); }
+    t("words: \"" + plainWords(B) + "\", \"" + captionItems(B).join(", ") + "\"", plainWords(B) === "Oil paint, filbert, on canvas. Runs out of paint, then only smudges. Rub a grey to load. Permanent. Pressure widens."
+      && captionItems(B).join(", ") === "Oils, filbert, runs out, permanent" && plainNameWords(B)[2] === "filbert" && ["oily", "loaded"].includes(plainNameWords(B)[1])); }
   return out;
 }
 const selfTestOil = selfTest;
@@ -6516,11 +6818,12 @@ function fadeChecks() {
       fadeAll(s, clock + 26000);
       t("Fading lays as Quick (" + start.toFixed(0) + "), thin parts go first (at 12 s " + faintGone + " of " + faint + " faint px, " + coreGone + " of " + core + " dark), and reaches nothing",
         Math.abs(start - dark(q)) < 1e-6 && faint > 20 && core > 20 && faintGone / faint > coreGone / core + .2 && dark(s) < 1e-6 && !s.fades.length);
-      const l = modSurface(W, H, 7); layStroke(l, mk("lemon"), line(), 14, 1, host);
+      // Dries In at its shortest, 10 s: it darkens in a second at a time, over 7 to 13 s by the mottle (FadingInk.stepMs).
+      const l = modSurface(W, H, 7); layStroke(l, mk("lemon", { dryIn: 10 }), line(), 14, 1, host);
       const trace = dark(l);
-      fadeAll(l, clock + 2000); const mid = dark(l);
-      fadeAll(l, clock + 6000);
-      t("Lemon Juice goes on faint (" + (trace / dark(q) * 100).toFixed(0) + "%), darkens in (" + (mid / dark(q) * 100).toFixed(0) + "% at 2 s) and ends as Quick lays it",
+      fadeAll(l, clock + 5000); const mid = dark(l);
+      fadeAll(l, clock + 14000);
+      t("Lemon Juice goes on faint (" + (trace / dark(q) * 100).toFixed(0) + "%), darkens in (" + (mid / dark(q) * 100).toFixed(0) + "% at 5 s of 10) and ends as Quick lays it",
         trace > dark(q) * .06 && trace < dark(q) * .16 && mid > trace && mid < dark(q) && l.page.every((v, i) => Math.abs(v - q.page[i]) < 1e-4) && !l.fades.length);
       const sample = modSurface(W, H, 7); layStroke(sample, mk("lemon"), line(), 14, 1, null);
       t("a sample tile shows it as laid, nothing ticking", !(sample.fades && sample.fades.length) && sample.page.every((v, i) => Math.abs(v - q.page[i]) < 1e-4)); }
@@ -6545,7 +6848,7 @@ if (typeof runChecks === "function") {
 // print), turned with the line or not (Turns), potato-stamp inked: blotchy, lighter each print by Ink Fade until the pen
 // rests about a second, darker with pressure. The medium lays it as any mark. Its nib is kept beside the code (NM.nibs
 // by its id, the app's nib store; here localStorage too), the code carrying the id after the six (parts.js nibSeg). A
-// Stamp whose nib isn't here prints this lab's default star (the app's prints round). Never rolled: it needs a cut.
+// Stamp whose nib isn't here prints a round stamp, as the app's does. Never rolled: it needs a cut.
 // ===================================================================================================================
 Object.assign(DIALS.tip, {
   spacing: { label: "Spacing", min: .05, max: 1.5, def: .12, fmt: v => Math.round(v * 100) + "%" },
@@ -6579,11 +6882,17 @@ function inLasso(x, y, poly) {
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < xj + (y - yj) / (yi - yj) * (xi - xj)) inside = !inside; }
   return inside;
 }
-// The default star: a solid five-pointed star 48 px across (mischief-lab-2.html's first stamp), each pixel 4 × 4 samples.
+// A star nib: a solid five-pointed star 48 px across (mischief-lab-2.html's first stamp), each pixel 4 × 4 samples.
 const STAR_NIB = (() => {
   const d = 48, a = new Uint8Array(d * d), poly = [];
   for (let k = 0; k < 10; k++) { const t = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 ? .45 : 1) * (d / 2 - .5); poly.push([d / 2 + r * Math.cos(t), d / 2 + r * Math.sin(t)]); }
   for (let y = 0; y < d; y++) for (let x = 0; x < d; x++) { let n = 0; for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) if (inLasso(x + (i + .5) / 4, y + (j + .5) / 4, poly)) n++; a[y * d + x] = Math.round(255 * n / 16); }
+  return makeNib(d, d, a);
+})();
+// What a code without its nib prints (the app's StampNib.ROUND): a round stamp 48 px across, its edge antialiased.
+const ROUND_NIB = (() => {
+  const d = 48, a = new Uint8Array(d * d), r = d / 2 - .5;
+  for (let y = 0; y < d; y++) for (let x = 0; x < d; x++) a[y * d + x] = Math.round(255 * clamp(r + .5 - Math.hypot(x + .5 - d / 2, y + .5 - d / 2)));
   return makeNib(d, d, a);
 })();
 const NIB_STORE = "inkwash.modlab.nib.";
@@ -6642,7 +6951,7 @@ resolve = function (B, size, shade) {
   const R = resolveSt(B, size, shade);
   if (B.tip.k === "stamp" && R.pat) {
     const mk = B.medium.k, lineMedium = mk === "ink" || mk === "charcoal" || mk === "graphite" || mk === "resist" || mk === "tone";
-    Object.assign(R.pat, { size: lineMedium ? R.inkSize : R.washSize, spacing: B.tip.d.spacing ?? .12, fade: B.tip.d.inkFade ?? .22, turns: ((B.tip.d.headTurn ?? 0) | 0) === 0, nib: nibOf(B.nib) || STAR_NIB });
+    Object.assign(R.pat, { size: lineMedium ? R.inkSize : R.washSize, spacing: B.tip.d.spacing ?? .12, fade: B.tip.d.inkFade ?? .22, turns: ((B.tip.d.headTurn ?? 0) | 0) === 0, nib: nibOf(B.nib) || ROUND_NIB });
   }
   return R;
 };
@@ -6754,8 +7063,8 @@ function stampChecks() {
   { const s = modSurface(W, H, 7), tap = (x, t0) => { layStroke(s, mk({ spacing: 1.2 }), [{ x, y: 120, p: .7, t: t0 }], 40, 1, null); return inkAt(s, x - 30, x + 30); };
     const a = tap(100, 1000), b = tap(300, 1400), c = tap(500, 3400);
     t("taps: soon after, lighter (" + b.toFixed(0) + " of " + a.toFixed(0) + "); after a rest, afresh (" + c.toFixed(0) + ")", b < .9 * a && c > .9 * a); }
-  // Without its nib: this lab's star.
-  { const B = mk(); B.nib = 0x5eed; t("a Stamp without its nib prints the default star", resolve(B, 60, 1).pat.nib === STAR_NIB); }
+  // Without its nib: the round stamp.
+  { const B = mk(); B.nib = 0x5eed; t("a Stamp without its nib prints the default round stamp", resolve(B, 60, 1).pat.nib === ROUND_NIB); }
   // Words and rolls.
   { const B = mk(), none = mk({ inkFade: 0 }), roll = () => { for (let i = 0; i < 1400; i++) if (rollStyle(STYLE_NAMES[i % STYLE_NAMES.length]).tip.k === "stamp") return false; return true; };
     t("words: \"" + plainWords(B) + "\"; never rolled", plainWords(B).startsWith("Ink stamp. Stamps a shape cut from the page. Fades as it prints.") && !plainWords(none).includes("Fades")
@@ -6803,23 +7112,38 @@ makeVars = function (B, locks) {
 
 // ---------- the page's own noise, the same for every crayon: tooth, the ragged edge, grit (kept by page size) ----------
 const CRAYON_MAPS = new Map();
+// The app's (Crayon.Maps): the tooth bumps 3 px across and the edge's notches 7 px and waver 2.5 px, seeded value noise
+// tiles 512 px across (StickGrain.tileNoise), each with a pixel of grit (PrintScreen.hash); the fleck's and scratch's grit.
+let CRAYON_TILES = null;
 function crayonMaps(w, h) {
   const key = w + "x" + h;
   let M = CRAYON_MAPS.get(key);
   if (M) return M;
-  const n = w * h, tooth = new Float32Array(n), rag = new Float32Array(n), grit = new Float32Array(n);
-  for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i++) {
-    // Tooth: soft bumps 3 px across with a pixel of grit. The edge: notches ~7 px apart, a waver ~2.5 px, a pixel of grit.
-    tooth[i] = .55 * stampNoise(x / 3, y / 3, 83) + .45 * hash01(hashInts(89, x, y), 0);
-    rag[i] = .55 * stampNoise(x / 7, y / 7, 91) + .3 * stampNoise(x / 2.5, y / 2.5, 97) + .15 * hash01(hashInts(103, x, y), 0);
-    grit[i] = hash01(hashInts(107, x, y), 0);
+  if (!CRAYON_TILES) {
+    const r = rng(0x0c7a10), t = tileNoise(512, 3, r), big = tileNoise(512, 7, r), small = tileNoise(512, 2.5, r);
+    for (let i = 0; i < t.length; i++) {
+      const x = i & 511, y = i >> 9;
+      t[i] = Math.fround(.55 * t[i] + .45 * screenHash(x, y, 89));
+      big[i] = Math.fround(.55 * big[i] + .3 * small[i] + .15 * screenHash(x, y, 103));
+    }
+    CRAYON_TILES = { tooth: t, rag: big };
   }
-  CRAYON_MAPS.set(key, M = { tooth, rag, grit });
+  const n = w * h, tooth = new Float32Array(n), rag = new Float32Array(n), grit = new Float32Array(n), scrape = new Float32Array(n);
+  for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i++) {
+    const k = ((y & 511) << 9) | (x & 511);
+    tooth[i] = CRAYON_TILES.tooth[k]; rag[i] = CRAYON_TILES.rag[k]; grit[i] = screenHash(x, y, 107); scrape[i] = screenHash(x, y, 71);
+  }
+  CRAYON_MAPS.set(key, M = { tooth, rag, grit, scrape });
   if (CRAYON_MAPS.size > CRAYON.MOST_MAPS) CRAYON_MAPS.delete(CRAYON_MAPS.keys().next().value);
   return M;
 }
-// The width's wobble, ±10 % along the stroke: noise ~22 px across, read at each dab's centre.
-const crayonWobble = (x, y) => .9 + .2 * stampNoise(x / 22, y / 22, 101);
+// The width's wobble, ±10 % along the stroke: noise ~22 px across, read at each dab's centre (Crayon.wobble).
+function crayonWobble(x, y) {
+  const u = x / 22, v = y / 22, i = Math.floor(u), j = Math.floor(v);
+  let fu = u - i, fv = v - j; fu = fu * fu * (3 - 2 * fu); fv = fv * fv * (3 - 2 * fv);
+  const top = lerp(screenHash(i, j, 101), screenHash(i + 1, j, 101), fu), bottom = lerp(screenHash(i, j + 1, 101), screenHash(i + 1, j + 1, 101), fu);
+  return .9 + .2 * lerp(top, bottom, fv);
+}
 
 // ---------- resolve: a charcoal line, crisp and as dark as the swatch, with the crayon's rule ----------
 // The brush the engine draws a crayon as: on paper (Float laid as Quick), smearing nothing (as Resist's).
@@ -6903,18 +7227,24 @@ function crayonCompose(st, rect) {
   const kept = s.kept && st.e < 1 ? s.kept : null, kb = kept ? s.keptBase : null, ke = 1 - st.e, dots = s.dots;
   // The shield as the stroke found it: masking fluid's share (what can lift) shields a crayon; wax takes wax.
   const rp = s.resist, rk = s.resistKept, rb = rp ? s.resistBase : null, rkb = rp ? s.resistKeptBase : null;
-  const lays = !C.scratch && C.wax > 0 && rp, wk = 1.6 * C.wax / CRAYON.WAX;
+  const lays = !C.scratch && C.wax > 0 && rp, wk = 1.6 * C.wax / CRAYON.WAX, lit = lightOver(R), paint = R.gray, lightShare = R.parts.inkShare * R.load;
+  // The page under it (planes.js) for light over dark, and the coverage found (the app's held).
+  const U = s.under || base, CB = s.covBase;
   for (let y = y0; y <= y1; y++) for (let i = y * w + x0, e = y * w + x1; i <= e; i++) {
     const V = L[i], u = base[i];
     if (!(V > 0)) { page[i] = u; if (kept) kept[i] = kb[i]; if (lays) { rp[i] = rb[i]; rk[i] = rkb[i]; } continue; }
     const f = rb ? 1 - Math.max(0, rb[i] - rkb[i]) : 1;
     if (C.scratch) {
-      const a = clamp(V * (M.grit[i] < .15 ? .5 : 1) * K) * f;
+      const a = clamp(V * (M.scrape[i] < .15 ? .5 : 1) * K) * f;
       page[i] = u + (P - u) * a;
+      if (CB) planeCover(s, i, CB[i] + (1 - CB[i]) * a);
       if (kept) kept[i] = kb[i] + (P - kb[i]) * a * ke;
     } else {
-      const t = lerp(M.tooth[i], fine[i] * .65 + mid[i] * .35, ph);
-      page[i] = u * (1 - crayonDark(t, kx, 1 - u / P, V) * K * f);
+      const t = lerp(M.tooth[i], fine[i] * .65 + mid[i] * .35, ph), a = crayonDark(t, kx, 1 - u / P, V);
+      // Light over dark (stroke.js lightOver): a light crayon lays its grey over darker marks by its wax.
+      const light = lit > 0 && paint > U[i];
+      page[i] = light ? u + (paint - u) * Math.min(1, a * lightShare) * f : u * (1 - a * K * f);
+      if (light && CB) planeCover(s, i, CB[i] + (1 - CB[i]) * Math.min(1, a * lightShare) * f);
       if (kept) kept[i] = kb[i] * (1 - crayonDark(t, kx, 1 - kb[i] / P, V) * K * f * ke);
       // Its wax into the resist planes, all of it kept: washes slide off it, the eraser doesn't lift it, it isn't hatched.
       if (lays) { const m = clamp(wk * crayonDark(t, kx, 0, V) * K); rp[i] = Math.max(rb[i], m); rk[i] = Math.max(rkb[i], m); }
@@ -6939,7 +7269,8 @@ Stroke = class extends StrokeCr {
 const crayonNoun = B => crayonScratch(B) ? "Crayon scratch" : "Wax crayon";
 // The brush as the old words know it: a line of ink that won't erase (as Resist's), the crayon's own said over it; in
 // "This brush" and the caption without its smudge, which it never lays (the app's ModularWords). A card keeps its own.
-function crayonPlain(B, card) { const A = cloneBrush(B); A.medium = freshPart("medium", "ink"); A.medium.d.erase = 0; if (!card) A.carry = freshPart("carry", "off"); return normBrush(A); }
+// Erasable at ink's usual (1): a crayon has no Erasable dial, so its words say nothing of erasing (the app's ModularWords).
+function crayonPlain(B, card) { const A = cloneBrush(B); A.medium = freshPart("medium", "ink"); A.medium.d.erase = 1; if (!card) A.carry = freshPart("carry", "off"); return normBrush(A); }
 const choiceWordsCr = choiceWords;
 choiceWords = function (B, part) {
   if (B.medium.k !== "crayon") return choiceWordsCr(B, part);
@@ -7705,6 +8036,18 @@ CHOICES.carry.push({ k: "stayin", label: "Stay in Lines", dials: ["flood"], macr
 // outline closes at the lift and the area inside fills with the same brush (its FillTool, which has no twin here), so
 // the lab and Studio say it and carry its code, and their pictures draw the outline alone. Never rolled or swapped to.
 CHOICES.carry.push({ k: "shape", label: "Filled Shape", dials: [], blurb: "Closes its outline at the lift and fills the shape with the same paint." });
+// Scrape (the app's PartChoice.SCRAPE, branch explore-knife): Smudge choice 7, a palette knife through the paint there,
+// by how wet it is (the app's Carry.scrape, which has no twin here: the lab and Studio carry its code and say it, their
+// pictures draw nothing). And Wears Down (the app's PartDial.WEAR), last of Round's and Chisel's dials, which the lab
+// carries but doesn't draw. Never rolled or swapped to.
+CHOICES.carry.push({ k: "scrape", label: "Scrape", dials: ["pick"], macro: "pick", words: ["light", "deep"], def: { pick: .7 }, labels: { pick: "Depth" }, blurb: "A flat blade: pushes wet paint into ridges, scrapes damp paint pale." });
+DIALS.tip.wear = { label: "Wears Down", min: 0, max: 1, def: 0 };
+for (const c of CHOICES.tip) if (c.k === "round" || c.k === "chisel") c.dials.push("wear");
+ADDED.add("tip.wear");
+// Reprint (the app's PartChoice.REPRINT, branch explore-reprint): Smudge choice 8, no dials: the marks there laid again in
+// the brush's Print Shading and Paper (the app's Carry.reprint, which has no twin here: the lab and Studio carry its code
+// and say it, their pictures draw nothing). Never rolled or swapped to.
+CHOICES.carry.push({ k: "reprint", label: "Reprint", dials: [], blurb: "Reprints the marks under it in its print shading." });
 const STAY = { inks: new Set(["ink", "charcoal", "graphite", "resist", "tone", "crayon"]), LINE: .4, GEO_K: 14, GEO_MIN: 20, BOX: 6, RATE: 9 / (1000 / 60), UNTIMED: 9,
   BUDGET: 2000, ENDLESS: 1e9, MEET: 12, RIM: 7, RIM_FROM: 12, FADE_ALL: 1800 };
 STAY.reach = flood => flood > .995 ? STAY.ENDLESS : Math.round(3 * 220 * flood * flood);
@@ -7712,7 +8055,7 @@ STAY.reach = flood => flood > .995 ? STAY.ENDLESS : Math.round(3 * 220 * flood *
 const makeVarsLines = makeVars;
 makeVars = function (B, locks) {
   const keep = CHOICES.carry.slice();
-  CHOICES.carry = keep.filter(c => (c.k !== "stayin" && c.k !== "shape") || c.k === B.carry.k);
+  CHOICES.carry = keep.filter(c => (c.k !== "stayin" && c.k !== "shape" && c.k !== "scrape" && c.k !== "reprint") || c.k === B.carry.k);
   try { return makeVarsLines(B, locks); } finally { CHOICES.carry = keep; }
 };
 // Resolve: no smudge (it moves no paint along); its Flood, none on water. Filled Shape smudges nothing either.
@@ -8347,7 +8690,7 @@ function tiltShadeChecks() {
   // Codes: the hand's last dial; off, the hand writes as before.
   { const c = encodeM(mk(1)), back = readAnyCode(c).b, hand = encodeM(mk(0)).split(".")[1].split("_")[5];
     t("a code with Tilt Shading (" + c + ") reads back; off, the hand writes as before (" + hand + ")",
-      encodeM(back) === c && back.hand.d.tshade === 1 && hand.length === 22 && HAND_DIALS[HAND_DIALS.length - 1] === "tshade"); }
+      encodeM(back) === c && back.hand.d.tshade === 1 && hand.length === 22 && HAND_DIALS[HAND_DIALS.indexOf("glen") + 1] === "tshade"); }
   // Drawn: upright and at 30 degrees exactly as without it; at 70, wider and lighter.
   { const off = draw(mk(0), 70), up = draw(mk(1), 0), up0 = draw(mk(0), 0), at30 = draw(mk(1), 30), low = draw(mk(1), 70);
     t("drawn: upright and at 30 degrees as without it (" + across(up) + " rows); laid at 70, " + across(low) + " rows wide and lighter (" + ink(low).toFixed(0) + " against " + ink(up).toFixed(0) + ")",
@@ -8367,6 +8710,16 @@ if (typeof runChecks === "function") {
       out.textContent += "\n\nTilt Shading:\n" + NM.lastTshade.map(c => `  ${c.ok ? "ok  " : "FAIL"} ${c.what}`).join("\n"); }, 240);
   };
 }
+
+// ===================================================================================================================
+// Steady Hand and Long Stick (2026-10-31, the app's PartDial.STEADY_HAND and LONG_STICK, SteadyHand.java): the hand's
+// last two dials, after Tilt Shading; written only when on. The app lays the mark with a tip on a spring that follows
+// the pen; this page draws the pen's own samples. Hidden here, kept so codes line up (as the catch-up's gravity is).
+// ===================================================================================================================
+Object.assign(DIALS.hand, { smooth: { label: "Steady Hand", min: 0, max: 1, def: 0, hide: true }, stick: { label: "Long Stick", min: 0, max: 1, def: 0, hide: true } });
+HAND_DIALS.push("smooth", "stick");
+ADDED.add("hand.smooth"); ADDED.add("hand.stick");
+KEEPS.hand.push("smooth", "stick");
 
 // ===================================================================================================================
 // The app's catch-up (2026-10-27): what the app's ModularCode, PartChoice and PartDial have that this port didn't, so
@@ -8412,15 +8765,92 @@ Object.assign(DIALS.tip, {
 });
 const HAND_HATCH = { k: "handhatch", label: "Hand Hatch", dials: ["pitch", "lineW", "hangle", "headTurn", "hlen", "hwob", "hends", "weight", "flick"], def: { headTurn: 1 } }, HAND_HATCH_AT = 12;
 const readPartHH = readPart;
-readPart = function (part, seg) {
-  if (part !== "tip" || !seg || parseInt(seg[0], 36) !== HAND_HATCH_AT || CHOICES.tip.length !== HAND_HATCH_AT) return readPartHH(part, seg);
+readPart = function (part, seg, ...rest) {
+  if (part !== "tip" || !seg || parseInt(seg[0], 36) !== HAND_HATCH_AT || CHOICES.tip.length !== HAND_HATCH_AT) return readPartHH(part, seg, ...rest);
   CHOICES.tip.push(HAND_HATCH);
   let P;
-  try { P = readPartHH(part, seg); } finally { CHOICES.tip.length = HAND_HATCH_AT; }
+  try { P = readPartHH(part, seg, ...rest); } finally { CHOICES.tip.length = HAND_HATCH_AT; }
   if (!P) return null;
   const H = freshPart("tip", "hatch");
   for (const key of choiceOf("tip", "hatch").dials) if (HAND_HATCH.dials.includes(key)) H.d[key] = P.d[key];
   return H;
+};
+
+// Press (the owner, 2026-10-30: the smudge tool's two, "each using pen pressure the way real media does"; the app's
+// PressSmudgeChecks): Smear's Press to Push and Clear Water's Press to Lift, written only when on, never rolled. Blend (the
+// Blend stump with Press to Push 1) softens at a light touch as the Blend stump does and pushes at a firm one as a Smear;
+// Water (the Water brush with Press to Lift 1) re-wets at a light touch, so what it lifts runs, and blots at a firm one.
+const PRESS_STUMP = "blend-stump.M50i00000000yat_3eqlj_3ssll00zz_1nl_1jz_8pthh00x9is00000000nz0.51j8ud";
+const PRESS_WATER = "water-brush.M60i000000000at_1ulat00770000_4i0ll_000_2g7ll0jsee00at_0000000000000000000nz0.20k";
+function pressChecks() {
+  const out = [], t = (what, ok) => out.push({ what, ok: !!ok }), W = 360, H = 240, P = PAPER_TONE;
+  const line = (x0, x1, p, n = 100) => Array.from({ length: n + 1 }, (_, k) => ({ x: x0 + (x1 - x0) * k / n, y: 120, p, t: k * 6, tx: NaN, ty: NaN }));
+  const mean = (s, x0, x1, y0, y1) => { let a = 0, n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { a += s.page[y * W + x]; n++; } return a / n; };
+  const seg = c => c.split("_")[2], read = c => readAnyCode(c).b;
+  const pressed = (c, v) => { const B = read(c); B.carry.d.press = v; return B; };
+  // Codes: off, as before; on, its digits after the choice's last.
+  { const blend = encodeM(pressed(PRESS_STUMP, 1)), water = encodeM(pressed(PRESS_WATER, 1)), mid = encodeM(pressed(PRESS_WATER, .37));
+    t("Press is written only when on (" + seg(blend) + ", " + seg(water) + "), round-trips, older codes as before",
+      encodeM(read(PRESS_STUMP)) === PRESS_STUMP && seg(encodeM(read(PRESS_WATER))) === seg(PRESS_WATER) && seg(blend) === "3ssll00zz000090zz" && seg(water) === "4i0llzz"
+      && encodeM(read(blend)) === blend && Math.abs(read(mid).carry.d.press - .37) < 1e-3 && dialLabel("carry", "smudge", "press") === "Press to Push" && dialLabel("carry", "water", "press") === "Press to Lift"); }
+  // Rolls never give it.
+  { const keep = Math.random; Math.random = rng(3030); let on = 0;
+    try { for (let i = 0; i < 1400; i++) if ((rollStyle(STYLE_NAMES[i % STYLE_NAMES.length]).carry.d.press ?? 0) > 0) on++; } finally { Math.random = keep; }
+    t("rolls never give Press (" + on + ")", on === 0); }
+  // Blend: light, the Blend stump's own page; firm, a Smear's (Soften 0); pushed past the hatching's end.
+  { const hatch = () => { const s = modSurface(W, H, 7); for (let y = 0; y < H; y++) for (let x = 80; x < 240; x++) if (((x % 12) + 12) % 12 < 3) s.page[y * W + x] = 60; return s; };
+    const draw = (B, p) => { const s = hatch(); layStroke(s, B, line(40, 300, p), 40, 1, null); return s; };
+    const same = (a, b) => a.page.every((v, i) => v === b.page[i]);
+    const smear = read(PRESS_STUMP); smear.carry.d.soften = 0;
+    const blend = pressed(PRESS_STUMP, 1), light = draw(blend, .12), firm = draw(blend, .95);
+    const pL = P - mean(light, 250, 290, 110, 130), pF = P - mean(firm, 250, 290, 110, 130);
+    t("Blend: light is the Blend stump's, firm a Smear's, pushing past the hatching (" + pL.toFixed(1) + " light, " + pF.toFixed(1) + " firm)",
+      same(light, draw(read(PRESS_STUMP), .12)) && same(firm, draw(smear, .95)) && pF > 4 * Math.max(1, pL)); }
+  // Water: light, what it lifts runs out past the wash; firm, the track paler and nothing laid past it.
+  { const draw = p => { const s = modSurface(W, H, 7); for (let y = 0; y < H; y++) for (let x = 0; x < 160; x++) s.page[y * W + x] = 130;
+      layStroke(s, pressed(PRESS_WATER, 1), line(60, 300, p), 40, .5, null); return s; };
+    const light = draw(.12), firm = draw(.95);
+    const tL = mean(light, 80, 150, 115, 125), tF = mean(firm, 80, 150, 115, 125), rL = P - mean(light, 164, 200, 110, 130), rF = P - mean(firm, 164, 200, 110, 130);
+    t("Water: light runs out past the wash (" + rL.toFixed(1) + "; firm " + rF.toFixed(1) + "), firm lifts the track paler (" + tF.toFixed(1) + "; light " + tL.toFixed(1) + ")",
+      rL > 1 && rF < .25 * rL && tF > tL + 10); }
+  // Words.
+  { const b = pressed(PRESS_STUMP, 1), w = pressed(PRESS_WATER, 1);
+    t("words: \"" + plainWords(b) + "\", \"" + plainWords(w) + "\"", plainWords(b).includes("Softens, pushes when pressed.") && plainWords(w).includes("Re-wets paint, lifts it when pressed.")); }
+  return out;
+}
+const selfTestPress = selfTest;
+selfTest = function () { const r = selfTestPress(); r.press = pressChecks(); r.ok = r.ok && r.press.every(c => c.ok); NM.lastPress = r.press; return r; };
+if (typeof runChecks === "function") {
+  const runChecksPress = runChecks;
+  runChecks = function () {
+    runChecksPress();
+    setTimeout(() => { const out = document.getElementById("checks"); if (!out || !NM.lastPress) return;
+      out.textContent += "\n\nPress:\n" + NM.lastPress.map(c => `  ${c.ok ? "ok  " : "FAIL"} ${c.what}`).join("\n"); }, 70);
+  };
+}
+// Dissolves (explore-media, 2026-11-01; the app's PartDial.SOLUBLE, key soluble): last of Ink's, Charcoal's and Graphite's
+// dials, Off or On. In the app the mark lies with the washes, so the Water brush melts it into a wash; the lab reads and
+// writes it only (not drawn here). Written only when on, so every older code is as before.
+DIALS.medium.soluble = { label: "Dissolves", choices: ["Off", "On"], def: 0 };
+for (const k of ["ink", "charcoal", "graphite"]) choiceOf("medium", k).dials.push("soluble");
+ADDED.add("medium.soluble");
+// Vector Ink (the owner, 2026-11-04: "yes add it to the medium list"; the app's PartChoice.VECTOR and VectorInk): Medium
+// choice 8, no dials. In the app its lines are kept as lines, sharp at any zoom, and the parts it can't draw sharp are set
+// aside (VectorInk.tidy: a Round tip, no smudge, Instant, no After, no texture); Brush Studio shows those cards as the
+// app's. Here (the lab's engine, Studio's Guide and its fallback) it draws as a plain ink line of its tip and hand.
+// Never rolled, never a variation's swap.
+CHOICES.medium.push({ k: "vector", label: "Vector Ink", dials: [], blurb: "A smooth line that stays sharp however far you zoom in." });
+const resolveVec = resolve;
+resolve = function (B, size, shade) {
+  if (B.medium.k !== "vector") return resolveVec(B, size, shade);
+  const A = cloneBrush(B); A.medium = freshPart("medium", "ink");
+  return resolveVec(A, size, shade);
+};
+const makeVarsVec = makeVars;
+makeVars = function (B, locks) {
+  const keep = CHOICES.medium.slice();
+  CHOICES.medium = keep.filter(c => c.k !== "vector" || c.k === B.medium.k);
+  try { return makeVarsVec(B, locks); } finally { CHOICES.medium = keep; }
 };
 
 ;
@@ -8442,6 +8872,11 @@ const VOICE_RULES = [
   ["1", "S", "Loops along the line", "It draws toy loops along your line.", ""],
   ["1", "S", "Loops round a ring pulled out from the start", "It loops around a ring you pull out from where you start.", ""],
   ["1", "S", "Crosses where gone over or held", "Go back over a spot, or hold still, and the hatching crosses.", ""],
+  ["1", "S", "Runs dry, blots where it slows", "It runs dry as you go, and drops a blot where you slow into a turn.", ""],
+  ["1", "S", "Blots, then scratches dry", "It drops the odd blot early on, then thins to a dry scratch.", ""],
+  ["1", "S", "Hairs part, more touch when pressed", "Its hairs leave separate lines, and pressing brings more of them down.", ""],
+  ["1", "S", "Reprints what it rolls over", "It picks up what it rolls over and prints it again a turn later.", ""],
+  ["1", "S", "Rolls an even band", "It rolls out an even band of ink.", ""],
   ["1", "S", "Greys shift each stroke at random", "Each stroke picks a new grey at random.", ""],
   ["1", "S", "Greys shift each stroke, shuffled", "Each stroke takes the next grey from a shuffled set.", ""],
   ["1", "S", "Greys shift each stroke, there and back", "Each stroke steps to the next grey, then back again.", ""],
@@ -8465,19 +8900,33 @@ const VOICE_RULES = [
   ["1", "S", "Veins bridge nearby marks for (.+) s", "Mold veins grow out to bridge nearby marks for $s.", ""],
   ["1", "S", "Fades away in (.+) s", "It fades away after $s.", ""],
   ["1", "S", "Darkens in as it dries", "It goes on faint and darkens as it dries.", ""],
+  ["1", "S", "Salt opens pale starbursts as it dries", "Salt on the wet wash opens pale starbursts as it dries.", ""],
+  ["1", "S", "Plastic wrap leaves crinkled veins as it dries", "Plastic wrap pressed into it leaves crinkled veins as it dries.", ""],
+  ["1", "S", "Feathers into the paper's fibres", "Once it's down, its edges feather into the paper's fibres.", ""],
+  ["1", "S", "Foxes like an old book", "Over a few minutes, small spots creep in around it like an old book's.", ""],
+  ["1", "S", "Prints like letterpress, darker at the edges", "Once it's down, it prints like letterpress, the ink squeezed darker at its edges.", ""],
+  ["1", "S", "Turns into torn paper, glued down", "Once it's down, it turns into a scrap of torn paper glued to the page.", ""],
+  ["1", "S", "Turns into cross-stitch on a fabric grid", "Stitch by stitch, it turns into cross-stitch on a fabric grid.", ""],
+  ["1", "S", "Cracks finely as it ages", "Over a few minutes, fine cracks open where it lies thickest, like old paint.", ""],
+  ["1", "S", "Tarnishes darker, like silverpoint", "It goes on pale and tarnishes slowly darker, like silverpoint.", ""],
   ["1", "S", "Holds ink between strokes", "It holds its ink between strokes.", ""],
   ["1", "S", "Tap a grey to dip", "Tap a grey to dip it in fresh ink.", ""],
   ["1", "S", "Runs out of paint, then only smudges", "It runs out of paint as you go, then only smudges.", ""],
+  ["1", "S", "Runs dry", "Its ink runs dry into scratchy streaks as you go.", ""],
+  ["1", "S", "Rub a grey to dip", "Rub a grey to dip it again.", ""],
+  ["1", "S", "Dissolves into a wash with water", "Brush clear water over it and it melts into a wash.", ""],
   ["1", "S", "Rub a grey to load", "Rub a grey to load it up again.", ""],
   ["1", "S", "Stays inside ink lines", "It stays inside your ink lines.", ""],
   ["1", "S", "Floods inside ink lines", "It floods up to your ink lines.", ""],
-  ["1", "S", "Fills the shape it starts in", "It fills the whole shape it starts in.", ""],
+  ["1", "S", "Fills the shape it starts in", "It fills the shape it starts in, or a loop you draw on open paper.", ""],
   ["1", "S", "Fills the shape it outlines", "When you lift, it closes the outline and fills it in.", ""],
   ["2", "S", "Stays wet until dried", "It stays wet until you tap the drop to dry it.", ""],
   ["2", "S", "Merges while wet, blooms when damp", "Wet strokes mix together and bloom as they dry.", "bloom"],
   ["2", "S", "Merges while wet", "Wet strokes mix together.", ""],
   ["2", "S", "Wet for (.+) s", "It stays wet for $s.", ""],
   ["2", "S", "(runs|drips|pools|granulates|blends when rocked)( and (runs|drips|pools|granulates|blends when rocked))? when tilted", "@tilt", "tilt"],
+  ["2", "S", "Re-wets paint, lifts it when pressed", "A light touch re-wets paint so it runs, and pressing harder lifts it off.", ""],
+  ["2", "S", "Softens, pushes when pressed", "A light touch softens marks, and pressing harder pushes them along.", ""],
   ["2", "S", "Lifts paint, lets it run", "It lifts paint and lets it run.", ""],
   ["2", "S", "Lifts paint", "It lifts paint off the page.", ""],
   ["2", "S", "Drags wet paint", "It drags wet paint along with it.", ""],
@@ -8565,6 +9014,10 @@ const VOICE_OPENERS = [
   ["Loops along the line", "spins out toy loops as you draw", "spinning out toy loops as you draw"],
   ["Loops round a ring pulled out from the start", "spins loops around a ring you pull out", "spinning loops around a ring you pull out"],
   ["Crosses where gone over or held", "crosshatches wherever you go back", "crosshatching wherever you go back"],
+  ["Runs dry, blots where it slows", "runs dry and blots", "running dry and blotting"],
+  ["Blots, then scratches dry", "blots, then scratches dry", "blotting, then scratching dry"],
+  ["Hairs part, more touch when pressed", "parts into hair lines", "parting into hair lines"],
+  ["Reprints what it rolls over", "reprints what it rolls over", "reprinting what it rolls over"],
   ["Builds up, resists washes", "lays down waxy layers", "laying down waxy layers"],
   ["Builds up", "lays down waxy layers", "laying down waxy layers"],
   ["Scrapes back to white", "scratches back to white", "scratching back to white"],
@@ -8577,8 +9030,19 @@ const VOICE_OPENERS = [
   ["Veins bridge nearby marks for (.+) s", "grows little mold veins", "growing little mold veins"],
   ["Fades away in (.+) s", "slowly fades away", "slowly fading away"],
   ["Darkens in as it dries", "shows up as it dries", "showing up as it dries"],
+  ["Salt opens pale starbursts as it dries", "opens salt starbursts as it dries", "opening salt starbursts as it dries"],
+  ["Plastic wrap leaves crinkled veins as it dries", "dries in plastic wrap crinkles", "drying in plastic wrap crinkles"],
+  ["Feathers into the paper's fibres", "feathers into the paper", "feathering into the paper"],
+  ["Foxes like an old book", "spots like an old book", "spotting like an old book"],
+  ["Prints like letterpress, darker at the edges", "prints like letterpress", "printing like letterpress"],
+  ["Turns into torn paper, glued down", "turns into torn paper", "turning into torn paper"],
+  ["Turns into cross-stitch on a fabric grid", "turns into cross-stitch", "turning into cross-stitch"],
+  ["Cracks finely as it ages", "cracks as it ages", "cracking as it ages"],
+  ["Tarnishes darker, like silverpoint", "tarnishes like silverpoint", "tarnishing like silverpoint"],
   ["Holds ink between strokes", "keeps its ink from stroke to stroke", "keeping its ink from stroke to stroke"],
   ["Runs out of paint, then only smudges", "runs out of paint as you go", "running out of paint as you go"],
+  ["Runs dry", "runs dry as you go", "running dry as you go"],
+  ["Dissolves into a wash with water", "melts into a wash with water", "melting into a wash with water"],
   ["Stays inside ink lines", "stays inside your lines", "staying inside your lines"],
   ["Floods inside ink lines", "floods up to your lines", "flooding up to your lines"],
   ["Fills the shape it starts in", "fills whole shapes", "filling whole shapes"],
@@ -8600,6 +9064,8 @@ const VOICE_OPENERS = [
   ["(?:runs|drips|pools)(?: and \\w+)? when tilted", "runs when you tilt the page", "running when you tilt the page"],
   ["(?:granulates|blends when rocked)(?: and .+)? when tilted", "moves when you tilt the page", "moving when you tilt the page"],
   ["Merges while wet(?:, blooms when damp)?", "mixes while it's wet", "mixing while it's wet"],
+  ["Re-wets paint, lifts it when pressed", "re-wets paint or lifts it off", "re-wetting paint or lifting it off"],
+  ["Softens, pushes when pressed", "softens or pushes what's there", "softening or pushing what's there"],
   ["Lifts paint, lets it run", "lifts paint and lets it run", "lifting paint and letting it run"],
   ["Lifts paint", "lifts paint off the page", "lifting paint off the page"],
   ["Drags wet paint", "drags wet paint along", "dragging wet paint along"],
@@ -8780,7 +9246,1447 @@ function aboutWords(facts, mine = "") {
 function brushWords(B) { return aboutWords(plainWords(B)); }
 
 ;
-const DRAWN_TOOLS = [["Steady line","steady-line.M00il00000000at_000zz0000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud"],["Ballpoint","ballpoint.M00at00005e003m_000zz0000000000077_0_177_0_85ei000000000000000nz0.2ez"],["Fountain pen","fountain-pen.M00i000at00003m_03mzzwe00000000000_0_000_0_8qz0000000000000000nz0.2f1"],["Split nib","split-nib.M24m0okjmi0000y00_000zz0000000000000_0_000_1jz_8lw00wk0000fq000000nz0.51j8ud"],["Fude pen","broad-nib.M20ss007700003m_000zzat00000000000_0_000_0_8at0000i000ll000000nz01.1s13pn4"],["Stipple pen","stipple-pen.M07i0clcli0_000zz0000000000000_0_000_1jz_0000000000000000000nz0.h6q"],["Engraving pen","engraving-pen.Me0wdatee0000ll_0p6000000000000000zz028bc0_0_000_0_3p6ll00000000000000nz0.2er"],["Felt marker","felt-marker.M31j2eei000000000at_000zzbq00920000000_0_300_1jz_84u0000000000400000nz0.jjds6x"],["Chisel marker","chisel-marker.M31j2eei000000000at_000zzdj005z0000000_0_000_1jz_82o00000000005u0000nz0.t4mf73"],["Highlighter","highlighter.M31e1zzp60000000000_1007700000000zz2_0_000_0_0000000000000000000nz0.2f2"],["Springy brush","springy-brush.M10ssati000003m_000zz0000000000000_0_000_0_4weatg7000000ee0000nz0.2fg"],["Swell brush","swell-brush.M10i0q6f40000at_000t7008h000000000_0_000_1jz_8wgft00dr0000ey0000nz0.1s13pn4"],["Flat hake","flat-hake.Mc3i01zz9a7e_1dxat00770000_0_1i0_1jz_88w0000000000000000nz0.1ifv2mx"],["Water brush","water-brush.M60i000000000at_1ulat00770000_4i0ll_000_2g7ll0jsee00at_0000000000000000000nz0.20k"],["Soft wash","soft-wash.M60i0000000007q_1wva200000000_0_0fk_7_8la0000000000000000nz0.t4mf73"],["Wet blooms","wet-blooms.M60i000000000ji_1z5gk00f6e400_0_000_7js_8mx0000000000000000nz0.1s13pn4"],["Pooling wash","pooling-wash.M60i000000000g7_1x3at00770000_0_190_7qzll_8g70000000000000000nz0.373k3"],["Masking fluid","masking-fluid.M60i000000000at_5_0_000_1jz_0000000000000000000nz0.px"],["Wax resist","wax-resist.M60i00000cl00at_500_0_1i0_1jz_0000000000000000000nz0.py"],["HB pencil","hb-pencil.M40i000000000at_4e551_0_1v5_1jz_8arsr00000000000000nz000000000530000005000c099zz.pg5zxt"],["Soft charcoal","soft-charcoal.M50i00000000yat_3eqlj_0_1nl_1jz_8pthh00000000000000nz000000000530000005000c099zz.51j8ud"],["Soft pastel","soft-pastel.Ma0i000007s00at_3b98o_0_3nj_1jz_8hg0000000000000000nz000000000530000005000c099zz.51j8ud"],["Wax crayon","wax-crayon.Ma0p600000000at_7ll0_0_1i0_0_0000000000000000000nz0.2f9"],["Loaded oils","loaded-oils.M99vleei0000000005e_2zz00_2llp6zz00js_000_7ne_1ss0000000000000000nz0.2fu"],["Spirograph","spirograph.M0bi010gj08huu801i08r_000zz0000000000000_0_000_0_0000000000000000000nz0.2fb"],["Stamp","stamp.M0agx1r0qe_000zz0000000000000_0_000_0_8cl0000000000ee0000nz0.2gd"],["Fill in","fill-in.M30wd00000000at_1atat00000000_5zz_000_0_0000000000000000000nz0.2fh"],["Filled shape","filled-shape.M30wd00000000at_1atat00000000_6_000_0_0000000000000000000nz0.2fi"],["Dot tone","dot-tone.Me0i00000000000_60e0_0_000_0_0000000000000000000nz0.2e5"],["Ben-Day brush","ben-day-brush.Me1zzeezz00000000ll_0i0000000000000000zz065ji000at_0_000_0_25ess00000000000000nz0.2ef"],["Lemon juice","lemon-juice.M20i000at0000at_000zz0000000000000_0_000_6hp_1ss0000000000000000nz0.2ff"],["Vanishing ink","vanishing-ink.M00i000000000at_000zz0000000000000_0_000_53a_0000000000000000000nz0.2fe"]];
+// ===================================================================================================================
+// Wet paint (the wet paint spec; Drying's Wet, life "wetpaint"): the app's wet canvas, ported from its Java as the spec
+// (WetWatercolor, MonoPaint's wet canvas in whole-canvas mode, upstream 8743286, MIT, © mpdairy; WetCanvas,
+// WetPaintStroke, FootprintSweep, BrushInk, PaintLoad). Wet strokes lay their footprint into the wet paint, final under
+// the pen; between strokes it moves a frame at a time (blooms, dark edges, bleed, granulation; opaque paint evening
+// out) and stays wet across strokes until dried. A Stroke whose host has getWet() lays into it; without one (samples,
+// loops) Wet lays as Instant, as the app does wherever it has no wet canvas.
+//   host.getWet()          the wet canvas (a WetCanvas on the stroke's surface), made the first time
+//   canvas.step(ms)        moves it for about ms of work (a page's loop, requestAnimationFrame); returns ms until the
+//                          next step, or -1 at rest. canvas.settle() moves it until it rests (a check, a replay)
+//   canvas.takeDirty()     the rect it changed since last asked, or null
+// The page is the surface's: tones 0 to 255 as the app's, paper (PAPER_TONE) read as 255.
+// shortcut: no Erasable kept tones, no memory cap (roomFor), no Pastels/Dry brush joining, no gravity (a level page);
+// add them if the web gets a tilted page or wet strokes that erase part.
+// ===================================================================================================================
+const WP = {
+  FRAME_MS: 150, FLOW_FRAME_MS: 50, PACED_TILES: 64, SIDE: 16, PIXELS: 256, FRAMES: 20, TILES_PER_FRAME: 96, WATER_FRAMES: 40,
+  DRYING: .985, STILL: .4, DAMP: .3, HUGE_TILES: 2048, HUGE_STEP: 2, LOOSE: .7, DEPTH: 2, DISSOLVE: .8, SHOWS: .4, MIX: .25,
+  SPREAD: .25, WASH_SPREAD: 0, WASH_FALL: .4, SPREAD_STEPS: 8, POOL: .7, LIGHT_MIXES: .35, MERGES: .45, MIXES: .8, MIXES_FROM: .45,
+  COMBINE: .7, COMBINES: .05, FLOODS: .15, BLEEDS: .62, EDGE: 4, TIDE: .62, REACH: 8
+};
+WP.SPAN = WP.SIDE + 2 * WP.REACH;
+const f32 = Math.fround;
+const wetMobility = fresh => f32(fresh * fresh * fresh);
+const wetSmooth = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+const wetMargin = downhill => 8 + Math.round(24 * Math.max(0, downhill));
+const bitCount = n => { n = n - ((n >>> 1) & 0x55555555); n = (n & 0x33333333) + ((n >>> 2) & 0x33333333); return (((n + (n >>> 4)) & 0xF0F0F0F) * 0x1010101) >>> 24; };
+const anySet = a => { for (let i = 0; i < a.length; i++) if (a[i]) return true; return false; };
+
+class WetTile {
+  constructor(x, y) {
+    const P = WP.PIXELS;
+    this.x = x; this.y = y;
+    this.base = new Uint8Array(P); this.pigment = new Float32Array(P); this.target = new Float32Array(P); this.next = new Float32Array(P);
+    this.shade = new Int16Array(P);
+    this.wet = new Uint8Array(P); this.touched = new Uint8Array(P); this.water = new Uint8Array(P); this.flowing = new Uint8Array(P);
+    this.wetRows = new Int32Array(WP.SIDE); this.wetColumns = new Int32Array(WP.SIDE);
+    this.pull = null; this.mobility = null; this.nextPull = null; this.washed = null;
+    this.gran = 0; this.rim = 0; this.mottle = 0; this.tide = 0; this.grain = null; this.blob = null;
+    this.edge = null; this.edgeStale = true; this.wave = null; this.nextWave = null; this.combined = null; this.bled = false; this.inFrame = -1;
+    this.paint = null; this.plain = null; this.reserve = null; this.stuck = null; this.soaked = null;
+    this.frames = 0; this.wetPixels = 0; this.flowingPixels = 0; this.loose = false; this.dampFrames = 0; this.meanInk = 0; this.meanFresh = 0;
+    this.flowLeft = 0; this.flowRight = 0; this.flowTop = 0; this.flowBottom = 0; this.spread = 0; this.spreadInk = 0; this.spreadSlot = -1; this.spreadFrame = -1;
+  }
+}
+// The page as the app's ToneDocument: tones 0 to 255 (paper 255), its opacity (whether a pixel holds paint) and what a
+// stroke found there. Writes go to page, the base the next stroke reads and the dirty rect.
+class WetPage {
+  constructor(surf) { this.s = surf; this.width = surf.w; this.height = surf.h; this.dirty = null; this.opaque = new Uint8Array(surf.w * surf.h); }
+  tone(x, y) { const v = this.s.page[y * this.width + x]; return v >= PAPER_TONE - .5 ? 255 : Math.round(v); }
+  strokeBaseTone(x, y) { const v = this.s.base[y * this.width + x]; return v >= PAPER_TONE - .5 ? 255 : Math.round(v); }
+  // shortcut: opacity is "darker than paper, or laid opaque", not the layer's coverage, so white paint laid by another stroke reads as paper.
+  opacity(x, y) { const i = y * this.width + x; return this.opaque[i] || this.s.page[i] < PAPER_TONE - .5 ? 255 : 0; }
+  setTone(x, y, t) {
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return;
+    const i = y * this.width + x, v = Math.min(PAPER_TONE, t);
+    if (this.s.page[i] === v) return;
+    this.s.page[i] = v;
+    if (this.dirty) grow(this.dirty, [x, y, x, y]); else this.dirty = [x, y, x, y];
+  }
+}
+
+// The wet model (WetWatercolor), whole-canvas mode, as WetCanvas uses it.
+class WetWatercolor {
+  constructor(page, amount) {
+    this.document = page; this.columns = Math.ceil(page.width / WP.SIDE);
+    this.tiles = new Array(this.columns * Math.ceil(page.height / WP.SIDE)).fill(null);
+    this.active = []; this.batch = []; this.spreading = [];
+    this.spreadInk = new Float32Array(16); this.spreadChange = new Float32Array(16); this.links = new Float32Array(16); this.downhill = new Float32Array(16);
+    this.spreadPixels = new Int32Array(16); this.linked = new Int32Array(32);
+    this.frame = 0; this.spreadCandidates = null; this.spreadPhase = 0; this.spreadCursor = 0; this.spreadPairs = 0; this.spreadStep = 0;
+    this.gravityX = 0; this.gravityY = 0; this.strokePixels = 0; this.frameRemaining = 0; this.advancedTiles = 0;
+    this.hasFlowing = false; this.flowingFrame = false; this.looseWater = false; this.looseSoFar = false; this.runTiles = 0; this.step = 1;
+    this.drying = WP.DRYING; this.washDrying = WP.DRYING; this.wakeFrames = WP.FRAMES; this.paintOnly = false; this.dryStays = false;
+    this.wash = null; this.waves = 0; this.strokeWave = 0; this.joined = new Int16Array(16);
+    this.setWetness(amount);
+    // Working space (the Java's Scratch).
+    this.sc = { spread: new Float32Array(WP.PIXELS), nearInk: new Float32Array(9), nearFresh: new Float32Array(9), nearInky: new Float32Array(9),
+      near: new Float32Array(9), ink: new Float32Array(WP.SPAN * WP.SPAN), free: new Float32Array(WP.SPAN * WP.SPAN) };
+  }
+  setWetness(amount) { this.wetness = f32(Math.max(0, Math.min(100, amount)) / 100); }
+  setFrames(frames) { this.wakeFrames = Math.max(1, frames); }
+  washOf(wave) { while (wave > 0 && wave < this.joined.length && this.joined[wave] !== 0) wave = this.joined[wave]; return wave; }
+  join(a, b) {
+    a = this.washOf(a); b = this.washOf(b);
+    if (a === b || a <= 0 || b <= 0) return;
+    const most = Math.max(a, b);
+    if (most >= this.joined.length) { const j = new Int16Array(Math.max(most + 1, this.joined.length * 2)); j.set(this.joined); this.joined = j; }
+    this.joined[most] = Math.min(a, b);
+  }
+  beginStroke() { this.strokePixels = 0; this.strokeWave = 0; for (const t of this.tiles) if (t) t.touched.fill(0); }
+  isAnimating() { return this.active.length > 0; }
+  framePending() { return this.frameRemaining > 0; }
+  flowing() { return this.flowingFrame && this.active.length > 0; }
+  flowFrameMillis() { return !this.flowing() || this.looseWater ? 0 : Math.round(WP.FLOW_FRAME_MS * Math.max(0, 1 - this.runTiles / WP.PACED_TILES)); }
+  rest() { for (const t of this.active) t.frames = 0; this.active.length = 0; this.frameRemaining = 0; this.spreadCandidates = null; this.spreading.length = 0; this.runTiles = 0; this.looseWater = this.looseSoFar = false; }
+  tileAt(x, y) {
+    const key = ((y / WP.SIDE) | 0) * this.columns + ((x / WP.SIDE) | 0);
+    return this.tiles[key] ??= new WetTile(((x / WP.SIDE) | 0) * WP.SIDE, ((y / WP.SIDE) | 0) * WP.SIDE);
+  }
+  tileOf(x, y) { return this.tiles[((y / WP.SIDE) | 0) * this.columns + ((x / WP.SIDE) | 0)]; }
+  wake(tile, frames = this.wakeFrames) { if (tile.frames === 0) this.active.push(tile); tile.frames = Math.max(tile.frames, frames); }
+  wakeAround(left, top, right, bottom) {
+    const D = this.document;
+    left = (Math.max(0, left) / WP.SIDE) | 0; top = (Math.max(0, top) / WP.SIDE) | 0;
+    right = (Math.min(D.width - 1, right) / WP.SIDE) | 0; bottom = (Math.min(D.height - 1, bottom) / WP.SIDE) | 0;
+    for (let ty = top; ty <= bottom; ty++) for (let tx = left; tx <= right; tx++) { const t = this.tiles[ty * this.columns + tx]; if (t) this.wake(t); }
+  }
+  wakeBeside(tile) {
+    const D = this.document;
+    for (let dir = 0; dir < 4; dir++) {
+      const x = tile.x + (dir === 0 ? -WP.SIDE : dir === 1 ? WP.SIDE : 0), y = tile.y + (dir === 2 ? -WP.SIDE : dir === 3 ? WP.SIDE : 0);
+      if (x < 0 || y < 0 || x >= D.width || y >= D.height) continue;
+      const o = this.tileOf(x, y);
+      if (o && o.nextPull && o.wetPixels > 0) this.wake(o, this.step + 1);
+    }
+  }
+  static markWet(tile, i) {
+    tile.wet[i] = 1; tile.wetPixels++;
+    const row = (i / WP.SIDE) | 0, col = i % WP.SIDE;
+    tile.wetRows[row] |= 1 << col; tile.wetColumns[col] |= 1 << row;
+  }
+  static clearWater(tile, i) {
+    tile.water[i] = 0; tile.flowing[i] = 0;
+    if (tile.plain) tile.plain[i] = 0;
+    if (tile.mobility) tile.mobility[i] = 0;
+    if (tile.washed) { tile.washed[i] = 0; tile.edgeStale = true; }
+  }
+  lift(tile, i, x, y) { WetWatercolor.markWet(tile, i); tile.base[i] = 255; tile.pigment[i] = tile.target[i] = 255 - this.document.tone(x, y); }
+  hydrated(tile, i, x, y) {
+    const D = this.document;
+    if (!this.paintOnly || D.opacity(x, y) === 0) { this.lift(tile, i, x, y); return; }
+    if (!this.dryStays) { this.lift(tile, i, x, y); (tile.paint ??= new Uint8Array(WP.PIXELS))[i] = 1; return; }
+    const tone = D.tone(x, y);
+    WetWatercolor.markWet(tile, i);
+    tile.base[i] = 255; tile.pigment[i] = tile.target[i] = 0;
+    if (!tile.stuck) { tile.stuck = new Float32Array(WP.PIXELS); tile.soaked = new Float32Array(WP.PIXELS); }
+    tile.stuck[i] = 255 - tone; tile.soaked[i] = 0;
+  }
+  hydrate(left, top, right, bottom) {
+    const D = this.document, S = WP.SIDE;
+    left = Math.max(0, left); top = Math.max(0, top); right = Math.min(D.width, right); bottom = Math.min(D.height, bottom);
+    if (left >= right || top >= bottom) return;
+    for (let ty = (top / S) | 0; ty <= ((bottom - 1) / S | 0); ty++) for (let tx = (left / S) | 0; tx <= ((right - 1) / S | 0); tx++) {
+      let tile = this.tiles[ty * this.columns + tx];
+      if (!tile) tile = this.tiles[ty * this.columns + tx] = new WetTile(tx * S, ty * S);
+      else if (tile.wetPixels === WP.PIXELS) continue;
+      const x0 = Math.max(left, tile.x), x1 = Math.min(right, tile.x + S), y0 = Math.max(top, tile.y), y1 = Math.min(bottom, tile.y + S);
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y - tile.y) * S + x - tile.x; if (!tile.wet[i]) this.hydrated(tile, i, x, y); }
+    }
+  }
+  // The tone a pixel's paint shows.
+  static shade(tile, i) {
+    const ink = f32(tile.pigment[i] * WetWatercolor.look(tile, i) + (tile.stuck ? tile.stuck[i] : 0));
+    return Math.max(0, Math.min(255, Math.round(tile.base[i] * f32(1 - Math.min(255, ink) / 255))));
+  }
+  static look(tile, i) {
+    if (!tile.washed || !tile.washed[i]) return 1;
+    const dried = !tile.flowing[i] ? 1 : Math.max(0, Math.min(1, (WP.LOOSE - tile.pull[i]) / (WP.LOOSE - WP.STILL)));
+    if (dried <= 0) return 1;
+    let look = 1;
+    const x = tile.x + i % WP.SIDE, y = tile.y + ((i / WP.SIDE) | 0);
+    if (tile.grain && tile.gran > 0) look *= 1 + 1.2 * tile.gran * dried * (2 * tile.grain(x, y) - 1);
+    if (tile.rim > 0 && tile.edge) { const e = tile.edge[i] / 255; look *= 1 + tile.rim * dried * (3.6 * e * e - .35); }
+    if (tile.blob && (tile.mottle > 0 || tile.tide > 0)) {
+      const b = tile.blob(x, y), off = (b - WP.TIDE) / .018;
+      look *= 1 + dried * (tile.mottle * .9 * (b - .5) + tile.tide * Math.max(0, 1 - off * off));
+    }
+    return Math.max(0, look);
+  }
+  composite(tile, i, x, y) { this.document.setTone(x, y, WetWatercolor.shade(tile, i)); }
+  // Opaque paint ({@code strength} of grey {@code gray}), mixing into paint under it by the wetness.
+  paintMask(mask, stride, x, y, w, h, gray, transparent, strength) {
+    const D = this.document, S = WP.SIDE;
+    const mL = wetMargin(-this.gravityX), mT = wetMargin(-this.gravityY), mR = wetMargin(this.gravityX), mB = wetMargin(this.gravityY);
+    this.hydrate(x - mL, y - mT, x + w + mR, y + h + mB);
+    for (let row = 0; row < h; row++) for (let col = 0; col < w; col++) {
+      const px = x + col, py = y + row;
+      if (!mask[row * stride + col] || px < 0 || py < 0 || px >= D.width || py >= D.height) continue;
+      const tile = this.tileAt(px, py), i = (py % S) * S + px % S;
+      if (tile.touched[i]) continue;
+      tile.touched[i] = 1; this.strokePixels++;
+      let pigment = f32((255 - gray) * strength);
+      const old = tile.pigment[i];
+      if (transparent) pigment = f32(old + (255 - old) * (255 - gray) * strength / 510);
+      else pigment = f32(old + (255 - gray - old) * strength);
+      let mixes = f32(.6 * this.wetness);
+      if (!transparent && pigment < old) mixes = f32(mixes * WP.LIGHT_MIXES);
+      if (this.paintOnly) {
+        if (!tile.paint || !tile.paint[i]) mixes = 0;
+        (tile.paint ??= new Uint8Array(WP.PIXELS))[i] = 1;
+        if (!transparent && tile.stuck) tile.stuck[i] *= 1 - strength;
+      }
+      tile.target[i] = old * mixes + pigment * (1 - mixes);
+      tile.pigment[i] = pigment;
+      WetWatercolor.clearWater(tile, i);
+      if (!transparent) D.opaque[py * D.width + px] = 1;
+      this.composite(tile, i, px, py);
+      this.wake(tile);
+    }
+    this.wakeAround(x - mL, y - mT, x + w + mR, y + h + mB);
+  }
+  // Flowing water from a brush (clear, or holding {@code ink}), each new pixel trading {@code trade} dabs' worth of ink.
+  waterMask(mask, stride, x, y, w, h, pull, ink, trade) {
+    const D = this.document, S = WP.SIDE;
+    const mL = wetMargin(-this.gravityX), mT = wetMargin(-this.gravityY), mR = wetMargin(this.gravityX), mB = wetMargin(this.gravityY);
+    this.hydrate(x - mL, y - mT, x + w + mR, y + h + mB);
+    for (let row = 0; row < h; row++) for (let col = 0; col < w; col++) {
+      const px = x + col, py = y + row;
+      if (!mask[row * stride + col] || px < 0 || py < 0 || px >= D.width || py >= D.height) continue;
+      const tile = this.tileAt(px, py), i = (py % S) * S + px % S, coverage = 1;
+      // A pixel the stroke already wet trades ink with the brush again (rub); only new ones take water.
+      if (tile.touched[i]) { if (tile.flowing[i]) this.soak(tile, i, px, py, ink, f32(pull * coverage)); continue; }
+      if (!tile.wet[i]) this.lift(tile, i, px, py); else WetWatercolor.loosen(tile, i, 1);
+      tile.touched[i] = 1; this.strokePixels++;
+      const newWater = !tile.water[i];
+      if (newWater) tile.target[i] = tile.pigment[i];
+      if (!tile.pull) { tile.pull = new Float32Array(WP.PIXELS); tile.mobility = new Float32Array(WP.PIXELS); }
+      tile.pull[i] = newWater ? pull : Math.max(tile.pull[i], pull);
+      tile.mobility[i] = wetMobility(tile.pull[i]);
+      if (newWater && tile.pigment[i] > 0) (tile.reserve ??= new Float32Array(WP.PIXELS))[i] = tile.pigment[i] * (WP.DEPTH - 1);
+      tile.water[i] = 1; tile.flowing[i] = 1; this.hasFlowing = this.looseWater = true;
+      if (tile.plain) tile.plain[i] = 0;   // a brush's water, never plain (it holds ink, or soaks it up)
+      const tint = 255 * ink.tint() * (1 - (tile.stuck ? tile.stuck[i] : 0) / 255);
+      if (tile.pigment[i] < tint) tile.pigment[i] += (tint - tile.pigment[i]) * coverage;
+      this.soak(tile, i, px, py, ink, f32(pull * coverage * trade));
+      this.wake(tile, WP.WATER_FRAMES);
+    }
+    this.wakeAround(x - mL, y - mT, x + w + mR, y + h + mB);
+  }
+  soak(tile, i, px, py, ink, share) {
+    const pigment = tile.pigment[i], reachable = WetWatercolor.reachable(tile, i);
+    const moved = ink.trade(pigment + reachable, share);
+    if (moved === 0) { this.composite(tile, i, px, py); return; }
+    if (moved > 0) {
+      const hidden = !tile.reserve ? 0 : Math.min(moved * (1 - WP.SHOWS), tile.reserve[i]);
+      if (hidden > 0) tile.reserve[i] -= hidden;
+      let rest = moved - hidden;
+      const loose = Math.min(rest, pigment);
+      rest -= loose;
+      if (loose > 0) { const kept = 1 - loose / pigment; if (tile.reserve) tile.reserve[i] *= kept; tile.target[i] *= kept; }
+      tile.pigment[i] = pigment - loose;
+      if (rest > 0 && tile.stuck) tile.stuck[i] = Math.max(0, tile.stuck[i] - rest);
+    } else tile.pigment[i] = Math.min(255, pigment - moved);
+    this.composite(tile, i, px, py);
+  }
+  static reachable(tile, i) { if (!tile.stuck || tile.stuck[i] <= 0) return 0; const s = tile.soaked[i]; return tile.stuck[i] * s * s; }
+  static loosen(tile, i, share) {
+    if (!tile.stuck || tile.stuck[i] <= 0 || share <= 0) return;
+    const freed = f32(tile.stuck[i] * Math.min(1, share));
+    tile.stuck[i] -= freed; tile.pigment[i] += freed;
+  }
+  // A watercolour wash: each new pixel fresh flowing water taking {@code strength} of grey {@code gray} as a glaze;
+  // with {@code line}, as much dry ink stuck beneath (a pen line as wide as the wash).
+  washMask(mask, stride, x, y, w, h, gray, strength, pull, rows, line) {
+    const D = this.document, S = WP.SIDE, wc = this.wash;
+    const mL = wetMargin(-this.gravityX), mT = wetMargin(-this.gravityY), mR = wetMargin(this.gravityX), mB = wetMargin(this.gravityY);
+    this.hydrate(x - mL, y - mT, x + w + mR, y + h + mB);
+    this.washTiles(x - mL, y - mT, x + w + mR, y + h + mB);
+    const dark = f32((255 - gray) / 255);
+    for (let row = 0; row < h; row++) for (let col = rows ? rows[2 * row] : 0, last = rows ? rows[2 * row + 1] : w - 1; col <= last; col++) {
+      const px = x + col, py = y + row;
+      if (!mask[row * stride + col] || px < 0 || py < 0 || px >= D.width || py >= D.height) continue;
+      const tile = this.tileAt(px, py), i = (py % S) * S + px % S;
+      if (tile.touched[i]) continue;
+      tile.touched[i] = 1; this.strokePixels++;
+      if (!tile.wet[i]) this.lift(tile, i, px, py);
+      if (line > 0) {
+        if (!tile.stuck) { tile.stuck = new Float32Array(WP.PIXELS); tile.soaked = new Float32Array(WP.PIXELS); }
+        tile.stuck[i] = Math.max(tile.stuck[i], line);
+      }
+      const stuck = tile.stuck ? tile.stuck[i] : 0, loose = tile.pigment[i];
+      const ink = Math.min(255, loose + stuck), laid = f32(dark * strength);
+      const water = tile.water[i] && tile.flowing[i];
+      const mixes = water && tile.washed[i] ? f32(WP.MIXES * wetSmooth((tile.pull[i] - WP.MIXES_FROM) / (WP.LOOSE - WP.MIXES_FROM))) : 0;
+      tile.pigment[i] += (1 - mixes) * (255 - ink) * laid + mixes * Math.max(0, (255 - stuck) * laid - loose);
+      tile.target[i] = tile.pigment[i];
+      if (tile.reserve) tile.reserve[i] = 0;
+      const fresh = f32(pull * (1 - wc.uneven * .8 * wc.blob(px, py)));
+      const under = water && tile.washed[i] && tile.pull[i] > WP.MERGES ? tile.wave[i] : 0;
+      tile.pull[i] = water ? tile.pull[i] + (1 - mixes) * Math.max(0, fresh - tile.pull[i]) : fresh;
+      tile.mobility[i] = wetMobility(tile.pull[i]);
+      if (this.strokeWave === 0) this.strokeWave = ++this.waves;
+      if (under > 0) this.join(this.strokeWave, under);
+      tile.wave[i] = this.strokeWave;
+      tile.combined[i] = 0;
+      tile.water[i] = 1; tile.flowing[i] = 1; this.hasFlowing = this.looseWater = true;
+      (tile.plain ??= new Uint8Array(WP.PIXELS))[i] = 1;
+      tile.washed[i] = 1;
+      tile.gran = Math.max(tile.gran, wc.gran); tile.rim = Math.max(tile.rim, Math.max(wc.edge, .5 * wc.bloom)); tile.grain = wc.grain;
+      tile.mottle = Math.max(tile.mottle, wc.bloom); tile.tide = Math.max(tile.tide, wc.uneven); tile.blob = wc.blob;
+      this.composite(tile, i, px, py);
+      this.wake(tile, WP.WATER_FRAMES);
+    }
+    this.wakeAround(x - mL, y - mT, x + w + mR, y + h + mB);
+    this.edgesChanged(x, y, x + w, y + h);
+  }
+  // A wash's pen line: dry ink stuck beneath the water, at least {@code strength} of grey {@code gray}.
+  lineMask(mask, stride, x, y, w, h, gray, strength, rows) {
+    const D = this.document, S = WP.SIDE, dark = f32((255 - gray) * Math.max(0, Math.min(1, strength)));
+    for (let row = 0; row < h; row++) for (let col = rows ? rows[2 * row] : 0, last = rows ? rows[2 * row + 1] : w - 1; col <= last; col++) {
+      const px = x + col, py = y + row;
+      if (!mask[row * stride + col] || px < 0 || py < 0 || px >= D.width || py >= D.height) continue;
+      const tile = this.tileAt(px, py), i = (py % S) * S + px % S;
+      if (!tile.wet[i]) this.hydrated(tile, i, px, py);
+      if (!tile.stuck) { tile.stuck = new Float32Array(WP.PIXELS); tile.soaked = new Float32Array(WP.PIXELS); }
+      if (tile.stuck[i] >= dark) continue;
+      tile.stuck[i] = dark;
+      if (tile.touched[i]) { this.composite(tile, i, px, py); this.wake(tile); }
+    }
+  }
+  washTiles(left, top, right, bottom) {
+    const D = this.document, S = WP.SIDE, P = WP.PIXELS;
+    left = Math.max(0, left); top = Math.max(0, top); right = Math.min(D.width, right); bottom = Math.min(D.height, bottom);
+    if (left >= right || top >= bottom) return;
+    for (let ty = (top / S) | 0; ty <= ((bottom - 1) / S | 0); ty++) for (let tx = (left / S) | 0; tx <= ((right - 1) / S | 0); tx++) {
+      const tile = this.tiles[ty * this.columns + tx] ??= new WetTile(tx * S, ty * S);
+      if (!tile.pull) { tile.pull = new Float32Array(P); tile.mobility = new Float32Array(P); }
+      if (!tile.nextPull) { tile.nextPull = new Float32Array(P); tile.washed = new Uint8Array(P); tile.wave = new Int16Array(P); tile.nextWave = new Int16Array(P); tile.combined = new Uint8Array(P); }
+    }
+  }
+  edgeness(tile) {
+    if (!tile.nextPull || !tile.edgeStale && tile.edge) return;
+    tile.edge ??= new Uint8Array(WP.PIXELS);
+    tile.edgeStale = false;
+    const E = WP.EDGE, n = (2 * E + 1) * (2 * E + 1);
+    for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.flowing[i]) continue;
+      const x = tile.x + i % WP.SIDE, y = tile.y + ((i / WP.SIDE) | 0), own = this.washOf(tile.wave[i]);
+      let dry = 0;
+      for (let dy = -E; dy <= E; dy++) for (let dx = -E; dx <= E; dx++) if (this.waveAt(x + dx, y + dy) !== own) dry++;
+      tile.edge[i] = Math.round(255 * Math.min(1, f32(dry * 2.3 / n)));
+    }
+  }
+  edgesChanged(left, top, right, bottom) {
+    const D = this.document, E = WP.EDGE, S = WP.SIDE;
+    left = Math.max(0, left - E); top = Math.max(0, top - E); right = Math.min(D.width - 1, right + E); bottom = Math.min(D.height - 1, bottom + E);
+    for (let ty = (top / S) | 0; ty <= ((bottom / S) | 0); ty++) for (let tx = (left / S) | 0; tx <= ((right / S) | 0); tx++) { const t = this.tiles[ty * this.columns + tx]; if (t) t.edgeStale = true; }
+  }
+  waveAt(x, y) {
+    const D = this.document;
+    if (x < 0 || y < 0 || x >= D.width || y >= D.height) return -1;
+    const t = this.tileOf(x, y), i = (y % WP.SIDE) * WP.SIDE + x % WP.SIDE;
+    return !t || !t.pull || !t.flowing[i] ? -1 : !t.wave ? 0 : this.washOf(t.wave[i]);
+  }
+  flowsAt(x, y) {
+    const D = this.document;
+    if (x < 0 || y < 0 || x >= D.width || y >= D.height) return false;
+    const t = this.tileOf(x, y);
+    return !!t && !!t.pull && !!t.flowing[(y % WP.SIDE) * WP.SIDE + x % WP.SIDE];
+  }
+  capillary(tile, i, value) {
+    const wc = this.wash, D = this.document, S = WP.SIDE;
+    const pi = tile.pull[i];
+    let gain = 0, flood = 0, combine = 0, wave = tile.wave[i], withW = 0;
+    const own = wave, combined = tile.combined[i];
+    const x = tile.x + i % S, y = tile.y + ((i / S) | 0);
+    const ei = tile.edge ? tile.edge[i] / 255 : 0, ni = wc.frill(x, y);
+    for (let dir = 0; dir < 4; dir++) {
+      const nx = x + (dir === 0 ? -1 : dir === 1 ? 1 : 0), ny = y + (dir === 2 ? -1 : dir === 3 ? 1 : 0);
+      if (nx < 0 || ny < 0 || nx >= D.width || ny >= D.height) continue;
+      const t = this.tileOf(nx, ny), j = (ny % S) * S + nx % S;
+      if (!t || t.inFrame !== this.frame || !t.pull || !t.flowing[j]) continue;
+      const pj = t.pull[j], d = f32(pi - pj), n = f32(.5 * (ni + wc.frill(nx, ny))), gj = t.pigment[j];
+      const wj = t.wave ? t.wave[j] : 0;
+      const one = wj === own || this.washOf(wj) === this.washOf(own), merged = wj !== own && one;
+      const k = merged || one && (combined || t.combined && t.combined[j]) ? 0 : wc.carry(n);
+      gain -= d > 0 ? k * d * value : k * d * gj;
+      if (-d > WP.FLOODS && n > 1 - wc.bloom) { if (pj > flood) { flood = pj; wave = wj; } }
+      if (merged && -d > WP.COMBINES && pj > combine) { combine = pj; withW = wj; }
+    }
+    let next = Math.max(pi, flood);
+    if (pi + WP.COMBINE * (combine - pi) > next) { next = f32(pi + WP.COMBINE * (combine - pi)); wave = withW; }
+    tile.nextPull[i] = next * (1 - wc.edgeDrying() * ei * ei);
+    tile.nextWave[i] = wave;
+    return f32(gain);
+  }
+  bleedInto(tile, i) {
+    const wc = this.wash, S = WP.SIDE;
+    if (wc.bleed <= 0 || tile.pigment[i] >= 1) return 0;
+    const x = tile.x + i % S, y = tile.y + ((i / S) | 0);
+    if (wc.frill(x, y) < 1 - wc.bleed) return 0;
+    let best = 0;
+    for (let dir = 0; dir < 4; dir++) {
+      const nx = x + (dir === 0 ? -1 : dir === 1 ? 1 : 0), ny = y + (dir === 2 ? -1 : dir === 3 ? 1 : 0);
+      const t = this.flowsAt(nx, ny) ? this.tileOf(nx, ny) : null;
+      if (!t || t.inFrame !== this.frame) continue;
+      const j = (ny % S) * S + nx % S;
+      if (t.pull[j] > best) { best = t.pull[j]; tile.nextWave[i] = t.wave ? t.wave[j] : 0; }
+    }
+    return best > WP.BLEEDS ? f32(best * wc.feather) : 0;
+  }
+  // One slice: at most maxTiles of the frame running now (a new frame begun when the last is done); false when idle.
+  advance(maxTiles = WP.TILES_PER_FRAME) {
+    this.advancedTiles = 0;
+    if (!this.active.length || maxTiles <= 0) return false;
+    if (this.frameRemaining === 0) {
+      this.frameRemaining = this.active.length; this.frame++;
+      if (this.wash) for (const t of this.active) t.inFrame = this.frame;
+      this.runTiles = Math.max(this.runTiles, this.active.length);
+      this.flowingFrame = this.active.some(t => anySet(t.flowing));
+      this.step = this.flowingFrame && this.runTiles >= WP.HUGE_TILES ? WP.HUGE_STEP : 1;
+      this.drying = f32(Math.pow(WP.DRYING, this.step));
+      this.washDrying = this.wash ? f32(Math.pow(this.wash.drying, this.step)) : this.drying;
+      this.spreadCandidates = this.hasFlowing ? this.active.slice() : null;
+      this.spreading.length = 0;
+      this.spreadPhase = this.spreadCursor = this.spreadPairs = this.spreadStep = 0;
+    }
+    this.planSpread();
+    const batch = this.batch; batch.length = 0;
+    const count = Math.min(maxTiles, this.frameRemaining);
+    for (let t = 0; t < count; t++) batch.push(this.active.shift());
+    const fromLeft = 1 + this.gravityX, fromRight = 1 - this.gravityX, fromAbove = 1 + this.gravityY, fromBelow = 1 - this.gravityY;
+    if (this.wash) for (const t of batch) this.edgeness(t);
+    for (const t of batch) this.computeTile(t, fromLeft, fromRight, fromAbove, fromBelow);
+    for (const t of batch) this.settleTile(t);
+    for (const t of batch) {
+      for (let i = 0; i < WP.PIXELS; i++) if (t.shade[i] >= 0) this.document.setTone(t.x + i % WP.SIDE, t.y + ((i / WP.SIDE) | 0), t.shade[i]);
+      this.looseSoFar ||= t.loose;
+      if ((t.frames -= this.step) > 0) this.active.push(t);
+    }
+    if (this.wash) for (const t of batch) {
+      if (t.loose && t.nextPull) this.wakeBeside(t);
+      if (t.bled) { t.bled = false; this.edgesChanged(t.x, t.y, t.x + WP.SIDE - 1, t.y + WP.SIDE - 1); }
+    }
+    this.advancedTiles = batch.length;
+    this.frameRemaining -= batch.length;
+    if (this.frameRemaining === 0) { this.looseWater = this.looseSoFar; this.looseSoFar = false; }
+    if (!this.active.length) this.runTiles = 0;
+    return true;
+  }
+  settleTile(tile) {
+    const D = this.document, S = WP.SIDE;
+    tile.shade.fill(-1);
+    for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.wet[i]) continue;
+      tile.pigment[i] = tile.next[i];
+      const x = tile.x + i % S, y = tile.y + ((i / S) | 0);
+      if (x >= D.width || y >= D.height) continue;
+      const tone = WetWatercolor.shade(tile, i);
+      if (tone !== D.tone(x, y)) tile.shade[i] = tone;
+    }
+    let wettest = 0, loose = false;
+    const washes = !!this.wash && !!tile.nextPull;
+    if (washes) for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.wet[i] || tile.flowing[i] || tile.nextPull[i] <= 0) continue;
+      tile.water[i] = 1; tile.flowing[i] = 1; tile.washed[i] = 1;
+      (tile.plain ??= new Uint8Array(WP.PIXELS))[i] = 1;
+      tile.target[i] = tile.pigment[i]; tile.pull[i] = tile.nextPull[i]; tile.wave[i] = tile.nextWave[i];
+      this.hasFlowing = true; tile.bled = true;
+    }
+    const rate = washes ? this.washDrying : this.drying;
+    for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.flowing[i]) continue;
+      if (washes) {
+        tile.pull[i] = tile.nextPull[i];
+        if (tile.wave[i] !== tile.nextWave[i]) {
+          if (this.washOf(tile.wave[i]) === this.washOf(tile.nextWave[i])) tile.combined[i] = 1;
+          tile.wave[i] = tile.nextWave[i]; tile.bled = true;
+        }
+      }
+      if (tile.reserve && tile.reserve[i] > 0) {
+        const gap = Math.max(0, tile.target[i] - tile.pigment[i]);
+        const dissolved = Math.min(tile.reserve[i], this.step === 1 ? gap * tile.pull[i] * WP.DISSOLVE : gap * (1 - Math.pow(1 - tile.pull[i] * WP.DISSOLVE, this.step)));
+        tile.reserve[i] -= dissolved; tile.pigment[i] += dissolved;
+      }
+      tile.pull[i] *= rate;
+      wettest = Math.max(wettest, tile.pull[i]);
+      loose ||= tile.pull[i] > WP.LOOSE;
+      tile.mobility[i] = wetMobility(tile.pull[i]);
+    }
+    tile.loose = loose;
+    const damp = wettest > WP.STILL;
+    tile.dampFrames = damp ? Math.ceil(Math.log(WP.STILL / wettest) / Math.log(washes ? this.wash.drying : WP.DRYING)) : 0;
+    if (damp) tile.frames = Math.max(tile.frames, this.step + 1);
+  }
+  computeTile(tile, fL, fR, fA, fB) {
+    const shares = this.sc.spread, spreads = this.shapeSpread(tile), washes = !!this.wash && !!tile.nextPull;
+    if (this.surrounded(tile)) { this.computeSurrounded(tile, spreads, washes, fL, fR, fA, fB); return; }
+    for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.wet[i]) continue;
+      const value = tile.pigment[i];
+      if (tile.flowing[i]) {
+        const washed = washes ? this.capillary(tile, i, value) : 0;
+        if (tile.pull[i] <= WP.STILL) { tile.next[i] = value + washed; continue; }
+        const fresh = tile.mobility[i];
+        tile.next[i] = washed + WetWatercolor.flowed(value, fL * this.exchange(tile, i, -1, 0, value, fresh) + fR * this.exchange(tile, i, 1, 0, value, fresh)
+          + fA * this.exchange(tile, i, 0, -1, value, fresh) + fB * this.exchange(tile, i, 0, 1, value, fresh), spreads ? shares[i] : 0);
+        continue;
+      }
+      tile.next[i] = this.evened(tile, i, value, fL * this.neighbor(tile, i, -1, 0, value) + fR * this.neighbor(tile, i, 1, 0, value)
+        + fA * this.neighbor(tile, i, 0, -1, value) + fB * this.neighbor(tile, i, 0, 1, value));
+      if (washes) {
+        if (value < 1 && tile.target[i] < 1) tile.next[i] = value;
+        tile.nextPull[i] = this.bleedInto(tile, i);
+      }
+    }
+  }
+  static flowed(value, gained, share) { return f32(value + f32(gained) / 12 + share); }
+  evened(tile, i, value, neighbors) {
+    if (tile.water[i]) return f32(value + (neighbors / 12 - value) * tile.pull[i]);
+    const flow = this.wetness;
+    return f32(value * (1 - .55 * flow) + neighbors * (flow / 30) + tile.target[i] * (.15 * flow));
+  }
+  surrounded(tile) {
+    if (tile.wetPixels !== WP.PIXELS) return false;
+    for (let side = 0; side < 4; side++) {
+      const o = this.beside(tile, 1, side === 0 ? -1 : side === 1 ? 1 : 0, side === 2 ? -1 : side === 3 ? 1 : 0);
+      if (!o || o.wetPixels !== WP.PIXELS) return false;
+    }
+    return true;
+  }
+  computeSurrounded(tile, spreads, washes, fL, fR, fA, fB) {
+    const shares = this.sc.spread, ink = this.sc.ink, free = this.sc.free, S = WP.SIDE, R = WP.REACH, SP = WP.SPAN;
+    WetWatercolor.gather(tile, 0, 0, 0, 0, S, S, ink, free);
+    WetWatercolor.gather(this.beside(tile, 1, -1, 0), S - R, 0, -R, 0, R, S, ink, free);
+    WetWatercolor.gather(this.beside(tile, 1, 1, 0), 0, 0, S, 0, R, S, ink, free);
+    WetWatercolor.gather(this.beside(tile, 1, 0, -1), 0, S - R, 0, -R, S, R, ink, free);
+    WetWatercolor.gather(this.beside(tile, 1, 0, 1), 0, 0, 0, S, S, R, ink, free);
+    for (let i = 0; i < WP.PIXELS; i++) {
+      const p = (((i / S) | 0) + R) * SP + i % S + R, value = ink[p];
+      if (tile.flowing[i]) {
+        const washed = washes ? this.capillary(tile, i, value) : 0;
+        if (tile.pull[i] <= WP.STILL) { tile.next[i] = value + washed; continue; }
+        const fresh = tile.mobility[i], ray = WetWatercolor.ray;
+        tile.next[i] = washed + WetWatercolor.flowed(value, fL * ray(ink, free, p, -1, value, fresh) + fR * ray(ink, free, p, 1, value, fresh)
+          + fA * ray(ink, free, p, -SP, value, fresh) + fB * ray(ink, free, p, SP, value, fresh), spreads ? shares[i] : 0);
+        continue;
+      }
+      tile.next[i] = this.evened(tile, i, value, fL * (ink[p - 1] + ink[p - 4] + ink[p - 8]) + fR * (ink[p + 1] + ink[p + 4] + ink[p + 8])
+        + fA * (ink[p - SP] + ink[p - 4 * SP] + ink[p - 8 * SP]) + fB * (ink[p + SP] + ink[p + 4 * SP] + ink[p + 8 * SP]));
+      if (washes) {
+        if (value < 1 && tile.target[i] < 1) tile.next[i] = value;
+        tile.nextPull[i] = this.bleedInto(tile, i);
+      }
+    }
+  }
+  static gather(from, x, y, toX, toY, w, h, ink, free) {
+    const S = WP.SIDE, R = WP.REACH, SP = WP.SPAN;
+    for (let row = 0; row < h; row++) {
+      const source = (y + row) * S + x, target = (toY + row + R) * SP + toX + R;
+      ink.set(from.pigment.subarray(source, source + w), target);
+      if (!from.mobility) free.fill(0, target, target + w); else free.set(from.mobility.subarray(source, source + w), target);
+    }
+  }
+  static ray(ink, free, p, step, value, fresh) {
+    return Math.min(fresh, free[p + step]) * (ink[p + step] - value) + Math.min(fresh, free[p + 4 * step]) * (ink[p + 4 * step] - value)
+      + Math.min(fresh, free[p + 8 * step]) * (ink[p + 8 * step] - value);
+  }
+  // Tiles joined by flowing water trade their mean ink over several quick steps, once a frame; into each tile's spread.
+  planSpread() {
+    if (!this.spreadCandidates) return;
+    const D = this.document, S = WP.SIDE, cand = this.spreadCandidates, sp = this.spreading;
+    for (const t of cand) if (anySet(t.flowing)) { WetWatercolor.measure(t); if (t.meanFresh > WP.DAMP) { t.spreadSlot = sp.length; sp.push(t); } }
+    const count = sp.length;
+    if (this.spreadInk.length < count) { this.spreadInk = new Float32Array(count * 2); this.spreadChange = new Float32Array(count * 2); this.spreadPixels = new Int32Array(count * 2); }
+    let pairs = 0;
+    for (let a = 0; a < count; a++) {
+      const tile = sp[a];
+      this.spreadInk[a] = tile.meanInk; this.spreadPixels[a] = tile.flowingPixels;
+      for (let side = 0; side < 2; side++) {
+        const x = tile.x + (side === 0 ? S : 0), y = tile.y + (side === 1 ? S : 0);
+        if (x >= D.width || y >= D.height) continue;
+        const other = this.tileOf(x, y);
+        if (!other || other.spreadSlot < 0) continue;
+        const joined = bitCount(side === 0 ? tile.flowRight & other.flowLeft : tile.flowBottom & other.flowTop);
+        if (joined === 0) continue;
+        if (this.links.length <= pairs) {
+          const grow2 = (A, n) => { const B = new A.constructor(n); B.set(A); return B; };
+          this.links = grow2(this.links, pairs * 2); this.downhill = grow2(this.downhill, pairs * 2); this.linked = grow2(this.linked, pairs * 4);
+        }
+        this.links[pairs] = WP.SPREAD * joined / S * wetMobility(Math.min(tile.meanFresh, other.meanFresh)) * Math.min(tile.flowingPixels, other.flowingPixels);
+        this.downhill[pairs] = side === 0 ? this.gravityX : this.gravityY;
+        this.linked[pairs * 2] = a; this.linked[pairs * 2 + 1] = other.spreadSlot; pairs++;
+      }
+    }
+    if (pairs > 0) {
+      const evens = this.wash ? WP.WASH_SPREAD : 1, falls = this.wash ? WP.WASH_FALL : 1;
+      for (let s = 0; s < WP.SPREAD_STEPS * this.step; s++) {
+        this.spreadChange.fill(0, 0, count);
+        for (let c = 0; c < pairs; c++) {
+          const a = this.linked[c * 2], b = this.linked[c * 2 + 1], link = this.links[c], slope = this.downhill[c], fall = WP.POOL * Math.abs(slope);
+          const moved = f32(link * (1 - fall) * evens * (this.spreadInk[b] - this.spreadInk[a]) + link * fall * falls * (slope > 0 ? -this.spreadInk[a] : this.spreadInk[b]));
+          this.spreadChange[a] += moved; this.spreadChange[b] -= moved;
+        }
+        for (let c = 0; c < count; c++) this.spreadInk[c] += this.spreadChange[c] / this.spreadPixels[c];
+      }
+    }
+    for (let c = 0; c < count; c++) {
+      const tile = sp[c], change = f32(this.spreadInk[c] - tile.meanInk);
+      tile.spread = f32(change / Math.max(change > 0 ? WP.DAMP : 1, change > 0 ? tile.meanFresh : tile.meanInk));
+      tile.spreadInk = change; tile.spreadFrame = this.frame; tile.spreadSlot = -1;
+    }
+    this.spreadCandidates = null;
+  }
+  static planned(tile, what) { return what === 0 ? tile.spread : what === 1 ? tile.spreadInk : what === 2 ? tile.meanFresh : tile.meanInk; }
+  gatherSpread(tile, near, what = 0) {
+    const D = this.document, S = WP.SIDE;
+    const own = tile.spreadFrame !== this.frame ? 0 : WetWatercolor.planned(tile, what);
+    let any = own !== 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const x = tile.x + dx * S, y = tile.y + dy * S;
+      const other = x >= 0 && y >= 0 && x < D.width && y < D.height ? this.tileOf(x, y) : null;
+      const value = other && other.spreadFrame === this.frame ? WetWatercolor.planned(other, what) : what === 1 && other && anySet(other.flowing) ? 0 : own;
+      near[(dy + 1) * 3 + dx + 1] = value;
+      any ||= value !== 0;
+    }
+    return any;
+  }
+  shapeSpread(tile) {
+    const near = this.sc.near, spread = this.sc.spread, S = WP.SIDE;
+    if (!this.gatherSpread(tile, near)) return false;
+    for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.flowing[i]) continue;
+      const blended = WetWatercolor.spreadAt(i, near, 0, 0);
+      spread[i] = blended * (blended > 0 ? tile.pull[i] : tile.pigment[i]);
+    }
+    if (!tile.plain || !anySet(tile.plain)) return true;
+    if (tile.spreadFrame !== this.frame) { for (let i = 0; i < WP.PIXELS; i++) if (tile.plain[i]) spread[i] = 0; return true; }
+    const ink = this.sc.nearInk, fresh = this.sc.nearFresh, inky = this.sc.nearInky;
+    this.gatherSpread(tile, ink, 1); this.gatherSpread(tile, fresh, 2); this.gatherSpread(tile, inky, 3);
+    const shiftX = f32((f32(this.frame * .618034) % 1) - .5), shiftY = f32((f32(this.frame * .754878) % 1) - .5);
+    for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.plain[i]) continue;
+      const change = WetWatercolor.spreadAt(i, ink, shiftX, shiftY);
+      spread[i] = tile.pull[i] <= WP.STILL ? 0 : change > 0 ? change * tile.pull[i] / Math.max(WP.DAMP, WetWatercolor.spreadAt(i, fresh, shiftX, shiftY))
+        : Math.max(-tile.pigment[i], change * tile.pigment[i] / Math.max(1, WetWatercolor.spreadAt(i, inky, shiftX, shiftY)));
+    }
+    return true;
+  }
+  static spreadAt(i, n, shiftX, shiftY) {
+    const S = WP.SIDE, u = f32((i % S + .5) / S - .5 + shiftX), v = f32((((i / S) | 0) + .5) / S - .5 + shiftY);
+    const sx = u < 0 ? 0 : 2, sy = v < 0 ? 0 : 6, a = Math.abs(u), b = Math.abs(v);
+    return f32((1 - a) * (1 - b) * n[4] + a * (1 - b) * n[3 + sx] + (1 - a) * b * n[sy + 1] + a * b * n[sy + sx]);
+  }
+  static measure(tile) {
+    let ink = 0, fresh = 0, count = 0, left = 0, right = 0, top = 0, bottom = 0;
+    const S = WP.SIDE;
+    for (let i = 0; i < WP.PIXELS; i++) {
+      if (!tile.flowing[i]) continue;
+      ink = f32(ink + tile.pigment[i]); fresh = f32(fresh + tile.pull[i]); count++;
+      const row = (i / S) | 0, col = i % S;
+      if (col === 0) left |= 1 << row; else if (col === S - 1) right |= 1 << row;
+      if (row === 0) top |= 1 << col; else if (row === S - 1) bottom |= 1 << col;
+    }
+    tile.meanInk = f32(ink / count); tile.meanFresh = f32(fresh / count); tile.flowingPixels = count;
+    tile.flowLeft = left; tile.flowRight = right; tile.flowTop = top; tile.flowBottom = bottom;
+  }
+  static edge(i, dx, dy) { const S = WP.SIDE; return dx < 0 ? i % S + 1 : dx > 0 ? S - i % S : dy < 0 ? ((i / S) | 0) + 1 : S - ((i / S) | 0); }
+  beside(tile, edge, dx, dy) {
+    if (edge > 8) return null;
+    const D = this.document, x = tile.x + dx * WP.SIDE, y = tile.y + dy * WP.SIDE;
+    return x >= 0 && y >= 0 && x < D.width && y < D.height ? this.tileOf(x, y) : null;
+  }
+  neighbor(tile, i, dx, dy, fallback) {
+    const S = WP.SIDE, edge = WetWatercolor.edge(i, dx, dy), step = dx + dy * S, wrap = dx * S + dy * WP.PIXELS;
+    const next = this.beside(tile, edge, dx, dy), reach = this.reach(tile, next, i, dx, dy, edge);
+    const close = reach < 1 ? fallback : edge > 1 ? tile.pigment[i + step] : next.pigment[i + step - wrap];
+    const near = reach < 4 ? fallback : edge > 4 ? tile.pigment[i + 4 * step] : next.pigment[i + 4 * step - wrap];
+    const far = reach < 8 ? fallback : edge > 8 ? tile.pigment[i + 8 * step] : next.pigment[i + 8 * step - wrap];
+    return f32(f32(close + near) + far);
+  }
+  exchange(tile, i, dx, dy, value, fresh) {
+    const S = WP.SIDE, edge = WetWatercolor.edge(i, dx, dy), step = dx + dy * S, wrap = dx * S + dy * WP.PIXELS;
+    const next = this.beside(tile, edge, dx, dy), reach = this.reach(tile, next, i, dx, dy, edge), trade = WetWatercolor.trade;
+    let gained = 0;
+    if (reach >= 1) gained += edge > 1 ? trade(tile, i + step, value, fresh) : trade(next, i + step - wrap, value, fresh);
+    if (reach >= 4) gained += edge > 4 ? trade(tile, i + 4 * step, value, fresh) : trade(next, i + 4 * step - wrap, value, fresh);
+    if (reach >= 8) gained += edge > 8 ? trade(tile, i + 8 * step, value, fresh) : trade(next, i + 8 * step - wrap, value, fresh);
+    return f32(gained);
+  }
+  static trade(source, i, value, fresh) { return !source.mobility ? 0 : f32(Math.min(fresh, source.mobility[i]) * (source.pigment[i] - value)); }
+  reach(tile, next, i, dx, dy, edge) {
+    const S = WP.SIDE;
+    if (tile.wetPixels === WP.PIXELS && (edge > 8 || next && next.wetPixels === WP.PIXELS)) return 8;
+    let position = dx !== 0 ? i % S : (i / S) | 0;
+    const line = dx !== 0 ? (i / S) | 0 : i % S;
+    let bits = dx !== 0 ? tile.wetRows[line] : tile.wetColumns[line];
+    let nextBits = !next ? 0 : dx !== 0 ? next.wetRows[line] : next.wetColumns[line];
+    if (dx + dy < 0) { bits = rev16(bits); nextBits = rev16(nextBits); position = S - 1 - position; }
+    let connected = bits >>> (position + 1);
+    if (edge <= 8) connected |= nextBits << (edge - 1);
+    const free = ~connected;
+    return free === 0 ? 32 : 31 - Math.clz32(free & -free);
+  }
+  // Takes up what else changed the page as its paint (an Undo, another stroke): those pixels' water goes.
+  rewet(wake) {
+    const D = this.document, S = WP.SIDE;
+    let changed = 0;
+    for (const tile of this.tiles) {
+      if (!tile || tile.wetPixels === 0) continue;
+      let any = false;
+      for (let i = 0; i < WP.PIXELS; i++) {
+        if (!tile.wet[i]) continue;
+        const x = tile.x + i % S, y = tile.y + ((i / S) | 0);
+        if (x >= D.width || y >= D.height) continue;
+        const tone = D.tone(x, y);
+        if (Math.abs(tone - WetWatercolor.shade(tile, i)) <= 1) continue;
+        tile.base[i] = 255; tile.pigment[i] = tile.target[i] = 255 - tone;
+        if (this.paintOnly && D.opacity(x, y) > 0) (tile.paint ??= new Uint8Array(WP.PIXELS))[i] = 1;
+        if (tile.reserve) tile.reserve[i] = 0;
+        if (tile.stuck) tile.stuck[i] = 0;
+        WetWatercolor.clearWater(tile, i);
+        any = true; changed++;
+      }
+      if (any && wake) this.wake(tile);
+    }
+    return changed;
+  }
+}
+// The low 16 bits reversed (Integer.reverse(bits) >>> 16).
+function rev16(v) { let r = 0; for (let k = 0; k < 16; k++) r |= ((v >>> k) & 1) << (15 - k); return r; }
+
+// A watercolour wash's dials and noises (ResolvedBrush.Wet.wash).
+class WetWash {
+  constructor(edge, bloom, uneven, bleed, gran, drying, feather, frill, blob, grain) {
+    Object.assign(this, { edge: f32(edge), bloom: f32(bloom), uneven: f32(uneven), bleed: f32(bleed), gran: f32(gran), drying: f32(drying), feather: f32(feather), frill, blob, grain });
+  }
+  carry(frill) { return Math.min(.22, f32(.3 * this.bloom * (.3 + 2 * frill * frill))); }
+  edgeDrying() { return f32(.02 + .04 * this.edge); }
+}
+// The ink a wet brush holds in its water (BrushInk); untinted here.
+class BrushInk {
+  constructor(capacity = BrushInk.CAPACITY) { this.capacity = capacity; this.ink = 0; this.floor = 0; }
+  fullness() { return f32(this.ink / this.capacity); }
+  tint() { return this.floor; }
+  restore(fullness) { this.ink = Math.max(0, Number.isFinite(fullness) ? Math.min(1, fullness) : 0) * this.capacity; }
+  load(gray) { this.ink = Math.max(this.floor, (255 - Math.max(0, Math.min(255, gray))) / 255) * this.capacity; }
+  trade(pigment, share) {
+    let moved = f32((pigment - 255 * this.fullness()) * .2 * share);
+    moved = Math.max(-(this.ink - this.floor * this.capacity) * 255, Math.min((this.capacity - this.ink) * 255, moved));
+    this.ink = f32(this.ink + moved / 255);
+    return moved;
+  }
+}
+BrushInk.CAPACITY = 3000;
+
+// Wet for a brush (ResolvedBrush.Wet), or null: its wetness, frames, whether dried paint rewets, ink in water, a wash.
+const WET_INK_WASH = { RIM: .4, FEATHER: .95 };
+function wetWashes(B) {
+  if (B.life.k !== "wetpaint" || B.carry.k === "water") return false;
+  if (B.style === "Watercolor") return B.medium.k === "wash";
+  return B.style === "Ink wash" && (B.medium.k === "wash" || B.medium.k === "ink" && (B.medium.d.wet ?? 0) > .08);
+}
+function wetOf(B, R, surf) {
+  if (B.life.k !== "wetpaint") return null;
+  const water = B.carry.k === "water", washes = wetWashes(B), mk = B.medium.k, inks = !water && !washes && (mk === "ink" || mk === "wash");
+  const stays = B.life.d.stays ?? .5, runs = B.life.d.runs ?? 0;
+  if (!washes && !(mk === "cover" || water || inks)) return null;
+  const W = { stays, runs, rewets: !washes && B.style !== "Oils", inks, wash: null, washPull: 0, line: false,
+    wetness: Math.round(15 + 70 * stays), frames: Math.round(8 + 32 * stays) };
+  if (washes) {
+    useTexture(surf, { texture: R.paper });
+    const M = B.medium.d, ink = B.style === "Ink wash", rim = ink ? WET_INK_WASH.RIM : 1;
+    const fine = surf.fine, mid = surf.mid, low = surf.low, blob = surf.blob, w = surf.w, at = (x, y) => y * w + x;
+    W.wash = new WetWash(rim * (M.pool ?? 0), rim * Math.min(1, (M.bloom ?? 0) + .5 * (M.backrun ?? 0)), M.backrun ?? 0, M.bleed ?? 0, B.paper.d.tooth ?? 0,
+      1 - .015 * (1.5 - stays), ink ? WET_INK_WASH.FEATHER : .85,
+      (x, y) => f32(.55 * fine[at(x, y)] + .45 * blob[at(x, y)]), (x, y) => low[at(x, y)], (x, y) => f32(1 - (.6 * fine[at(x, y)] + .4 * mid[at(x, y)])));
+    W.washPull = f32(ink ? .6 + .25 * (M.wet ?? 0) : .45 + .4 * (M.wet ?? 0));
+    W.line = (M.line ?? 0) > 0;
+  }
+  return W;
+}
+
+// Wet paint on a surface (WetCanvas): its model, how it runs, and what each holder's brush keeps between strokes.
+class WetCanvas {
+  constructor(surf) {
+    this.s = surf; this.page = new WetPage(surf); this.wet = new WetWatercolor(this.page, 50);
+    this.rev = surf.rev | 0; this.kinds = -1; this.held = new Map(); this.frameStarted = 0;
+  }
+  moving() { return this.wet.isAnimating(); }
+  brush(W) {
+    const m = this.wet;
+    m.setWetness(W.wetness); m.setFrames(W.frames);
+    m.paintOnly = true; m.dryStays = !W.rewets;
+    if (W.wash) m.wash = W.wash;
+  }
+  // What else changed the page since this canvas left it (surf.rev): taken up as paint, which then rests (wake: moves).
+  catchUp(wake) {
+    if ((this.s.rev | 0) === this.rev) return;
+    this.wet.rewet(wake);
+    if (!wake) this.wet.rest();
+    this.rev = this.s.rev | 0;
+  }
+  // Unpaced: the frame running now to its end; false once the paint rests (WetCanvas.frame).
+  frame() {
+    this.catchUp(false);
+    if (!this.wet.isAnimating()) return false;
+    do this.wet.advance(); while (this.wet.framePending());
+    return this.wet.isAnimating();
+  }
+  // Moves it until it rests, as a tap on the wet indicator runs it on.
+  settle(most = 100000) { let n = 0; while (this.frame() && ++n < most) { /* frames */ } }
+  // A page's loop: about ms of slices; returns ms until the next (as WetCanvas.step and MonoPaint's scheduleWet), -1 at rest.
+  step(ms = 8) {
+    this.catchUp(false);
+    const m = this.wet;
+    if (!m.isAnimating()) return -1;
+    const t0 = now();
+    let frame = m.frame;
+    do { m.advance(); if (m.frame !== frame) { frame = m.frame; this.frameStarted = t0; } } while (m.framePending() && now() - t0 < ms);
+    if (!m.isAnimating()) return -1;
+    if (m.framePending()) return 0;
+    if (m.flowing()) return Math.max(0, m.flowFrameMillis() - (now() - this.frameStarted));
+    return WP.FRAME_MS;
+  }
+  takeDirty() { const d = this.page.dirty; this.page.dirty = null; return d; }
+}
+
+// ---------- the footprint a Wet stroke lays (FootprintSweep, WetCanvas.Footprint) ----------
+const FP_SIDES = 24, FP_COS = [], FP_SIN = [];
+for (let i = 0; i < FP_SIDES; i++) { FP_COS.push(Math.cos(2 * Math.PI * i / FP_SIDES)); FP_SIN.push(Math.sin(2 * Math.PI * i / FP_SIDES)); }
+class WetFootprint {
+  constructor(R, pts, surf, isLine) {
+    this.R = R; this.pts = pts; this.s = surf; this.width = surf.w; this.height = surf.h; this.isLine = isLine;
+    this.smudge = isLine && !ownLine(R);
+    const h = surf.h;
+    this.lo = new Int32Array(h).fill(2147483647); this.hi = new Int32Array(h).fill(-1); this.lo2 = new Int32Array(h).fill(2147483647); this.hi2 = new Int32Array(h).fill(-1);
+    this.left = new Float64Array(h); this.right = new Float64Array(h); this.hullLeft = new Float64Array(h); this.hullRight = new Float64Array(h);
+    this.top = 2147483647; this.bottom = -1; this.first = true; this.lifted = false; this.hakeStart = NaN; this.hakeSettle = 0;
+    this.px = []; this.py = []; this.qx = []; this.qy = []; this.pn = 0; this.qn = 0;
+    this.spans = []; this.box = null; this.mask = new Uint8Array(0); this.rows = new Int32Array(0);
+  }
+  head() {
+    const R = this.R;
+    if (this.smudge) return null;
+    const head = this.isLine ? (R.lineTip === "hake" ? R.lineHake : null) : R.body && R.body.head === "flat" ? R.body : null;
+    return head && head.headTurn !== "fixed" ? head : null;
+  }
+  holds() { return Number.isNaN(this.hakeStart) && !this.lifted && !!this.head() && this.total() < hakeSettle(this.isLine ? this.R.inkSize : this.R.bodySize); }
+  total() { const p = this.pts; return p.length ? p[p.length - 1].d : 0; }
+  to(k) {
+    if (Number.isNaN(this.hakeStart) && this.head()) {
+      const settle = hakeSettle(this.isLine ? this.R.inkSize : this.R.bodySize);
+      this.hakeSettle = settle;
+      this.hakeStart = hakeStartTravel(this.pts, Math.min(settle, this.total()));
+      if (Number.isNaN(this.hakeStart)) { const T = tiltOf(this.pts[0].tx, this.pts[0].ty); this.hakeStart = T && T.dir !== null ? T.dir : 0; }
+      if (k > 0 && this.first) this.sweepTo(0);
+    }
+    this.sweepTo(k);
+  }
+  sweepTo(k) {
+    [this.px, this.qx] = [this.qx, this.px]; [this.py, this.qy] = [this.qy, this.py];
+    this.pn = this.qn;
+    const [a, b, c, s] = this.ellipseAt(k), x = this.pts[k].x, y = this.pts[k].y;
+    for (let i = 0; i < FP_SIDES; i++) { const u = a * FP_COS[i], q = b * FP_SIN[i]; this.qx[i] = x + u * c - q * s; this.qy[i] = y + u * s + q * c; }
+    this.qn = FP_SIDES;
+    if (this.first) { this.first = false; this.fill(this.qx, this.qy, this.qn, null, null, 0); return; }
+    const [hx, hy] = this.hull();
+    this.fill(hx, hy, hx.length, this.px, this.py, this.pn);
+  }
+  // Sample k's shape: the stampers' own ellipse there (half-axes a and b, turned to cos, sin).
+  ellipseAt(k) {
+    const R = this.R, pts = this.pts, P = pts[k], j = Math.max(0, k - 1), Q = pts[j], d = P.d, seg = P.d - Q.d;
+    const dirx = seg > 0 ? (P.x - Q.x) / seg : 1, diry = seg > 0 ? (P.y - Q.y) / seg : 0;
+    // A smudge's dab (Carry.stumpR): its reach, or out to a comb's outer tines.
+    if (this.smudge) { const C = R.carry, r = Math.max(1, C.tines ? Math.max(...C.tines.map(Math.abs)) + C.tineReach : C.r); return [r, r, 1, 0]; }
+    const head = this.isLine ? (R.lineTip === "hake" ? R.lineHake : null) : R.body.head === "flat" ? R.body : null;
+    if (head) {
+      const hs = this.isLine ? R.inkSize : R.bodySize, pr = P.p, T = tiltOf(P.tx, P.ty);
+      const D = paintDiameter(head, hs, pr, T);
+      const travel = hakeTravelAt(head.headTurn === "fixed" ? NaN : this.hakeStart, this.hakeSettle, d, Math.atan2(P.uy ?? 0, P.ux ?? 1));
+      let th = head.headTurn !== "fixed" ? travel + Math.PI / 2 : head.angle * DEG;
+      if (head.tilt > 0 && T && T.dir !== null) th = turnToward(th, T.dir + Math.PI / 2, head.tilt);
+      const thick = Math.max(1.5, hs * (0.03 + 0.05 * Math.pow(clamp(pr), 1.2)) * (1 + 0.8 * (head.pWidth || 0) * (pr - 0.4)));
+      return [Math.max(1, D / 2), Math.max(1, thick / 2), Math.cos(th), Math.sin(th)];
+    }
+    if (this.isLine) {
+      // LineStamper.nib's ellipse, as stampLine works it out at a sample.
+      const b = R.pen, size = R.inkSize, big = inkBig(b, size), pr = P.p, v = P.v, T = tiltOf(P.tx, P.ty);
+      let wd = size * lerp(1 - 0.75 * b.pressure, 1 + 0.6 * b.pressure, pr) * clamp(1 + b.speed * 0.55 * (clamp(v / 2.5) - 0.3), 0.35, 1.6);
+      const inLen = taperLens(b, size)[0];
+      if (inLen > 0) wd *= Math.pow(clamp(d / inLen), 0.6) * 0.92 + 0.08;
+      if (b.fast && b.taperOut > 0) {
+        const fall = Q.pk > 0 ? clamp(pr / (Q.pk * 0.7)) : 1, flick = clamp((v - 1.2) / 2);
+        wd *= lerp(1, Math.pow(fall, 0.8) * 0.92 + 0.08, b.taperOut) * (1 - 0.8 * b.taperOut * flick);
+      }
+      const xi = clamp((P.x / big) | 0, 0, this.width - 1), yi = clamp((P.y / big) | 0, 0, this.height - 1);
+      if (b.wobble > 0) wd *= 1 + b.wobble * 0.7 * (this.s.mid[yi * this.width + xi] - 0.5);
+      if (b.pool > 0) { const grw = b.pool * 0.9 * (1 - clamp(v / 0.25)) ** 2; wd = big > 1 ? wd + Math.min(wd * grw, 16 * grw * Math.sqrt(big)) : wd * (1 + grw); }
+      let ang = b.angle * DEG, flat = 1;
+      if (((b.tiltSize || 0) + (b.tiltAngle || 0) + (b.tDark || 0) + (b.side || 0) > 0 || b.filbert) && T) {
+        wd *= tiltWidth(b, T.lean);
+        const shade = sideShade(b, T.lean);
+        if (shade > 0) wd *= 1 + SIDE.WIDTH * shade;
+        if (b.tiltAngle > 0 && T.dir !== null) ang = turnToward(ang, T.dir + Math.PI / 2, b.tiltAngle);
+        if (b.filbert && T.dir !== null) ang = T.dir + Math.PI / 2;
+        flat = tiltFlat(b, T.lean);
+      }
+      if (b.sAngle > 0) ang = turnToward(ang, Math.atan2(diry, dirx) + Math.PI / 2, b.sAngle * clamp(v / 1.5));
+      const a = Math.max(0.6, wd / 2);
+      let bb = Math.max(0.6, Math.min(a, Math.max(1, a * b.aspect * flat)));
+      if (b.pWidth > 0) bb = b.aspect >= 1 ? Math.max(0.6, bb * (1 - 0.45 * b.pWidth * pr)) : Math.max(0.6, Math.min(a, bb * (1 + 1.2 * b.pWidth * (pr - 0.4))));
+      return [a, bb, Math.cos(ang), Math.sin(ang)];
+    }
+    // The body's dab (BodyStamper.shape), its taper in, no taper out (not yet lifted).
+    // The pen's lean read only for Tilt → size or darkness (FootprintSweep.ellipseAt): a Filbert's oval lies at its Nib Angle here.
+    const bd = R.body, T = bd.tilt > 0 || bd.tDark ? tiltOf(P.tx, P.ty) : null;
+    const D = paintDiameter(bd, R.bodySize, P.p, bd.tilt > 0 ? T : null);
+    const inLen = (bd.taperIn || 0) * 70 * Math.max(1, R.bodySize / 24);
+    let r = Math.max(0.8, D / 2);
+    if (inLen > 0) r = Math.max(0.8, r * (Math.pow(clamp(d / inLen), 0.6) * 0.92 + 0.08));
+    if (bd.speed) r *= clamp(1 + bd.speed * 0.55 * (clamp(P.v / 2.5) - 0.3), 0.35, 1.6);
+    let A = r, B = r, th = 0;
+    const reads = T && T.dir !== null;
+    if (bd.filbert) { if (reads && bd.tilt > 0 && T.lean > 0) A = r * (1 + 0.6 * bd.tilt * T.lean); B = Math.max(0.8, r * bd.aspect); th = reads ? T.dir + Math.PI / 2 : bd.angle * DEG; }
+    else if (bd.tilt > 0 && reads && T.lean > 0) { A = r * (1 + 0.6 * bd.tilt * T.lean); B = r * (1 - 0.35 * bd.tilt * T.lean); th = T.dir + Math.PI / 2; }
+    else if (bd.aspect !== undefined && bd.aspect < 1) { B = Math.max(0.8, r * bd.aspect); th = bd.angle * DEG; }
+    return [A, B, Math.cos(th), Math.sin(th)];
+  }
+  // The convex hull of the last two shapes (Andrew's monotone chain), as FootprintSweep.hull: its corners.
+  hull() {
+    const sx = [...this.px.slice(0, this.pn), ...this.qx.slice(0, this.qn)], sy = [...this.py.slice(0, this.pn), ...this.qy.slice(0, this.qn)], m = sx.length;
+    const order = [];
+    for (let i = 0; i < m; i++) {
+      let at = i;
+      order.push(i);
+      while (at > 0 && (sx[order[at - 1]] > sx[i] || sx[order[at - 1]] === sx[i] && sy[order[at - 1]] > sy[i])) { order[at] = order[at - 1]; at--; }
+      order[at] = i;
+    }
+    const hx = [], hy = [], cross = (ax, ay, bx, by, cx, cy) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    for (let i = 0; i < m; i++) { const p = order[i]; while (hx.length >= 2 && cross(hx[hx.length - 2], hy[hy.length - 2], hx[hx.length - 1], hy[hy.length - 1], sx[p], sy[p]) <= 0) { hx.pop(); hy.pop(); } hx.push(sx[p]); hy.push(sy[p]); }
+    const low = hx.length + 1;
+    for (let i = m - 2; i >= 0; i--) { const p = order[i]; while (hx.length >= low && cross(hx[hx.length - 2], hy[hy.length - 2], hx[hx.length - 1], hy[hy.length - 1], sx[p], sy[p]) <= 0) { hx.pop(); hy.pop(); } hx.push(sx[p]); hy.push(sy[p]); }
+    hx.pop(); hy.pop();
+    return [hx, hy];
+  }
+  fill(xs, ys, n, ox, oy, on) {
+    const rows = this.edges(xs, ys, n, this.hullLeft, this.hullRight);
+    if (!rows) return;
+    const old = ox ? this.edges(ox, oy, on, this.left, this.right) : null, w = this.width;
+    for (let y = rows[0]; y <= rows[1]; y++) {
+      const x0 = Math.max(0, Math.ceil(this.hullLeft[y] - .5)), x1 = Math.min(w - 1, Math.floor(this.hullRight[y] - .5));
+      if (x1 < x0) continue;
+      if (old && y >= old[0] && y <= old[1]) {
+        const e0 = Math.ceil(this.left[y] - .5), e1 = Math.floor(this.right[y] - .5);
+        if (e0 <= e1 && e1 >= x0 && e0 <= x1) { if (x0 < e0) this.add(y, x0, e0 - 1); if (x1 > e1) this.add(y, e1 + 1, x1); continue; }
+      }
+      this.add(y, x0, x1);
+    }
+  }
+  add(y, a, b) {
+    const lo = this.lo, hi = this.hi, lo2 = this.lo2, hi2 = this.hi2, MAX = 2147483647;
+    if (y < this.top) this.top = y;
+    if (y > this.bottom) this.bottom = y;
+    if (lo[y] > hi[y]) { lo[y] = a; hi[y] = b; return; }
+    if (b >= lo[y] - 1 && a <= hi[y] + 1) {
+      lo[y] = Math.min(lo[y], a); hi[y] = Math.max(hi[y], b);
+      if (lo2[y] <= hi2[y] && hi2[y] >= lo[y] - 1 && lo2[y] <= hi[y] + 1) { lo[y] = Math.min(lo[y], lo2[y]); hi[y] = Math.max(hi[y], hi2[y]); lo2[y] = MAX; hi2[y] = -1; }
+      return;
+    }
+    if (lo2[y] > hi2[y]) { lo2[y] = a; hi2[y] = b; return; }
+    if (b >= lo2[y] - 1 && a <= hi2[y] + 1) {
+      lo2[y] = Math.min(lo2[y], a); hi2[y] = Math.max(hi2[y], b);
+      if (hi2[y] >= lo[y] - 1 && lo2[y] <= hi[y] + 1) { lo[y] = Math.min(lo[y], lo2[y]); hi[y] = Math.max(hi[y], hi2[y]); lo2[y] = MAX; hi2[y] = -1; }
+      return;
+    }
+    this.write(y);
+    lo[y] = a; hi[y] = b;
+  }
+  write(y) {
+    const span = (a, b) => { this.spans.push(y, a, b); const B = this.box ??= [a, y, b, y]; if (a < B[0]) B[0] = a; if (b > B[2]) B[2] = b; if (y < B[1]) B[1] = y; if (y > B[3]) B[3] = y; };
+    span(this.lo[y], this.hi[y]);
+    if (this.lo2[y] <= this.hi2[y]) span(this.lo2[y], this.hi2[y]);
+    this.lo[y] = this.lo2[y] = 2147483647; this.hi[y] = this.hi2[y] = -1;
+  }
+  flush() { for (let y = this.top; y <= this.bottom; y++) if (this.lo[y] <= this.hi[y]) this.write(y); this.top = 2147483647; this.bottom = -1; }
+  edges(xs, ys, n, left, right) {
+    let t = 0, b = 0;
+    for (let i = 1; i < n; i++) { if (ys[i] < ys[t]) t = i; if (ys[i] > ys[b]) b = i; }
+    const y0 = Math.max(0, Math.ceil(ys[t] - .5)), y1 = Math.min(this.height - 1, Math.floor(ys[b] - .5));
+    if (y1 < y0) return null;
+    const chain = (step, at) => {
+      for (let i = t; i !== b;) {
+        const k = (i + step) % n, ya = ys[i], yb = ys[k];
+        if (yb > ya) {
+          const r0 = Math.max(y0, Math.ceil(ya - .5)), r1 = Math.min(y1, Math.ceil(yb - .5) - 1), slope = (xs[k] - xs[i]) / (yb - ya);
+          for (let y = r0; y <= r1; y++) at[y] = xs[i] + (y + .5 - ya) * slope;
+        }
+        i = k;
+      }
+      const last = Math.ceil(ys[b] - .5);
+      if (last >= y0 && last <= y1 && last + .5 === ys[b]) at[last] = xs[b];
+    };
+    chain(1, left); chain(n - 1, right);
+    for (let y = y0; y <= y1; y++) if (left[y] > right[y]) { const s = left[y]; left[y] = right[y]; right[y] = s; }
+    return [y0, y1];
+  }
+  // The pixels swept since the last take as one mask over their box (1 where new), and each row's first and last new column.
+  take(lay) {
+    this.flush();
+    if (!this.box) return false;
+    const [x0, y0, x1, y1] = this.box, w = x1 - x0 + 1, h = y1 - y0 + 1, sp = this.spans;
+    if (this.mask.length < w * h) this.mask = new Uint8Array(w * h); else this.mask.fill(0, 0, w * h);
+    if (this.rows.length < 2 * h) this.rows = new Int32Array(4 * h);
+    const rows = this.rows;
+    for (let r = 0; r < h; r++) { rows[2 * r] = 2147483647; rows[2 * r + 1] = -2; }
+    for (let i = 0; i < sp.length; i += 3) {
+      const r = sp[i] - y0, row = r * w - x0;
+      this.mask.fill(1, row + sp[i + 1], row + sp[i + 2] + 1);
+      rows[2 * r] = Math.min(rows[2 * r], sp[i + 1] - x0); rows[2 * r + 1] = Math.max(rows[2 * r + 1], sp[i + 2] - x0);
+    }
+    for (let r = 0; r < h; r++) if (rows[2 * r + 1] < 0) rows[2 * r] = -1;
+    this.spans = []; this.box = null;
+    lay(this.mask, x0, y0, w, h, rows);
+    return true;
+  }
+}
+
+// ---------- what a Wet stroke lays (WetPaintStroke) ----------
+const WET_STROKE = { WASH_BODY: 1, PAPER: 250, PICKUP_PX: 40, INK_PULL: .6, INK_LIGHT: .2, INK_FULL: .92, INK_PX: 48, INK_LOAD: 4 };
+// The app's line and body exist only with paint of its own (ResolvedBrush: Clear Water has neither; its footprint is its smudge's dab).
+const ownLine = R => !!R.line && R.load > 0, ownBody = R => !!R.body && R.load > 0;
+const wetReach = R => Math.max(ownLine(R) ? R.inkSize * (1 + .6 * R.pen.pressure) * (1 + 1.06 * (R.pen.fuzz || 0)) : 0, ownLine(R) && R.linePlaced ? R.placeSize : 0, ownBody(R) ? R.bodySize : 0);
+const inkTrade = travel => { const t = Math.max(0, Math.min(1, travel)); return f32((WET_STROKE.INK_LIGHT + (WET_STROKE.INK_FULL - WET_STROKE.INK_LIGHT) * t * t) / (.2 * WET_STROKE.INK_PULL)); };
+const inkCapacity = reach => { const k = Math.max(1, reach / WET_STROKE.INK_PX); return f32(WET_STROKE.INK_LOAD * BrushInk.CAPACITY * k * k); };
+function washStrengthAt(R, travel) {
+  const t = Math.max(0, Math.min(1, travel)), body = (R.lineInk ? GLAZE : 1) * R.parts.bodyAmt;
+  return f32(WET_STROKE.WASH_BODY * body * Math.min(1, .55 + .65 * t) * (1 - .7 * clamp(R.pen.pDark || 0) * (1 - t)));
+}
+// The paint a dragging, loaded brush carries (PaintLoad): its own grey running out, mixed toward what it picked up.
+class WetPaintLoad {
+  constructor(page, gray) { this.page = page; this.gray = gray; this.picked = 0; this.travelled = 0; this.pickedAt = 0; this.amount = 1; this.started = false; }
+  tone() { return Math.round(this.picked + (this.gray - this.picked) * this.amount); }
+  travel(dist) { this.travelled += dist; }
+  left(share) { this.amount = Math.max(0, Math.min(1, share)); }
+  deposit() { return f32(.45 + .55 * this.amount); }
+  pickUp(mask, x, y, w, h) {
+    const D = this.page;
+    let under = 0, count = 0;
+    for (let row = 0; row < h; row++) for (let col = 0; col < w; col++) {
+      const px = x + col, py = y + row;
+      if (mask[row * w + col] && px >= 0 && py >= 0 && px < D.width && py < D.height) { under += D.strokeBaseTone(px, py); count++; }
+    }
+    const distance = this.travelled - this.pickedAt; this.pickedAt = this.travelled;
+    if (count === 0) return;
+    under /= count;
+    if (!this.started) { this.picked = under; this.started = true; }
+    else this.picked += (under - this.picked) * (1 - Math.exp(-distance / 40));
+  }
+}
+class WetPaintStroke {
+  constructor(st, canvas, W, holder) {
+    const R = st.R, s = st.surf;
+    this.st = st; this.R = R; this.W = W; this.canvas = canvas; this.holder = holder; this.swept = -1; this.finished = false;
+    canvas.catchUp(false);
+    canvas.brush(W);
+    const m = canvas.wet;
+    this.water = !!R.carry && R.carry.kind === "water";
+    this.rinsed = this.water ? new BrushInk() : null;
+    this.gray = Math.round(255 * (1 - R.shade));
+    this.held = W.inks ? new BrushInk(inkCapacity(wetReach(R))) : null;
+    if (this.held) { const f = canvas.held.get("ink:" + holder); if (f === undefined) this.held.load(this.gray); else this.held.restore(f); }
+    this.step = Math.max(2, wetReach(R) / 24);
+    this.sweep = new WetFootprint(R, st.pts, s, !ownBody(R));
+    const lines = !!W.wash && W.line && !!R.line, whole = lines && R.bodySize <= R.inkSize;
+    this.lineSweep = lines && !whole ? new WetFootprint(R, st.pts, s, true) : null;
+    this.lineInWash = whole ? f32((255 - this.gray) * clamp(R.parts.inkShare)) : 0;
+    if (R.loaded) st.oil = { share: clamp(Math.max(R.loaded.start, canvas.held.get("load:" + holder) || 0)), spent: 0 };
+    const drags = !this.water && !this.held && !!R.carry && R.carry.moves;
+    this.load = drags && R.loaded ? new WetPaintLoad(canvas.page, this.gray) : null;
+    this.dirties = drags && !R.loaded;
+    this.own = this.dirties ? f32(1 - .3 * R.carry.pick) : 1;
+    this.dirt = -1;
+    m.beginStroke();
+  }
+  present() {
+    const pts = this.st.pts, newest = pts.length - 1;
+    if (this.finished || newest <= this.swept) return;
+    for (let k = this.swept + 1; k <= newest; k++) {
+      if (this.sweep.holds()) break;
+      if (k < newest && this.swept >= 0 && pts[k].d - pts[this.swept].d < this.step) continue;
+      const travelled = this.swept < 0 ? 0 : f32(pts[k].d - pts[this.swept].d);
+      this.sweep.to(k);
+      if (this.lineSweep) {
+        this.lineSweep.to(k);
+        this.lineSweep.take((mask, x, y, w, h, rows) => this.canvas.wet.lineMask(mask, w, x, y, w, h, this.gray, this.R.parts.inkShare, rows));
+      }
+      this.sweep.take((mask, x, y, w, h, rows) => this.lay(mask, x, y, w, h, rows, k, travelled));
+      this.swept = k;
+    }
+  }
+  lay(mask, x, y, w, h, rows, k, travelled) {
+    const m = this.canvas.wet, R = this.R, p = this.st.pts[k];
+    if (this.water) { m.waterMask(mask, w, x, y, w, h, f32(.5 + .5 * clamp(R.carry.pick)), this.rinsed, 1); return; }
+    if (this.W.wash) { m.washMask(mask, w, x, y, w, h, this.gray, washStrengthAt(R, p.p), this.W.washPull, rows, this.lineInWash); return; }
+    if (this.held) { m.waterMask(mask, w, x, y, w, h, WET_STROKE.INK_PULL, this.held, inkTrade(p.p)); return; }
+    if (this.dirties) { m.paintMask(mask, w, x, y, w, h, this.dirty(mask, x, y, w, h, travelled), false, f32(R.cover)); return; }
+    if (!this.load) { m.paintMask(mask, w, x, y, w, h, this.gray, false, f32(R.cover)); return; }
+    this.load.travel(travelled);
+    this.load.pickUp(mask, x, y, w, h);
+    this.load.left(p.own ?? 1);
+    m.paintMask(mask, w, x, y, w, h, this.load.tone(), false, f32(R.cover * this.load.deposit()));
+  }
+  // Drag or Smear without Paint Load: the paint it crosses (as the stroke found it) mixed into what it picked up.
+  dirty(mask, x, y, w, h, travelled) {
+    const D = this.canvas.page;
+    let under = 0, count = 0;
+    for (let row = 0; row < h; row += 2) for (let col = 0; col < w; col += 2) {
+      const px = x + col, py = y + row;
+      if (!mask[row * w + col] || px < 0 || py < 0 || px >= D.width || py >= D.height) continue;
+      const tone = D.strokeBaseTone(px, py);
+      if (tone < WET_STROKE.PAPER) { under += tone; count++; }
+    }
+    if (count > 0) { under = f32(under / count); this.dirt = this.dirt < 0 ? under : f32(this.dirt + (under - this.dirt) * (1 - Math.exp(-travelled / WET_STROKE.PICKUP_PX))); }
+    return this.dirt < 0 ? this.gray : Math.round(this.dirt + (this.gray - this.dirt) * this.own);
+  }
+  finish() {
+    if (this.finished) return;
+    this.sweep.lifted = true;
+    if (this.lineSweep) this.lineSweep.lifted = true;
+    this.present();
+    this.finished = true;
+    const st = this.st, held = this.canvas.held;
+    if (this.R.loaded && st.oil) { const left = Math.max(0, st.oil.share - st.oil.spent / this.R.loaded.full); held.set("load:" + this.holder, left > this.R.loaded.start ? left : 0); }
+    if (this.held) held.set("ink:" + this.holder, this.held.fullness());
+    this.canvas.rev = this.canvas.s.rev | 0;
+  }
+}
+
+// A wet wash with a pen line holds its body near the line (ResolvedBrush.wetBody): at most 40 px past it each side, 180 across.
+const resolveWetBody = resolve;
+resolve = function (B, size, shade) {
+  const R = resolveWetBody(B, size, shade);
+  const lineMedium = B.medium.k === "ink" || B.medium.k === "charcoal" || B.medium.k === "graphite";
+  if (wetWashes(B) && lineMedium) R.bodySize = Math.min(R.bodySize, Math.max(R.inkSize, Math.min(180, R.inkSize + 80)));
+  return R;
+};
+// A Wet stroke with a host that holds wet paint lays into it; any other stroke marks the page changed for it (surf.rev).
+const StrokeWet = Stroke;
+Stroke = class extends StrokeWet {
+  constructor(surf, B, size, shade, host) {
+    super(surf, B, size, shade, host);
+    const canvas = host && host.getWet && B.life.k === "wetpaint" ? host.getWet() : null, W = canvas ? wetOf(B, this.R, surf) : null;
+    this.wetStroke = W ? new WetPaintStroke(this, canvas, W, host.holder || "any") : null;
+  }
+  add(samples) {
+    if (!this.wetStroke) return super.add(samples);
+    for (const s of samples) if (addPt(this.pts, ...s) && this.oil) this.oilSpend();
+    const D = this.wetStroke.canvas.page, was = D.dirty; D.dirty = null;
+    this.wetStroke.present();
+    const r = D.dirty; D.dirty = r ? union(r, was || r) : was;
+    if (r) grow(this.rect, r);
+    return r;
+  }
+  end() {
+    if (!this.wetStroke) { const r = super.end(); this.surf.rev = (this.surf.rev | 0) + 1; return r; }
+    if (this.pts.length === 1) { const p = this.pts[0]; this.add([[p.x + .8, p.y, p.p, p.t + 16, p.tx, p.ty]]); }
+    const D = this.wetStroke.canvas.page, was = D.dirty; D.dirty = null;
+    this.wetStroke.finish();
+    const r = D.dirty; D.dirty = r ? union(r, was || r) : was;
+    if (r) grow(this.rect, r);
+    this.lift = 0;
+    return emptyRect(this.rect) ? null : this.rect.slice();
+  }
+};
+// The eraser changes the page too: wet paint takes up what it left (surf.rev) when next used.
+const EraserWet = Eraser;
+Eraser = class extends EraserWet {
+  add(samples) { const r = super.add(samples); if (r) this.s.rev = (this.s.rev | 0) + 1; return r; }
+};
+// Checks: a pen's pressure goes through the Manta's curve; a Wet stroke with a host stays wet and moves after lift, and
+// one without lays as Instant; another stroke over moving paint lets it rest.
+function wetPaintChecks() {
+  const out = [], t = (what, ok) => out.push({ what, ok: !!ok });
+  t("a pen's pressure through the Manta's curve: .05 none, .30 a usual press (.625), .78 all of it", penTravel(.05) === 0 && Math.abs(penTravel(.3) - .625) < 1e-9 && penTravel(.78) === 1 && penTravel(1) === 1);
+  const B = readAnyCode("watercolour-washy.M60i04o4b0000ji_1zz8t00ag9600_1zzex_000_7js_8zz0000000000000000zz0.1s13pn4").b;
+  const pts = []; for (let i = 0; i <= 60; i++) pts.push({ x: 40 + 4 * i, y: 100 + 20 * Math.sin(i / 9), p: .7, t: 8 * i, tx: NaN, ty: NaN });
+  const s = modSurface(320, 200, 7), host = { wet: null, getWet() { return this.wet ??= new WetCanvas(s); } };
+  layStroke(s, B, pts, 60, .3, host);
+  const lifted = s.page.slice(), moving = host.wet && host.wet.moving();
+  host.wet.settle();
+  let moved = 0; for (let i = 0; i < lifted.length; i++) if (Math.abs(lifted[i] - s.page[i]) >= 1) moved++;
+  t("a Wet stroke with a host stays wet and moves after lift (" + moved + " px moved)", moving && moved > 200 && !host.wet.moving());
+  const s2 = modSurface(320, 200, 7); layStroke(s2, B, pts, 60, .3, null);
+  let laid = 0; for (let i = 0; i < s2.page.length; i++) if (s2.page[i] < PAPER_TONE - 1) laid++;
+  t("without one it lays as Instant (" + laid + " px)", laid > 2000);
+  layStroke(s, B, pts.map(q => ({ ...q, y: q.y + 15 })), 60, .3, host);
+  const pen = readAnyCode("steady-line.M00il00000000at_000zz0000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud").b;
+  layStroke(s, pen, pts, 4, 1, host);
+  t("another stroke over moving wet paint lets it rest, still wet", host.wet.step(1) === -1);
+  return out;
+}
+const selfTestWetPaint = selfTest;
+selfTest = function () { const r = selfTestWetPaint(); r.wetPaint = wetPaintChecks(); r.ok = r.ok && r.wetPaint.every(c => c.ok); return r; };
+
+;
+// ===================================================================================================================
+// The page's planes (the app's ToneDocument: a page of two layers, Wash under Ink as InkWashLayers.blank, each a base and
+// four kind planes, Dry media, Wash, Pen, Opaque; ToneDocument.stacked shows them both bases first, then kind by kind,
+// the wash layer's under the ink layer's). A stroke reads and writes only its own plane (strokeBaseTones): the surface's
+// page, base, kept, print and dots are that plane's while it draws (planeBind), so the engine is as it was on one page.
+// Each plane keeps a coverage beside its tones over white (cov, 0 to 1; the app's alpha): a transparent mark covers by
+// its darkness, opaque paint, light over dark, White and Invert by their own (planeCover, engine.js). What shows is the planes stacked (planesShow: s.shown); a page that
+// has only ever had one plane shows it as it is, and draws exactly as before. Built last (engine-files.cjs).
+// User layers (the layers panel) are left out: a brush reads none but the pair's.
+// ===================================================================================================================
+const KIND_PEN = 1, KIND_PAINT = 2, KIND_PENCIL = 4, KIND_ALL = 7, KIND_OPAQUE = 8;
+const PLANE_KINDS = [KIND_PENCIL, KIND_PAINT, KIND_PEN, KIND_PAINT], LAYER_WASH = 0, LAYER_INK = 1, STACK_N = 10;
+// What a plane holds of the surface: the engine's arrays while it is bound.
+const PLANE_FIELDS = ["page", "base", "cov", "covBase", "kept", "keptBase", "print", "dots"];
+// Place k of the stack, bottom to top (ToneDocument.stacked): layer 0 (wash) or 1 (ink), plane p (-1 its base).
+const stackAt = (layer, p) => 2 * (p + 1) + layer;
+// The plane a gesture of kinds lays on (ToneDocument.planeOf); -1, the base, for none or more than one.
+function kindPlane(kinds) {
+  if (kinds & KIND_OPAQUE) return (kinds & KIND_ALL) === KIND_PAINT ? 3 : -1;
+  return kinds === KIND_PENCIL ? 0 : kinds === KIND_PAINT ? 1 : kinds === KIND_PEN ? 2 : -1;
+}
+// The kind its Medium is (ResolvedBrush.medium): opaque paint Paint on its own plane; a texture (Screen, Stipple, Hatch,
+// Hand Hatch) Paint whatever its medium; charcoal, graphite and crayon Dry media; the rest Pen.
+function brushMedium(B, R) {
+  const mk = B.medium.k, tk = B.tip.k, texture = !!R.screen || tk === "stipple" || tk === "hatch" || tk === "handhatch";
+  return mk === "cover" ? KIND_PAINT | KIND_OPAQUE : mk === "wash" || texture ? KIND_PAINT : mk === "charcoal" || mk === "graphite" || mk === "crayon" ? KIND_PENCIL : KIND_PEN;
+}
+// The layer it draws on (ModularStroke.layerOf): ink, charcoal, graphite, resist, screentone and crayon the ink layer,
+// but a wet wash (wet.js wetWashes); the rest the wash layer.
+const brushLayer = B => ["ink", "charcoal", "graphite", "resist", "tone", "crayon", "vector"].includes(B.medium.k) && !wetWashes(B) ? LAYER_INK : LAYER_WASH;
+// The plane a stroke of B draws on (ModularStroke.kinds): its paint's; a smudge with none of its own its Medium's plane
+// where its layer has one, else the base.
+function strokePlane(s, B, R) {
+  const layer = brushLayer(B), medium = brushMedium(B, R);
+  let kinds = R.load > 0 ? medium : 0;
+  if (!kinds && R.carry && R.carry.moves) { const p = kindPlane(medium); kinds = p >= 0 && s.planes && s.planes[stackAt(layer, p)] ? medium : 0; }
+  return stackAt(layer, kindPlane(kinds));
+}
+// The plane the parity harness lays its marks on (WebParity.scene): the brush's own.
+const markPlane = strokePlane;
+
+function planeSave(s) { if (s.bound !== undefined) { const p = s.planes[s.bound]; for (const f of PLANE_FIELDS) p[f] = s[f]; } }
+// Binds plane k: the surface's arrays become its (made blank the first time). The first plane bound on a page takes what
+// the page holds (marks laid before any stroke, as the parity harness lays them on the brush's own).
+function planeBind(s, k) {
+  if (k === undefined || s.bound === k) return;
+  const n = s.w * s.h, P = PAPER_TONE;
+  if (s.bound === undefined) {
+    s.planes = new Array(STACK_N).fill(null); s.planes[k] = {}; s.bound = k;
+    s.cov = new Float32Array(n); for (let i = 0; i < n; i++) s.cov[i] = Math.max(0, 1 - s.page[i] / P);
+    s.covBase = Float32Array.from(s.cov);
+    return planeSave(s);
+  }
+  planeSave(s);
+  let p = s.planes[k];
+  if (!p) {
+    // A second plane: from now on the page shows them stacked (one alone shows as it is).
+    if (!s.shown) s.shown = Float32Array.from(s.page);
+    const page = new Float32Array(n).fill(P);
+    p = s.planes[k] = { page, base: Float32Array.from(page), cov: new Float32Array(n), covBase: new Float32Array(n), kept: null, keptBase: null, print: null, dots: null };
+  }
+  for (const f of PLANE_FIELDS) s[f] = p[f];
+  s.bound = k;
+}
+// fn with plane k bound (undefined: as it is), the plane bound before put back.
+function planeWith(s, k, fn) {
+  const back = s.bound;
+  if (k === undefined || back === undefined || k === back) return fn();
+  planeBind(s, k);
+  try { return fn(); } finally { planeBind(s, back); }
+}
+// The planes stacked over rect r into s.shown (ToneDocument.compositeTones): each over what is under it by its coverage,
+// a transparent mark's at least its darkness (kept, as the app's write rule keeps a pixel's coverage).
+function planesShow(s, r) {
+  if (!s.shown || !r) return;
+  planeSave(s);
+  const P = PAPER_TONE, w = s.w, x0 = Math.max(0, Math.floor(r[0])), y0 = Math.max(0, Math.floor(r[1])), x1 = Math.min(w - 1, Math.ceil(r[2])), y1 = Math.min(s.h - 1, Math.ceil(r[3]));
+  const list = s.planes.filter(p => p);
+  for (let y = y0; y <= y1; y++) for (let i = y * w + x0, e = y * w + x1; i <= e; i++) {
+    let v = P;
+    for (const p of list) { const t = p.page[i], c = Math.max(p.cov[i], 1 - t / P); if (c > p.cov[i]) p.cov[i] = c; v = t + (v - P) * (1 - c); }
+    s.shown[i] = v;
+  }
+}
+// The page as it shows, every plane stacked: the page itself while it has one plane.
+function shownPage(s) { if (s.shown) planesShow(s, [0, 0, s.w - 1, s.h - 1]); return s.shown || s.page; }
+// fn reading s.page as the page shows (planesShow first, for the rect it reads).
+function planesView(s, fn) { if (!s.shown) return fn(); const page = s.page; s.page = s.shown; try { return fn(); } finally { s.page = page; } }
+// The page under a stroke as it finds it (ModularCompose.Under): the planes of layers 0 to top stacked, its own as found
+// (it has drawn nothing yet). Null while the page has one plane: then it is the stroke's base.
+function planesUnder(s, top) {
+  if (!s.shown) return null;
+  planeSave(s);
+  const P = PAPER_TONE, out = new Float32Array(s.w * s.h).fill(P), list = s.planes.filter((p, k) => p && (k & 1) <= top);
+  for (let i = 0; i < out.length; i++) { let v = P; for (const p of list) { const t = p.page[i], c = Math.max(p.cov[i], 1 - t / P); v = t + (v - P) * (1 - c); } out[i] = v; }
+  return out;
+}
+
+// ---------- strokes on their planes ----------
+const StrokePl = Stroke;
+Stroke = class extends StrokePl {
+  constructor(surf, B, size, shade, host) {
+    const R = resolve(B, size, shade);
+    // Masking fluid lays on the page's fluid (resist planes), no plane; a stroke on floating paint or wet paint lays on
+    // that paint's plane (ModularStroke.begin: water.kinds; WetPaintStroke: canvas.kinds).
+    const bath = R.float && host && host.bath && host.bath.wet ? host.bath : null, wet = B.life.k === "wetpaint" && host && host.wet ? host.wet : null;
+    if (!(R.resist && !(R.erase < 1))) planeBind(surf, bath && bath.plane !== undefined ? bath.plane : wet && wet.plane !== undefined ? wet.plane : strokePlane(surf, B, R));
+    // White, Invert and light over dark read the page under them, the stroke's own layer and below; Behind the pair's.
+    surf.under = R.blend === "behind" ? planesUnder(surf, LAYER_INK) : R.blend === "lighten" || R.blend === "invert" || lightOver(R) > 0 ? planesUnder(surf, brushLayer(B)) : null;
+    super(surf, B, size, shade, host);
+    if (surf.cov) surf.covBase.set(surf.cov);
+    this.plane = surf.bound; this.under = surf.under;
+    // The layer drawn on is the page's active one after (ModularStroke.selectLayer): what a live page's change lays on.
+    surf.active = brushLayer(B);
+  }
+  onPlane(fn) { const s = this.surf; return planeWith(s, this.plane, () => { const u = s.under; s.under = this.under; try { return fn(); } finally { s.under = u; } }); }
+  add(samples) { return this.onPlane(() => this.smeared(super.add(samples))); }
+  end() { return this.onPlane(() => this.smeared(super.end())); }
+  holdTick(t) { return this.onPlane(() => super.holdTick(t)); }
+  // A smudge's write (ToneDocument.smearTones): its coverage what the smear leaves there, not what it found.
+  // shortcut: as its darkness, so a smeared opaque mark covers as a transparent one; keep the carry's coverage if that shows.
+  smeared(r) {
+    const s = this.surf, C = this.R.carry;
+    if (r && s.cov && C && C.moves) for (let y = Math.max(0, r[1]); y <= Math.min(s.h - 1, r[3]); y++) for (let i = y * s.w + Math.max(0, r[0]), e = y * s.w + Math.min(s.w - 1, r[2]); i <= e; i++)
+      if (s.page[i] !== s.base[i]) s.cov[i] = Math.max(0, 1 - s.page[i] / PAPER_TONE);
+    return r;
+  }
+};
+// What keeps working after its stroke (Slow's water, Float's bath, wet paint, Halo's veins, Fading's marks) works on the
+// plane it was laid on.
+const addWetPl = Water.prototype.addWet;
+Water.prototype.addWet = function (...a) { this.plane = this.s.bound; return addWetPl.apply(this, a); };
+// shortcut: a pen line into a wet wash (Takes ink) trades with the water on the pen's plane; keep the water's plane apart if that shows.
+for (const m of ["step", "dryAll"]) { const f = Water.prototype[m]; Water.prototype[m] = function (...a) { return planeWith(this.s, this.plane, () => f.apply(this, a)); }; }
+const BathPl = Bath;
+Bath = class extends BathPl { constructor(surf, ...rest) { super(surf, ...rest); this.plane = surf.bound; } };
+for (const m of ["render", "print", "undoLast"]) { const f = BathPl.prototype[m]; if (f) BathPl.prototype[m] = function (...a) { return planeWith(this.s, this.plane, () => f.apply(this, a)); }; }
+// shortcut: wet paint keeps the plane of the stroke that first wet it, as the app's canvas keeps its kinds; a stroke of
+// another layer joins it there.
+const WetPaintStrokePl = WetPaintStroke;
+WetPaintStroke = class extends WetPaintStrokePl { constructor(st, canvas, ...rest) { if (canvas.plane === undefined) canvas.plane = st.surf.bound; super(st, canvas, ...rest); } };
+for (const m of ["catchUp", "frame", "step"]) { const f = WetCanvas.prototype[m]; WetCanvas.prototype[m] = function (...a) { return planeWith(this.s, this.plane, () => f.apply(this, a)); }; }
+const HaloPl = Halo;
+Halo = class extends HaloPl {
+  constructor(s, ...rest) { super(s, ...rest); this.plane = s.bound; }
+  step(...a) { return planeWith(this.s, this.plane, () => super.step(...a)); }
+};
+const fadeStepPl = fadeStep;
+fadeStep = function (s, M, t) { if (M.plane === undefined) M.plane = s.bound; return planeWith(s, M.plane, () => fadeStepPl(s, M, t)); };
+
+// ---------- the eraser: every plane of the kinds it takes ----------
+// The app's EraseBothStroke takes the pair's planes of its kinds and both bases (paint of no known kind is every kind);
+// er.kinds (EraseKind.KINDS: 0 Everything, KIND_PEN, KIND_PAINT, KIND_PENCIL) takes them whole, permanent paint too
+// (the owner, 2026-10-22), a chosen kind Tone's dots whole; left undefined, the lab's Erasable rule (ToneDocument.eraseKinds(0)).
+// shortcut: a chosen kind still lifts masking fluid where it passes; the app's leaves the fluid (no kind of mark).
+const EraserPl = Eraser;
+Eraser = class extends EraserPl {
+  disc(cx, cy, rad, ...rest) {
+    const s = this.s, whole = this.kinds !== undefined, takes = this.kinds ? this.kinds : KIND_ALL;
+    if (!s.planes) return this.discOn(cx, cy, rad, rest, whole && this.kinds !== 0 ? "dots" : whole);
+    const n = s.w * s.h, back = s.bound, targets = [];
+    for (let k = 0; k < STACK_N; k++) if (s.planes[k] && (k < 2 || PLANE_KINDS[(k >> 1) - 1] & takes)) targets.push(k);
+    this.seens ??= [];
+    // Fluid this pass lifts leaves every plane under it (the first plane's pass takes it).
+    const lift = [], rp = s.resist, x0 = Math.max(0, Math.floor(cx - rad)), x1 = Math.min(s.w - 1, Math.ceil(cx + rad)), y0 = Math.max(0, Math.floor(cy - rad)), y1 = Math.min(s.h - 1, Math.ceil(cy + rad));
+    if (rp) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * s.w + x; if (rp[i] > s.resistKept[i] + .004 && (x + .5 - cx) ** 2 + (y + .5 - cy) ** 2 <= rad * rad) lift.push(i); }
+    let r = null;
+    try {
+      targets.forEach((k, j) => {
+        planeBind(s, k);
+        this.seen = this.seens[k] ??= new Uint8Array(n);
+        if (j > 0) for (const i of lift) this.seen[i] = 1;
+        r = this.discOn(cx, cy, rad, rest, whole && this.kinds !== 0 ? "dots" : whole);
+      });
+    } finally { planeBind(s, back); }
+    return r || [x0, y0, x1, y1];
+  }
+  // One plane's disc: whole takes what the eraser can't (kept) too; "dots" Tone's dots whole as well.
+  discOn(cx, cy, rad, rest, whole) {
+    const s = this.s, kept = s.kept, dots = s.dots, seen = this.seen, x0 = Math.max(0, Math.floor(cx - rad)), x1 = Math.min(s.w - 1, Math.ceil(cx + rad)), y0 = Math.max(0, Math.floor(cy - rad)), y1 = Math.min(s.h - 1, Math.ceil(cy + rad));
+    const was = s.cov ? [] : null;
+    if (was) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * s.w + x; if (!seen[i]) was.push(i); }
+    if (whole) s.kept = null;
+    if (whole === "dots") s.dots = null;
+    let r;
+    try { r = super.disc(cx, cy, rad, ...rest); } finally { s.kept = kept; s.dots = dots; }
+    if (whole && kept) for (const i of was || []) if (seen[i]) kept[i] = PAPER_TONE;
+    if (whole === "dots" && dots) for (const i of was || []) if (seen[i]) dots[i] = 0;
+    // What it erased covers as what it left: paper, or the tone kept.
+    if (was) for (const i of was) if (seen[i]) s.cov[i] = Math.max(0, 1 - s.page[i] / PAPER_TONE);
+    return r;
+  }
+};
+
+// ---------- the page shown, cleared, laid on ----------
+const showPagePl = showPage;
+showPage = function (ctx, surf, rect) { if (!surf.shown) return showPagePl(ctx, surf, rect); planesShow(surf, rect); return planesView(surf, () => showPagePl(ctx, surf, rect)); };
+const pageGraysPl = pageGrays;
+pageGrays = function (s, hatch) { shownPage(s); return planesView(s, () => pageGraysPl(s, hatch)); };
+// A clear page: one plane again, unbound, taken by the next stroke.
+const blankPagePl = blankPage;
+blankPage = function (s) { if (s.bound !== undefined) planeSave(s); s.planes = undefined; s.bound = undefined; s.shown = null; s.under = null; s.cov = s.covBase = null; blankPagePl(s); };
+// Greys received from another page (a live page's LiveChange: what that page showed, over all its layers), laid as the
+// Manta lays them (LiveProbe.onLayer, then PictureImport.lay): on the active layer's base (the layer last drawn on), as ink, each its layer's look
+// scaled by how much darker the page must get there, only where that darkens the layer; set (an Undo's) as they are,
+// lighter too. greys: w a row, 255 or more clear (paper is PAPER_TONE here); returns whether anything changed.
+// shortcut: the Manta's own (its comment): exact for black ink over another layer's marks, near for grey ink on this layer.
+function planesLay(s, x, y, w, h, greys, set, layer = s.active ?? LAYER_INK) {
+  planesShow(s, [x, y, x + w - 1, y + h - 1]);
+  const P = PAPER_TONE, before = new Float32Array(w * h).fill(P), shown = s.shown || s.page;
+  for (let j = 0; j < w * h; j++) { const px = x + j % w, py = y + (j / w | 0); if (px < s.w && py < s.h) before[j] = shown[py * s.w + px]; }
+  let changed = false;
+  if (s.bound === undefined) planeBind(s, stackAt(layer, -1));
+  planeWith(s, stackAt(layer, -1), () => {
+    planeSave(s);
+    const look = s.planes.filter((p, k) => p && (k & 1) === layer);
+    for (let j = 0; j < w * h; j++) {
+      const px = x + j % w, py = y + (j / w | 0), i = py * s.w + px;
+      if (greys[j] >= 255 || px >= s.w || py >= s.h) continue;
+      // The layer's look here (its base and planes as one, ToneDocument.layerTone).
+      let lt = P;
+      for (const p of look) { const t = p.page[i], c = Math.max(p.cov[i], 1 - t / P); lt = t + (lt - P) * (1 - c); }
+      const g = Math.min(P, greys[j]), now = before[j];
+      let v = g;
+      if (!set) { if (g >= now) continue; v = now <= 0 ? g : Math.min(P, lt * g / now); if (v >= lt) continue; }
+      if (s.page[i] === v) continue;
+      s.page[i] = s.base[i] = v; s.cov[i] = Math.max(s.cov[i], 1 - v / P); changed = true;
+    }
+  });
+  planesShow(s, [x, y, x + w - 1, y + h - 1]);
+  s.rev = (s.rev | 0) + 1;
+  return changed;
+}
+// The page made to show greys (w a row, 255 or more left as it is) as one plain picture: every plane clear there and the
+// active layer's base those greys. This page's own Undo (a live page's takeBack), whose pixels must show as they were.
+function planesSet(s, x, y, w, h, greys) {
+  const k = stackAt(s.active ?? LAYER_INK, -1);
+  if (s.bound === undefined) planeBind(s, k);
+  planeWith(s, k, () => {
+    planeSave(s);
+    for (let j = 0; j < w * h; j++) {
+      const px = x + j % w, py = y + (j / w | 0), i = py * s.w + px;
+      if (greys[j] >= 255 || px >= s.w || py >= s.h) continue;
+      for (const p of s.planes) if (p) { p.page[i] = p.base[i] = PAPER_TONE; p.cov[i] = 0; if (p.kept) p.kept[i] = PAPER_TONE; if (p.print) p.print[i] = PAPER_TONE; if (p.dots) p.dots[i] = 0; }
+      const v = Math.min(PAPER_TONE, greys[j]);
+      s.page[i] = s.base[i] = v; s.cov[i] = Math.max(0, 1 - v / PAPER_TONE);
+    }
+  });
+  planesShow(s, [x, y, x + w - 1, y + h - 1]);
+  s.rev = (s.rev | 0) + 1;
+}
+
+;
+const DRAWN_TOOLS = [["Another pencil","another-pencil.M40i000000000at_4ip2c_0_di0_1jz_800000000zzzz000000zz000000000530000005000c099zz.inw"],["Steady line","steady-line.M00il00000000at_000zz0000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud"],["Verve felt","verve-felt.M30i0776o0q00u1_000zz0000920000000_0_d00_0_8i00000zz0000400000nz0.jjds6x"],["Fude fountain","fude-fountain.M20ss007700003m_000zzat00000000000_0_000_0_8at0000i000ll000000nz01.1s13pn4"],["Ink wash","ink-wash.M60i0000000007q_1wva200000000_0_0fk_7_8zz0000000000000000nz0.t4mf73"],["Watercolour wash","watercolour-washy.M60i04o4b0000ji_1zz8t00ag9600_1zzex_000_7js_8zz0000000000000000zz0.1s13pn4"],["Rob boss","rob-boss.M99vleei0000000005e_2zg00_2llydzzn7_000_7ne_1ss0000000000000000nz0.2fu"],["Ben-Day brush","ben-day-brush.Me1zzeezz00000000ll_0i0000000000000000zz065ji000at_0_000_0_25ess00000000000000nz0.2ef"],["High lighter","high-lighter.M31e1zzp60000000000_1007700000000zz2_0_000_0_0000000000000000000nz0.2f2"],["Cheap ballpoint","cheap-ballpoint.M00i00000002g4l_000zzi00000000003l_0_000_1jz_8h77a00000000000000nz0.ir1"],["Hatch pen","hatch-pen.M08at7x901zzi0_000zz0000000000000_0_000_1jz_0000000000000000000nz0.x3"],["Stipple pen","stipple-pen.M07i0clcli0_000zz0000000000000_0_000_1jz_0000000000000000000nz0.h6q"],["Fountain pen","fountain-pen.M00i000at00003m_03mzzwe00000000000_0_000_0_8qz0000000000000000nz0.2f1"],["Split nib","split-nib.M24m0okjmi0000y00_000zz0000000000000_0_000_1jz_8lw00wk0000fq000000nz0.51j8ud"],["Ink wash brush","ink-wash-brush.M10i06f0000003t_1w85i000s0000zz2_0_d6e_2clcl000_8t00000000000000000nz0.ir1"],["Ms. Sketch","mr-sketch.M31pfzzi00000001n37_2y200_0_000_1jz_0000000000000000000nz0.ir1"],["Soft pencil","soft-pencil.M40zz00000000at_4ss5e_0_1p6_0_8at0000000000000000nz000000000530000005000c099zz.2hi"],["Soft charcoal","soft-charcoal.M50i00000000yat_3eqlj_0_1nl_1jz_8pthh00000000000000nz000000000530000005000c099zz.51j8ud"],["Soft pastel","soft-pastel.Ma0i000007s00at_3b98o_0_3nj_1jz_8hg0000000000000000nz000000000530000005000c099zz.51j8ud"],["Wax crayon","wax-crayon.Ma0p600000000at_7ll0_0_1i0_0_0000000000000000000nz0.2f9"],["Soft wash","soft-wash.M60i0000000007q_1wva200000000_0_0fk_7_8la0000000000000000nz0.t4mf73"],["Slow bloom","slow-bloom.M60i000000000i6_1yh0000fc2a00_0_1g7_7ss_8j90000000000000000nz0.vkxdda"],["Watercolour backrun","backrun.M60i000000000gv_1t10000c8gj00_0_13f_7_8sl0000000000000000nz0.ib8b3u"],["Granulating","granulating.M60i000000000ac_1uk0000fh0000_0_186_7_8me0000000000000000nz0.1t996q7"],["Flat wash","flat-wash.M70i08u860000vx_1gv00jp860000_0_000_7_8re0000000000000000nz0.demerg"],["Wet gouache","wet-gouache.M80b70000000054_2zz00_0_000_7_83z0000000000000000nz0.2fj"],["Cracking paint","cracks.M80zz0000000077_2zzll_0_000_2clcl0js_3p6ll00000000000000nz0_0_cll6p.2hh"],["Wet oils","wet-oils.M90i0000000003k_2zz00_2llp6zz_000_7ne_8d30000ty0000000000nz0.2ft"],["Loaded oils","loaded-oils.M99vleei0000000005e_2zz00_2llp6zz00js_000_7ne_1ss0000000000000000nz0.2fu"],["Dry round","dry-round.Mb0i00000in0074_2k700_0_2r6_1jz_8ny0000000000000000nz0.t4mf73"],["Flat brush","big-sky.Mc3i00zz896c_1sbat00770000_0_000_1jz_86n0000000000000000nz0.1uhentb"],["Gradient tone","gradient-tone.Me0i00000000000_63kub2_0_000_0_800zz00000000000000nz0.2e8"],["Rosette ink","rosette-ink.Me0zz77at0000ss_0p6000000000000000zz05gm_0_000_0_3p6ll00000000000000nz0.2eg"],["Halftone brush","halftone-brush.Me0zzati00000ss_0p6000000000000000zz01b2i00090_0_000_0_3p6ll00000000000000nz0.2eh"],["Riso","riso.Me1vleezz00000000i0_000zz0000000000000zz0f8b009000ee_0_000_0_800zz00000000000000nz0.2h9"],["Engraving pen","engraving-pen.Me0wdatee0000ll_0p6000000000000000zz028bc0_0_000_0_3p6ll00000000000000nz0.2er"],["Wavy-line pen","wavy-line-pen.Me0wdatee0000ll_0p6000000000000000zz08b200_0_000_0_3p6ll00000000000000nz0.2es"],["Fill in","fill-in.M30wd00000000at_1atat00000000_5zz_000_0_0000000000000000000nz0.2fh"],["Water","water.M60i000000000at_1ulat00770000_4i0llzz_000_2g7ll0jsee00at_0000000000000000000nz0.20k"]];
 ;
 // ---------- image tools for Match and texture import: plain arrays, no canvas ----------
 function grayOf(img) {
@@ -9893,10 +11799,10 @@ const CATEGORIES = [
   { label: "Pens", tools: ["Steady line", "Ballpoint", "Fountain pen", "Split nib", "Fude pen", "Stipple pen", "Engraving pen"], tips: ["round", "flat", "split"], media: ["ink"] },
   { label: "Markers", tools: ["Felt marker", "Chisel marker", "Highlighter"], tips: ["chisel", "round"], media: ["ink", "wash"] },
   { label: "Brushes", tools: ["Springy brush", "Swell brush", "Sumi", "Comb", "Flat hake"], tips: ["round", "bristles", "multi", "hake"], media: ["ink", "wash"] },
-  { label: "Washes", tools: ["Water brush", "Soft wash", "Wet blooms", "Pooling wash", "Masking fluid", "Wax resist"], tips: ["round", "hake", "bristles"], media: ["wash"] },
+  { label: "Washes", tools: ["Water", "Soft wash", "Wet blooms", "Pooling wash", "Masking fluid", "Wax resist"], tips: ["round", "hake", "bristles"], media: ["wash"] },
   { label: "Dry Media", tools: ["HB pencil", "Soft charcoal", "Soft pastel", "Wax crayon"], tips: ["round", "chisel"], media: ["graphite", "charcoal", "crayon"] },
   { label: "Oils", tools: ["Loaded oils"], tips: ["bristles", "round"], media: ["cover"] },
-  { label: "Odd Ones", tools: ["Spirograph", "Fill in", "Filled shape", "Dot tone", "Ben-Day brush", "Lemon juice", "Vanishing ink"], tips: ["round"], media: ["ink", "wash"] }
+  { label: "Odd Ones", tools: ["Spirograph", "Fill in", "Dot tone", "Ben-Day brush", "Lemon juice", "Vanishing ink"], tips: ["round"], media: ["ink", "wash"] }
 ];
 const CATEGORY_PRIOR = 3, CHOSEN_BUDGET = .6;
 const categoryOf = label => CATEGORIES.find(c => c.label === label) || null;

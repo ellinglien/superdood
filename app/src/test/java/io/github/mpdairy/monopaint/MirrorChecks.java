@@ -159,6 +159,17 @@ public final class MirrorChecks {
                 2 * ModularStroke.reach(r) + 8, reflects && ModularStroke.laysAgain(r));
     }
     static boolean blank(ToneDocument d) { for (int y = 0; y < d.height; y++) for (int x = 0; x < d.width; x++) if (d.compositeTone(x, y) != 255) return false; return true; }
+    /** Whether pixel {@code i} of a layer's look is black at coverage 254: to the eraser, a Tone dot (EraseBothStroke.dot). */
+    static boolean dot(ToneDocument.Layer look, int i) { int a = look.alpha[i] & 255; return a == PrintScreen.DOT_COVERAGE && ((look.tones[i] & 255) * a + 255 * (255 - a) + 127) / 255 == PrintScreen.DOT_TONE; }
+    /**
+     * Whether the page is blank but for ink-layer pixels the eraser reads as Tone dots ({@link #dot}): a pen's pixel black at
+     * coverage 254 is one, and Everything scrapes those by chance each pass (EraseBothStroke.scrapes, salted by the page's revision).
+     */
+    static boolean blankButDots(ToneDocument d) {
+        ToneDocument.Layer look = d.layerSnapshot().layers.get(InkWashLayers.INK).flattened();
+        for (int y = 0, i = 0; y < d.height; y++) for (int x = 0; x < d.width; x++, i++) if (!dot(look, i) && (d.compositeTone(x, y) != 255 || look.alpha[i] != 0)) return false;
+        return true;
+    }
     static void copies() {
         ModularBrush pen = QuickStrokeChecks.brush("Fineliner", PartChoice.NONE);
         for (boolean reflects : new boolean[]{false, true}) {
@@ -182,7 +193,7 @@ public final class MirrorChecks {
             MirrorStroke erase = new MirrorStroke(d, new EraseBothStroke(d, big), d.mirrors().group(), () -> new EraseBothStroke(d, big), 240, false);
             stroke(erase, 340, 200, 420, 160, 40);
             erase.finish();
-            check(blank(d), "The eraser's copies take all six away" + how);
+            check(blankButDots(d), "The eraser's copies take all six away" + how);
             check(d.undo() && d.compositeTone(380, 180) < 128 && !blank(d), "and one Undo brings all six back" + how);
         }
         // A copy wholly off the page is never laid: one mirror near the edge, a stroke well inside.
@@ -258,7 +269,7 @@ public final class MirrorChecks {
             // (EraseBothStroke.scrapes, salted by the page's revision): left out on both sides.
             boolean[] dot = new boolean[W * H];
             ToneDocument.Layer look = f.layerSnapshot().layers.get(InkWashLayers.INK).flattened();
-            for (int i = 0; i < dot.length; i++) { int a = look.alpha[i] & 255; dot[i] = a == PrintScreen.DOT_COVERAGE && ((look.tones[i] & 255) * a + 255 * (255 - a) + 127) / 255 == PrintScreen.DOT_TONE; }
+            for (int i = 0; i < dot.length; i++) dot[i] = dot(look, i);
             // Fineliner: permanent; Watercolor: .4 erasable. Rows across the page, each as the mirror sees it.
             for (int y = 0; y < H; y += 20) {
                 EraseBothStroke e = new EraseBothStroke(f, InkWashSizes.Preset.LARGE);

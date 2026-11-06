@@ -42,40 +42,47 @@ final class PdfImport {
      * {@code done} hears its notebook, or null when cancelled, or the error. Off the main thread.
      */
     void run(Context context, Uri uri, int width, int height, CoverDesign design, long day, DocumentStore store, Progress progress, DocumentStore.Result<Made> done) {
+        run(context, uri, null, true, width, height, design, day, store, progress, done);
+    }
+    /**
+     * As above, named {@code named} (null: after the file), and a picture ({@code pdf} false) made a notebook of one page
+     * as a one-page PDF would be (Share on Wi-Fi's upload, {@link LiveShare}).
+     */
+    void run(Context context, Uri uri, String named, boolean pdf, int width, int height, CoverDesign design, long day, DocumentStore store, Progress progress, DocumentStore.Result<Made> done) {
         Thread work = new Thread(() -> {
-            File temp = new File(context.getCacheDir(), "pdf import.pages");
+            // A file of its own: the Manta's Import and an upload may run at once.
+            File temp;
+            try { temp = File.createTempFile("import", ".pages", context.getCacheDir()); }
+            catch (IOException e) { done.complete(null, e); return; }
             PackedPage.Source[] source = {null};
             // Until the store has the pages, the cache's file goes with whatever ends this (cancelled, failed).
             boolean handed = false;
             try {
-                String name = name(context, uri);
+                String name = named != null ? named : name(context, uri);
                 List<long[]> written = new ArrayList<>();
                 boolean cut;
-                try (ParcelFileDescriptor file = context.getContentResolver().openFileDescriptor(uri, "r")) {
-                    if (file == null) throw new IOException(PictureImport.UNREADABLE);
-                    try (PdfRenderer pdf = new PdfRenderer(file); FileOutputStream out = new FileOutputStream(temp)) {
-                        int count = pdf.getPageCount(), n = PictureImport.pdfPages(count);
-                        if (n == 0) throw new IOException(PictureImport.NO_PAGES);
-                        cut = n < count;
-                        long blank = BlankPages.made(width, height).bytes.length, packed = 0, offset = 0;
-                        Bitmap drawn = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-                        int[] pixels = new int[width * height];
-                        try {
-                            for (int i = 0; i < n; i++) {
-                                if (cancelled) { done.complete(null, null); return; }
-                                progress.at(i, n);
-                                draw(pdf, i, drawn);
-                                drawn.getPixels(pixels, 0, width, 0, 0, width, height);
-                                byte[] bytes = DrawingBook.encode(PictureImport.pdfPage(width, height, PictureImport.greys(pixels)));
-                                // The 200 MB: the pages that fit, and the PDF said cut short.
-                                if (!PictureImport.fits(packed, bytes.length + blank)) { cut = true; break; }
-                                CRC32 crc = new CRC32(); crc.update(bytes);
-                                out.write(bytes);
-                                written.add(new long[]{offset, bytes.length, crc.getValue()});
-                                offset += bytes.length; packed += bytes.length + blank;
-                            }
-                        } finally { drawn.recycle(); }
-                    }
+                try (Pages from = pdf ? pdfPages(context, uri) : picture(context, uri, width, height); FileOutputStream out = new FileOutputStream(temp)) {
+                    int count = from.count(), n = PictureImport.pdfPages(count);
+                    if (n == 0) throw new IOException(PictureImport.NO_PAGES);
+                    cut = n < count;
+                    long blank = BlankPages.made(width, height).bytes.length, packed = 0, offset = 0;
+                    Bitmap drawn = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                    int[] pixels = new int[width * height];
+                    try {
+                        for (int i = 0; i < n; i++) {
+                            if (cancelled) { done.complete(null, null); return; }
+                            progress.at(i, n);
+                            from.draw(i, drawn);
+                            drawn.getPixels(pixels, 0, width, 0, 0, width, height);
+                            byte[] bytes = DrawingBook.encode(PictureImport.pdfPage(width, height, PictureImport.greys(pixels)));
+                            // The 200 MB: the pages that fit, and the PDF said cut short.
+                            if (!PictureImport.fits(packed, bytes.length + blank)) { cut = true; break; }
+                            CRC32 crc = new CRC32(); crc.update(bytes);
+                            out.write(bytes);
+                            written.add(new long[]{offset, bytes.length, crc.getValue()});
+                            offset += bytes.length; packed += bytes.length + blank;
+                        }
+                    } finally { drawn.recycle(); }
                 }
                 if (written.isEmpty()) throw new IOException(PictureImport.NO_PAGES);
                 if (cancelled) { done.complete(null, null); return; }
@@ -101,6 +108,37 @@ final class PdfImport {
         work.start();
     }
 
+    /** What a notebook's pages are drawn from: a PDF's pages, or one picture. */
+    private interface Pages extends java.io.Closeable {
+        int count();
+        /** Page {@code i} drawn on white into {@code drawn}, fitted inside it and centred. */
+        void draw(int i, Bitmap drawn);
+    }
+    private static Pages pdfPages(Context context, Uri uri) throws IOException {
+        ParcelFileDescriptor file = context.getContentResolver().openFileDescriptor(uri, "r");
+        if (file == null) throw new IOException(PictureImport.UNREADABLE);
+        PdfRenderer pdf;
+        try { pdf = new PdfRenderer(file); } catch (IOException | RuntimeException e) { file.close(); throw e; }
+        return new Pages() {
+            @Override public int count() { return pdf.getPageCount(); }
+            @Override public void draw(int i, Bitmap drawn) { PdfImport.draw(pdf, i, drawn); }
+            @Override public void close() throws IOException { pdf.close(); file.close(); }
+        };
+    }
+    /** The picture at {@code uri} as one page ({@link PicturePlacer#read}, as Import reads one). */
+    private static Pages picture(Context context, Uri uri, int width, int height) throws IOException {
+        Bitmap picture = PicturePlacer.read(context.getContentResolver(), uri, width, height);
+        return new Pages() {
+            @Override public int count() { return 1; }
+            @Override public void draw(int i, Bitmap drawn) {
+                drawn.eraseColor(Color.WHITE);
+                int[] fit = PictureImport.fit(picture.getWidth(), picture.getHeight(), drawn.getWidth(), drawn.getHeight());
+                new android.graphics.Canvas(drawn).drawBitmap(picture, null, new android.graphics.Rect(fit[0], fit[1], fit[0] + fit[2], fit[1] + fit[3]),
+                        new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+            }
+            @Override public void close() { picture.recycle(); }
+        };
+    }
     /** Page {@code i} of {@code pdf} drawn on white into {@code drawn}, fitted inside it and centred. */
     private static void draw(PdfRenderer pdf, int i, Bitmap drawn) {
         drawn.eraseColor(Color.WHITE);

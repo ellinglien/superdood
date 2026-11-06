@@ -2,7 +2,7 @@
 
 Approved by Elling on 2026-10-14 ("i think it's ready to go … build it please"),
 after eight rounds on the mockup in `docs/brush-lab/brush-lab-mockup.html`
-(published at https://claude.ai/artifact/8RS1E8YvpZLdfvsL88vqJV). The mockup
+(published at a private page). The mockup
 is the reference for layout, wording and behaviour; this spec says what the app
 must do and where it differs from the mockup.
 

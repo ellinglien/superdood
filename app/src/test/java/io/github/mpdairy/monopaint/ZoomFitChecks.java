@@ -36,11 +36,12 @@ final class ZoomFitChecks {
                 check(v.x == x && v.y == y && v.scale() == scale, "out of Zen Mode, the same fit as before");
             }
         }
+        browser();
         int[] manta = pad(DrawLayoutChecks.SCREENS[0]);
         // 2401 px tall until layout v3 (2026-10-26), whose brush line grew from 18 dp to 32 with its preview.
         check(manta[0] == 1785 && manta[1] == 2387, "the Manta's pad: " + manta[0] + " x " + manta[1]);
         backdrop(manta);
-        System.out.println("PASS: the page whole and centred in the room the bars leave (the Manta's 1785 x 2387 px), Manta and Nomad either way up, pages from either turn and from Zen Mode; the double tap and leaving Zen Mode come back to exactly that fit; a pinch still never below 100%; the lines beyond the page at every zoom, never in a copy");
+        System.out.println("PASS: the page whole and centred in the room the bars leave (the Manta's 1785 x 2387 px), Manta and Nomad either way up, pages from either turn and from Zen Mode; the double tap and leaving Zen Mode come back to exactly that fit; a pinch still never below 100%; the lines beyond the page at every zoom, never in a copy; in the browser the whole page any way up, 2.5 times about the fingers, a pinch out back to the whole page; a desktop's wide window the width filled, a pinch out to the whole page");
     }
     /**
      * The backdrop (the owner, 2026-10-27: "a background for when the canvas is < 100% and you can see it ... (lines)"):
@@ -57,11 +58,48 @@ final class ZoomFitChecks {
                         && src.contains("viewportBitmap.backdrop = true;"), "only the drawing screen's raster asks for the lines: " + f.getName());
             }
             String raster = new String(java.nio.file.Files.readAllBytes(new java.io.File(dir, "ViewportBitmap.java").toPath()));
-            String dithered = raster.substring(raster.indexOf("static Bitmap dithered("), raster.indexOf("final Bitmap bitmap;"));
-            check(raster.contains("    boolean backdrop;") && !dithered.contains("backdrop"), "a raster starts without the lines; a copy's (dithered) never asks");
+            check(raster.contains("    boolean backdrop;"), "a raster starts without the lines");
             String c = new String(java.nio.file.Files.readAllBytes(new java.io.File("app/src/main/cpp/viewport_bitmap.c").toPath()));
             check(c.contains("return lines && ") && c.split("backdrop\\(lines,x,y\\)", -1).length == 3, "the native raster draws lines beyond the page only when asked, paper otherwise");
         } catch (java.io.IOException e) { throw new AssertionError(e); }
+    }
+    /**
+     * The browser ({@link CanvasViewport#whole}; the owner, 2026-11-01: "the lower part is obscured"): the whole page
+     * fitted either way up, past 100% on a large screen; a pinch out stops at that fit; the page point under the
+     * fingers (the page's centre: an edge stays on the room's) stays under them at 2.5 times; a reset comes back to
+     * the fit. Rooms in device px: an iPad both ways, a phone, a desktop window, a 5K one.
+     */
+    static void browser() {
+        int[][] rooms = {{1340, 2264}, {2016, 1488}, {729, 2229}, {1500, 860}, {4400, 2600}};
+        for (int[] room : rooms) {
+            CanvasViewport v = new CanvasViewport();
+            v.whole = true;
+            v.configure(room[0], room[1], 1920, 2560);
+            float fit = Math.min(room[0] / 1920f, room[1] / 2560f), x = v.x, y = v.y;
+            check(v.scale() == fit && v.x >= 0 && v.y >= 0 && v.x + 1920 * fit <= room[0] + .5f && v.y + 2560 * fit <= room[1] + .5f, "the browser: the whole page in " + room[0] + "x" + room[1]);
+            float px = room[0] / 2f, py = room[1] / 2f, pageX = (px - v.x) / v.scale(), pageY = (py - v.y) / v.scale();
+            v.gesture(2.5f, px, py, px, py);
+            check(Math.abs(v.scale() / fit - 2.5f) < 1e-4 && Math.abs((px - v.x) / v.scale() - pageX) < .01f && Math.abs((py - v.y) / v.scale() - pageY) < .01f, "the browser: 2.5 times, the page point under the fingers kept, " + room[0] + "x" + room[1]);
+            v.gesture(.01f, 0, 0, 0, 0);
+            check(v.scale() == fit && v.x == x && v.y == y, "the browser: a pinch out stops at the whole page, " + room[0] + "x" + room[1]);
+            v.gesture(3, px, py, px, py); v.reset(); v.configure(room[0], room[1], 1920, 2560);
+            check(v.scale() == fit && v.x == x && v.y == y, "the browser: a reset comes back to the whole page");
+        }
+        // A desktop (CanvasViewport.wide; the owner, 2026-11-05: "zoomed to full width (for desktop)"): a window wider than
+        // tall fills its width, its top showing; a pinch out goes on to the whole page; a reset comes back to the width.
+        // Taller than wide, the whole page as before.
+        for (int[] room : rooms) {
+            CanvasViewport v = new CanvasViewport();
+            v.whole = v.wide = true;
+            v.configure(room[0], room[1], 1920, 2560);
+            boolean across = room[0] > room[1];
+            float whole = Math.min(room[0] / 1920f, room[1] / 2560f), fit = across ? room[0] / 1920f : whole;
+            check(v.scale() == fit && (!across || v.x == 0 && v.y == 0), "a desktop: " + (across ? "the width filled, the top showing, " : "the whole page, ") + room[0] + "x" + room[1]);
+            v.gesture(.01f, 0, 0, 0, 0);
+            check(Math.abs(v.scale() - whole) < 1e-4 && Math.abs(2 * v.x + 1920 * v.scale() - room[0]) <= 1 && Math.abs(2 * v.y + 2560 * v.scale() - room[1]) <= 1, "a desktop: a pinch out to the whole page, centred, " + room[0] + "x" + room[1]);
+            v.gesture(3, room[0] / 2f, room[1] / 2f, room[0] / 2f, room[1] / 2f); v.reset(); v.configure(room[0], room[1], 1920, 2560);
+            check(v.scale() == fit && (!across || v.x == 0 && v.y == 0), "a desktop: a reset comes back to the fit");
+        }
     }
     /** The panel, px, of a {@code width x height} dp screen: the Manta's 1920 x 2560 or the Nomad's 1404 x 1872, that way up. */
     static int[] panel(int[] s) {

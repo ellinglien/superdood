@@ -189,6 +189,10 @@ final class DryingWater {
     /** Its box on the page, {left, top, right, bottom} inclusive, and the layer it settles on. */
     int[] box() { return new int[]{x0, y0, x0 + w - 1, y0 + h - 1}; }
     int layer() { return layer; }
+    /** How much of its wet time is still to come, 1 as laid to 0 settled (Scrape: how wet it still is). */
+    double wetLeft() { return Math.max(0, 1 - (double) age / ticks); }
+    /** How long it is wet, ms. */
+    long wetMs() { return ticks * 1000L / TPS; }
     /** How long {@link #liftAll} took, ns (for the bench). */
     long liftNanos;
     /** How many cells the wash reached on each grid row {@code cy0} to {@code cy1}, rows shared out over the cores. */

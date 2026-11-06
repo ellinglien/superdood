@@ -27,8 +27,8 @@ final class NotebookTemplate {
             CORNELL = new NotebookTemplate("cornell", "Cornell"), STORYBOARD = new NotebookTemplate("storyboard", "Storyboard"),
             DIARY = new NotebookTemplate("diary", "Diary"), COMICS = new NotebookTemplate("comics", "Comics"),
             /**
-             * Three boxes down the left (Did, Saw, Heard) and a big one for the drawing: the Daily Prompt's diary cards ({@link
-             * DailyPrompt}). Its boxes are timed, in order ({@link TimedSections}): Did 2:30, Saw 2:30, Heard 0:30, Picture 0:30.
+             * Three boxes down the left (Did, Saw, Heard) and a big one for the drawing: the Did, Saw, Heard diary
+             * (the Self-Portrait Prompt's diary cards until its cut, 2026-11-05). Its boxes are timed, in order ({@link TimedSections}): Did 2:30, Saw 2:30, Heard 0:30, Picture 0:30.
              */
             DIARY_PAGE = new NotebookTemplate("diarypage", "Diary Page", new String[]{"Did", "Saw", "Heard", "Picture"}, new int[]{150, 150, 30, 30}),
             RANDOM = new NotebookTemplate("random", "Random");
@@ -41,8 +41,7 @@ final class NotebookTemplate {
     final String key, label;
     /**
      * Timed Sections ({@link TimedSections}): its boxes' names (Title Case, shown in the side bar's countdown) and their times,
-     * s, in order, as {@link #sectionRects} places them; none for a template without them. The prompts file may change the
-     * times ({@link DailyPrompt#sectionTimes}).
+     * s, in order, as {@link #sectionRects} places them; none for a template without them.
      */
     final String[] sections;
     final int[] sectionSeconds;

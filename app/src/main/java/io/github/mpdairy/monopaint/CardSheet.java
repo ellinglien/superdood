@@ -13,13 +13,14 @@ import java.util.List;
  * tablets in both turns ({@code LibraryCardChecks}).
  */
 final class CardSheet {
-    /** The screens: the settings list's, a page's own template (a hold on it in the strip), the front cover's (a hold on it), Random's set. */
-    enum Screen { TEMPLATE, PAGE_TEMPLATE, TRANSPARENCY, TOOLS, TIMED, COVER, RANDOM_FROM }
+    /** The screens: the settings list's, a page's own template (a hold on it in the strip), the front cover's (a hold on it), Random's set, the notebook's Surface and a page's own. */
+    enum Screen { TEMPLATE, PAGE_TEMPLATE, TRANSPARENCY, TOOLS, TIMED, COVER, RANDOM_FROM, SURFACE, PAGE_SURFACE }
 
     /** Each screen's title and what it does (docs/TEXT-STYLE.md: Title Case, then a sentence-case line). */
     static String title(Screen s) {
         switch (s) {
             case TEMPLATE: case PAGE_TEMPLATE: return NotebookLayout.TEMPLATE;
+            case SURFACE: case PAGE_SURFACE: return LibraryCard.SURFACE;
             case TRANSPARENCY: return TracingPaper.TRANSPARENCY;
             case TOOLS: return NotebookLayout.TOOLS;
             case TIMED: return NotebookRules.TIMED_PAGES;
@@ -31,6 +32,8 @@ final class CardSheet {
         switch (s) {
             case TEMPLATE: return "The guides on every page";
             case PAGE_TEMPLATE: return "The guides on page " + (page + 1) + " alone";
+            case SURFACE: return "The paper every page is on";
+            case PAGE_SURFACE: return "The paper page " + (page + 1) + " is on alone";
             case TRANSPARENCY: return "Other pages seen through the one drawn on";
             case TOOLS: return "Where the bar's brushes come from";
             case TIMED: return "A countdown on every page";
@@ -39,7 +42,9 @@ final class CardSheet {
         }
     }
     /** Whether a screen's choices are pictures (a page's shape): templates and covers. */
-    static boolean pictured(Screen s) { return s == Screen.TEMPLATE || s == Screen.PAGE_TEMPLATE || s == Screen.COVER || s == Screen.RANDOM_FROM; }
+    static boolean pictured(Screen s) { return s == Screen.TEMPLATE || s == Screen.PAGE_TEMPLATE || s == Screen.COVER || s == Screen.RANDOM_FROM || surfaces(s); }
+    /** Whether a screen picks a surface: the notebook's, or a page's own. */
+    static boolean surfaces(Screen s) { return s == Screen.SURFACE || s == Screen.PAGE_SURFACE; }
     /** Whether a screen has a slider: Timed Pages alone, Tools' Brushes under its choices. */
     static boolean slides(Screen s) { return s == Screen.TIMED || headed(s); }
     /** Whether a screen's slider has a head, beside its choices: Tools' Brushes. */
@@ -81,6 +86,7 @@ final class CardSheet {
                 words = new String[TRANSPARENCY_CHOICES]; for (int i = 0; i < words.length; i++) words[i] = String.join(", ", LibraryCard.transparency(transparency(i))); return words;
             case TOOLS: words = new String[NotebookOptions.Tools.values().length]; for (int i = 0; i < words.length; i++) words[i] = NotebookOptions.Tools.values()[i].label; return words;
             case COVER: words = new String[CoverDesign.values().length]; for (int i = 0; i < words.length; i++) words[i] = CoverDesign.values()[i].label; return words;
+            case SURFACE: case PAGE_SURFACE: words = new String[BrushTexture.values().length]; for (int i = 0; i < words.length; i++) words[i] = LibraryCard.surface(BrushTexture.values()[i]); return words;
             default: return new String[0];
         }
     }
@@ -94,7 +100,23 @@ final class CardSheet {
             NotebookTemplate t = templates.get(i);
             if (o.template.random() ? t.random() : t.equals(o.template)) words[i] = LibraryCard.notebooks(words[i]);
         }
+        // A page's own surface: the notebook's is "Notebook's (Smooth)", the choice that puts the page back to it.
+        if (s == Screen.PAGE_SURFACE) words[o.surface.ordinal()] = LibraryCard.notebooks(words[o.surface.ordinal()]);
         return words;
+    }
+    /**
+     * A Surface tile's picture, {@code w × h} tones: a pencil shading over the surface's tooth, light at the left to dark
+     * at the right, at the page's own scale (the graphite catches the ridges; the valleys stay paper). Its scan stands in
+     * ({@link BrushTexture#swatch}).
+     */
+    static byte[] surfacePicture(BrushTexture t, int w, int h) {
+        PaperGrain g = t.swatch();
+        byte[] tones = new byte[w * h];
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+            float height = (.65f * g.fine(x, y) + .35f * g.mid(x, y)) / 255, shade = .15f + .8f * x / Math.max(1, w - 1);
+            tones[y * w + x] = (byte) (height > 1 - shade ? 70 : 255);
+        }
+        return tones;
     }
     /** Choice {@code i}'s note ({@code inUse}: it is the one in use), or null. */
     static String note(Screen s, int i, boolean inUse) {
@@ -112,7 +134,7 @@ final class CardSheet {
             default: return null;
         }
     }
-    /** Which choice is in use (−1: none, e.g. a template whose file is gone); {@code page}'s own for {@link Screen#PAGE_TEMPLATE}. */
+    /** Which choice is in use (−1: none, e.g. a template whose file is gone); {@code page}'s own for {@link Screen#PAGE_TEMPLATE} (a page's surface: {@code CardSelector}'s). */
     static int chosen(Screen s, NotebookOptions o, TracingPaper tracing, CoverDesign design, List<NotebookTemplate> templates, NotebookTemplate page) {
         switch (s) {
             case TEMPLATE: for (int i = 0; i < templates.size(); i++) if (templates.get(i).equals(o.template) || templates.get(i).random() && o.template.random()) return i; return -1;
@@ -120,8 +142,30 @@ final class CardSheet {
             case TRANSPARENCY: return transparencyChoice(tracing);
             case TOOLS: return o.tools.ordinal();
             case COVER: return design.ordinal();
+            case SURFACE: return o.surface.ordinal();
             default: return -1;
         }
+    }
+
+    /**
+     * The templates a template screen offers: Random only where the notebook is Random already (a page's own: choosing
+     * it gives the page a new pick); it is set from Random Template (the refocus, 2026-10-24).
+     */
+    static List<NotebookTemplate> offered(NotebookOptions o) {
+        List<NotebookTemplate> templates = NotebookTemplate.choices();
+        if (!o.template.random()) templates.removeIf(NotebookTemplate::random);
+        return templates;
+    }
+    /** Which choice is in use on {@code s} for {@code book}: a page's own surface or template on a page's screens ({@code page}). */
+    static int chosen(Screen s, DrawingBook book, List<NotebookTemplate> templates, int page) {
+        if (s == Screen.PAGE_SURFACE) return book.surface(page).ordinal();
+        return chosen(s, book.options(), book.tracing(), book.design(), templates, s == Screen.PAGE_TEMPLATE ? book.template(page) : null);
+    }
+    /** Choice {@code i}'s picture {@code w × h}, tones (null: none): the cover's paper (of the notebook {@code name}), a surface's shading, a template's guides. */
+    static byte[] picture(Screen s, int i, List<NotebookTemplate> templates, String name, int w, int h) {
+        if (s == Screen.COVER) return NotebookCovers.paper(true, CoverDesign.values()[i], name, w, h, null);
+        if (surfaces(s)) return surfacePicture(BrushTexture.values()[i], w, h);
+        return pictured(s) ? templates.get(i).shared(w, h) : null;
     }
 
     /**

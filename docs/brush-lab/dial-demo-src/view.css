@@ -1,0 +1,68 @@
+/* Brush Lab Dials' tiles (view.js), shared with Brush Studio's Guide tab: every class starts dg-. Greys: --g1 to --g4,
+   --ink and --paper, set by the page. */
+/* Parts */
+.dg-part { padding: 34px 0 10px; }
+.dg-part-head { display: flex; align-items: center; gap: 14px; border-bottom: 4px solid var(--ink); padding-bottom: 10px; }
+.dg-part-head .dg-num { display: inline-flex; align-items: center; justify-content: center; min-width: 46px; height: 40px; border: 3px solid var(--ink); font-weight: 700; font-size: 18px; }
+.dg-part h2 { margin: 0; font-size: 28px; line-height: 1.1; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.dg-blurb { font-size: 18px; margin: 12px 0 4px; }
+.dg-intro { color: var(--g4); margin: 4px 0 0; max-width: 80ch; }
+h3.dg-group { margin: 22px 0 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--g4);
+  display: flex; align-items: center; gap: 12px; }
+h3.dg-group::after { content: ""; flex: 1; border-top: 2px solid var(--g2); }
+.dg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 16px; }
+
+/* Tiles */
+.dg-tile { border: 3px solid var(--ink); padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; background: var(--paper); }
+.dg-tile.dg-choice { border-width: 4px; }
+.dg-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dg-head h4 { margin: 0; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; line-height: 1.25; }
+.dg-tile.dg-choice h4 { font-size: 17px; }
+.dg-head .dg-val { margin-left: auto; font-size: 13px; color: var(--g4); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dg-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding: 1px 6px; border: 2px solid var(--g3); color: var(--g4); line-height: 1.4; align-self: center; }
+.dg-sub { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--g4); margin-top: -4px; }
+/* The picture is paper in either theme. */
+.dg-frame { position: relative; border: 2px solid var(--g2); background: #ffffff; }
+.dg-frame canvas { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; }
+.dg-frame .dg-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; color: #888888; background: #ffffff; }
+.dg-frame .dg-wait[hidden] { display: none; }
+.dg-strip { display: none; }
+.dg-say { margin: 0; font-size: 14px; line-height: 1.45; }
+.dg-on { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--g4); margin-top: auto; padding-top: 2px; }
+.dg-on + .dg-on { margin-top: -4px; padding-top: 0; }
+
+/* The slider under a tile */
+.dg-track { padding: 2px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.dg-track.dg-blank { display: none; }
+.dg-rule { position: relative; height: 14px; margin: 0 6px; }
+.dg-rule::before { content: ""; position: absolute; left: -6px; right: -6px; top: 6px; border-top: 2px solid var(--ink); }
+.dg-rule i { position: absolute; top: 0; width: 12px; height: 14px; margin-left: -6px; background: var(--ink); }
+.dg-ends { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--g4); margin-top: -2px; }
+.dg-ends .dg-now { color: var(--ink); font-weight: 700; text-align: center; }
+.dg-ends.dg-center { justify-content: center; }
+.dg-segs { display: flex; gap: 4px; }
+.dg-segs span { flex: 1; text-align: center; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 5px 2px;
+  border: 2px solid var(--ink); color: var(--ink); background: var(--paper); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-segs span.dg-on { background: var(--ink); color: var(--paper); margin: 0; padding: 5px 2px; font-size: 12px; }
+.dg-clock { position: relative; height: 12px; border: 2px solid var(--ink); }
+.dg-clock i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--g3); width: 0; }
+.dg-clock b { position: absolute; top: -6px; bottom: -6px; width: 3px; margin-left: -1px; background: var(--ink); }
+
+/* Steps: a few moments side by side, for reduced motion or on request */
+.dg-stepped .dg-grid { grid-template-columns: 1fr; }
+.dg-stepped .dg-frame { border: 0; background: none; }
+.dg-stepped .dg-frame > canvas { display: none; }
+.dg-stepped .dg-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.dg-stepped .dg-strip figure { margin: 0; border: 2px solid var(--g2); background: #ffffff; }
+.dg-stepped .dg-strip canvas { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; }
+.dg-stepped .dg-strip figcaption { font-size: 12px; font-weight: 700; text-align: center; padding: 3px 2px; border-top: 2px solid var(--g2); color: #000000; }
+.dg-stepped .dg-track, .dg-stepped .dg-head .dg-val { display: none; }
+.dg-stepped .dg-tile { display: grid; grid-template-columns: minmax(200px, 1fr) 3fr; gap: 6px 16px; }
+.dg-stepped .dg-tile > * { grid-column: 1; }
+.dg-stepped .dg-tile > .dg-frame { grid-column: 2; grid-row: 1 / span 6; }
+
+/* A host that lets a tile be tried (Studio's Guide): the picture is a button. */
+.dg-frame.dg-pick { cursor: pointer; }
+.dg-frame.dg-pick:hover { border-color: var(--ink); }
+.dg-frame.dg-pick:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }

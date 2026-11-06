@@ -172,6 +172,24 @@ final class WetWatercolor {
      */
     void paintOnly(boolean paintOnly, boolean dryStays) { this.paintOnly = paintOnly; this.dryStays = dryStays; }
     private boolean paintOnly, dryStays;
+    /**
+     * Inkwash (the owner, 2026-11-06: "for the oil.. yes, spread cover like the stroke"): the most pigment opaque paint has
+     * laid on this canvas ({@link #paintMask}), 0 for none. Its spread then covers by how much of that paint each pixel
+     * holds, not by how dark it is, as the stroke covers ({@link #covers}); transparent paint and water as ever.
+     * shortcut: one paint darkness for the whole canvas, so a pale paint's spread beside a darker one's covers as the darker's would (no more than before); per-pixel paint amounts if that shows.
+     */
+    private float coverInk;
+    /** Each pixel's coverage for {@link #coverTones}: opaque paint's spread by its share of {@link #coverInk}; water pixels as they are. */
+    private final int[] coverages = new int[PIXELS];
+    private int[] covers(Tile tile) {
+        for (int i = 0; i < PIXELS; i++) {
+            int px = tile.x + i % SIDE, py = tile.y + i / SIDE;
+            if (tile.shade[i] < 0 || px >= document.width || py >= document.height) continue;
+            int found = document.opacity(px, py);
+            coverages[i] = tile.water.get(i) ? found : Math.max(found, Math.min(255, Math.round(255 * tile.pigment[i] / coverInk)));
+        }
+        return coverages;
+    }
     /** Inkwash: how many frames a touched tile keeps moving ({@link #FRAMES} upstream, about 3 s). */
     void setFrames(int frames) { wakeFrames = Math.max(1, frames); }
     private int wakeFrames = FRAMES;
@@ -199,13 +217,18 @@ final class WetWatercolor {
          * watercolour's (a few px); nearer 1 its water feathers further into the paper, as ink on absorbent paper.
          */
         final float feather;
+        /**
+         * How fresh its water must be to wet blank paper beside it ({@link #bleedInto}): {@link #BLEEDS} on cold press;
+         * lower on a surface that drinks (it soaks in sooner), higher on one that doesn't (the surface spec, 2026-11-01).
+         */
+        final float wets;
         final Noise frill, blob, grain;
         Wash(float edge, float bloom, float uneven, float bleed, float gran, float drying, Noise frill, Noise blob, Noise grain) {
-            this(edge, bloom, uneven, bleed, gran, drying, .85f, frill, blob, grain);
+            this(edge, bloom, uneven, bleed, gran, drying, .85f, BLEEDS, frill, blob, grain);
         }
-        Wash(float edge, float bloom, float uneven, float bleed, float gran, float drying, float feather, Noise frill, Noise blob, Noise grain) {
+        Wash(float edge, float bloom, float uneven, float bleed, float gran, float drying, float feather, float wets, Noise frill, Noise blob, Noise grain) {
             this.edge = edge; this.bloom = bloom; this.uneven = uneven; this.bleed = bleed; this.gran = gran; this.drying = drying;
-            this.feather = feather; this.frill = frill; this.blob = blob; this.grain = grain;
+            this.feather = feather; this.wets = wets; this.frill = frill; this.blob = blob; this.grain = grain;
         }
         /** How strongly pigment follows a freshness difference between two water pixels, by their {@code frill}: Bloom's. */
         float carry(float frill) { return Math.min(.22f, .3f * bloom * (.3f + 2 * frill * frill)); }
@@ -257,7 +280,7 @@ final class WetWatercolor {
     /** How much fresher flowing water must be than damp water beside it to flood it (Bloom). */
     private static final float FLOODS = .15f;
     /** How fresh flowing water beside blank paper must be to wet it (Bleed). */
-    private static final float BLEEDS = .62f;
+    static final float BLEEDS = .62f;
     /** Wet reach beyond a stamp: paint can run further downhill before it dries. */
     private int margin(float downhill) { return 8 + Math.round(24 * Math.max(0, downhill)); }
     void beginStroke() {
@@ -320,6 +343,7 @@ final class WetWatercolor {
                 }
                 tile.target[index] = old * mixes + pigment * (1 - mixes);
                 tile.pigment[index] = pigment;
+                if (paintOnly && !transparent && pigment > coverInk) coverInk = pigment;
                 clearWater(tile, index);
                 if(transparent) document.glazeTone(px,py,Math.round(255 - (255 - gray) * strength));
                 else document.paintTone(px,py,Math.round(255 - pigment));
@@ -581,7 +605,7 @@ final class WetWatercolor {
     }
     /**
      * Inkwash (section 9, Bleed): how fresh a blank wet pixel beside fresh flowing water becomes this frame, as its
-     * water wets it, or 0: only past {@link #BLEEDS}, where the frill noise lets it (more of it the more Bleed).
+     * water wets it, or 0: only past its {@link Wash#wets} ({@link #BLEEDS} on cold press), where the frill noise lets it (more of it the more Bleed).
      */
     private float bleedInto(Tile tile, int i) {
         Wash wc = wash;
@@ -596,7 +620,7 @@ final class WetWatercolor {
             int j = (ny % SIDE) * SIDE + nx % SIDE;
             if (t.pull[j] > best) { best = t.pull[j]; tile.nextWave[i] = t.wave == null ? 0 : t.wave[j]; }
         }
-        return best > BLEEDS ? best * wc.feather : 0;
+        return best > wc.wets ? best * wc.feather : 0;
     }
     /**
      * {@link #waterMask} for a watercolor brush, shown at once and laid in full later, when
@@ -857,6 +881,21 @@ final class WetWatercolor {
         tile.used = masks;
         return tile;
     }
+    /**
+     * Inkwash (Scrape, the palette knife): how wet page pixel {@code x, y} is, 0 dry to 1 fresh: water by its freshness,
+     * {@link #DAMP} and under reading as dry, {@link #STILL} (water at rest) as damp; other wet paint {@link #WET_PAINT}.
+     * Reads only, so it makes no tile.
+     */
+    float wetAt(int x, int y) {
+        if (x < 0 || y < 0 || x >= document.width || y >= document.height) return 0;
+        Tile tile = tiles[(y / SIDE) * columns + x / SIDE];
+        if (tile == null || tile.dried) return 0;
+        int i = (y % SIDE) * SIDE + x % SIDE;
+        if (tile.water.get(i) && tile.pull != null) return Math.max(0, Math.min(1, (tile.pull[i] - DAMP) / (1 - DAMP)));
+        return tile.wet.get(i) ? WET_PAINT : 0;
+    }
+    /** How wet {@link #wetAt} reads wet paint that isn't water (gouache, oils): wet enough to push. */
+    static final float WET_PAINT = .8f;
     /** Inkwash (section 9): the wet tiles beside {@code tile} that can take its wash's water move for a frame or two more. */
     private void wakeBeside(Tile tile) {
         for (int dir = 0; dir < 4; dir++) {
@@ -969,6 +1008,19 @@ final class WetWatercolor {
         tile.wetRows[row] |= 1 << col;
         tile.wetColumns[col] |= 1 << row;
     }
+    /** Inkwash: {@link #markWet} undone: the pixel is dry paper again, its water and paint gone. */
+    private static void markDry(Tile tile, int index) {
+        tile.wet.clear(index); tile.wetPixels--;
+        int row = index / SIDE, col = index % SIDE;
+        tile.wetRows[row] &= ~(1 << col);
+        tile.wetColumns[col] &= ~(1 << row);
+        tile.base[index] = (byte)255; tile.pigment[index] = tile.target[index] = 0;
+        if (tile.paint != null) tile.paint.clear(index);
+        if (tile.reserve != null) tile.reserve[index] = 0;
+        if (tile.stuck != null) tile.stuck[index] = 0;
+        clearWater(tile, index);
+        if (tile.held != null) tile.held.clear(index);
+    }
     boolean finishStroke() { return finishStroke(false); }
     /**
      * Inkwash: {@code withPrevious}, the stroke's gesture finishes as part of the edit before it ({@link
@@ -996,17 +1048,24 @@ final class WetWatercolor {
      * water and lifted reserve gone. The tones are read from the document's active layer, which must be this model's.
      * With {@code wake}, the tiles that changed move again ({@link #setFrames}'s frames). Returns how many pixels changed.
      */
-    int rewet(boolean wake) {
+    int rewet(boolean wake) { return rewet(wake, false); }
+    /**
+     * {@link #rewet(boolean)}; with {@code forget} (Hold to Snap's take-back, {@link WetCanvas#forget}), a pixel the Undo
+     * left with none of this layer's paint is dry paper again, as though the stroke undone had never wet it, and so is
+     * bare paper anywhere in its tile, which rests; the other tiles move on.
+     */
+    int rewet(boolean wake, boolean forget) {
         int changed = 0;
         for (Tile tile : tiles) {
             if (tile == null || tile.wetPixels == 0) continue;
-            boolean any = false;
+            boolean any = false, forgot = false;
             for (int i = tile.wet.nextSetBit(0); i >= 0; i = tile.wet.nextSetBit(i + 1)) {
                 int x = tile.x + i % SIDE, y = tile.y + i / SIDE;
                 if (x >= document.width || y >= document.height) continue;
                 int tone = document.tone(x, y);
                 // A pixel's own write can come back a shade off (a layer's coverage rounds it): not a change.
                 if (Math.abs(tone - shade(tile, i)) <= 1) continue;
+                if (forget && document.opacity(x, y) == 0) { markDry(tile, i); changed++; forgot = true; continue; }
                 tile.base[i] = (byte)255;
                 // Its water goes (below), a wash's look with it: what shows is its pigment.
                 tile.pigment[i] = tile.target[i] = 255 - tone;
@@ -1016,6 +1075,14 @@ final class WetWatercolor {
                 clearWater(tile, i);
                 if (tile.held != null) tile.held.clear(i);
                 any = true; changed++;
+            }
+            if (forgot) {
+                // The undone stroke's water on bare paper beside its paint goes too, and the tile rests.
+                for (int i = tile.wet.nextSetBit(0); i >= 0; i = tile.wet.nextSetBit(i + 1)) {
+                    int x = tile.x + i % SIDE, y = tile.y + i / SIDE;
+                    if (x < document.width && y < document.height && document.opacity(x, y) == 0) markDry(tile, i);
+                }
+                if (tile.frames > 0) { tile.frames = 0; active.remove(tile); }
             }
             if (any && wake) wake(tile);
         }
@@ -1104,7 +1171,8 @@ final class WetWatercolor {
         shareBatch((tile, own) -> settle(tile));
         // Only writing the tones that changed stays on this thread.
         for (Tile tile : batch) {
-            document.setTones(tile.x, tile.y, SIDE, SIDE, tile.shade);
+            if (coverInk > 0) document.coverTones(tile.x, tile.y, SIDE, SIDE, tile.shade, covers(tile));
+            else document.setTones(tile.x, tile.y, SIDE, SIDE, tile.shade);
             // The model owns these pixels' tones again; any preview over them is gone.
             if (tile.held != null) tile.held.andNot(tile.wet);
             looseSoFar |= tile.loose;

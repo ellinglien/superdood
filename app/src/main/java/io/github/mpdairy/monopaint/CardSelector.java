@@ -53,20 +53,15 @@ final class CardSelector {
         this.screen = screen; this.page = page;
         if (screen == CardSheet.Screen.RANDOM_FROM) { randomFrom(); return; }
         NotebookOptions o = book.options();
-        List<NotebookTemplate> templates = NotebookTemplate.choices();
-        // Random only where the notebook is Random already (a page's own: choosing it gives the page a new pick); it is
-        // set from Settings' More, Random Template (the refocus, 2026-10-24).
-        if (!o.template.random()) templates.removeIf(NotebookTemplate::random);
+        List<NotebookTemplate> templates = CardSheet.offered(o);
         String[] names = CardSheet.names(screen, templates, o);
-        int chosen = CardSheet.chosen(screen, o, book.tracing(), book.design(), templates, screen == CardSheet.Screen.PAGE_TEMPLATE ? book.template(page) : null);
+        int chosen = CardSheet.chosen(screen, book, templates, page);
         CardSheet.Layout sheet = sheet(screen, names.length, page);
         String name = DrawingFiles.name(app.drawingName);
         List<View> cards = new ArrayList<>();
         for (int i = 0; i < names.length; i++) {
             int choice = i;
-            BiFunction<Integer, Integer, byte[]> picture = null;
-            if (screen == CardSheet.Screen.COVER) { CoverDesign design = CoverDesign.values()[i]; picture = (w, h) -> NotebookCovers.paper(true, design, name, w, h, null); }
-            else if (CardSheet.pictured(screen)) picture = templates.get(i)::shared;
+            BiFunction<Integer, Integer, byte[]> picture = CardSheet.pictured(screen) ? (w, h) -> CardSheet.picture(screen, choice, templates, name, w, h) : null;
             View card = card(sheet, screen, names[i], CardSheet.note(screen, i, i == chosen), CardSheet.icon(screen, i, templates), i == chosen, true, picture);
             card.setOnClickListener(v -> choose(screen, choice, page, templates));
             if ((screen == CardSheet.Screen.TEMPLATE) && templates.get(i).random()) card.setOnLongClickListener(v -> { randomFrom(); return true; });
@@ -105,6 +100,8 @@ final class CardSelector {
                 break;
             }
             case PAGE_TEMPLATE: app.setPageTemplate(page, templates.get(choice)); break;
+            case SURFACE: app.setNotebookOptions(o.withSurface(BrushTexture.values()[choice])); break;
+            case PAGE_SURFACE: app.setPageSurface(page, BrushTexture.values()[choice]); break;
             case TRANSPARENCY: {
                 TracingPaper t = CardSheet.transparency(choice);
                 app.setTracing(book.tracing().withPaper(t.paper).withStrength(t.strength));

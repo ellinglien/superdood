@@ -87,10 +87,7 @@ final class OrientationChecks {
             });
             report.append("Landscape suggestion waits for a stable sensor angle and a tap; document, undo, pen and rotated palette hit testing pass.\n");
             screenshot(test,activity,"orientation-right.png");
-            fileMenuChecks(test,activity);
             fastStrokeAndRefresh(test,activity,doc,report);
-            dialogChecks(test,activity);
-            horizontalDrag(test,activity,doc);
             Matrix rightHandPage = new Matrix((Matrix)get(pad,"pageToView"));
             main(test,() -> { preferences.edit().putBoolean("toolbox_right",true).apply(); call(activity,"applyToolboxSide"); });
             test.waitForIdleSync();
@@ -101,7 +98,6 @@ final class OrientationChecks {
                 check(doc.tone(620,540)<255,"Left-handed landscape pen coordinates");
             });
             screenshot(test,activity,"orientation-left.png");
-            fileMenuChecks(test,activity);
             main(test,() -> call(activity,"requestQuarter",new Class<?>[]{int.class},1));
             awaitRotation(test,activity,Surface.ROTATION_270,true);
             main(test,() -> {
@@ -110,17 +106,13 @@ final class OrientationChecks {
                 check(doc.tone(800,740)<255,"Reverse landscape pen coordinates");
             });
             screenshot(test,activity,"orientation-left-right-edge-down.png");
-            fileMenuChecks(test,activity);
             main(test,() -> {
                 preferences.edit().putBoolean("toolbox_right",false).apply(); call(activity,"applyToolboxSide");
             });
             test.waitForIdleSync();
             main(test,() -> layout(activity,false));
             screenshot(test,activity,"orientation-right-edge-down.png");
-            fileMenuChecks(test,activity);
             fastStrokeAndRefresh(test,activity,doc,report);
-            dialogChecks(test,activity);
-            horizontalDrag(test,activity,doc);
             main(test,() -> {
                 call(activity,"requestQuarter",new Class<?>[]{int.class},2);
             });
@@ -153,51 +145,13 @@ final class OrientationChecks {
                 preferences.edit().putBoolean("toolbox_right",right).apply();
                 call(activity,"replaceBook",new Class<?>[]{DrawingBook.class},original);
                 set(activity,"drawingName",name); call(activity,"applyToolboxSide");
-                call(activity,"refreshPaintModes"); call(activity,"saveToolState"); call(activity,"recoveryNow");
+                call(activity,"saveToolState"); call(activity,"recoveryNow");
             });
             CountDownLatch saved = new CountDownLatch(1);
             ((DocumentStore)get(activity,"store")).recover((value,error) -> saved.countDown());
             check(saved.await(15,TimeUnit.SECONDS),"Original recovery persisted");
             main(test,activity::finish);
         }
-    }
-    private static void horizontalDrag(Instrumentation test,PaintActivity activity,ToneDocument document) throws Exception {
-        if(true)return; // Retired: MonoPaint's preset rail, never shown in Inkwash.
-        ToolLibrary saved=(ToolLibrary)get(activity,"library"), tools=new ToolLibrary();
-        ToolLibrary.Preset first=tools.add("Landscape A"), middle=tools.add("Landscape B"), last=tools.add("Landscape C");
-        tools.recall(middle.id);
-        byte[] tones=document.snapshot();
-        main(test,() -> { set(activity,"library",tools); call(get(activity,"toolbar"),"rebuildTools"); });
-        test.waitForIdleSync();
-        try {
-            View source=preset(activity,first.id), target=preset(activity,last.id);
-            // A narrower panel scrolls the rail; bring the adjacent presets into view as a person would.
-            final View from=source, to=target;
-            main(test,() -> {
-                to.requestRectangleOnScreen(new android.graphics.Rect(0,0,to.getWidth(),to.getHeight()),true);
-                from.requestRectangleOnScreen(new android.graphics.Rect(0,0,from.getWidth(),from.getHeight()),true);
-            });
-            test.waitForIdleSync();
-            main(test,() -> check(PanelCoordinates.fullyVisible(from,new android.graphics.Rect(0,0,from.getWidth(),from.getHeight()))
-                    &&PanelCoordinates.fullyVisible(to,new android.graphics.Rect(0,0,to.getWidth(),to.getHeight())),"Dragged presets are on screen"));
-            float[] start=physicalPoint(source,source.getWidth()/2f,source.getHeight()/2f);
-            float[] end=physicalPoint(target,target.getWidth()-2,target.getHeight()/2f);
-            PaintChecks.drag(test,start[0],start[1],end[0],end[1],0);
-            check(tools.presets().get(2).id.equals(first.id),"Horizontal drag reorders presets");
-            main(test,() -> { for(int i=0;i<30;i++)tools.add("Landscape scroll "+i); tools.recall(middle.id); call(get(activity,"toolbar"),"rebuildTools"); });
-            test.waitForIdleSync();
-            source=preset(activity,middle.id); View scroll=(View)get(get(activity,"toolbar"),"landscapeTools");
-            start=physicalPoint(source,source.getWidth()/2f,source.getHeight()/2f);
-            end=physicalPoint(scroll,scroll.getWidth()-8,scroll.getHeight()/2f);
-            PaintChecks.drag(test,start[0],start[1],end[0],end[1],800);
-            check(scroll.getScrollX()>0,"Horizontal drag scrolls at right edge");
-            check(Arrays.equals(tones,document.snapshot()),"Horizontal drag never paints");
-        } finally {
-            main(test,() -> { set(activity,"library",saved); call(get(activity,"toolbar"),"rebuildTools"); ((View)get(get(activity,"toolbar"),"landscapeTools")).scrollTo(0,0); });
-        }
-    }
-    private static View preset(PaintActivity activity,String id) throws Exception {
-        return (View)((java.util.Map<?,?>)get(get(activity,"toolbar"),"selectionButtons")).get(id);
     }
     private static void fastStrokeAndRefresh(Instrumentation test,PaintActivity activity,ToneDocument document,StringBuilder report) throws Exception {
         Object pad=get(activity,"pad"); View view=(View)pad;
@@ -247,7 +201,6 @@ final class OrientationChecks {
                 check(direct.readGray(Math.round(end[0]),Math.round(end[1]))==((shown.getPixel(Math.round(end[0]),Math.round(end[1]))>>>16)&255)/16,"Landscape pen pixels reach native panel buffer");
                 check(direct.readGray(Math.round(at[0]),Math.round(at[1]))==((shown.getPixel(Math.round(at[0]),Math.round(at[1]))>>>16)&255)/16,"Pen ink appears in the panel buffer");
             });
-            selection(test,activity,pad);
             // A full compositor redraw must reproduce the same artwork, rather than stale pre-pen pixels.
             main(test,() -> { view.invalidate(); activity.getWindow().getDecorView().invalidate(); });
             test.waitForIdleSync(); SystemClock.sleep(200);
@@ -262,94 +215,6 @@ final class OrientationChecks {
     private static MotionEvent.PointerCoords coords(float x,float y,float pressure,float tiltX,float tiltY) {
         MotionEvent.PointerCoords c=new MotionEvent.PointerCoords(); c.x=x;c.y=y;c.pressure=pressure;
         c.setAxisValue(MotionEvent.AXIS_ORIENTATION,tiltX);c.setAxisValue(MotionEvent.AXIS_TILT,tiltY); return c;
-    }
-    private static void dialogChecks(Instrumentation test,PaintActivity activity) throws Exception {
-        if(true)return; // Retired: MonoPaint's tool settings panel; Inkwash edits tools on its Tools page.
-        android.widget.PopupWindow[] dialog={null};
-        main(test,() -> {
-            Method method=PaintActivity.class.getDeclaredMethod("showToolSettings"); method.setAccessible(true);
-            dialog[0]=(android.widget.PopupWindow)method.invoke(activity);
-        });
-        test.waitForIdleSync(); SystemClock.sleep(200);
-        try {
-            main(test,() -> {
-                View frame=dialog[0].getContentView();
-                check(frame instanceof QuarterTurnLayout,"Tool panel rotates inside its portrait window");
-                check(frame.getWidth()>0 && frame.getHeight()>0,"Rotated settings has a measured content area");
-                android.graphics.Rect visible=new android.graphics.Rect();
-                check(frame.getGlobalVisibleRect(visible) && visible.width()==frame.getWidth() && visible.height()==frame.getHeight(),"Rotated settings fits its window");
-                check(activity.getWindowManager().getDefaultDisplay().getRotation()==Surface.ROTATION_0,"Opening settings never turns the desktop");
-            });
-            View done=dialog[0].getContentView().findViewWithTag("close");
-            float[] point=physicalPoint(done,done.getWidth()/2f,done.getHeight()/2f);
-            long now=SystemClock.uptimeMillis();
-            for(int action:new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_UP}) {
-                MotionEvent e=MotionEvent.obtain(now,SystemClock.uptimeMillis(),action,point[0],point[1],0);
-                e.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-                check(test.getUiAutomation().injectInputEvent(e,true),"Rotated Done tap injected");e.recycle();
-            }
-            await(test,() -> !dialog[0].isShowing(),"Rotated dialog Done hit target");
-        } finally {main(test,dialog[0]::dismiss);}
-        await(test,() -> get(get(activity,"pad"),"direct")!=null,"Direct display reconnects after rotated settings");
-    }
-    private static void fileMenuChecks(Instrumentation test,PaintActivity activity) throws Exception {
-        if(true)return; // Retired: MonoPaint's header hamburger; Inkwash's menu is in its side column.
-        byte[] tones=((ToneDocument)get(get(activity,"pad"),"document")).snapshot();
-        main(test,() -> {
-            View button=(View)get(activity,"menuButton");
-            tapLocal(activity,button,button.getWidth()/2f,button.getHeight()/2f);
-        });
-        test.waitForIdleSync();
-        android.widget.PopupWindow popup=(android.widget.PopupWindow)get(activity,"filePopup");
-        check(popup!=null && popup.isShowing(),"Hamburger opens an anchored popup");
-        try {
-            main(test,() -> {
-                View root=(View)get(activity,"root"), button=(View)get(activity,"menuButton");
-                View scroll=((android.view.ViewGroup)popup.getContentView()).getChildAt(0);
-                android.graphics.RectF menu=boundsInRoot(root,scroll), anchor=boundsInRoot(root,button);
-                boolean right=((SharedPreferences)get(activity,"preferences")).getBoolean("toolbox_right",false);
-                check(Math.abs(menu.top-anchor.bottom)<2,"File menu opens immediately below the hamburger");
-                check(Math.abs(right ? menu.right-anchor.right : menu.left-anchor.left)<2,"File menu aligns with the hamburger's outer edge");
-                check(menu.left>=-1 && menu.top>=-1 && menu.right<=root.getWidth()+1 && menu.bottom<=root.getHeight()+1,"File menu fits on screen");
-            });
-            screenshot(test,activity,"orientation-menu-"+get(activity,"appRotation")+"-"+get(activity,"toolboxRight")+".png");
-            android.view.ViewGroup rows=(android.view.ViewGroup)((android.view.ViewGroup)((android.view.ViewGroup)popup.getContentView()).getChildAt(0)).getChildAt(0);
-            View settings=null;
-            for(int i=0;i<rows.getChildCount();i++)
-                if(rows.getChildAt(i) instanceof android.widget.TextView&&"Settings".contentEquals(((android.widget.TextView)rows.getChildAt(i)).getText()))settings=rows.getChildAt(i);
-            check(settings!=null,"File menu has a Settings item");
-            // Input reaches a popup only once its window has focus, which can lag behind main-thread idle.
-            await(test,() -> popup.getContentView().hasWindowFocus(),"File menu receives input");
-            injectTap(test,physicalPoint(settings,settings.getWidth()/2f,settings.getHeight()/2f));
-            await(test,() -> !popup.isShowing(),"Rotated menu item responds to its displayed touch target");
-            test.waitForIdleSync();
-            android.view.accessibility.AccessibilityNodeInfo window=test.getUiAutomation().getRootInActiveWindow();
-            check(window!=null && !window.findAccessibilityNodeInfosByText("Drawing hand").isEmpty(),"Settings menu item opens app settings");
-            test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);
-            test.waitForIdleSync();
-            main(test,() -> ((View)get(activity,"menuButton")).performClick());
-            test.waitForIdleSync();
-            android.widget.PopupWindow reopened=(android.widget.PopupWindow)get(activity,"filePopup");
-            View pad=(View)get(activity,"pad");
-            await(test,() -> reopened.getContentView().hasWindowFocus(),"Reopened file menu receives input");
-            injectTap(test,physicalPoint(pad,pad.getWidth()/2f,pad.getHeight()/2f),true);
-            await(test,() -> !reopened.isShowing(),"Tap outside dismisses the anchored menu");
-            View menuButton=(View)get(activity,"menuButton");
-            float[] outside=physicalPoint(pad,pad.getWidth()/2f,pad.getHeight()/2f);
-            android.widget.PopupWindow byFinger=openMenu(test,activity,menuButton,MotionEvent.TOOL_TYPE_FINGER);
-            tapPopupWindow(test,byFinger,outside,MotionEvent.TOOL_TYPE_FINGER);
-            await(test,() -> !byFinger.isShowing(),"A finger tap outside dismisses a menu a finger opened");
-            android.widget.PopupWindow byPen=openMenu(test,activity,menuButton,MotionEvent.TOOL_TYPE_STYLUS);
-            tapPopupWindow(test,byPen,outside,MotionEvent.TOOL_TYPE_FINGER);
-            test.waitForIdleSync();
-            check(byPen.isShowing(),"A finger outside a menu the pen opened is a resting hand");
-            tapPopupWindow(test,byPen,outside,MotionEvent.TOOL_TYPE_STYLUS);
-            await(test,() -> !byPen.isShowing(),"The pen dismisses a menu the pen opened");
-            check(Arrays.equals(tones,((ToneDocument)get(get(activity,"pad"),"document")).snapshot()),"Opening and dismissing the menu preserves drawing pixels");
-        } finally {
-            main(test,() -> { android.widget.PopupWindow open=(android.widget.PopupWindow)get(activity,"filePopup"); if(open!=null)open.dismiss(); });
-        }
-        await(test,() -> get(get(activity,"pad"),"direct")!=null,"Direct display reconnects after file menu");
     }
     private static android.graphics.RectF boundsInRoot(View root,View view) {
         android.graphics.RectF bounds=new android.graphics.RectF(0,0,view.getWidth(),view.getHeight());
@@ -397,27 +262,6 @@ final class OrientationChecks {
         return MotionEvent.obtain(down,time,action,1,new MotionEvent.PointerProperties[]{p},
                 new MotionEvent.PointerCoords[]{coords(x,y,pressure,tiltX,tiltY)},0,0,1,1,0,0,InputDevice.SOURCE_STYLUS,0);
     }
-    private static void selection(Instrumentation test,PaintActivity activity,Object pad) throws Exception {
-        if(true)return; // Retired: MonoPaint's shade picker, never shown in Inkwash.
-        SelectionFeedback feedback=(SelectionFeedback)get(activity,"selectionFeedback"); boolean enabled=feedback.enabled;
-        int submitted=feedback.submitted;
-        main(test,() -> {
-            feedback.enabled=true;
-            View shade=(View)get(activity,"shadePicker");
-            tapLocal(activity,shade,1,shade.getHeight()/2f);
-        });
-        try {
-            check(feedback.submitted>submitted,"Rotated color selection reaches direct display");
-            DirectEink direct=(DirectEink)get(pad,"direct"); Bitmap bitmap=(Bitmap)get(pad,"display");
-            android.graphics.Rect page=direct.bufferRegion(new android.graphics.Rect(0,0,bitmap.getWidth(),bitmap.getHeight()));
-            check(!android.graphics.Rect.intersects(page,feedback.lastBufferRegion),"Color update stays outside the physical artwork");
-        } finally {
-            main(test,() -> {
-                View shade=(View)get(activity,"shadePicker");tapLocal(activity,shade,shade.getWidth()-1,shade.getHeight()/2f);
-                feedback.enabled=enabled;
-            });
-        }
-    }
     private static void layout(PaintActivity activity,boolean right) throws Exception {
         // Retired: MonoPaint header, color bar, preset rail and hamburger placement; Inkwash shows only its side column.
         View pad=(View)get(activity,"pad");
@@ -431,43 +275,6 @@ final class OrientationChecks {
             test.waitForIdleSync();
             // Retired: hamburger corner and file menu; MonoPaint's header is never shown in Inkwash.
         }
-    }
-    private static void menuCorner(PaintActivity activity,boolean right) throws Exception {
-        View root=(View)get(activity,"root"), menu=(View)get(activity,"menuButton"), rotate=(View)get(activity,"rotateButton");
-        float[] center=layoutPoint(root,menu,menu.getWidth()/2f,menu.getHeight()/2f);
-        float half=menu.getWidth()/2f;
-        check(Math.abs(center[0]-(right ? root.getWidth()-half : half))<1
-                && Math.abs(center[1]-half)<1,"Hamburger occupies the upper outer corner for each drawing hand");
-        check(rotate.getParent()!=get(activity,"menuControls"),"Rotation suggestion occupies no header space");
-    }
-    private static void shadeMarker(PaintActivity activity) throws Exception {
-        View shade=(View)get(activity,"shadePicker"), root=(View)get(activity,"root"), pad=(View)get(activity,"pad");
-        int gray=(Integer)get(get(activity,"paint"),"gray");
-        Bitmap rendered=Bitmap.createBitmap(shade.getWidth(),shade.getHeight(),Bitmap.Config.ARGB_8888);
-        try {
-            tapLocal(activity,shade,1,shade.getHeight()/2f);
-            check((Integer)get(get(activity,"paint"),"gray")==255,"Landscape picker keeps white at the top for both hands");
-            tapLocal(activity,shade,shade.getWidth()-1,shade.getHeight()/2f);
-            check((Integer)get(get(activity,"paint"),"gray")==0,"Landscape picker keeps black at the bottom for both hands");
-            shade.draw(new android.graphics.Canvas(rendered));
-            int inset=Math.round(3*activity.getResources().getDisplayMetrics().density);
-            float[] middle=layoutPoint(root,shade,shade.getWidth()/2f,shade.getHeight()/2f);
-            float[] canvasMiddle=layoutPoint(root,pad,pad.getWidth()/2f,pad.getHeight()/2f);
-            int marks=0;
-            for (int y : new int[]{inset,shade.getHeight()-inset}) {
-                for (int x=0;x<shade.getWidth();x++) {
-                    if ((rendered.getPixel(x,y)&0xffffff)!=0) continue;
-                    float[] mark=layoutPoint(root,shade,x,y);
-                    check(Math.abs(mark[0]-canvasMiddle[0])<Math.abs(middle[0]-canvasMiddle[0]),"Black selection marker faces the canvas");
-                    check(mark[1]>middle[1],"Black selection marker stays at the bottom");
-                    marks++;
-                }
-            }
-            check(marks>0,"Black selection marker is visible beside the gradient");
-        } finally { rendered.recycle(); set(get(activity,"paint"),"gray",gray); shade.invalidate(); }
-    }
-    private static int layoutY(View root,View view) {
-        return Math.round(layoutPoint(root,view,0,0)[1]);
     }
     private static float[] layoutPoint(View root,View view,float x,float y) {
         float[] point={x,y};

@@ -48,6 +48,19 @@ final class ShapeStroke {
         dirty.add(left,row,right,row+1);
     }
     boolean finish() { if(ended)return false; ended=true; return document.finish(); }
+    /** Inkwash: Record and Replay: the shape as last drawn ({@link StrokeLog.Shape}); null when it never was. */
+    StrokeLog.Shape logged() { return Float.isNaN(lastX)?null:geometry.logged(shade,lastX,lastY); }
+    /**
+     * Inkwash: {@code spans} (two intervals a row, as {@link ShapeGeometry} rasters them) laid in {@code shade} on the
+     * selected layer as one Undo step: a shape as the Manta commits it ({@code ShapePreview.finish}) and as Replay draws it.
+     */
+    static boolean lay(ToneDocument document,int[] spans,int shade) {
+        document.begin();
+        for(int y=0;y<document.height;y++)for(int part=0;part<4;part+=2) {
+            int at=y*4+part;document.paintSpan(spans[at],spans[at+1],y,shade);
+        }
+        return document.finish();
+    }
     void cancel() {
         if(ended)return;
         document.cancel();ended=true;

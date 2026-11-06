@@ -4,9 +4,12 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- A live page holds a Wi-Fi lock while listening (LiveProbe): low latency. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- largeHeap: the Manta's apps get 192 MB unless they ask, 512 MB if they do (4 GB of RAM); wet paint, fills and
          pages need the room. -->
-    <application android:requestLegacyExternalStorage="true" android:largeHeap="true"
+    <application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true" android:largeHeap="true"
         android:label="@string/app_name" android:icon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true">
         <!-- Lets adb take heap dumps and profiles of the release build (owner's request, 2026-10-25). -->

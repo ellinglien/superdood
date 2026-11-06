@@ -1,6 +1,6 @@
-# My Bad Drawings' fridge magnet words: one tile a line, repeats on purpose (several s, ing, ed, ly, the).
+# Superdood's fridge magnet words: one tile a line, repeats on purpose (several s, ing, ed, ly, the).
 # Edit freely. Lines starting with # are notes. The bin shuffles these into pages each time it opens.
-# To add a pack of your own, put a file named something.words.txt in Document/My Bad Drawings.
+# To add a pack of your own, put a file named something.words.txt in Document/Superdood.
 #
 # Kit 1: the classic kit (the owner's list, & to you; Paintmageddon's kit is this one less six words).
 #

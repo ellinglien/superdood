@@ -31,7 +31,7 @@ const DIALS = {
     headTurn: { label: "Head Follows", choices: ["Stroke", "Page"], def: 0 },
     gap: { label: "Tine Gap", min: 0, max: 1, def: .55 },
     count: { label: "Lines", min: 2, max: 5, def: 3, int: true, fmt: v => String(Math.round(v)) },
-    reach: { label: "Spacing", min: 0, max: 1, def: .6 },
+    reach: { label: "Line Spacing", min: 0, max: 1, def: .6 },
     hairs: { label: "Hairs", min: 6, max: 32, def: 26, int: true, fmt: v => String(Math.round(v)) },
     cohesion: { label: "Clump", min: 0, max: 1, def: .55 },
     splay: { label: "Splay", min: 0, max: 1, def: .45 },
@@ -71,7 +71,11 @@ const DIALS = {
     // paint mode): how much paint a full brush holds (off: it never runs out, as before), and the share of it every
     // stroke starts with. Written only when on; a part's roll leaves them off (Oils rolls Paint Load from the seed).
     pload: { label: "Paint Load", min: 0, max: 1, def: 0 },
-    pmin: { label: "Starting Load", min: 0, max: 1, def: .25 }
+    pmin: { label: "Starting Load", min: 0, max: 1, def: .25 },
+    // Smear's and Clear Water's Press (the owner, 2026-10-30; the app's PartDial.PRESS): how far a firm press takes the
+    // brush from what its light touch does. Smear's Press to Push takes Soften toward 0 (softens light, pushes firm);
+    // Clear Water's Press to Lift takes Lay Down Paint and the wet it leaves toward 0 (re-wets light, blots firm). Off, as before.
+    press: { label: "Press to Push", min: 0, max: 1, def: 0 }
   },
   paper: { tooth: { label: "Texture", min: 0, max: 1, def: .5 } },
   life: {
@@ -115,9 +119,9 @@ const CHOICES = {
     { k: "off", label: "Off", dials: [], blurb: "Lays its own paint only." },
     { k: "lift", label: "Lift", dials: ["pick", "lay"], macro: "pick", words: ["gentle", "strong"], def: { pick: .2, lay: .3 }, blurb: "Takes paint off as it goes, like a damp brush or a tissue." },
     { k: "drag", label: "Drag", dials: ["pick", "lay", "load", "keep", "pload", "pmin"], macro: "pick", words: ["clean", "smeary"], def: { pick: .6, lay: .7, load: .85 }, blurb: "Drags the paint beneath along: wet into wet." },
-    { k: "smudge", label: "Smear", dials: ["pick", "lay", "load", "soften", "keep", "pload", "pmin"], macro: "pick", words: ["clean", "smeary"], def: { pick: .7, lay: .55, load: .3 }, blurb: "Mostly smears what's there, like a finger or a stump." },
+    { k: "smudge", label: "Smear", dials: ["pick", "lay", "load", "soften", "keep", "pload", "pmin", "press"], macro: "pick", words: ["clean", "smeary"], def: { pick: .7, lay: .55, load: .3 }, blurb: "Mostly smears what's there, like a finger or a stump." },
     // Clear Water (the wet smudge spec): Smudge's fifth choice, so older codes never hold it. Lays only water.
-    { k: "water", label: "Clear Water", dials: ["pick", "lay"], macro: "pick", words: ["gentle", "strong"], def: { pick: .5, lay: .6 }, blurb: "Lays only water: lifts what it touches and lets it run through the wet." }
+    { k: "water", label: "Clear Water", dials: ["pick", "lay", "press"], macro: "pick", words: ["gentle", "strong"], def: { pick: .5, lay: .6 }, labels: { press: "Press to Lift" }, blurb: "Lays only water: lifts what it touches and lets it run through the wet." }
   ],
   paper: ["plain", "cold press", "laid", "felt", "crumpled", "canvas"].map(k => ({ k, label: { plain: "Smooth", "cold press": "Cold Press", laid: "Ribbed" }[k] || k[0].toUpperCase() + k.slice(1), dials: ["tooth"], macro: "tooth", words: ["smooth", "rough"], def: { tooth: k === "plain" ? 0 : .5 } })),
   life: [
@@ -164,7 +168,7 @@ function freshPart(part, k) {
 }
 // Dials added after the prototype's, last in their choices' lists (the app's ModularCode.ADDED): written only when one is
 // off its default, so a brush that doesn't use them keeps its code; never rolled, so every roll draws as before.
-const ADDED = new Set(["medium.dust", "medium.erase", "carry.soften", "carry.keep", "carry.pload", "carry.pmin"]);
+const ADDED = new Set(["medium.dust", "medium.erase", "carry.soften", "carry.keep", "carry.pload", "carry.pmin", "carry.press"]);
 // Erasable (the Erasable spec): every medium starts at 1, erases clean (the owner, 2026-10-22: "per-tool things should be
 // erasable unless the user specifies"; until then the real medium's: ink permanent, a wash .4, gouache .3, Oils' paint off).
 // A code that doesn't say reads 1. Resist's dial is wax or fluid (newmods.js).
@@ -267,7 +271,7 @@ function resolve(B, size, shade) {
     line: Pa.stampLine, body: Pa.bodyAmt > 0, lineTooth: Pa.pen.tooth, cover, gray: PAPER_TONE * (1 - shade), shade,
     // Drying's light preview grey: the swatch's shade, a wash's as dark as its glaze is to the old 34% one.
     previewShade: mk === "wash" ? WASH_BLACK * shade / GLAZE : shade,
-    hold: m("hold"), spread: m("spread"), grade: m("grade"), lineInk: mk === "ink",
+    hold: m("hold"), spread: m("spread"), grade: m("grade"), lineInk: mk === "ink", markerInk: mk === "wash" && life === "none" && B.style === "Marker",
     windowLen: (L.d.window ?? 6) * 12 + 0.5 * (lineMedium && w < .5 ? inkSize : washSize), drying: L.d.drying ?? .35, settle: life === "dry" ? (L.d.settle ?? 0) : 0,
     takes: life === "dry" ? ["", "drift", "vein"][L.d.takes | 0] : "", plume: L.d.plume ?? .55 };
   R.body = Pa.bodyAmt > 0 ? body : null;
@@ -282,10 +286,10 @@ function resolve(B, size, shade) {
   R.lineReach = R.linePlaced ? Math.ceil(Math.max(Pa.bodySize, tk === "multi" ? inkSize * (2 + 1.4 * bb.count) : 0) * .9 + inkSize * 3 + (bb.offset > 0 ? Pa.bodySize * 1.4 + inkSize * 2.5 : 0) + (bb.chaos > 0 ? Pa.bodySize * .6 + inkSize : 0)) : 0;
   if (R.lineTip === "hake") R.lineHake = { seed: bb.seed, mode: "flat", pressure: h("ps"), soft: T.d.soft ?? .2, streaks: t("dry"), gran: 0, angle: bb.angle, headTurn: body.headTurn,
     tilt: body.tilt, fast: false, head: "flat", cover: 0, pDark: h("pd"), pWidth: h("pw"), softK: lerp(.012, .6, T.d.soft ?? .2) };
-  if (R.lineTip === "bristles") R.lineSwarm = { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") };
+  if (R.lineTip === "bristles") R.lineSwarm = { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), load: T.d.load ?? .5, pressure: h("ps"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") };
   R.bodyTip = tk === "bristles" ? "bristles" : (tk === "split" || tk === "multi") && !lineMedium ? "placed" : "body";
   R.bodyStateful = tk === "bristles" || tk === "hake";
-  if (R.bodyTip === "bristles") R.bodySwarm = Object.assign({}, R.lineSwarm || { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") }, { amount: Pa.bodyAmt });
+  if (R.bodyTip === "bristles") R.bodySwarm = Object.assign({}, R.lineSwarm || { seed: bb.seed, hairs: t("hairs"), cohesion: t("cohesion"), spreadH: t("splay"), dryness: t("dryness"), load: T.d.load ?? .5, pressure: h("ps"), tiltSize: h("ts"), tDark: h("td"), pDark: h("pd"), sDark: h("sd") }, { amount: Pa.bodyAmt });
   if (R.bodyTip === "placed") {
     R.bodyLineSize = washSize * (tk === "split" ? .55 : .22);
     R.bodyPen = Object.assign({}, pen, { lines: tk === "split" ? "split" : "spread", wetGap: 0, dry: t("dry"), aspect: tk === "split" ? t("aspect") : 1, skipStart: 0, skipEnd: 0, pool: 0, splatter: 0 });
@@ -296,10 +300,10 @@ function resolve(B, size, shade) {
   // own-paint share, opaque paint's cover too (Smudge spec F1). A body glazes at a third of the swatch, as the app's
   // paint shades (PAINT_DARK); a wash to near black (washStrength: its full body lays .97 of the swatch's grey).
   // Clear Water lays no paint of its own (the app's ModularBrush.ownPaint).
-  const load = C.k === "off" ? 1 : C.k === "water" ? 0 : (C.d.load ?? 1);
+  const load = C.k === "off" ? 1 : C.k === "water" || C.k === "scrape" || C.k === "reprint" ? 0 : (C.d.load ?? 1);
   R.inkK = shade * Pa.inkShare * lineDark * load;
   R.washK = (mk === "wash" ? washStrength(shade) : GLAZE * shade) * load;
-  R.cover = cover * load;
+  R.cover = cover * load; R.load = load;
   R.erase = M.d.erase ?? 1;
   if (life === "float") R.float = floatParts(B, R, load);
   if (C.k !== "off") {
@@ -308,7 +312,7 @@ function resolve(B, size, shade) {
     // Dabs 1 + .08 r apart (r / 4 below 15 px): closer than the lab's first r / 4, so a smear streaks smoothly, without combing.
     const spacing = Math.max(1.5, Math.min(r * .25, 1 + r * .08));
     R.carry = { kind: C.k, moves: !(C.k === "lift" && R.cover > 0), pick: C.d.pick ?? .4, lay: C.d.lay ?? .5, paper: PAPER_TONE, r, spacing, hits: r / spacing, stride: r > 30 ? r / 30 : 1, n: Math.ceil(r / (r > 30 ? r / 30 : 1)) + 1,
-      keep: C.k === "drag" || C.k === "smudge" ? (C.d.keep ?? 0) : 0 };
+      keep: C.k === "drag" || C.k === "smudge" ? (C.d.keep ?? 0) : 0, press: C.k === "smudge" || C.k === "water" ? (C.d.press ?? 0) : 0 };
     // Smear's Soften: part or all of it MonoPaint's blending stump (stroke.js stumpDab); a Rake or a Split nib combs, along
     // its tines (as floatParts places them, a Rake's over its lines' band).
     const soften = C.k === "smudge" ? (C.d.soften ?? 0) : 0;
@@ -626,6 +630,8 @@ function handWords(B, n = 2) {
 // A Smear that is mostly MonoPaint's blending stump (Soften from .5): "Softens.", tagged "stump"; with tines, "Combs.", "comb".
 const isStump = B => B.carry.k === "smudge" && (B.carry.d.soften ?? 0) >= .5;
 const combs = B => B.tip.k === "multi" || B.tip.k === "split";
+// Smudge's Press on: Press to Push (a Smear) or Press to Lift (Clear Water); the app's ModularWords.pressed.
+const pressed = B => (B.carry.d.press ?? 0) > 0;
 const isClearWater = B => B.life.k === "float" && (B.carry.k === "water" || (B.carry.k === "drag" || B.carry.k === "smudge") && (B.carry.d.load ?? 1) < .02);
 // Smudge's Clear Water off the water, and Keeps Paint on (a dirty brush; not all stump): the wet smudge spec.
 const isWater = B => B.carry.k === "water" && B.life.k !== "float";
@@ -732,7 +738,9 @@ function plainWords(B) {
   const strong = marks.sort((a, b) => b[0] - a[0]).slice(0, 2).map(m => m[1]);
   if (strong.length) out.push(cap1(strong.join(", ")) + ".");
   // Smudge Off says nothing (not "undefined").
-  const smudge = floats ? null : { lift: "Lifts paint.", drag: "Drags wet paint.", smudge: isStump(B) ? (combs(B) ? "Combs." : "Softens.") : "Smears.", water: "Lifts paint, lets it run." }[B.carry.k];
+  // Press to Push and Press to Lift say what a firm press does (the owner, 2026-10-30).
+  const smudge = floats ? null : { lift: "Lifts paint.", drag: "Drags wet paint.", smudge: isStump(B) ? (combs(B) ? "Combs." : pressed(B) ? "Softens, pushes when pressed." : "Softens.") : "Smears.",
+    water: pressed(B) ? "Re-wets paint, lifts it when pressed." : "Lifts paint, lets it run." }[B.carry.k];
   // Paint Load says plainly what it does, and how to load it, in the smudge's place (the oil paint spec).
   const carry = smudge ? (runsOut(B) ? "Runs out of paint, then only smudges. Rub a grey to load." : smudge) + (keepsPaint(B) ? " Keeps paint for the next stroke." : "") : null;
   if (carry) out.push(carry);
@@ -837,13 +845,19 @@ function namePicks(sec, has, seed, n, ...not) {
 // B's name (BrushNames.name), deadpan, Title Case: about one in five its words, the rest a deadpan form (the next where
 // one won't wrap to two lines of a card), then its words, its plain words, its describer and part; null with none.
 const PLAIN = .2, capWord = w => w[0].toUpperCase() + w.slice(1);
-function brushNameOf(B) {
+// taken (BrushNames.name(b, taken), a library's names): passed by for the next name it would give; all taken, the first.
+function brushNameOf(B, taken = () => false) {
   const w = nameWords(B), plain = plainNameWords(B);
   if (!w.length) return null;
   const s = ((B.seed >>> 0) ^ TRAIT_SALT) >>> 0, tries = w.length === 3 && hash01(s, 7) >= PLAIN ? deadpanForms(w, plain, s) : [];
   tries.push(nameTitled(w), nameTitled(plain));
-  for (const name of tries) if (name.length <= NAME_MAX && nameTwoLines(name)) return name;
-  return nameTitled(plain.length < 3 ? plain : plain.slice(1));
+  let first = null;
+  for (const name of tries) if (name.length <= NAME_MAX && nameTwoLines(name)) {
+    if (!taken(name)) return name;
+    first ??= name;
+  }
+  const last = nameTitled(plain.length < 3 ? plain : plain.slice(1));
+  return first === null || !taken(last) ? last : first;
 }
 // Words with spaces, each capitalized: names are Title Case (BrushNames.titled).
 const nameTitled = ws => ws.map(capWord).join(" ");
@@ -963,23 +977,39 @@ function writePart(part, P) {
   }
   return s;
 }
-function readPart(part, seg) {
+// A part's segment; null for an empty one. A newer version's (docs/BRUSH-CODE.md; the app's ModularCode.readPart) reads
+// what this one knows and sets newer.v: a choice past the list is the part's first, fresh; an option past its dial's
+// leaves the dial fresh; characters left over are ignored.
+function readPart(part, seg, newer = {}) {
   if (!seg) return null;
   const ci = parseInt(seg[0], 36);
-  if (!(ci >= 0 && ci < CHOICES[part].length)) return null;
+  if (!(ci >= 0 && ci < CHOICES[part].length)) { newer.v = true; return freshPart(part, CHOICES[part][0].k); }
   const c = CHOICES[part][ci], P = freshPart(part, c.k);
   let at = 1;
   for (const key of c.dials) {
     const sp = DIALS[part][key];
-    if (sp.choices) { if (at >= seg.length) break; const o = parseInt(seg[at++], 36); if (!(o >= 0 && o < sp.choices.length)) return null; P.d[key] = o; continue; }
+    if (sp.choices) { if (at >= seg.length) break; const o = parseInt(seg[at++], 36); if (o < sp.choices.length) P.d[key] = o; else newer.v = true; continue; }
     if (at + 2 > seg.length) break;
     const step = parseInt(seg.slice(at, at + 2), 36); at += 2;
-    if (!(step >= 0 && step <= M_STEPS)) return null;
     P.d[key] = sp.min + step / M_STEPS * (sp.max - sp.min);
   }
+  if (at < seg.length) newer.v = true;
   return P;
 }
-const codeSlug = n => String(n).toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "") || "brush";
+// A name's slug (the app's ModularCode.slug): lower case, digits kept after its first letter (2026-10-31), every run of
+// other characters a hyphen. Older codes, letters only, still match.
+const codeSlug = n => String(n).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^[^a-z]+|-$/g, "") || "brush";
+const CODE_NAME = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
+// A code as written (the app's BrushCode.written): lower case, trimmed, but the shape letter after the first dot.
+function writtenCode(text) {
+  let c = javaTrim(String(text)).toLowerCase();
+  const dot = c.indexOf(".") + 1;
+  if (dot > 0 && dot < c.length) c = c.slice(0, dot) + c[dot].toUpperCase() + c.slice(dot + 1);
+  return c;
+}
+// Whether a code is of a shape this version doesn't know (the app's ModularCode.newer: a letter but B, I, M and P): it
+// doesn't read, and says "Needs a newer version".
+const newerShape = text => text != null && new RegExp("^" + CODE_NAME + "\\.[A-HJ-LNOQ-Z][0-9a-z_.]*$").test(writtenCode(text));
 // A Stamp's nib (newmods.js; the app's ModularCode): its id in base 36 after the six, only for a Stamp with one, so
 // every other code is as before.
 const nibSeg = B => B.tip && B.tip.k === "stamp" && B.nib ? "_" + (B.nib >>> 0).toString(36) : "";
@@ -988,21 +1018,23 @@ function encodeM(B) {
 }
 // What makes two brushes draw alike: the parts, the seed and a Stamp's nib, not the name or style.
 const brushKey = B => PARTS.map(p => writePart(p, B[p])).join("_") + nibSeg(B) + "." + (B.seed >>> 0).toString(36);
-// Any code: M, B, I/P (with the prototypes' tails and ".x"). Returns { b, from } or null.
+// Any code: M, B, I/P (with the prototypes' tails and ".x"). Returns { b, from, newer } or null; newer: an M code of a
+// newer version, read as far as this one knows (docs/BRUSH-CODE.md: "Newer version, some parts differ").
 function readAnyCode(text) {
   if (text == null) return null;
-  let c = javaTrim(String(text)).toLowerCase();
-  const dot = c.indexOf(".") + 1;
-  if (dot > 0 && dot < c.length) c = c.slice(0, dot) + c[dot].toUpperCase() + c.slice(dot + 1);
-  let m = /^([a-z]+(?:-[a-z]+)*)\.M([0-9a-z])([0-9a-z_]+)\.([0-9a-z]{1,7})$/.exec(c);
+  const c = writtenCode(text);
+  let m = new RegExp("^(" + CODE_NAME + ")\\.M([0-9a-z])([0-9a-z_]+)\\.([0-9a-z]{1,7})$").exec(c);
   if (m) {
-    const style = parseInt(m[2], 36), seed = parseInt(m[4], 36), segs = m[3].split("_");
-    if (style >= STYLE_NAMES.length || seed > 0xffffffff || segs.length < PARTS.length) return null;
-    const B = { name: m[1], seed, style: STYLE_NAMES[style] };
-    for (let i = 0; i < PARTS.length; i++) { const P = readPart(PARTS[i], segs[i]); if (!P) return null; B[PARTS[i]] = P; }
+    const style = parseInt(m[2], 36), seed = parseInt(m[4], 36), segs = m[3].split("_"), newer = { v: false };
+    if (seed > 0xffffffff || segs.length < PARTS.length) return null;
+    // A style past the list is Anything goes; segments past the six and the nib are a newer version's.
+    if (style >= STYLE_NAMES.length) newer.v = true;
+    if (segs.length > PARTS.length + 1) newer.v = true;
+    const B = { name: m[1], seed, style: STYLE_NAMES[style < STYLE_NAMES.length ? style : STYLE_NAMES.indexOf("Anything goes")] };
+    for (let i = 0; i < PARTS.length; i++) { const P = readPart(PARTS[i], segs[i], newer); if (!P) return null; B[PARTS[i]] = P; }
     // A Stamp's nib: a seventh segment (one that doesn't read is no nib).
     if (B.tip.k === "stamp" && segs.length > PARTS.length && /^[0-9a-z]{1,7}$/.test(segs[PARTS.length])) { const id = parseInt(segs[PARTS.length], 36); if (id <= 0xffffffff) B.nib = id; }
-    return { b: normBrush(B), from: "M" };
+    return { b: normBrush(B), from: "M", newer: newer.v };
   }
   m = /^([a-z]+(?:-[a-z]+)*)\.B([0-9a-z])([0-9a-z]+)\.([0-9a-z]{1,7})$/.exec(c);
   if (m) { const b = readB(m); return b ? { b, from: "B" } : null; }

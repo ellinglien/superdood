@@ -583,6 +583,9 @@ final class SpiroStamper {
      */
     static void segment(FloatTiles into, FloatTiles wetD, double x0, double y0, double x1, double y1, double r, double tone, double d, int[] rect) {
         if (!(tone > 0)) return;
+        // On a fine grid (sharp dry brushes): the line in the grid's points, its edge a point wide.
+        FineGrid g = into.grid;
+        if (g != null) { x0 = g.gridX(x0); y0 = g.gridY(y0); x1 = g.gridX(x1); y1 = g.gridY(y1); r *= g.k; }
         int w = into.width, h = into.height;
         double R = r + 1;
         int bx0 = Math.max(0, (int) Math.floor(Math.min(x0, x1) - R)), bx1 = Math.min(w - 1, (int) Math.ceil(Math.max(x0, x1) + R));

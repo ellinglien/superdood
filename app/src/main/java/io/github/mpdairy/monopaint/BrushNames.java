@@ -14,8 +14,8 @@ import java.util.Set;
 
 /**
  * Names for new brushes and drawings, from plain text files Elling can edit (assets/names, one name a line):
- * an adjective and a fruit or vegetable ("dapper-fig") for a drawing; a new brush is named for what it is instead,
- * a fun word, a describer and its part ("Sloppy Inky Drag", "Polite Smear", {@link #described}), from names/traits.txt, as is a new
+ * an adjective and a fruit or vegetable ("dapper-fig") for a drawing; a new brush is named for what it is instead
+ * ("Harbour Fog", "Polite Smear", "Wash McGrath", {@link #described}), from names/traits.txt and names/folks.txt, as is a new
  * notebook's title ("Several Opinions About Soup", {@link #titles}). Brushes and notebooks store their names, so editing the lists renames nothing.
  * Pure, checked on the desktop.
  */
@@ -25,13 +25,19 @@ final class BrushNames {
             PRODUCE_DEFAULT = {"plum", "pear", "fig", "lime", "leek", "kale", "yam", "beet"};
     /** traits.txt's sections, in a name's order: its fun word, its describer, its part ("sloppy-inky-drag"). */
     static final String FUN = "fun", DESCRIBER = "describer", PART = "part";
-    private static List<String> adjectives, produce;
+    /** traits.txt's paint-colour sections, keyed as the rest: a name's first word, its last ("Harbour Fog"). */
+    static final String COLOUR = "colour", NOUN = "noun";
+    /** What a part's name falls back on without names/folks.txt ("Wash Delores"). */
+    static final String[] FOLKS_DEFAULT = {"Delores", "Bartholomew", "Mildred", "Cyril", "Pottle", "Furlong"};
+    private static List<String> adjectives, produce, folks;
     private static Map<String, Map<String, List<String>>> traits;
 
     private BrushNames() { }
 
     static synchronized List<String> adjectives() { if (adjectives == null) adjectives = load("names/adjectives.txt", ADJECTIVES_DEFAULT); return adjectives; }
     static synchronized List<String> produce() { if (produce == null) produce = load("names/produce.txt", PRODUCE_DEFAULT); return produce; }
+    /** First names and surnames for a part's name ("Wash McGrath"), one a line, as written. */
+    static synchronized List<String> folks() { if (folks == null) folks = load("names/folks.txt", FOLKS_DEFAULT); return folks; }
     /** names/traits.txt's sections ({@link #traits(List)}); none when it is missing, so names stay adjective-produce. */
     static synchronized Map<String, Map<String, List<String>>> traits() { if (traits == null) traits = traits(lines("names/traits.txt")); return traits; }
 
@@ -41,7 +47,7 @@ final class BrushNames {
     }
     /**
      * A variation's name, drawing an adjective from {@code random} first as it always did, so every variation rolls as
-     * before. A capitalized name led by a word of [deadpan], [fun], [describer] or [part] ("Polite Smear", "Dusty Aunt Charcoal")
+     * before. A capitalized name led by a word of [deadpan], [colour], [fun], [describer] or [part] ("Polite Smear", "Harbour Fog")
      * keeps the rest under another word of the same line, from {@code seed} (the variation's): "Nervous Smear". A name led
      * by a fun word (not a fruit or vegetable's) keeps the rest, its describer and part, under another word of the same
      * fun line: "sloppy-inky-drag" to "loose-inky-drag". A fruit or vegetable's name led by anything but an adjective (an
@@ -54,7 +60,7 @@ final class BrushNames {
         String adjective = pick(adjectives(), random);
         String[] words = name.trim().toLowerCase(Locale.ROOT).split("[- ]+");
         if (words.length >= 2 && Character.isUpperCase(name.trim().charAt(0)))
-            for (String section : new String[]{DEADPAN, FUN, DESCRIBER, PART}) {
+            for (String section : new String[]{DEADPAN, COLOUR, FUN, DESCRIBER, PART}) {
                 Map<String, List<String>> lines = traits().get(section);
                 if (lines != null) for (List<String> line : lines.values())
                     if (line.contains(words[0])) return cap(other(line, words[0], seed)) + name.trim().substring(words[0].length());
@@ -87,40 +93,61 @@ final class BrushNames {
      * when it has no last word or traits.txt names nothing. From the brush and its seed, drawing nothing from any
      * Random, so a roll's every part and seed come out as before.
      */
-    static String described(ModularBrush b, String name) {
+    static String described(ModularBrush b, String name) { return described(b, name, n -> false, Collections.<String>emptyList()); }
+    /** {@link #described}, passing by names {@code taken} and repeats of {@code recent} ({@link #name(ModularBrush, java.util.function.Predicate, List)}). */
+    static String described(ModularBrush b, String name, java.util.function.Predicate<String> taken, List<String> recent) {
         if (!traitNames || family(name).isEmpty()) return name;
-        String named = name(b);
+        String named = name(b, taken, recent);
         return named == null ? name : named;
     }
     /**
-     * {@code b}'s name, deadpan (the owner, 2026-10-29: "mostly deadpan"; "have the brush names hint at what the brush
-     * does for sure"): every name has its part, the word for what makes it ({@link #words}). About {@link #PLAIN} its words
-     * capitalized ("Sloppy Inky Drag"; Title Case, the owner, 2026-10-29), the rest a {@link #deadpan} form ("Polite
-     * Smear"), the next form where one won't wrap to two lines of a card, then its words, its plain words, its describer
-     * and part. Null with no words. parts.js brushNameOf.
+     * {@code b}'s name (the owner, 2026-11-02: "it's ok but seems to repeat quite often"), in one of three kinds the seed
+     * picks: about {@link #COLOURED} a paint colour's, two or three words from traits.txt's [colour] and [noun] by what the
+     * brush has ("Harbour Fog", "Burnt Toast", "Rainy Harbour Fog", {@link #coloured}); about {@link #DEADPANNED} a
+     * {@link #deadpan} form ("Polite Smear", "Smear of Mild Regret"); the rest its part and a name from names/folks.txt
+     * ("Wash McGrath", {@link #folk}). Then the other kinds, its words, its plain words: the first that wraps to two
+     * lines of a card. Null with no words. Title Case (the owner, 2026-10-29).
      */
     static String name(ModularBrush b) { return name(b, n -> false); }
     /**
      * {@link #name}, passing by the names {@code taken} (a library's, {@link BrushLibrary#has}) for the next one it
      * would give; all taken, the first, which a save numbers ({@link BrushLibrary#freeName}).
      */
-    static String name(ModularBrush b, java.util.function.Predicate<String> taken) {
+    static String name(ModularBrush b, java.util.function.Predicate<String> taken) { return name(b, taken, Collections.<String>emptyList()); }
+    /**
+     * {@link #name}, passing by one that repeats a name of {@code recent} (the library's latest, newest first; the first
+     * {@link #RECENT}) in its form or a word ({@link #marks}) for the next that doesn't, else the first not taken. The
+     * same brush and names give the same name.
+     */
+    static String name(ModularBrush b, java.util.function.Predicate<String> taken, List<String> recent) {
         List<String> w = words(b), plain = plainWords(b), tries = new ArrayList<>();
         if (w.isEmpty()) return null;
         int s = (int) b.seed ^ TRAIT_SALT;
-        if (w.size() == 3 && StrokeMath.hash01(s, 7) >= PLAIN) tries.addAll(deadpan(w, plain, s));
+        List<String> colour = coloured(b, s), dead = w.size() == 3 ? deadpan(w, plain, s) : Collections.<String>emptyList(), folk = folk(w, s);
+        double kind = StrokeMath.hash01(s, 7);
+        for (List<String> k : kind < COLOURED ? Arrays.asList(colour, dead, folk) : kind < COLOURED + DEADPANNED ? Arrays.asList(dead, colour, folk) : Arrays.asList(folk, colour, dead))
+            tries.addAll(k);
         tries.add(titled(w));
         tries.add(titled(plain));
-        String first = null;
+        Set<String> used = new HashSet<>();
+        for (String r : recent.subList(0, Math.min(RECENT, recent.size()))) used.addAll(marks(r));
+        String first = null, worn = null;
         for (String name : tries) if (name.length() <= Brush.NAME_MAX && twoLines(name)) {
-            if (!taken.test(name)) return name;
             if (first == null) first = name;
+            if (taken.test(name)) continue;
+            if (Collections.disjoint(marks(name), used)) return name;
+            if (worn == null) worn = name;
         }
+        if (worn != null) return worn;
         String last = titled(plain.size() < 3 ? plain : plain.subList(1, 3));
         return first == null || !taken.test(last) ? last : first;
     }
-    /** About one name in five is the plain words. */
-    static final double PLAIN = .2;
+    /** The mix (the owner, 2026-11-02): paint colours most often, then deadpan forms, the rest a part and a name. */
+    static final double COLOURED = .55, DEADPANNED = .30;
+    /** About one paint-colour name in four has three words ("Rainy Harbour Fog"). */
+    static final double THREE = .25;
+    /** How many of the library's latest names a new one keeps from repeating. */
+    static final int RECENT = 10;
     /** {@code words} with spaces, each capitalized: names are Title Case (the owner, 2026-10-29). */
     private static String titled(List<String> words) {
         List<String> out = new ArrayList<>();
@@ -128,34 +155,138 @@ final class BrushNames {
         return String.join(" ", out);
     }
     /**
-     * The deadpan forms for {@code w} (fun, describer, part; {@code plain} before {@link #nonsense}), from traits.txt's
-     * [deadpan], the one hash {@code s} picks first, then the next ones round: "Polite Smear", "Regrettable Inky Hake",
-     * "Dusty Aunt Charcoal", "Inky Pen Junior", "Smear of Mild Regret", "Wash for Beginners", "Inky Pen Situation",
-     * "Budget Dusty Charcoal". Each says the part; a made-up describer leaves out the forms without it. None missing a
-     * word. parts.js deadpanForms.
+     * Paint-colour names for {@code b}: a word of the first [colour] line it has the key of and one of its first two
+     * [noun] lines (so it hints at the brush: a wash's "Harbour Fog", charcoal's "Burnt Toast", a smudge's "Thumb
+     * Print"), the seed's pair first, then the next pairs round; about {@link #THREE} with a word of its first two
+     * [colour] lines before ("Rainy Harbour Fog"). None with words that echo.
+     */
+    static List<String> coloured(ModularBrush b, int s) {
+        Set<String> has = traitKeys(b);
+        List<String> first = pool(COLOUR, has, 1), more = pool(COLOUR, has, 2), second = pool(NOUN, has, 2), out = new ArrayList<>();
+        if (first.isEmpty() || second.isEmpty()) return out;
+        int a = (int) (StrokeMath.hash01(s, 20) * first.size()), c = (int) (StrokeMath.hash01(s, 21) * second.size()), n = first.size();
+        int e = (int) (StrokeMath.hash01(s, 24) * more.size());
+        boolean three = StrokeMath.hash01(s, 22) < THREE;
+        for (int i = 0; i < n * second.size(); i++) {
+            String x = first.get((a + i) % n), y = second.get((c + i + i / n) % second.size()), z = more.get((e + i) % more.size());
+            if (echoes(x, y)) continue;
+            if (three && !echoes(z, x) && !echoes(z, y)) out.add(titled(Arrays.asList(z, x, y)));
+            out.add(titled(Arrays.asList(x, y)));
+        }
+        return out;
+    }
+    /** The words of {@code section}'s first {@code most} lines {@code has} the key of but "any" (so a name hints at the brush), in order, each once; "any"'s with none. */
+    private static List<String> pool(String section, Set<String> has, int most) {
+        List<String> out = new ArrayList<>();
+        Map<String, List<String>> lines = traits().get(section);
+        if (lines == null) return out;
+        int taken = 0;
+        for (Map.Entry<String, List<String>> e : lines.entrySet()) {
+            if (taken == most || !has.contains(e.getKey()) || e.getKey().equals("any") && taken > 0) continue;
+            taken++;
+            for (String w : e.getValue()) if (!out.contains(w)) out.add(w);
+        }
+        return out;
+    }
+    /** Its part and a name of names/folks.txt ({@link #folks}), the seed's first, then the next round: "Wash McGrath", "Pencil Delores". */
+    static List<String> folk(List<String> w, int s) {
+        List<String> out = new ArrayList<>(), folks = folks();
+        String part = w.get(w.size() - 1);
+        int at = (int) (StrokeMath.hash01(s, 23) * folks.size());
+        for (int i = 0; i < folks.size(); i++) {
+            String f = folks.get((at + i) % folks.size());
+            if (!echoes(part, f.toLowerCase(Locale.ROOT))) out.add(cap(part) + " " + f);
+        }
+        return out;
+    }
+    /**
+     * The deadpan forms: {part} and {describer} its words, any other {key} a word of that line of traits.txt's [deadpan]
+     * (the owner, 2026-11-02: "same deadpan voice, much more variety"). Each says the part.
+     */
+    static final String[] FORMS = {
+            "{manner} {part}", "{manner} {describer} {part}", "{describer} {relative} {part}", "{describer} {part} {edition}",
+            "{part} of {mild} {concern}", "{part} for {audience}", "{describer} {part} {event}", "{budget} {describer} {part}",
+            "{hedge} {part}", "{hedge} {describer} {part}", "{part} with {having}", "{part} on a {day}",
+            "{ordinal} {describer} {part}", "{describer} {part} {group}", "{part} on {leave}", "{part} in {state}",
+            "{describer} {part} {afterword}", "{part} {afterword}", "{part} {review}", "{part} and {company}",
+            "{measure} of {part}", "{manner} {part} {edition}", "{relative} {part}", "{describer} {part} for {audience}"};
+    private static final java.util.regex.Pattern KEY = java.util.regex.Pattern.compile("\\{([a-z]+)\\}");
+    /**
+     * The deadpan forms for {@code w} (fun, describer, part; {@code plain} before {@link #nonsense}), {@link #FORMS} with
+     * their words, the one hash {@code s} picks first, then the next ones round: "Polite Smear", "Regrettable Inky Hake",
+     * "Dusty Aunt Charcoal", "Smear of Mild Regret", "Pen with Opinions", "Smidge of Pencil", "Wash on a Tuesday"…
+     * A made-up describer leaves out the forms without it; none missing a word. parts.js deadpanForms (the older eight).
      */
     static List<String> deadpan(List<String> w, List<String> plain, int s) {
         List<String> out = new ArrayList<>();
         Map<String, List<String>> d = traits().get(DEADPAN);
         if (d == null) return out;
-        String describer = w.get(1), part = w.get(2), manner = word(d.get("manner"), s, 13);
-        boolean madeUp = !describer.equals(plain.get(1));
-        String[] forms = {
-                madeUp ? null : join(manner, " ", part),
-                join(manner, " ", describer, " ", part),
-                join(describer, " ", word(d.get("relative"), s, 14), " ", part),
-                join(describer, " ", part, " ", word(d.get("edition"), s, 17)),
-                madeUp ? null : join(part, " of ", word(d.get("mild"), s, 15), " ", word(d.get("concern"), s, 16)),
-                madeUp ? null : join(part, " for Beginners"),
-                join(describer, " ", part, " Situation"),
-                join("Budget ", describer, " ", part)};
-        int at = (int) (StrokeMath.hash01(s, 12) * forms.length);
-        for (int i = 0; i < forms.length; i++) {
-            int k = (at + i) % forms.length;
-            // The two short forms only when picked: else they'd stand in for every long name that won't fit.
-            if (forms[k] != null && (i == 0 || k != 0 && k != 5)) out.add(forms[k]);
+        boolean madeUp = !w.get(1).equals(plain.get(1));
+        int at = (int) (StrokeMath.hash01(s, 12) * FORMS.length);
+        for (int i = 0; i < FORMS.length; i++) {
+            String form = FORMS[(at + i) % FORMS.length];
+            if (madeUp && !form.contains("{describer}")) continue;
+            java.util.regex.Matcher m = KEY.matcher(form);
+            StringBuffer name = new StringBuffer();
+            boolean whole = true;
+            while (m.find()) {
+                String key = m.group(1), word = key.equals("describer") ? w.get(1) : key.equals("part") ? w.get(2) : word(d.get(key), s, 30 + DEADPAN_KEYS.indexOf(key));
+                if (word == null) { whole = false; break; }
+                m.appendReplacement(name, cap(word));
+            }
+            if (whole) out.add(m.appendTail(name).toString());
         }
         return out;
+    }
+    /** [deadpan]'s lines the forms use, each its own hash. */
+    private static final List<String> DEADPAN_KEYS = Arrays.asList("manner", "relative", "edition", "mild", "concern", "audience", "event", "budget", "hedge",
+            "having", "day", "ordinal", "group", "leave", "state", "afterword", "review", "company", "measure");
+    /** The small words a form joins with, never a repeat. */
+    private static final Set<String> SMALL = new HashSet<>(Arrays.asList("of", "for", "on", "a", "in", "with", "and"));
+    /**
+     * What makes {@code name} a repeat of another: its deadpan form ({@link #form}, "#3"), and its words, lower case,
+     * but the small ones and the words that say what a brush is ([part] and [describer]'s, which alike brushes share).
+     */
+    static Set<String> marks(String name) {
+        Set<String> out = new HashSet<>();
+        int form = form(name);
+        if (form >= 0) out.add("#" + form);
+        for (String w : name.trim().toLowerCase(Locale.ROOT).split(" +")) if (!SMALL.contains(w) && !told().contains(w)) out.add(w);
+        return out;
+    }
+    private static Set<String> told;
+    private static synchronized Set<String> told() {
+        if (told == null) {
+            told = new HashSet<>();
+            for (String section : new String[]{PART, DESCRIBER}) if (traits().get(section) != null) for (List<String> l : traits().get(section).values()) told.addAll(l);
+        }
+        return told;
+    }
+    private static List<java.util.regex.Pattern> formPatterns;
+    /** Which of {@link #FORMS} {@code name} is (the one with fewest open words first), or -1: a paint colour's, a name's or older. */
+    static synchronized int form(String name) {
+        if (formPatterns == null) {
+            formPatterns = new ArrayList<>();
+            Map<String, List<String>> d = traits().get(DEADPAN);
+            for (String f : FORMS) {
+                java.util.regex.Matcher m = KEY.matcher(f);
+                StringBuffer re = new StringBuffer("(?i)");
+                int at = 0;
+                while (m.find()) {
+                    re.append(java.util.regex.Pattern.quote(f.substring(at, m.start())));
+                    List<String> line = d == null ? null : d.get(m.group(1));
+                    re.append(line == null ? "[a-z]+" : "(?:" + String.join("|", line) + ")");
+                    at = m.end();
+                }
+                formPatterns.add(java.util.regex.Pattern.compile(re.append(java.util.regex.Pattern.quote(f.substring(at))).toString()));
+            }
+        }
+        int best = -1, open = Integer.MAX_VALUE;
+        for (int i = 0; i < FORMS.length; i++) {
+            int o = FORMS[i].split("\\{(describer|part)\\}", -1).length;
+            if (o < open && formPatterns.get(i).matcher(name.trim()).matches()) { best = i; open = o; }
+        }
+        return best;
     }
     /** The letters a line of the narrowest card holds (Tools page and library cards, 142 dp at 13 sp). */
     static final int LINE_LETTERS = 12;
@@ -325,7 +456,10 @@ final class BrushNames {
         if (ModularWords.runsOut(b)) keys.add("carry.pload");
         if (paper.choice != PartChoice.PLAIN && paper.choice != ModularWords.usual(style, BrushPart.PAPER) && paper.get(PartDial.TOOTH) >= STRONG_TOOTH)
             keys.add("paper." + paper.choice.key);
-        if (life.choice != ModularWords.usual(style, BrushPart.LIFE)) keys.add("life." + life.choice.key);
+        // Later by the retired Drying choice's key it shares ("life.fade"), in the drying's place.
+        PartChoice later = b.mischief();
+        if (later != PartChoice.LATER_OFF) keys.add("life." + later.key);
+        else if (life.choice != ModularWords.usual(style, BrushPart.LIFE)) keys.add("life." + life.choice.key);
         for (PartDial d : PartDial.GRAVITY) if (life.get(d, 0) > .15) keys.add("life." + d.key);
         return keys;
     }

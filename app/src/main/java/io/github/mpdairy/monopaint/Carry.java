@@ -31,6 +31,10 @@ import static io.github.mpdairy.monopaint.StrokeMath.clamp;
  * it, and it is spread over a stroke's dabs as MonoPaint's are over its own (a dab every .24 r). The reservoir trades
  * {@code 1 − soften} of what it would; at Soften 1 there is none. A stump smaller than MonoPaint's (under 20 px across)
  * reaches at least 3 px for its box and its pull, and works more of its dab ({@link ResolvedBrush.Carry#small}).
+ *
+ * <p>Press ({@link PartDial#PRESS}, the smudge tool's two): Smear's Press to Push takes each dab's Soften toward 0 as
+ * it is pressed, so a light touch softens and a firm one smears; Clear Water's Press to Lift its Lay Down Paint and the
+ * wet it marks ({@link ResolvedBrush.Carry#softenAt}, {@link ResolvedBrush.Carry#wetAt}).
  */
 final class Carry {
     private final ResolvedBrush.Carry c;
@@ -58,6 +62,7 @@ final class Carry {
         water = c.water();
         this.stillWet = water ? stillWet : null;
         if (water) plane.water(this.stillWet);
+        if (c.reprint()) plane.reprint();
     }
     /**
      * Keeps Paint: what the brush ends the stroke holding, for its next ({@link HeldPaint}): each cell as the stroke left
@@ -83,10 +88,22 @@ final class Carry {
                 double t = seg > 0 ? clamp((next - d0) / seg) : 1;
                 double x = pts.x[k - 1] + (pts.x[k] - (double) pts.x[k - 1]) * t, y = pts.y[k - 1] + (pts.y[k] - (double) pts.y[k - 1]) * t;
                 double pr = pts.p[k - 1] + (pts.p[k] - (double) pts.p[k - 1]) * t;
-                if (c.soften < 1) dab(x, y, pr, width, height, rect);
-                if (c.soften > 0) {
+                if (c.scrape()) {
                     double len = Math.hypot(pts.x[k] - (double) pts.x[k - 1], pts.y[k] - (double) pts.y[k - 1]);
-                    soften(x, y, pr, len > 0 ? (pts.x[k] - pts.x[k - 1]) / len : 0, len > 0 ? (pts.y[k] - pts.y[k - 1]) / len : 0, width, height, rect);
+                    double ux = Float.isNaN(pts.ux[k]) ? (pts.x[k] - pts.x[k - 1]) / len : pts.ux[k], uy = Float.isNaN(pts.uy[k]) ? (pts.y[k] - pts.y[k - 1]) / len : pts.uy[k];
+                    double lean = BrushDirection.tiltLean(pts.tx[k - 1] + (pts.tx[k] - (double) pts.tx[k - 1]) * t, pts.ty[k - 1] + (pts.ty[k] - (double) pts.ty[k - 1]) * t);
+                    scrape(x, y, pr, ux, uy, lean, width, height, rect);
+                    next += c.spacing;
+                    continue;
+                }
+                // Reprint keeps each pixel's most, so its dabs may lie a quarter radius apart: a third as many as a smear's at 180 px.
+                if (c.reprint()) { reprint(x, y, pr, width, height, rect); next += Math.max(c.spacing, .25 * c.r); continue; }
+                // Press to Push: a firm press works less as a stump, more as the smear.
+                double s = c.softenAt(pr);
+                if (s < 1) dab(x, y, pr, s, width, height, rect);
+                if (s > 0) {
+                    double len = Math.hypot(pts.x[k] - (double) pts.x[k - 1], pts.y[k] - (double) pts.y[k - 1]);
+                    soften(x, y, pr, s, len > 0 ? (pts.x[k] - pts.x[k - 1]) / len : 0, len > 0 ? (pts.y[k] - pts.y[k - 1]) / len : 0, width, height, rect);
                 }
                 next += c.spacing;
             }
@@ -95,7 +112,7 @@ final class Carry {
     }
 
     /** A dab's own: where it is, what it trades, and how it lifts; set by {@link #dab}, read by {@link #rows}. */
-    private double x, y, take, give, soak, edge, takeWet;
+    private double x, y, take, give, soak, edge, takeWet, wetShare;
     private boolean lift;
     private int x0, x1;
     /** The dab's columns from x0: dx² and the cell column's offset (with n), from {@link #dab}. */
@@ -104,18 +121,21 @@ final class Carry {
     /** A dab covering this many pixels or more shares its rows out over {@link Cores}. */
     static final double SHARE_PX = 4000;
 
-    /** One dab at {@code x, y} with pressure travel {@code pr}, grown into {@code rect}. */
-    private void dab(double x, double y, double pr, int width, int height, int[] rect) {
+    /** One dab at {@code x, y} with pressure travel {@code pr}, {@code soften} of it a stump's, grown into {@code rect}. */
+    private void dab(double x, double y, double pr, double soften, int width, int height, int[] rect) {
         double r = c.r, press = .45 + .55 * pr, pass = 1 / c.hits;
+        // Press to Lift: a firm press lays less back and leaves less wet, a damp tissue's blot.
+        wetShare = c.wetAt(pr);
+        double lay = wetShare < 1 ? c.lay * wetShare : c.lay;
         this.x = x; this.y = y; edge = Math.max(1, r * .3);
         lift = c.lifts();
         take = 1 - Math.pow(1 - Math.min(.95, (lift ? 2 : 1) * c.pick * press), pass);
         // Clear Water over a wash still wet: the paint comes up more readily.
         takeWet = water ? 1 - Math.pow(1 - Math.min(.95, 2 * ClearWater.WET_LIFT * c.pick * press), pass) : take;
         // Lift soaks up 1 − Lay down of what it holds over a radius of travel: it stays damp, so it keeps lifting.
-        give = 1 - Math.pow(1 - c.lay * press, pass); soak = lift ? 1 - Math.pow(c.lay * press, pass) : 0;
+        give = 1 - Math.pow(1 - lay * press, pass); soak = lift ? 1 - Math.pow(lay * press, pass) : 0;
         // Part stump: the reservoir trades the rest.
-        if (c.soften > 0) { take *= 1 - c.soften; give *= 1 - c.soften; }
+        if (soften > 0) { take *= 1 - soften; give *= 1 - soften; }
         x0 = Math.max(0, (int) Math.floor(x - r)); x1 = Math.min(width - 1, (int) Math.ceil(x + r));
         int y0 = Math.max(0, (int) Math.floor(y - r)), y1 = Math.min(height - 1, (int) Math.ceil(y + r));
         if (x1 < x0 || y1 < y0) return;
@@ -147,7 +167,7 @@ final class Carry {
         double r = c.r, x = this.x, y = this.y, take = this.take, give = this.give, soak = this.soak, edge = this.edge, inner = (r - edge) * (r - edge);
         boolean lift = this.lift, water = this.water;
         float[] heldA = this.heldA, heldP = this.heldP;
-        double keeps = c.keeps, takeWet = this.takeWet;
+        double keeps = c.keeps, takeWet = this.takeWet, wetShare = this.wetShare;
         int[] wetBox = stillWet;
         int n = c.n, T = CarryPlane.SIDE, missed = 0, x0 = this.x0;
         double[] colD2 = this.colD2;
@@ -179,7 +199,7 @@ final class Carry {
                     boolean takes = up > bp;
                     double tk = wetRow && px >= wetBox[0] && px <= wetBox[2] ? takeWet : take;
                     double f = (takes ? tk : give) * e, keep = 1 - soak * e;
-                    if (Wt != null && e > Wt[i]) Wt[i] = (float) e;
+                    if (Wt != null && e * wetShare > Wt[i]) Wt[i] = (float) (e * wetShare);
                     float na = (float) (ua + (ba - ua) * f), np = (float) (up + (bp - up) * f);
                     if (na != A[i] || np != P[i]) { A[i] = na; P[i] = np; F[i] = 1; }
                     cellA[j] = (float) ((ba - (ba - ua) * f) * keep); cellP[j] = (float) ((bp - (bp - up) * f) * keep);
@@ -188,6 +208,158 @@ final class Carry {
             }
         }
         if (missed > 0) plane.missed(missed);
+    }
+
+    // ---------- Scrape: a palette knife's blade ----------
+    /** The share of its depth the blade takes off a dry mark: a faint burnish. */
+    static final double BURNISH = .05;
+    /** What one blade pushed toward each end (coverage and darkness), and its ridges' weights; reused. */
+    private final double[] pushA = new double[2], pushP = new double[2], ridgeW = new double[2];
+    /**
+     * Scrape ({@link PartChoice#SCRAPE}): one blade at {@code x, y}, pressure travel {@code pr}, moving {@code ux, uy},
+     * the pen leaning {@code lean} (0 upright to 1 laid over). Its edge lies across the way it moves, with its ridges
+     * from an eighth of the brush's radius upright (the knife's tip: a fine line) to all of it laid over (its flat).
+     * Each pixel under it gives up its paint by how wet it is
+     * ({@link CarryPlane#wetnessTile}): wet paint about half the depth, most of that pushed to the blade's
+     * nearer end and laid in a ridge just past it (darkest by the blade); damp paint nearly all of it, carried off on
+     * the blade (sgraffito's light line); a dry mark only a burnish ({@link #BURNISH}). Pressure sets how deep.
+     */
+    private void scrape(double x, double y, double pr, double ux, double uy, double lean, int width, int height, int[] rect) {
+        // The blade's half-length, and its ridges' width beside it: together the brush's radius laid over.
+        double hw = c.bladeHalf(lean), rw = ResolvedBrush.Carry.ridge(hw), out = hw + rw;
+        // Its thickness a tent two dabs' spacing wide, so the dabs along the way add up to one whole pass everywhere.
+        double ht = Math.max(1, c.spacing), depth = clamp(c.pick * (.35 + .65 * pr)), vx = -uy, vy = ux;
+        double ex = Math.abs(vx) * out + Math.abs(ux) * ht, ey = Math.abs(vy) * out + Math.abs(uy) * ht;
+        int x0 = Math.max(0, (int) Math.floor(x - ex)), x1 = Math.min(width - 1, (int) Math.ceil(x + ex));
+        int y0 = Math.max(0, (int) Math.floor(y - ey)), y1 = Math.min(height - 1, (int) Math.ceil(y + ey));
+        if (x1 < x0 || y1 < y0) return;
+        plane.unblank(x0, y0, x1, y1);
+        int T = CarryPlane.SIDE, missed = 0;
+        pushA[0] = pushA[1] = pushP[0] = pushP[1] = ridgeW[0] = ridgeW[1] = 0;
+        // The blade: what it takes, and what it pushes toward each end; and the ridges' weights, to share that out.
+        for (int py = y0; py <= y1; py++) for (int px = x0; px <= x1; px++) {
+            double dx = px + .5 - x, dy = py + .5 - y, along = dx * ux + dy * uy, across = dx * vx + dy * vy, a = Math.abs(across);
+            if (Math.abs(along) > ht || a > out) continue;
+            int end = across < 0 ? 0 : 1;
+            double tent = 1 - Math.abs(along) / ht;
+            if (a > hw) { ridgeW[end] += tent * (1 - (a - hw) / rw); continue; }
+            int tx = px / T, ty = py / T, i = (py % T) * T + px % T;
+            float[] A = plane.coverageTile(tx, ty);
+            if (A == null) { missed++; continue; }
+            float[] P = plane.darknessTile(tx, ty), Wt = plane.wetnessTile(tx, ty);
+            double w = Wt == null ? 0 : Wt[i], push = StrokeMath.smoothstep(.4, .75, w);
+            double bite = StrokeMath.lerp(BURNISH, StrokeMath.lerp(.95, .5, push), StrokeMath.smoothstep(0, .1, w));
+            double f = 1 - Math.pow(1 - clamp(bite * depth * clamp(hw - a + .5)), tent);
+            double da = A[i] * f, dp = P[i] * f;
+            if (!(dp > 0 || da > 0)) continue;
+            A[i] -= (float) da; P[i] -= (float) dp;
+            plane.freshTile(tx, ty)[i] = 1;
+            double share = StrokeMath.lerp(.05, .55, push);
+            pushA[end] += da * share; pushP[end] += dp * share;
+        }
+        // The ridges: what was pushed toward each end, laid past it, most by the blade.
+        if (pushP[0] + pushP[1] + pushA[0] + pushA[1] > 0) for (int py = y0; py <= y1; py++) for (int px = x0; px <= x1; px++) {
+            double dx = px + .5 - x, dy = py + .5 - y, along = dx * ux + dy * uy, across = dx * vx + dy * vy, a = Math.abs(across);
+            if (Math.abs(along) > ht || a > out || a <= hw) continue;
+            int end = across < 0 ? 0 : 1;
+            if (ridgeW[end] <= 0) continue;
+            int tx = px / T, ty = py / T, i = (py % T) * T + px % T;
+            float[] A = plane.coverageTile(tx, ty);
+            if (A == null) { missed++; continue; }
+            float[] P = plane.darknessTile(tx, ty);
+            double g = (1 - Math.abs(along) / ht) * (1 - (a - hw) / rw) / ridgeW[end];
+            // Pigment piled on pigment darkens as a glaze does, toward black but never there at once.
+            float na = (float) (1 - (1 - A[i]) * (1 - Math.min(1, pushA[end] * g)));
+            A[i] = na; P[i] = (float) Math.min(na, 1 - (1 - P[i]) * (1 - Math.min(1, pushP[end] * g)));
+            plane.freshTile(tx, ty)[i] = 1;
+        }
+        if (missed > 0) plane.missed(missed);
+        StrokeMath.grow(rect, new int[]{x0, y0, x1, y1});
+    }
+
+    // ---------- Reprint: the marks there laid again in the brush's own print ----------
+    /** Without a Print Shading, toner's threshold: darker than this prints black, lighter goes back to paper. */
+    static final double TONER = .45;
+    /** How far toner's threshold wanders pixel to pixel: a photocopy's grit along an edge. */
+    static final double TONER_GRIT = .12;
+    /** How far the paper's grain at Texture 1 sinks or lifts the darkness reprinted, so the print misses its hollows. */
+    static final double GRAIN = .5;
+    /** A reprint's dot gain: darkness {@code d} prints as {@code 1 − (1 − d)^PRINT_GAIN} (a 40% grey as 56%). */
+    static final double PRINT_GAIN = 1.6;
+    /**
+     * A reprint's lightest grey: darker than this as found (tone 240) or it prints as paper, as a print's finest
+     * highlights do. Below it a pencil's soft shoulder and grain specks (tone 241 to 254, which read as paper) came
+     * back as stray black dots, two to eight times as dark after the dot gain and the grain (2026-11-02).
+     */
+    static final double LIGHTEST = .06;
+    /** The reprint dab's centre, strength and page, set by {@link #reprint}, read by {@link #reprintRows}. */
+    private double rx, ry, rs;
+    private int rHeight, rx0, rx1;
+    /**
+     * Reprint ({@link PartChoice#REPRINT}): one dab at {@code x, y}, pressure travel {@code pr}. Every pixel within its
+     * radius (its soft edge a third of it) goes {@link ResolvedBrush.Carry#reprintAt} of the way from its loose paint as
+     * the stroke found it ({@link CarryPlane#foundCoverageTile}) to that paint printed: black where the brush's Print
+     * Shading inks its darkness there ({@link PrintScreen#ink}), paper where it doesn't; without one, black where it
+     * passes {@link #TONER}. The paper's grain at its Texture shifts the darkness first. A pixel keeps the most any dab
+     * took it ({@link CarryPlane#reachedTile}), so a stroke back and forth reprints once, and the same strokes print the
+     * same. Paper stays paper: it lays nothing where nothing was, nor where a grey lighter than {@link #LIGHTEST} was.
+     */
+    private void reprint(double x, double y, double pr, int width, int height, int[] rect) {
+        double s = c.reprintAt(pr), r = c.r;
+        if (!(s > 0)) return;
+        int x0 = Math.max(0, (int) Math.floor(x - r)), x1 = Math.min(width - 1, (int) Math.ceil(x + r));
+        int y0 = Math.max(0, (int) Math.floor(y - r)), y1 = Math.min(height - 1, (int) Math.ceil(y + r));
+        if (x1 < x0 || y1 < y0) return;
+        rx = x; ry = y; rs = s; rHeight = height; rx0 = x0; rx1 = x1;
+        if (Math.PI * r * r < SHARE_PX || !Cores.shared) reprintRows(y0, y1);
+        else {
+            // A big dab in bands of rows, its tiles filled first on this thread: each pixel reads and writes only its own.
+            plane.reach(x0, y0, x1, y1);
+            int n = y1 - y0 + 1, pieces = Math.min(n, 4 * Cores.WORKERS), per = (n + pieces - 1) / pieces;
+            Cores.each((n + per - 1) / per, (piece, worker) -> reprintRows(y0 + piece * per, Math.min(y1, y0 + (piece + 1) * per - 1)));
+        }
+        StrokeMath.grow(rect, new int[]{x0, y0, x1, y1});
+    }
+    /** The reprint dab's page rows {@code ya..yb}. */
+    private void reprintRows(int ya, int yb) {
+        double r = c.r, R2 = r * r, edge = Math.max(1, r * .3), inner = (r - edge) * (r - edge), x = rx, y = ry, s = rs;
+        int T = CarryPlane.SIDE, missed = 0;
+        for (int py = ya; py <= yb; py++) {
+            double dy = py + .5 - y, dy2 = dy * dy;
+            if (dy2 >= R2) continue;
+            int ty = py / T, row = (py % T) * T;
+            for (int xs = rx0; xs <= rx1; ) {
+                int tx = xs / T, xe = Math.min(rx1, tx * T + T - 1);
+                float[] A = plane.coverageTile(tx, ty);
+                if (A == null) { missed += xe - xs + 1; xs = xe + 1; continue; }
+                // Nothing loose here: nothing to reprint.
+                if (plane.blankTile(tx, ty)) { xs = xe + 1; continue; }
+                float[] P = plane.darknessTile(tx, ty), FA = plane.foundCoverageTile(tx, ty), FP = plane.foundTile(tx, ty), S = plane.reachedTile(tx, ty);
+                byte[] F = plane.freshTile(tx, ty);
+                for (int px = xs; px <= xe; px++) {
+                    double dx = px + .5 - x, d2 = dx * dx + dy2;
+                    if (d2 >= R2) continue;
+                    int i = row + px % T;
+                    double v = s * (d2 < inner ? 1 : clamp((r - Math.sqrt(d2)) / edge));
+                    if (v <= S[i]) continue;
+                    S[i] = (float) v;
+                    double fa = FA[i], fp = FP[i];
+                    if (fa == 0 && fp == 0) continue;
+                    double t = inks(fp, px, py) ? 1 : 0;
+                    A[i] = (float) (fa + (t - fa) * v); P[i] = (float) (fp + (t - fp) * v); F[i] = 1;
+                }
+                xs = xe + 1;
+            }
+        }
+        if (missed > 0) plane.missed(missed);
+    }
+    /** Whether Reprint prints darkness {@code d} over white (0 to 1) black at page pixel {@code x, y} ({@link #reprint}). */
+    private boolean inks(double d, int x, int y) {
+        if (d < LIGHTEST) return false;
+        // Ink spreads as it prints: a copy lays a little darker than what it copies, so a pale wash still shows.
+        d = 1 - Math.pow(1 - d, PRINT_GAIN);
+        if (c.tooth > 0) d -= c.tooth * GRAIN * (c.paper.height(x, y) - .5);
+        return c.print != null ? c.print.ink(d, x, y, rHeight) : d > TONER + TONER_GRIT * (PrintScreen.hash(x, y, 41) - .5);
     }
 
     // ---------- Soften: MonoPaint's blending stump (ToneDabs.soften) on the plane ----------
@@ -206,20 +378,20 @@ final class Carry {
     private double flatter;
 
     /**
-     * One stump dab at {@code x, y}, pressure travel {@code pr}, the stroke heading {@code ux, uy} (0, 0 at its start):
+     * One stump dab at {@code x, y}, pressure travel {@code pr}, {@code soften} its Soften there, the stroke heading {@code ux, uy} (0, 0 at its start):
      * every pixel within the radius moves toward the mean of the page around the pixel a quarter radius behind (80%) and
      * around itself (20%), by {@code .7 × strength × (1 − q)²} at {@code q = d² / r²}, all read before any is written. A
      * comb does this at each tine, a stump of the tine's width, the tine taking only what it meets behind it, by {@code
      * .7 × strength × (1 − q)}, so its streaks run on.
      */
-    private void soften(double x, double y, double pr, double ux, double uy, int width, int height, int[] rect) {
+    private void soften(double x, double y, double pr, double soften, double ux, double uy, int width, int height, int[] rect) {
         double press = .45 + .55 * pr;
         double[] tines = c.tines;
         // A comb's tines lie across the way it moves: none before it moves.
         if (tines != null && ux == 0 && uy == 0) return;
         spotR = tines != null ? c.tineReach() : c.r;
         // MonoPaint's .7 × strength at its dab spacing (.12 of the width), spread over this stroke's dabs.
-        double w = clamp(.7 * c.soften * c.pick * press);
+        double w = clamp(.7 * soften * c.pick * press);
         sWeight = 1 - Math.pow(1 - w, c.spacing / Math.max(.5, .24 * spotR));
         if (!(sWeight > 0)) return;
         sux = ux; suy = uy; blur = c.blur(); flatter = c.flatter(); pageW = width; pageH = height;

@@ -303,7 +303,8 @@ function handGrid(B, cellh) {
 }
 function cardOpen(B, part) {
   const m = MET, P = B[part], c = choiceOf(part, P.k);
-  const chips = CHOICES[part].filter(ch => !(part === "hand" && ch.k === "custom" && P.k !== "custom")).map(ch =>
+  // Custom (the hand) and Filled Shape show only on a brush that holds them, as in Brush Lab.
+  const chips = CHOICES[part].filter(ch => !((part === "hand" && ch.k === "custom" || ch.k === "shape") && P.k !== ch.k)).map(ch =>
     `<button class="chip" data-act="choose" data-part="${part}" data-k="${ch.k}" aria-pressed="${ch.k === P.k}" ${isLocked(part) ? "disabled" : ""}>${esc(ch.label)}</button>`).join("");
   const blurb = part === "hand" ? "Rows: pressure, tilt, speed. Columns: size, darkness, nib width and angle. Tap a cell to step it: off, some, full." : (c.blurb || ROLE[part].blurb);
   const chipRows = Math.ceil(CHOICES[part].length / Math.max(2, Math.floor((m.col - 30) / 92)));

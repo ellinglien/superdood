@@ -1,6 +1,6 @@
 # Feasibility notes — 2026-09-24
 
-> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not My Bad Drawings.
+> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not Superdood.
 
 ## User's reference behavior
 

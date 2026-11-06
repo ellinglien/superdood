@@ -22,7 +22,9 @@ import android.widget.LinearLayout;
  * away from the column (clear of the drawing hand): Zoom; the page and its
  * count ("3 / 24", a cover's word), with its padlock and its Timed-page blink, between ‹ and ›; and a strip of tiny live previews of the
  * front cover, the pages and the back cover, a window round the page drawn on ({@link Strip}). On a preview a tap goes
- * to it, a quick drag riffles, a hold opens its Page Settings at once, before the pen lifts (the owner, 2026-10-24:
+ * to it (the front cover's opens Notebook Settings, the owner, 2026-11-03: "tapping the cover page on the top bar should
+ * open up the notebook settings page"; ‹ from page 1 or a riffle still turns to it to draw), a quick drag riffles, a
+ * hold opens its Page Settings at once, before the pen lifts (the owner, 2026-10-24:
  * "have the page menu load right away, don't wait for pen lift"; a page moves from there, its Move row, since the hold
  * no longer lifts it to drag) ({@link StripGesture}). Inside a notebook ({@link NotebookScreens}) the same bar has ‹ and › either side of the number instead,
  * ‹ from the first page turning to the front cover and › from the last to the back cover. Its sizes are {@link
@@ -60,7 +62,7 @@ final class PageTurner {
     private boolean hidden;
 
     /** The + tile's words, said to a screen reader (docs/TEXT-STYLE.md, "The page bar"). */
-    static final String NEW_PAGE = "New page";
+    static final String NEW_PAGE = DrawLayout.NEW_PAGE;
 
     /** The bar for {@code host}; {@code notebook}: the drawing screen's, with Zoom and the previews. */
     PageTurner(PaintActivity app, Host host, boolean notebook) {
@@ -113,6 +115,7 @@ final class PageTurner {
             int i = columnRight ? k : parts.length - 1 - k;
             view.addView(parts[i], new LinearLayout.LayoutParams(widths[i], -1, i == parts.length - 1 ? 1 : 0));
         }
+        InkWashBar.partialGrey(view);
         strip.requestLayout();
     }
     /** The drawing screen's sizes as last laid out (null before), and whether the column is on the page's right. */
@@ -121,15 +124,15 @@ final class PageTurner {
 
     /**
      * Page {@code index} of {@code count} is shown, or a cover ({@link DrawingBook#FRONT}, {@link DrawingBook#BACK}): the
-     * numbers or the cover's word; inside a notebook ‹ greyed on the front cover and › on the back (the notebook's order:
-     * the front cover, the pages, the back cover); on the drawing screen the previews round it.
+     * numbers or the cover's word; ‹ greyed on the front cover and › on the back (the notebook's order: the front cover,
+     * the pages, the back cover); on the drawing screen the previews round it.
      */
     void show(int index, int count) { show(index, count, false); }
     /**
-     * As {@link #show(int, int)}; {@code turned}: another page of the same pages turned to. Then, while the page turned
-     * to is in the previews' window, only what the turn changes goes to the panel: the frames and the underline, the
-     * number, an arrow (the owner, 2026-10-25: "avoid a refresh of the top bar as well unless there is a new page added,
-     * just move the underline"), each changed patch put on the panel as the side bars' are ({@link
+     * As {@link #show(int, int)}; {@code turned}: another page of the same pages turned to. Then only what the turn
+     * changes goes to the panel, in one fast update: the window re-centred on it, the underline, the number, an arrow
+     * (the owner, 2026-10-25: "avoid a refresh of the top bar as well unless there is a new page added, just move the
+     * underline"; centred since 2026-11-06), each changed patch put on the panel as the side bars' are ({@link
      * SelectionFeedback#updateParts}). Pages added, deleted or moved, or another notebook: all of it again.
      */
     void show(int index, int count, boolean turned) {
@@ -152,6 +155,7 @@ final class PageTurner {
             dim(previous, R.drawable.ic_ph_caret_left, index != DrawingBook.FRONT);
             dim(next, R.drawable.ic_ph_caret_right, index != DrawingBook.BACK);
         } else {
+            // Inside a notebook the same, the turn past the pages said as the cover it goes to.
             dim(previous, R.drawable.ic_ph_caret_left, index != DrawingBook.FRONT);
             previous.setContentDescription(index == 0 ? "Front cover" : "Previous page");
             next.setContentDescription(index == this.count - 1 ? "Back cover" : "Next page");
@@ -165,7 +169,6 @@ final class PageTurner {
         if (strip == null) return;
         strip.update(() -> { for (int k = 0; k < strip.getChildCount(); k++) ((Strip.Preview) strip.getChildAt(k)).describe(); });
     }
-    private TracingPaper tracing() { return app.book == null ? TracingPaper.NONE : app.book.tracing(); }
     /**
      * Each see-through step's eye, by {@link TracingPaper#STEPS} (the owner, 2026-10-21; Phosphor): Solid {@code eye}
      * Fill, Half {@code eye} Duotone, Faint {@code eye} Light, Hidden {@code eye-closed} Bold.
@@ -285,8 +288,6 @@ final class PageTurner {
         /** The page (layer) the marks show as drawn on, of {@code drawnBook}: the book's own, but between a turn and its {@link #marked}. */
         private int drawnOn = DrawingBook.NONE;
         private DrawingBook drawnBook;
-        /** The window's first tile as shown, kept while the page drawn on is in it, so a turn moves the marks alone (-1: none yet). */
-        private int first = -1;
         private final Paint ink = new Paint(), frame = new Paint(), ghostTab = new Paint(), dimmed = new Paint(), multiply = new Paint();
         private final Runnable redrawLive = this::redrawLiveWhenIdle;
         private final Runnable hold = this::held;
@@ -312,19 +313,9 @@ final class PageTurner {
         /** How many pages (stacks) there are. */
         private int count() { return stacks().count(); }
         /** Whether stack {@code place} shows through the page drawn on now (another stack). */
-        private boolean ghosting(int place) {
-            if (DrawingBook.isCover(place) || place == here()) return false;
-            PageStacks s = stacks();
-            for (int[] g : tracing().ghosts(drawn())) if (s.of(g[0]) == place) return true;
-            return false;
-        }
+        private boolean ghosting(int place) { return NotebookStrip.ghosting(book(), drawn(), place); }
         /** Whether every layer of stack {@code place} is Hidden (a cover never is). */
-        private boolean hidden(int place) {
-            if (DrawingBook.isCover(place) || place >= count()) return false;
-            PageStacks s = stacks();
-            for (int p = s.first(place); p <= s.last(place); p++) if (tracing().step(p) != TracingPaper.HIDDEN) return false;
-            return true;
-        }
+        private boolean hidden(int place) { return NotebookStrip.hidden(book(), place); }
         private int tiles() { return book() == null ? 0 : count() + 3; }
         /** How many previews there is room for, and how many show. */
         private int room() { return at == null || view.getWidth() == 0 ? 0 : at.previews(Math.round(view.getWidth() / getResources().getDisplayMetrics().density)); }
@@ -334,20 +325,12 @@ final class PageTurner {
          * The + tile's slot: its own tile, right after the last page and before the back cover, where the window has it; else
          * pinned in the window's last slot (it takes that tile's place), so a page can always be added.
          */
-        private int plusSlot() { int k = count() + 1 - start(); return k >= 0 && k < shownCount() ? k : shownCount() - 1; }
+        private int plusSlot() { return StripGesture.plusSlot(start(), shownCount(), count()); }
         private int start() { return held >= 0 ? held : round(); }
-        /** The first tile of the window: as it was while the page drawn on shows in it, else round that page. */
-        private int round() {
-            if (book() == null) return 0;
-            int tile = StripGesture.tileOf(here(), count());
-            if (!StripGesture.shows(first, tile, count(), shownCount())) first = NotebookLayout.window(tile, tiles(), shownCount());
-            return first;
-        }
-        /** Whether the page the book draws on now shows in the window as it is, so a turn to it needs only the marks moved. */
-        boolean keeps() {
-            return book() != null && drawnBook == book() && held < 0 && getChildCount() > 0 && !isLayoutRequested()
-                    && StripGesture.shows(first, StripGesture.tileOf(stacks().of(book().index()), count()), count(), shownCount());
-        }
+        /** The first tile of the window: the page drawn on centred, held at the ends. */
+        private int round() { return book() == null ? 0 : StripGesture.round(here(), count(), shownCount()); }
+        /** Whether a turn can go to the panel as one fast update of what it changes: the strip laid out as it is, no gesture holding the window. */
+        boolean keeps() { return book() != null && drawnBook == book() && held < 0 && getChildCount() > 0 && !isLayoutRequested(); }
         /** The first preview's left, px: the previews sit against the number. */
         private int firstLeft() {
             int n = shownCount(), used = n == 0 ? 0 : app.dp(n * (at.previewWidth() + at.previewGap()) - at.previewGap());
@@ -382,6 +365,8 @@ final class PageTurner {
             if (room == getChildCount() || room <= 0) return;
             removeAllViews();
             for (int k = 0; k < room; k++) addView(new Preview(k));
+            // New views: under partial grey as the bar is, so a preview's redraw is one grey pass, none if unchanged.
+            InkWashBar.partialGrey(this);
             requestLayout(); shown();
         }
         @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
@@ -394,7 +379,6 @@ final class PageTurner {
         /** Another page drawn on, or another count: the window round it, and what each preview says. */
         void shown() {
             if (book() == null) return;
-            if (drawnBook != book()) first = -1;
             // The places moved: the sample stays only with the page drawn on.
             if (app.pad != null && liveOf == app.pad.document) { livePlace = stacks().of(book().index()); liveLayer = book().index(); } else livePlace = liveLayer = DrawingBook.NONE;
             marked();
@@ -476,11 +460,12 @@ final class PageTurner {
                     StripGesture.Kind done = gesture.up(time, x, y);
                     int riffledTo = riffled, tapped = pressed;
                     boolean plus = plusDown;
+                    // A riffle lands while the window is still held, so its turn redraws the whole strip once, re-centred.
+                    if (!plus && done == StripGesture.Kind.RIFFLE) closeRiffle(riffledTo);
                     end();
                     if (plus) { if (done == StripGesture.Kind.TAP && !app.busy()) app.newPage(); }
                     else if (done == StripGesture.Kind.TAP) go(tapped);
                     else if (done == StripGesture.Kind.OPTIONS) options(tapped);
-                    else if (done == StripGesture.Kind.RIFFLE) closeRiffle(riffledTo);
                     return true;
                 default: return true;
             }
@@ -512,15 +497,15 @@ final class PageTurner {
             end();
             options(place);
         }
-        /** The gesture is over: the window round the page drawn on again. */
+        /** The gesture is over: the window round the page drawn on again (in the redraw already due, if a turn asked for one). */
         private void end() {
             removeCallbacks(hold); removeCallbacks(slide);
-            if (held >= 0 && held != round()) update(this::reset); else reset();
+            if (held >= 0 && held != round() && !isDirty()) update(this::reset); else reset();
         }
         private void reset() { held = -1; pressed = DrawingBook.NONE; plusDown = false; }
         private void go(int place) {
             if (book() == null || !DrawingBook.isCover(place) && (place < 0 || place >= count())) return;
-            app.drawOnStack(place);
+            if (place == DrawingBook.FRONT) app.showSettings(); else app.drawOnStack(place);
         }
 
         // The riffle: the picture of the page under the finger, over the page (nothing decoded)

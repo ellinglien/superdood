@@ -26,14 +26,14 @@ public final class AppRenameChecks {
     }
 
     public static void main(String[] args) throws Exception {
-        // The name is My Bad Drawings (2026-10-29), formerly Scribulor, before that Inkwash; the files are named from it.
-        check(AppName.NAME.equals("My Bad Drawings") && java.util.Arrays.equals(AppName.FORMER, new String[]{"Scribulor", "Inkwash"}), "the name is My Bad Drawings, formerly Scribulor and Inkwash");
-        check(BrushBackup.NAME.equals("My Bad Drawings brushes.txt") && BrushBackup.NIBS.equals("My Bad Drawings stamps"), "the brushes' file and stamps' folder");
-        check(DailyPrompt.FILE.equals("My Bad Drawings prompts.txt") && DailyPrompt.DEFAULTS.startsWith("# My Bad Drawings daily prompts"), "the prompts' file");
-        check(BrushImport.NAME.equals("My Bad Drawings import.txt") && BrushImport.DONE.equals("My Bad Drawings import (added).txt"), "the import files");
+        // The name is Superdood (2026-11-04), formerly My Bad Drawings, Scribulor, before that Inkwash; the files are named from it.
+        check(AppName.NAME.equals("Superdood") && java.util.Arrays.equals(AppName.FORMER, new String[]{"My Bad Drawings", "Scribulor", "Inkwash"}), "the name is Superdood, formerly My Bad Drawings, Scribulor and Inkwash");
+        check(BrushBackup.NAME.equals("Superdood brushes.txt") && BrushBackup.NIBS.equals("Superdood stamps"), "the brushes' file and stamps' folder");
+        check(BrushImport.NAME.equals("Superdood import.txt") && BrushImport.DONE.equals("Superdood import (added).txt"), "the import files");
+        check(ToolBackup.NAME.equals("Superdood toolbar.txt"), "the toolbar's file");
         check(BrushImport.isImport("Friend.scribulor.txt") && BrushImport.isImport("scribulor IMPORT.txt") && !BrushImport.isImport("Friend (added).txt"), "import files recognised");
-        check(BrushImport.isImport("Friend.inkwash.txt") && BrushImport.isImport("Inkwash import.txt"), "the former name's import files still recognised");
-        check(AppRename.formerFolder("My Bad Drawings bench", AppName.NAME, "Scribulor").equals("Scribulor bench") && AppRename.formerFolder("My Bad Drawings bench", AppName.NAME, "Inkwash").equals("Inkwash bench"), "the bench variant's former folders");
+        check(BrushImport.isImport("Friend.inkwash.txt") && BrushImport.isImport("Inkwash import.txt") && BrushImport.isImport("My Bad Drawings import.txt"), "the former names' import files still recognised");
+        check(AppRename.formerFolder("Superdood bench", AppName.NAME, "My Bad Drawings").equals("My Bad Drawings bench") && AppRename.formerFolder("Superdood checks", AppName.NAME, "Scribulor").equals("Scribulor checks"), "the bench and checks variants' former folders");
         // app/build.gradle reads the name from AppName.java's one NAME line (the same pattern as there).
         File source = new File("app/src/main/java/io/github/mpdairy/monopaint/AppName.java");
         if (source.isFile()) {
@@ -69,6 +69,13 @@ public final class AppRenameChecks {
         write(new File(export, "Inkwash/Trip/Day 1.png"), "old day");
         write(new File(export, "Quill/Sketches.png"), "new png");
         write(new File(export, "Quill/Trip/Day 2.png"), "new day");
+        // Folders beside it named after it ("My Bad Drawings PDFs" stayed, 2026-11-04); another build's stay for it.
+        write(new File(document, "Inkwash PDFs/Trip.pdf"), "old pdf");
+        write(new File(document, "Inkwash PDFs/Sketches.pdf"), "sketches pdf");
+        write(new File(document, "Quill PDFs/Trip.pdf"), "new pdf");
+        write(new File(document, "Inkwash bench/Bench.mpaint"), "bench");
+        write(new File(document, "Inkwash bench PDFs/Bench.pdf"), "bench pdf");
+        write(new File(document, "Inkwashed/Other.mpaint"), "not ours");
         int before = count(root);
 
         File drawings = new File(document, "Quill");
@@ -76,13 +83,20 @@ public final class AppRenameChecks {
         check(count(root) == before, "no file lost or added: " + count(root) + " of " + before);
         check(!new File(document, "Inkwash").exists() && !new File(export, "Inkwash").exists(), "the old folders are gone");
         check(read(new File(drawings, "Sketches.mpaint")).equals("drawing") && read(new File(drawings, "Trip/Day 1.mpaint")).equals("day one"), "the drawings moved");
-        check(read(new File(drawings, "Quill brushes.txt")).equals("brushes") && read(new File(drawings, "Quill prompts.txt")).equals("prompts"), "own files renamed");
+        check(read(new File(drawings, "Quill brushes.txt")).equals("brushes") && read(new File(drawings, "Inkwash prompts.txt")).equals("prompts"), "own files renamed; the cut prompts' file moves as named");
         check(read(new File(drawings, "Quill toolbar.txt")).equals("toolbar"), "the toolbar's file renamed");
         check(read(new File(drawings, "Quill import (added).txt")).equals("added") && read(new File(drawings, "Quill stamps/stamp_1.txt")).equals("nib"), "import log and stamps renamed");
         check(new File(drawings, "Friend.inkwash.txt").isFile(), "a friend's import file stays as named (still read)");
         check(read(new File(export, "Quill/Sketches.png")).equals("new png") && read(new File(export, "Quill/Sketches (2).png")).equals("old png"), "a clash keeps both");
         check(read(new File(export, "Quill/Trip/Day 1.png")).equals("old day") && read(new File(export, "Quill/Trip/Day 2.png")).equals("new day"), "subfolders merge");
         check(!pictures.exists(), "a folder that never was stays absent");
+        check(!new File(document, "Inkwash PDFs").exists() && read(new File(document, "Quill PDFs/Sketches.pdf")).equals("sketches pdf"), "a folder beside it named after it moves");
+        check(read(new File(document, "Quill PDFs/Trip.pdf")).equals("new pdf") && read(new File(document, "Quill PDFs/Trip (2).pdf")).equals("old pdf"), "and a clash there keeps both");
+        check(new File(document, "Inkwash bench/Bench.mpaint").isFile() && new File(document, "Inkwash bench PDFs/Bench.pdf").isFile() && !new File(document, "Quill bench").exists(), "another build's folders stay for it");
+        check(new File(document, "Inkwashed/Other.mpaint").isFile(), "a folder only starting with the name stays");
+        // The bench build moves its own, and the folders beside it.
+        check(AppRename.carryOver(parents, null, "Quill bench", "Quill", former) && read(new File(document, "Quill bench PDFs/Bench.pdf")).equals("bench pdf")
+                && new File(document, "Quill bench/Bench.mpaint").isFile() && !new File(document, "Inkwash bench").exists(), "the bench build's folders beside it move too");
 
         // Idempotent: a second run changes nothing.
         check(AppRename.carryOver(parents, drawings, "Quill", "Quill", former) && count(root) == before, "a second run is a no-op");

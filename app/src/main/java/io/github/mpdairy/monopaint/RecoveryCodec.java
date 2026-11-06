@@ -83,8 +83,15 @@ final class RecoveryCodec {
         if (book.options.lockPages) out.writeInt(LOCK_PAGES);
         // Nib Preview, when off: no more. Readers before it stop here: on.
         if (!book.options.nibPreview) out.writeInt(NIB_PREVIEW_OFF);
-        // Self-Portrait Prompt, when on: no more. Readers before it stop here: off.
-        if (book.options.selfPortrait) out.writeInt(SELF_PORTRAIT);
+        // Self-Portrait Prompt (cut 2026-11-05): no longer written; read and dropped where an older recovery has it.
+        // Surface, when not Smooth: one byte. Readers before it stop here: Smooth.
+        if (book.options.surface != BrushTexture.DEFAULT) { out.writeInt(SURFACE); out.writeByte(book.options.surface.ordinal()); }
+        // Each page's own surface, when a page has one. Readers before it stop here: the notebook's on every page.
+        byte[] surfaces = BookOptions.pageSurfaceBytes(book.pageSurfaces);
+        if (surfaces != null) { out.writeInt(PAGE_SURFACES); out.writeInt(surfaces.length); out.write(surfaces); }
+        // Favourites: each page's star mark, when a page has one. Readers before it stop here: no page starred.
+        byte[] faves = BookOptions.pageFaveBytes(book.pageFaves);
+        if (faves != null) { out.writeInt(PAGE_FAVES); out.writeInt(faves.length); out.write(faves); }
         out.flush();
     }
     /** A page: in the notebook's file (by its length and CRC) or its bytes. */
@@ -100,7 +107,7 @@ final class RecoveryCodec {
         if (picture != null) out.write(picture);
     }
     /** The covers' section, a cover with nothing drawn on it, and the covers' design's section. */
-    private static final int COVERS = 0x54535243, NONE = 2, DESIGN = 0x54535244, OPTIONS = 0x5453524f, RULES = 0x54535255, PAPER = 0x54535250, STRENGTH = 0x54535253, TEMPLATES = 0x54535254, LAST = 0x5453524c, STACKS = 0x5453524b, GUIDES_SHOWN = 0x54535247, PAGE_COLOUR = 0x54535242, PAGE_RULES = 0x54535252, PAGE_SECONDS = 0x5453524d, LOCK_PAGES = 0x54535258, NIB_PREVIEW_OFF = 0x5453524e, SELF_PORTRAIT = 0x54535251; // TSRU, TSRP, TSRS, TSRT, TSRL, TSRK, TSRG, TSRB, TSRR, TSRM, TSRX, TSRN, TSRQ
+    private static final int COVERS = 0x54535243, NONE = 2, DESIGN = 0x54535244, OPTIONS = 0x5453524f, RULES = 0x54535255, PAPER = 0x54535250, STRENGTH = 0x54535253, TEMPLATES = 0x54535254, LAST = 0x5453524c, STACKS = 0x5453524b, GUIDES_SHOWN = 0x54535247, PAGE_COLOUR = 0x54535242, PAGE_RULES = 0x54535252, PAGE_SECONDS = 0x5453524d, LOCK_PAGES = 0x54535258, NIB_PREVIEW_OFF = 0x5453524e, SELF_PORTRAIT = 0x54535251, SURFACE = 0x54535246, PAGE_SURFACES = 0x54535256, PAGE_FAVES = 0x54535241; // TSRU, TSRP, TSRS, TSRT, TSRL, TSRK, TSRG, TSRB, TSRR, TSRM, TSRX, TSRN, TSRQ, TSRF, TSRV, TSRA
 
     /** Reads a recovery whose pages it holds itself (a TSR3 naming pages in its notebook's file can't be read so). */
     static Recovered read(InputStream input) throws IOException { return read(input, path -> null); }
@@ -156,9 +163,10 @@ final class RecoveryCodec {
         java.util.List<String> templates = null;
         long lastDay = -1;
         byte[] stacks = null;
-        int[] pageRules = null, pageSeconds = null;
+        int[] pageRules = null, pageSeconds = null, pageSurfaces = null, pageFaves = null;
+        BrushTexture surface = BrushTexture.DEFAULT;
         int guidesShown = NotebookOptions.FULL, paper = NotebookOptions.WHITE;
-        boolean lockPages = false, nibPreview = true, selfPortrait = false;
+        boolean lockPages = false, nibPreview = true;
         // The sections after the covers, each once and in any order: the design, then the other options.
         while (section == COVERS) {
             int next;
@@ -206,7 +214,20 @@ final class RecoveryCodec {
             else if (next == PAGE_COLOUR) paper = in.readUnsignedByte();
             else if (next == LOCK_PAGES) lockPages = true;
             else if (next == NIB_PREVIEW_OFF) nibPreview = false;
-            else if (next == SELF_PORTRAIT) selfPortrait = true;
+            else if (next == SELF_PORTRAIT) { /* the cut Self-Portrait Prompt: dropped */ }
+            else if (next == SURFACE) surface = BrushTexture.of(in.readUnsignedByte());
+            else if (next == PAGE_SURFACES) {
+                int length = in.readInt();
+                if (length < 0 || length > 1 << 20) throw new IOException("Invalid recovery");
+                byte[] bytes = new byte[length]; in.readFully(bytes);
+                pageSurfaces = BookOptions.pageSurfaces(bytes, count);
+            }
+            else if (next == PAGE_FAVES) {
+                int length = in.readInt();
+                if (length < 0 || length > 1 << 20) throw new IOException("Invalid recovery");
+                byte[] bytes = new byte[length]; in.readFully(bytes);
+                pageFaves = BookOptions.pageFaves(bytes, count);
+            }
             else if (next == PAGE_RULES) {
                 int length = in.readInt();
                 if (length < 0 || length > 1 << 20) throw new IOException("Invalid recovery");
@@ -221,7 +242,7 @@ final class RecoveryCodec {
             }
             else break;
         }
-        options = options.withGuidesShown(guidesShown).withPaper(paper).withLockPages(lockPages).withNibPreview(nibPreview).withSelfPortrait(selfPortrait);
+        options = options.withGuidesShown(guidesShown).withPaper(paper).withLockPages(lockPages).withNibPreview(nibPreview).withSurface(surface);
         DrawingBook book = new DrawingBook(width, height, pages, index, DocumentCodec.read(new ByteArrayInputStream(pages.get(index).bytes())));
         book.restoreCanvasChoices(choices);
         book.restorePictures(pictures, pictured);
@@ -232,6 +253,8 @@ final class RecoveryCodec {
         book.restorePageTemplates(templates);
         book.restorePageRules(pageRules);
         book.restorePageSeconds(pageSeconds);
+        book.restorePageSurfaces(pageSurfaces);
+        book.restorePageFaves(pageFaves);
         book.restoreLastDay(lastDay);
         return new Recovered(book, path, unsaved);
     }

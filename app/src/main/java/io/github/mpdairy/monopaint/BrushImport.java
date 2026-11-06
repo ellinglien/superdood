@@ -13,6 +13,8 @@ import java.nio.file.Files;
  */
 final class BrushImport {
     static final String SUFFIX = " import.txt", DONE_SUFFIX = " import (added).txt", NAME = AppName.NAME + SUFFIX, DONE = AppName.NAME + DONE_SUFFIX;
+    /** The notes a code from a newer version ({@link ModularCode#newer}) gives where it is opened: read with some parts stood in, or not read. */
+    static final String NEWER = "Newer version, some parts differ", NEEDS_NEWER = "Needs a newer version";
 
     /** The brush a share code describes: an M code, or an old I or P code as its six parts; null if it doesn't read. */
     static ModularBrush decode(String code) {
@@ -20,6 +22,8 @@ final class BrushImport {
         if (m == null) { WildBrush old = BrushCode.decode(code); m = old != null ? LegacyBrushes.of(old) : null; }
         return m;
     }
+    /** What opening {@code code} says: {@link #NEWER} or {@link #NEEDS_NEWER} for a code from a newer version; null for any other. */
+    static String newerNote(String code) { return !ModularCode.newer(code) ? null : decode(code) != null ? NEWER : NEEDS_NEWER; }
 
     /**
      * True for "Inkwash import.txt" and any "*.inkwash.txt" (case aside), and the same under a name the app had before
@@ -44,18 +48,18 @@ final class BrushImport {
         return all;
     }
 
-    /** Imports every import file in {@code folder}; how many brushes were added. */
-    static int runAll(BrushLibrary library, File folder) {
+    /** Imports every import file in {@code folder}; how many brushes were added. A code from a newer version tells {@code said} its {@link #newerNote}. */
+    static int runAll(BrushLibrary library, File folder, java.util.function.Consumer<String> said) {
         File[] files = folder == null ? null : folder.listFiles();
         if (files == null) return 0;
         java.util.Arrays.sort(files);
         int added = 0;
-        for (File f : files) if (f.isFile() && isImport(f.getName())) added += run(library, f);
+        for (File f : files) if (f.isFile() && isImport(f.getName())) added += run(library, f, said);
         return added;
     }
 
-    /** Adds every brush {@code file} holds to {@code library} and renames the file; how many it added. */
-    static int run(BrushLibrary library, File file) {
+    /** Adds every brush {@code file} holds to {@code library} and renames the file; how many it added. A code from a newer version tells {@code said} its {@link #newerNote}. */
+    static int run(BrushLibrary library, File file, java.util.function.Consumer<String> said) {
         if (file == null || !file.isFile()) return 0;
         int added = 0;
         try {
@@ -63,6 +67,8 @@ final class BrushImport {
                 String code = line.trim();
                 if (code.isEmpty() || code.startsWith("#")) continue;
                 ModularBrush m = decode(code);
+                String note = newerNote(code);
+                if (note != null) said.accept(note);
                 if (m != null && library.save(Brush.of(m)) == BrushLibrary.Saved.ADDED) added++;
             }
         } catch (IOException e) { return added; }

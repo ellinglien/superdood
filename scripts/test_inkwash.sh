@@ -10,13 +10,142 @@ classes=$(mktemp -d)
 trap 'rm -rf "$classes"' EXIT
 main=app/src/main/java/io/github/mpdairy/monopaint
 test=app/src/test/java/io/github/mpdairy/monopaint
-sources=(AppName AppRename HandOver Assets Cores TypeStyle BrushNames PaperNoise PaperGrain BrushTexture BrushSetting BrushStyle BrushCode Brush BrushCaptions BrushLibrary LibraryCleanup BrushBackup ToolBackup BrushImport ToolSwatches ToolSlots FingerTool BrushLab LabPages LabText LabLayout DrawLayout ToolPresets ToolsLayout ToolsPage ToolKits GrayPalette DotPattern ToneDocument DocumentCodec NotebookLayout NotebookExport NotebookPdf NotebookMigration DrawingBook PackedPage BookCodec BookPictures PagePicture RecoveryCodec RecoverySchedule LayerThumbnail BrushDirection ToolSettings DrawingStroke LiftingStroke DrawingFiles InkWashLayers InkWashSizes InkWashShades PenSpeed RoundFootprint WashCoverage PageTilt GravityFlow DryingWater SettlePacer SettleWorker WetWorkBudget BrushInk PaintLoad WetWatercolor WetCanvas WatercolorSession WetPaintStroke EraseBothStroke EraseKind DrawingNames WildBrush WildSample BrushPart PartDial PartChoice ModularFeatures ModularStyle ModularLocks ModularCode ModularBrush ModularVariations ModularWords BrushVoice ResolvedBrush FloatTiles StrokePoints StrokeMath StrokePaper StickGrain LineStamper Placement HakeRibbon BodyStamper BodySettle ModularCompose StrokeTones ModularStroke ModularSizes LegacyBrushes Prof PenBatch FootprintSweep QuickStroke CarryPlane Carry FloatBath FloatScan FloatTrace FloatPen FloatWater BristleSwarm StippleStamper HatchStamper HandHatchStamper HeldPen DisplayRecovery ToneDabs ToolStroke HaloGrowth Magnets MagnetDrag WordPacks WordBinLayout PageShade BlankPages NotebookNames PageClear PrintScreen CoverNoise CoverMarble CoverDesign CoverPattern CoverTexture NotebookCovers BookOptions NotebookTemplate NotebookOptions SurpriseTools PinchPan PageView CanvasViewport MultiFingerTap FillRegion FillTool HeldPaint ClearWater Mirrors MirrorStroke MirrorShow ShadeStrip SwatchSetLayout FlickFling LoadedPaint PageClock NotebookRules TimedPages SandTimer FadingInk StampNib StampStamper Crayon SpiroStamper SwatchPicker StayIn FilledShape GreyGradient StrokeLog DailyPrompt StripGesture TracingPaper GhostPlane CoverWear PageStacks LayerEdits LibraryCard CardArt CardSheet TimedSections PictureImport HoverNib FloatingSelection LassoPlanes EdgeHold PageExport PsdWriter)
-checks=(AppRenameChecks HandOverChecks KindVisibilityChecks ToolBackupChecks RoundFootprintChecks EdgeRippleChecks LinkedEditChecks InkWashLayersChecks LayerPairChecks LayerThumbnailChecks InkWashSizesChecks InkWashShadesChecks WashCoverageChecks EraseBothChecks PenSpeedChecks DrawingNamesChecks DrawingRenameChecks WildBrushChecks WildSampleChecks BrushNamesChecks BrushTextureChecks BrushCodeChecks BrushChecks BrushLibraryChecks LibraryCleanupChecks ToolSlotsChecks ToolSwatchesChecks BrushLabChecks LabSlotsChecks LabLayoutChecks PartModelChecks ModularStyleChecks ModularCodeChecks ModularVariationsChecks ResolveChecks StrokeBasicsChecks LineStamperChecks BodyStamperChecks ModularStrokeChecks FastWetChecks ComposeShortcutChecks ModularBenchChecks LatticeChecks ModularBrushChecks ModularLabChecks DryingWaterChecks SettlePacingChecks SettleWorkerChecks GravityChecks PartSampleChecks LegacyConversionChecks DrawLayoutChecks FingerToolChecks ToolPresetsChecks ToolsPageChecks ToolKitsChecks VoiceChecks CoresChecks QuickStrokeChecks CarrySmudgeChecks FloatChecks BristleSwarmChecks ErasableChecks EraseKindChecks KindLayersChecks EraseAllChecks StippleChecks HatchChecks HandHatchChecks ScreenFillChecks BlendChecks DisplayRecoveryChecks StumpChecks ResistChecks HaloChecks MagnetChecks WordPacksChecks WordBinChecks NotebookFileChecks NotebookMigrationChecks NotebookExportChecks NotebookPdfChecks NotebookLayoutChecks NotebookPagesChecks SaveLessChecks PageShadeChecks PageColourChecks BlankPagesChecks NotebookNamesChecks PageClearChecks ScreenChecks CoverChecks CoverDesignChecks NotebookOptionsChecks ZoomStrokeChecks PinchPanChecks FillRegionChecks FillChecks WetSmudgeChecks MirrorChecks FillMirrorChecks GreyBarChecks FlickFlingChecks OilChecks SmudgeSizeChecks TrailChecks NotebookRulesChecks SandTimerChecks FadingChecks StampChecks CrayonChecks SpiroChecks SwatchChecks StayInChecks FilledShapeChecks GradientChecks StrokeLogChecks DailyPromptChecks StripGestureChecks TracingChecks CoverWearChecks PageStacksChecks CrispPageChecks LibraryCardChecks TemplateChecks TimedSectionsChecks NoErasingChecks PictureImportChecks WetPaintChecks LightOverDarkChecks StabilityChecks HoverNibChecks SelectionChecks LassoChecks ZoomFitChecks EdgeHoldChecks PageExportChecks)
+sources=(AppName ShapeStroke ShapeGeometry DirtyRegions LassoPieces AppRename HandOver Assets Cores TypeStyle BrushNames PaperNoise PaperGrain SurfaceGrain BrushTexture BrushSetting BrushStyle BrushCode Brush BrushCaptions BrushLibrary LibraryCleanup BrushBackup ToolBackup BrushImport ToolSwatches ToolSlots FingerTool BrushLab LabPages LabText LabLayout DrawLayout ToolPresets ToolsLayout ToolsPage ToolKits GrayPalette DotPattern ToneDocument DocumentCodec NotebookLayout NotebookExport NotebookPdf NotebookMigration DrawingBook PackedPage BookCodec BookPictures PagePicture RecoveryCodec RecoverySchedule LayerThumbnail BrushDirection ToolSettings DrawingStroke LiftingStroke DrawingFiles InkWashLayers InkWashSizes InkWashShades PenSpeed RoundFootprint WashCoverage PageTilt GravityFlow DryingWater SettlePacer SettleWorker WetWorkBudget BrushInk PaintLoad WetWatercolor WetCanvas WatercolorSession WetPaintStroke EraseBothStroke EraseKind DrawingNames WildBrush WildSample BrushPart PartDial PartChoice ModularFeatures ModularStyle ModularLocks ModularCode ModularBrush ModularVariations ModularWords BrushVoice ResolvedBrush FloatTiles StrokePoints StrokeMath StrokePaper StickGrain LineStamper Placement HakeRibbon BodyStamper BodySettle ModularCompose StrokeTones ModularStroke ModularSizes LegacyBrushes Prof PenBatch FootprintSweep QuickStroke CarryPlane Carry FloatBath FloatScan FloatTrace FloatPen FloatWater BristleSwarm StippleStamper HatchStamper HandHatchStamper RulingPen TwigStick FanBrush Brayer HeldPen SteadyHand DisplayRecovery ToneDabs ToolStroke HaloGrowth Magnets TextBoxes MagnetDrag WordPacks WordBinLayout PageShade BlankPages NotebookNames PageClear PrintScreen CoverNoise CoverMarble CoverDesign CoverPattern CoverTexture NotebookCovers BookOptions NotebookTemplate NotebookOptions SurpriseTools PinchPan PageView CanvasViewport MultiFingerTap FillRegion FillTool HeldPaint ClearWater Mirrors MirrorStroke MirrorShow ShadeStrip SwatchSetLayout FlickFling LoadedPaint PageClock NotebookRules TimedPages SandTimer FadingInk LaterMedia StampNib StampStamper Crayon SpiroStamper SwatchPicker StayIn FilledShape GreyGradient StrokeLog StripGesture TracingPaper GhostPlane CoverWear PageStacks LayerEdits LibraryCard CardArt CardSheet TimedSections PictureImport HoverNib FloatingSelection LassoPlanes EdgeHold PageExport PsdWriter HoldSnap LiveChange LiveOwn LiveReveal LiveTools StrokeStart LiveHost LiveSend LiveCrypt LivePresence LivePage LiveBooks QrCode NotebookStrip WetLook ReplayRun SystemSettings ZenFan VectorLines VectorInk FineGrid SharpStrokes SharpView ExportSize PngRender)
+checks=(AppRenameChecks HandOverChecks KindVisibilityChecks ToolBackupChecks RoundFootprintChecks EdgeRippleChecks LinkedEditChecks InkWashLayersChecks LayerPairChecks LayerThumbnailChecks InkWashSizesChecks InkWashShadesChecks WashCoverageChecks EraseBothChecks PenSpeedChecks DrawingNamesChecks DrawingRenameChecks WildBrushChecks WildSampleChecks BrushNamesChecks BrushTextureChecks BrushCodeChecks BrushChecks BrushLibraryChecks LibraryCleanupChecks ToolSlotsChecks ToolSwatchesChecks BrushLabChecks LabSlotsChecks LabLayoutChecks PartModelChecks ModularStyleChecks ModularCodeChecks ModularVariationsChecks ResolveChecks StrokeBasicsChecks LineStamperChecks BodyStamperChecks ModularStrokeChecks FastWetChecks ComposeShortcutChecks ModularBenchChecks LatticeChecks ModularBrushChecks ModularLabChecks DryingWaterChecks SettlePacingChecks SettleWorkerChecks GravityChecks PartSampleChecks LegacyConversionChecks DrawLayoutChecks FingerToolChecks ToolPresetsChecks ToolsPageChecks ToolKitsChecks VoiceChecks CoresChecks QuickStrokeChecks CarrySmudgeChecks FloatChecks BristleSwarmChecks ErasableChecks EraseKindChecks KindLayersChecks EraseAllChecks StippleChecks HatchChecks HandHatchChecks NibChecks PreviewWidthChecks ScreenFillChecks BlendChecks DisplayRecoveryChecks StumpChecks ResistChecks HaloChecks MagnetChecks TextBoxChecks WordPacksChecks WordBinChecks NotebookFileChecks NotebookMigrationChecks NotebookExportChecks NotebookPdfChecks NotebookLayoutChecks NotebookPagesChecks SaveLessChecks PageShadeChecks PageColourChecks BlankPagesChecks NotebookNamesChecks PageClearChecks ScreenChecks CoverChecks CoverDesignChecks NotebookOptionsChecks ZoomStrokeChecks PinchPanChecks FillRegionChecks FillChecks WetSmudgeChecks PressSmudgeChecks MirrorChecks FillMirrorChecks GreyBarChecks FlickFlingChecks OilChecks SmudgeSizeChecks TrailChecks NotebookRulesChecks SandTimerChecks FadingChecks StampChecks CrayonChecks SpiroChecks SwatchChecks StayInChecks FilledShapeChecks GradientChecks StrokeLogChecks StripGestureChecks TracingChecks CoverWearChecks PageStacksChecks CrispPageChecks LibraryCardChecks TemplateChecks TimedSectionsChecks NoErasingChecks PictureImportChecks WetPaintChecks LightOverDarkChecks StabilityChecks HoverNibChecks SelectionChecks LassoChecks ZoomFitChecks EdgeHoldChecks PageExportChecks StudioGuideChecks CodeSpecChecks LaterChecks LaterMediaChecks KnifeChecks SteadyHandChecks HoldSnapChecks MediaChecks ReprintChecks AreaChecks SurfaceChecks LiveChangeChecks LiveRevealChecks LiveToolsChecks LiveUndoChecks DrawMenusChecks LiveHostChecks LiveSendChecks LiveCryptChecks NotebookStripChecks FavouritesChecks SmudgeReachChecks LabColumnChecks SystemSettingsChecks ZenFanChecks VectorInkChecks VectorPdfChecks SharpChecks EraseSharpChecks EffectsLiveChecks ExportSizeChecks PngRenderChecks)
 # Shared by checks, not run on their own.
-helpers=(Timing NotebookFixture NotebookBench CoverTextures PresetPictures)
+helpers=(Timing WebParity NotebookFixture NotebookBench CoverTextures PresetPictures KnifePictures WetSmudgePictures SteadyHandPictures ReprintPictures AreaPictures SurfacePictures VectorInkPictures VectorInkBench EraseBench SharpBench SharpPictures SharpTools)
 javac -d "$classes" $(for s in "${sources[@]}"; do echo "$main/$s.java"; done) \
   $(for c in "${checks[@]}" "${helpers[@]}"; do echo "$test/$c.java"; done)
 for c in "${checks[@]}"; do java -cp "$classes" "io.github.mpdairy.monopaint.$c"; done
+# Share on Wi-Fi's QR code read back by OpenCV's decoder, where it is installed.
+if python3 -c "import cv2" 2>/dev/null; then
+  qr_link="http://192.168.100.200:8080/live#k7qmw2xrh4tnpd9e"
+  java -cp "$classes" io.github.mpdairy.monopaint.LiveHostChecks qr "$qr_link" "$classes/qr.pgm"
+  qr_read=$(python3 -c "import cv2, sys; print(cv2.QRCodeDetector().detectAndDecode(cv2.imread(sys.argv[1], 0))[0])" "$classes/qr.pgm")
+  [ "$qr_read" = "$qr_link" ] || { echo "FAIL: the QR code reads '$qr_read', not $qr_link"; exit 1; }
+  echo "PASS: Share on Wi-Fi's QR code reads back as its link"
+else
+  echo "SKIP: the QR code's decode needs python3 with cv2"
+fi
+# The same strokes write the same bytes from one run to the next, on several cores (LaterMediaChecks.sameBytes, twice).
+same_a=$(java -cp "$classes" io.github.mpdairy.monopaint.LaterMediaChecks fading-hash) same_b=$(java -cp "$classes" io.github.mpdairy.monopaint.LaterMediaChecks fading-hash)
+[ "$same_a" = "$same_b" ] || { echo "FAIL: a page with Fading and Lemon Juice marks writes other bytes in another run ($same_a vs $same_b)"; exit 1; }
+echo "PASS: a page with Fading and Lemon Juice marks writes the same bytes in two runs, on several cores"
+# The web reader over the same test codes as CodeSpecChecks (docs/brush-code.json).
+node docs/brush-lab/studio-src/code-spec-check.cjs
+# The version before Later (ae4caeb8) reads this version's codes as docs/BRUSH-CODE.md says: a Later it holds in Drying in
+# full, a new combination's six parts with the "Newer version" note.
+later_ref=ae4caeb8
+if git rev-parse -q --verify "$later_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$later_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderLaterCheck.java" 2>&1 | grep -v "^Note:" || true
+  java -cp "$classes" io.github.mpdairy.monopaint.LaterChecks older > "$old_classes/codes.txt"
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderLaterCheck "$old_classes/codes.txt"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the older brush code reader's check needs git and commit $later_ref"
+fi
+# The version before Later's media (c360ed8e) reads their codes as Later Off, "Newer version"; opens a page with one of
+# their marks as saved, the mark staying so; and wrote a page with Fading and Lemon Juice marks as this version does.
+media_ref=c360ed8e
+if git rev-parse -q --verify "$media_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$media_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderLaterCheck.java" "$test/OlderMediaCheck.java" 2>&1 | grep -v "^Note:" || true
+  java -cp "$classes" io.github.mpdairy.monopaint.LaterChecks media > "$old_classes/codes.txt"
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderLaterCheck "$old_classes/codes.txt" "the version before Later's media"
+  java -cp "$classes" io.github.mpdairy.monopaint.LaterMediaChecks older-write "$old_classes/media.mpaint"
+  page=$(java -cp "$classes" io.github.mpdairy.monopaint.LaterMediaChecks older-page -)
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderMediaCheck read "$old_classes/media.mpaint" "$page"
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderMediaCheck fading "$old_classes/fading.mpaint"
+  java -cp "$classes" io.github.mpdairy.monopaint.LaterMediaChecks fading-bytes "$old_classes/fading.mpaint"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the check against the version before Later's media needs git and commit $media_ref"
+fi
+# The version before Later's print, crafts and ageing (9a57ae48) reads their codes as Later Off, "Newer version", and opens
+# a page with one of their marks as saved, the mark staying so.
+later2_ref=9a57ae48
+if git rev-parse -q --verify "$later2_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$later2_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderLaterCheck.java" "$test/OlderMediaCheck.java" 2>&1 | grep -v "^Note:" || true
+  java -cp "$classes" io.github.mpdairy.monopaint.LaterChecks later2 > "$old_classes/codes.txt"
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderLaterCheck "$old_classes/codes.txt" "the version before Later's print, crafts and ageing"
+  java -cp "$classes" io.github.mpdairy.monopaint.LaterMediaChecks older-write2 "$old_classes/media.mpaint"
+  page=$(java -cp "$classes" io.github.mpdairy.monopaint.LaterMediaChecks older-page2 -)
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderMediaCheck read "$old_classes/media.mpaint" "$page" "the version before Later's print, crafts and ageing (9a57ae48)" "a Cross-Stitch mark"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the check against the version before Later's print, crafts and ageing needs git and commit $later2_ref"
+fi
+# The version before Vector Ink (04c30e6f) opens a page with its lines as saved: the LINE section passed by, the lines their pixels.
+vector_ref=04c30e6f
+if git rev-parse -q --verify "$vector_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$vector_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderVectorCheck.java" 2>&1 | grep -v "^Note:" || true
+  java -cp "$classes" io.github.mpdairy.monopaint.VectorInkChecks older-write "$old_classes/vector.mpaint"
+  page=$(java -cp "$classes" io.github.mpdairy.monopaint.VectorInkChecks older-page "$old_classes/vector.mpaint")
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderVectorCheck "$old_classes/vector.mpaint" "$page"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the check against the version before Vector Ink needs git and commit $vector_ref"
+fi
+# The version before every edit was logged (56dad77f) opens a page whose log (version 2) holds eraser, smudge and Lasso
+# entries as saved, without a replay (the notebook incident of 2026-11-02: the log is extra, the pixels are the page).
+replay_ref=56dad77f
+if git rev-parse -q --verify "$replay_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$replay_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderReplayCheck.java" 2>&1 | grep -v "^Note:" || true
+  page=$(java -cp "$classes" io.github.mpdairy.monopaint.StrokeLogChecks older-write "$old_classes/replay.mpaint")
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderReplayCheck "$old_classes/replay.mpaint" "$page"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the check against the version before every edit was logged needs git and commit $replay_ref"
+fi
+# The version before shapes, pictures and merges were logged (1886cebf) reads a log with them as none: the page opens as
+# saved, without a replay.
+more_ref=1886cebf
+if git rev-parse -q --verify "$more_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$more_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderReplayCheck.java" 2>&1 | grep -v "^Note:" || true
+  page=$(java -cp "$classes" io.github.mpdairy.monopaint.StrokeLogChecks older-write-more "$old_classes/replay.mpaint")
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderReplayCheck "$old_classes/replay.mpaint" "$page" "the version before shapes, pictures and merges were logged ($more_ref)"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the check against the version before shapes, pictures and merges were logged needs git and commit $more_ref"
+fi
+# The version before Print Shading's Risograph, Photocopy and Soft Dither (9a57ae48) reads their codes as Print Shading
+# None, the rest as written, "Newer version"; and the versions before Maze to Rings (47c1624d) and Pixels and Stitches (e8fdf657) theirs.
+for screen_check in "9a57ae48 older riso, photocopy and soft dither" "47c1624d older-lined maze to rings" "e8fdf657 older-cells pixels and stitches"; do
+  read -r screen_ref screen_list screen_what <<< "$screen_check"
+  if git rev-parse -q --verify "$screen_ref^{commit}" >/dev/null 2>&1; then
+    old_src=$(mktemp -d) old_classes=$(mktemp -d)
+    git archive "$screen_ref" "$main" | tar -x -C "$old_src"
+    javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderLaterCheck.java" 2>&1 | grep -v "^Note:" || true
+    java -cp "$classes" io.github.mpdairy.monopaint.ScreenChecks "$screen_list" > "$old_classes/codes.txt"
+    java -cp "$old_classes" io.github.mpdairy.monopaint.OlderLaterCheck "$old_classes/codes.txt" "the version before $screen_what"
+    rm -rf "$old_src" "$old_classes"
+  else
+    echo "SKIP: the check against the version before $screen_what needs git and commit $screen_ref"
+  fi
+done
+# The version before Reprint (9e447836) reads its codes as Smudge Off, the rest as written, "Newer version".
+reprint_ref=9e447836
+if git rev-parse -q --verify "$reprint_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$reprint_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderLaterCheck.java" 2>&1 | grep -v "^Note:" || true
+  java -cp "$classes" io.github.mpdairy.monopaint.ReprintChecks older > "$old_classes/codes.txt"
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderLaterCheck "$old_classes/codes.txt" "the version before Reprint"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the check against the version before Reprint needs git and commit $reprint_ref"
+fi
 # A notebook from this version opens in the one before notebooks (580a326): its block of pictures is ignored.
 old_ref=580a326
 if git rev-parse -q --verify "$old_ref^{commit}" >/dev/null 2>&1; then
@@ -106,6 +235,18 @@ if git rev-parse -q --verify "$stack_ref^{commit}" >/dev/null 2>&1; then
   rm -rf "$old_src" "$old_classes"
 else
   echo "SKIP: the version before stacks' check needs git and commit $stack_ref"
+fi
+# A page with text boxes opens in the version before them (9e447836), its TEXT section skipped, the ink made from one as drawn.
+text_ref=9e447836
+if git rev-parse -q --verify "$text_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$text_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/TextOlderReaderCheck.java" 2>&1 | grep -v "^Note:" || true
+  where=$(java -cp "$classes" io.github.mpdairy.monopaint.TextBoxChecks write "$old_classes/text.mpaint")
+  java -cp "$old_classes" io.github.mpdairy.monopaint.TextOlderReaderCheck "$old_classes/text.mpaint" $where
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the older reader's check for text boxes needs git and commit $text_ref"
 fi
 # A page with mirrors opens in the version before them (2327d14), its MIRR section skipped.
 mirror_ref=2327d14

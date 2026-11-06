@@ -7,11 +7,17 @@ public final class DrawLayoutChecks {
     // The Nomad's eight slots (2026-10-28), their rows sharing the ten's room: 854 and 8, 611 and 2 with ten.
     // The picker box half as long again from the room to spare (2026-10-29): 980 and 235, 870 and 4, 850 and 12, 609 and 4 before.
     // Shapes and Play's small row back (2026-10-30): 1040 and 175, 874 and 0, 859 and 3, 613 and 0 before.
-    static final int[][] NOW = {{1084, 131}, {874, 0}, {858, 4}, {613, 0}};
+    // The layer button's row on the Manta (2026-11-06; none on the Nomad): 1084 and 131, 874 and 0 before.
+    // The sand timer, Show Kinds and Play to the menu, two small rows fewer, and the layer button (58 dp) under the picker box on
+    // the Nomad too (2026-11-06): 1084 and 65, 808 and 0, 858 and 4, 613 and 0 before.
+    // The book's row under the layer button, before the picker box grows (2026-11-06; 30 dp on the Manta turned, none on the Nomad turned): 996 and 161, 816 and 0, 800 and 4, 555 and 0 before.
+    // The book's row from 7b99f5c0 to the menu's Page Bar row the same day: 996 and 117, 786 and 0, 760 and 0, 555 and 0 then.
+    // The Nomad upright 804 and 0 with nine slots and Fill in a tool row (2026-11-06; 800 and 4 with ten): its eight shown share twelve rows' room among eleven.
+    static final int[][] NOW = {{996, 161}, {816, 0}, {804, 0}, {555, 0}};
 
     public static void main(String[] args) throws java.io.IOException {
-        leaveClean(); zenTap(); fits(); manta(); tray(); longPress(); order(); shorter(); side(); chooser(); taps(); fun(); funLists(); zoom(); finger(); pageBar(); layers(); zen(); brushLine(); screen(); column(); extras(); lasso(); tenSlots(); nomadEight(); picker(); pickerBox();
-        System.out.println("PASS: the page bar along the page's top from the column, the page under it, the brush line along the foot from 14 dp past Zen Mode's button, Zen on the column's axis in the foot corner, nothing overlapping, every screen and either hand; Zen Mode's way out a pen target over 26 dp, inside the smallest screen's corner, its words Title Case; the drawing screen's one side toolbar fits the Manta and the Nomad in either turn without scrolling, no layers in it (Page Settings' Layers row since the refocus, 2026-10-24), every item at least its least, no pen target under 26 dp; Menu first, centred on the page previews, Template Visibility (its step Full, Half, Faint, Hidden) beside it; the tray (ten slots, a row each, 24 to 34 dp, no numbers, the stroke the row's width less its side bar), straight under it the smudge tool and Finger, then the eraser, the picker box (2026-10-27, the owner's drawing: the grey strip its lower-left triangle, white at the top, the size slider its upper-right one, broad at the top, two squares and the gap wide, a pen driving the triangle it lands in, a drag redrawing its tab's strip alone), one dot of the size in the grey under them, no swatches, and the Dropper and the Lasso under that, Refresh alone in the row under them (the whole row its target), then Show Kinds and the sand timer, Shapes and Play (2026-10-30), the wet indicator, the brush line a Basic tool's description after its name, what is in use marked by a side bar, the Manta at its preferred heights either way up with white space to spare; no Edit buttons (a long press customizes) and no page turner in the column; the page bar along the page's top, 40 dp (36 on the Nomad), Notebook at the end away from the column, either hand, then Zoom, \"100 / 100\" between ‹ and ›, then 22 x 30 dp previews (19 x 26 on the Nomad, 21 to 40 of them, a + tile of the same size after the last page) 4 dp clear of the edge, a touch going to the nearest, its buttons over 26 dp, the page that much shorter and the column's width narrower; a tap on a tray row only selects it, the selected smudge tool its chooser (as big as its cards need, beside the column, paged past six), the selected eraser does nothing, no paint bucket and no Fill mode; no undo, redo, Brush Lab or Zoom in the column (2026-10-28); Cut, Copy and Delete in the bar over a floating piece, no Trash button; Play's menu beside its button (Magnetic Poetry, Mirrors, Replay Page; no Shapes, Self-Portrait Prompt, Stamp, Surprise Me or Fling), its side bar while a toy is on, fitting every screen; Export Now and Delete Notebook at Notebook Settings' foot; Zoom on the page bar, its padlock beside its percentage up to 800%; the Mirrors list (rows 52 dp, its caption) fitting every screen's height, their labels Title Case, two words at most; Finger the column's button showing what a finger does, its menu fitting the height; the menu in two groups, a grey-400 line between; a slot's long press the tool picker, the owner's drawn tools, fitting every screen, grouped by kind, Brush Lab and Advanced under them, Reset to Default over them for an edited Basic tool alone");
+        leaveClean(); fingerTaps(); fits(); manta(); tray(); longPress(); order(); shorter(); side(); chooser(); taps(); fun(); funLists(); zoom(); finger(); pageBar(); layers(); zen(); brushLine(); screen(); column(); extras(); lasso(); allSlots(); nomadEight(); picker(); pickerRows(); pickerBox(); tops();
+        System.out.println("PASS: the page bar along the page's top from the column, the page under it, the brush line along the foot from 14 dp past Zen Mode's button, Zen on the column's axis in the foot corner, nothing overlapping, every screen and either hand; Zen Mode's way out a pen target over 26 dp, inside the smallest screen's corner, its words Title Case; the drawing screen's one side toolbar fits the Manta and the Nomad in either turn without scrolling, no layers in it but the layer button over Refresh (2026-11-06; Page Settings' Layers row since the refocus, 2026-10-24), every item at least its least, no pen target under 26 dp; Menu first, centred on the page previews, Template Visibility (its step Full, Half, Faint, Hidden) beside it; the tray (nine slots, a row each, 24 to 34 dp, no numbers, the stroke the row's width less its side bar), straight under it the smudge tool and Finger, then the eraser, the picker box (2026-10-27, the owner's drawing: the grey strip its lower-left triangle, white at the top, the size slider its upper-right one, broad at the top, two squares and the gap wide, a pen driving the triangle it lands in, a drag redrawing its tab's strip alone), one dot of the size in the grey under them, no swatches, and the Dropper and the Lasso under that, Refresh alone in the row under them (the whole row its target), then Show Kinds and the sand timer, Shapes and Play (2026-10-30), the wet indicator, the brush line a Basic tool's description after its name, what is in use marked by a side bar, the Manta at its preferred heights either way up with white space to spare; no Edit buttons (a long press customizes) and no page turner in the column; the page bar along the page's top, 40 dp (36 on the Nomad), Notebook at the end away from the column, either hand, then Zoom, \"100 / 100\" between ‹ and ›, then 22 x 30 dp previews (19 x 26 on the Nomad, 21 to 40 of them, a + tile of the same size after the last page) 4 dp clear of the edge, a touch going to the nearest, its buttons over 26 dp, the page that much shorter and the column's width narrower; a tap on a tray row only selects it, the selected smudge tool its chooser (as big as its cards need, beside the column, paged past six), the selected eraser does nothing, no paint bucket and no Fill mode; no undo, redo, Brush Lab or Zoom in the column (2026-10-28); Cut, Copy and Delete in the bar over a floating piece, no Trash button; Play's menu beside its button (Magnetic Poetry, Mirrors, Replay Page; no Shapes, Self-Portrait Prompt, Stamp, Surprise Me or Fling), its side bar while a toy is on, fitting every screen; Export Now and Delete Notebook at Notebook Settings' foot; Zoom on the page bar, its padlock beside its percentage up to 800%; the Mirrors list (rows 52 dp, its caption) fitting every screen's height, their labels Title Case, two words at most; Finger the column's button showing what a finger does, its menu fitting the height; the menu in two groups, a grey-400 line between; a slot's long press the tool picker, the owner's drawn tools, fitting every screen, grouped by kind, Brush Lab and Advanced under them, Reset to Default over them for an edited Basic tool alone");
     }
 
     /**
@@ -23,22 +29,24 @@ public final class DrawLayoutChecks {
      * A two-finger double tap is Zen Mode (the owner, 2026-10-30): a two-finger tap's Undo waits for a second tap, which
      * takes it back and toggles Zen instead; the pen, a finger's stroke, a page turn or leaving does the waiting Undo first.
      */
-    static void zenTap() throws java.io.IOException {
+    static void fingerTaps() throws java.io.IOException {
         String pad = source("DrawingPad");
-        check(pad.contains("static final long ZEN_TAP_MS = 350;")
-                && pad.contains("if (fingers == 2 && undoWaiting) { removeCallbacks(waitingUndo); undoWaiting = false; app.setZen(!app.zen); }")
-                && pad.contains("else if (fingers == 2) { undoWaiting = true; postDelayed(waitingUndo, ZEN_TAP_MS); }")
-                && pad.contains("if (undoWaiting && event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) undoNow();")
-                && pad.contains("private void beginInkStroke(int tool, boolean eraserEnd, int id, String kind) {\n        undoNow();")
-                && pad.contains("void suspend() {\n        undoNow();") && pad.contains("if (page != document) undoNow();"),
-                "A two-finger double tap toggles Zen Mode; a lone two-finger tap undoes after ZEN_TAP_MS, at once if the pen, a stroke, a page turn or leaving comes first");
+        check(!pad.contains("ZEN_TAP_MS") && !pad.contains("redoWaiting") && pad.contains("FingerTool.Tap tap = FingerTool.tap(fingers, app.prefs.twoFingerTap(), app.prefs.threeFingerTap());") && pad.contains("if (tap == FingerTool.Tap.UNDO) app.undo(); else if (tap == FingerTool.Tap.REDO) app.redo(); else refreshAsked(")
+                && pad.contains("if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) layLiveNow();")
+                && pad.contains("private void suspend(boolean staying) {\n        layLiveNow();") && pad.contains("if (page != document) { layLiveNow(); app.live.shown(page); }"),
+                "A two- and a three-finger tap do System Settings' choices (Undo and Redo at first), both at once (no three-finger double tap for Zen Mode since 2026-11-02)");
+        // Another page shown stays on the drawing screen: only the page's fast ink goes blank, or the column, the page bar
+        // and the Zen button go white with nothing to redraw them (the owner, 2026-11-03, after the Template eye).
+        int show = pad.indexOf("void showPage(ToneDocument page) {");
+        check(pad.indexOf("suspend(true);", show) == pad.indexOf("suspend(", show) && pad.contains("void suspend() { suspend(false); }")
+                && pad.contains("eraseFastInk(staying ? pageArea() : windowArea())"), "Showing a page blanks the page's fast ink alone");
     }
     static void leaveClean() throws java.io.IOException {
         String screens = source("NotebookScreens");
         int cover = screens.indexOf("private void cover(Mode next)"), suspend = screens.indexOf("app.pad.suspend();", cover),
-                shown = screens.indexOf("view.setVisibility(View.VISIBLE);", cover), clean = screens.indexOf("if (leaving) Ui.cleanWindow(", cover);
+                shown = screens.indexOf("view.setVisibility(View.VISIBLE);", cover), clean = screens.indexOf("if (leaving) view.postDelayed(() -> Ui.flashWindow(", cover);
         check(cover > 0 && suspend > cover && shown > suspend && clean > shown && clean < screens.indexOf("void hide()"),
-                "Every way from the drawing screen to the notebook screens cleans the window once they show");
+                "Every way from the drawing screen to the notebook screens cleans the window once they show and a menu that opened them is gone");
     }
     /**
      * The Lasso's state machine (the owner, 2026-10-24: "sometimes selecting the lasso doesnt work, i have to click to
@@ -64,16 +72,32 @@ public final class DrawLayoutChecks {
         }
         // Cut, Copy, Delete (the owner, 2026-10-25: "there should be options for lasso"), in the bar over the piece since
         // 2026-10-28 ("above it is a toolbar offering choices for what to do with it"); Paste the Lasso's tap.
-        check(java.util.Arrays.equals(DrawLayout.LASSO_BAR, new String[]{"Cut", "Duplicate", "Delete"}), "A piece up: Cut, Duplicate, Delete (Duplicate in Copy's place, 2026-10-28)");
+        check(java.util.Arrays.equals(DrawLayout.LASSO_BAR, new String[]{"Cut", "Duplicate", "Make Stamp", "Delete"}),
+                "A piece up: Cut, Duplicate, Make Stamp, Delete (Duplicate in Copy's place, 2026-10-28; Make Stamp 2026-11-02)");
+        // The bar, one row of its words (InkWashBar.lightRow: each LIGHT_PAD each side, the row's fine outline), fits the
+        // narrowest page beside the column: the Nomad's, portrait.
+        float row = 2;  // Theme.FINE each side
+        for (String w : DrawLayout.LASSO_BAR) row += LabText.width(w, TypeStyle.MENU.sp, 0) + 2 * DrawLayout.LIGHT_PAD;
+        DrawLayout nomad = new DrawLayout(749, 998);
+        check(row <= nomad.width - nomad.side, "The Lasso's bar fits the Nomad's page: " + row + " dp of " + (nomad.width - nomad.side));
         String bar, pad;
         try { bar = source("InkWashBar"); pad = source("DrawingPad"); } catch (java.io.IOException e) { throw new AssertionError(e); }
-        check(bar.contains("app.pad.cutSelection(); else if (choice == 1) app.pad.duplicateSelection(); else app.pad.deleteSelection();")
+        check(bar.contains("app.pad.cutSelection(); else if (choice == 1) app.pad.duplicateSelection(); else if (choice == 2) app.pad.stampSelection(); else app.pad.deleteSelection();")
                         && bar.contains("labelContent == lassoContent) && !Ui.outside(labelContent, event, index)")
                         && pad.contains("selection.grab(handle); lassoBar();") && pad.contains("drawSelectionFrame(); flush(true); lassoBar();")
                         && pad.contains("selectionShown.setEmpty(); lassoBar();") && pad.contains("showSelection(); flush(true); lassoBar();"),
                 "The bar's words run the piece's own; the pen on it keeps it; gone while the piece moves, back where it lands, gone with it");
         check(DrawLayout.lassoTap(true, false, true) == DrawLayout.LassoTap.MENU && DrawLayout.lassoTap(false, false, true) == DrawLayout.LassoTap.TAKE_UP,
                 "In use with something kept, a tap offers Paste; not in use, it takes the Lasso up");
+        // The column's Lasso tapped while the edge strip's piece floats (the owner, 2026-11-05: "regular lasso selected from the
+        // toolbar had some issues with the frame options not showing up"): the tap leaves the piece, but the Lasso is the hand's
+        // now, so placing the piece leaves it up and the next loop lifts a piece with its frame and bar. The edge strip's
+        // letting go still puts it away once the piece is done (e0656f2e).
+        int tap = bar.indexOf("private void tapLasso()"), keep = bar.indexOf("app.pad.keepLasso();", tap);
+        check(tap > 0 && keep > tap && keep < bar.indexOf("DrawLayout.lassoTap(", tap) && pad.contains("void keepLasso() { lassoBack = false; }")
+                        && pad.contains("boolean lassoBackWhenDone() { return lassoBack = selection != null && lassoOn && !lassoDeletes; }")
+                        && bar.contains("else if (!app.pad.lassoBackWhenDone()) { app.pad.lasso(false);"),
+                "A tap on the column's Lasso keeps it after the floating piece is done; the edge strip's lift still puts it away after");
     }
 
     /**
@@ -89,81 +113,92 @@ public final class DrawLayoutChecks {
         for (int tap = 0; tap < 4; tap++) { said.append(DrawLayout.templateSaid(o.guidesShown)).append("; "); o = o.withNextGuidesStep(); }
         check(o.guidesShown == NotebookOptions.FULL && said.toString().equals("Template Visibility: Full; Template Visibility: Half; Template Visibility: Faint; Template Visibility: Hidden; "),
                 "Template Visibility steps Full, Half, Faint, Hidden, Full: " + said);
-        // The menu (2026-10-30: Settings, Open Notebook, Import; Finger, Left-Handed; one group line) fits the
-        // Nomad in landscape unscrolled.
-        check(5 * DrawLayout.MENU_ROW + 9 + 2 <= 749 - 2 * DrawLayout.PAD && DrawLayout.LEFT_HANDED.equals("Left-Handed"), "The menu with Left-Handed fits every screen");
+        // The menu (2026-10-30: Settings, Notebook Explorer, Import; Finger, Left-Handed; one group line; Export Page since
+        // 2026-11-02, Draw Together on the live branch) fits the Nomad in landscape unscrolled.
+        // The column's Sand Timer, Show Kinds and Play too since 2026-11-06, Finger Action out (System Settings'), four groups.
+        java.util.List<DrawLayout.Row> manta = DrawLayout.fileRows(true, null, false, "Draw Together", false, true, true, false, true);
+        int lines = java.util.Collections.frequency(manta, DrawLayout.Row.LINE), menuRows = manta.size() - lines;
+        check(menuRows == 11 && lines == 3 && menuRows * DrawLayout.MENU_ROW + lines * 9 + 2 <= 749 - 2 * DrawLayout.PAD && DrawLayout.LEFT_HANDED.equals("Left-Handed"), "The menu with Export Page, the column's three, Left-Handed and Draw Together fits every screen");
         try {
             String bar = source("InkWashBar"), app = source("PaintActivity"), ink = source("InkWash");
             check(bar.contains("app.showGuides(app.book.options().withNextGuidesStep().guidesShown)") && !app.contains("names.add(NotebookLayout.TEMPLATE)")
-                            && !app.contains("stepsMenu(") && bar.contains("name.setText(choice == 0 ? NotebookLayout.TEMPLATE : EraseKind.LABELS[choice])")
-                            && bar.contains("for (int c = guides() < 0 ? 1 : 0; c < EraseKind.LABELS.length; c++)"),
+                            && !app.contains("stepsMenu(") && bar.contains("eyeCell(DrawLayout.kindsName(choice), true, false,")
+                            && bar.contains("for (int c = DrawLayout.kindsFirst(guides()); c < EraseKind.LABELS.length; c++)")
+                            && DrawLayout.kindsFirst(-1) == 1 && DrawLayout.kindsFirst(0) == 0 && DrawLayout.kindsName(0).equals(NotebookLayout.TEMPLATE),
                     "Template Visibility is Show Kinds' popup's first eye, only while the page has guides; one state (NotebookOptions.guidesShown); no Template row in the menu");
-            // The menu's groups (the owner, 2026-10-24: "it's chaotic"), most used first; two since Play went back to the column, 2026-10-30.
+            // The menu's groups (the owner, 2026-10-24: "it's chaotic"), most used first; two since Play went back to the column, 2026-10-30; the owner's four, 2026-11-06.
             String menu = app.substring(app.indexOf("void fileMenu(View anchor)"), app.indexOf("menu(anchor, \"file menu\""));
+            // The rows are DrawLayout.fileRows' (the browser's too, M4).
             java.util.List<String> rows = new java.util.ArrayList<>();
-            String[] parts = menu.split("names\\.add\\(|divider\\(");
-            for (int k = 1; k < parts.length; k++) rows.add(parts[k].startsWith("names, ") ? "|" : parts[k].substring(0, parts[k].indexOf(')')));
-            check(rows.equals(java.util.Arrays.asList("DrawLayout.NOTEBOOK_SETTINGS", "NotebookLayout.OPEN_NOTEBOOK", "PictureImport.IMPORT",
-                            "|", "inkWashBar.fingerRow(", "toolboxRight ? DrawLayout.RIGHT_HANDED : DrawLayout.LEFT_HANDED"))
+            for (DrawLayout.Row r : manta) rows.add(r.words == null ? "|" : r.words);
+            check(rows.equals(java.util.Arrays.asList(NotebookLayout.OPEN_NOTEBOOK, DrawLayout.NOTEBOOK_SETTINGS, "|", LibraryCard.EXPORT_PAGE, PictureImport.IMPORT, EraseKind.SHOW_KINDS, DrawLayout.PAGE_BAR, "|",
+                                    "Draw Together", SandTimer.NAME, DrawLayout.PLAY, "|", DrawLayout.LEFT_HANDED, SystemSettings.TITLE))
+                            && menu.contains("DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing, !barHidden)")
+                            && menu.contains("exportMenu(anchor, book.stacks().of(book.index()))") && menu.contains("DrawingBook.isCover(book.index())) rows.removeIf(r -> \"exportPage\".equals(r.key))")
+                            && source("NotebookScreens").contains("app.exportMenu(export, place);") && app.split("\"export menu\"", -1).length == 2
                             && !app.contains("coverRows(") && app.contains("line.setBackgroundColor(Theme.GREY_400)"),
-                    "The menu: the notebook (Settings, Open Notebook, Import: pictures and PDFs, one row since 2026-10-29), the app (Finger and Left-Handed), a grey-400 line between; no Play (the column's, 2026-10-30), Export Now, Rename, Delete, Show Kinds or Replay Page rows (2026-10-28): " + rows);
-            check(bar.contains("app.iconButton(DrawLayout.PLAY, R.drawable.ic_ph_confetti, () -> { if (!app.busy()) app.playMenu(played[0]); })")
-                            && bar.contains("boolean on = DrawLayout.playOn(app.pad != null && app.pad.words.open(), app.mirrors.on());\n        play.mark(on);")
-                            && source("MirrorsMenu").contains("app.inkWashBar.modesChanged()") && source("WordsMode").split("app.inkWashBar.modesChanged\\(\\)", -1).length == 3
-                            && bar.contains("void pageChanged() {\n        // Another page, or Undo: its mirrors may be on or off.\n        modesChanged();") && !menu.contains("playMenu("),
-                    "Play's button opens its menu beside it, its side bar while a toy is on (the bin opened or closed, the mirrors changed, another page)");
+                    "The menu (the owner's order, 2026-11-06): Notebook Explorer and Notebook Settings; Export Page (the page shown's, Page Settings' one menu, none on a cover, 2026-11-02), Import (pictures and PDFs, one row since 2026-10-29) and Show Kinds; Draw Together, the Sand Timer while it can be set and Play, marked while a toy is on; Left-Handed and System Settings; a grey-400 line between each; no Finger Action (System Settings'), Export Now, Rename, Delete or Replay Page rows: " + rows);
+            // Play the menu's row since 2026-11-06 (the column's button 2026-10-30 to 2026-11-06): its menu beside Menu, marked while a toy is on, read as the menu opens.
+            check(menu.contains("case \"play\": actions[i] = () -> { if (!busy()) playMenu(anchor); };")
+                            && menu.contains("DrawLayout.playOn(pad != null && (pad.words.open() || pad.text.on() || pad.shapesOn && !pad.lassoOn && !pad.dropperOn), mirrors.on())")
+                            && !bar.contains("ic_ph_shapes") && !bar.contains("tapShapes") && !bar.contains("ic_ph_confetti") && !bar.contains("modesChanged")
+                            && bar.contains("void sayMirrors(String text, long ms) { say(text, ms, menu); }"),
+                    "Play the menu's row, its menu beside Menu, marked while a toy is on; no Play or Shapes button in the column");
             // Notebook Settings' foot (2026-10-28): Export Now, then Delete Notebook last, the same actions and confirmation.
             String screens = source("NotebookScreens");
             int exportAt = screens.indexOf("app.exportNow();"), deleteAt = screens.indexOf("app.deleteNotebook(app.drawingName);"), footAt = screens.indexOf("TextView foot = text(LibraryCard.foot(");
             check(exportAt > 0 && exportAt < deleteAt && deleteAt < footAt && screens.contains("new LabButton[]{export, delete}") && LibraryCard.DELETE_NOTEBOOK.equals("Delete Notebook")
                             && app.contains(".setTitle(\"Delete this notebook?\")") && screens.contains("LibraryCard.settingsLayout("),
                     "Notebook Settings' foot: Export Now, then Delete Notebook, its confirmation as before; Rename the name's button");
-            check(bar.contains("PageTurner.STEP_ICONS[step + 1]") && bar.contains("book.template(book.index()).equals(NotebookTemplate.BLANK) ? -1")
+            check(bar.contains("PageTurner.STEP_ICONS[at + 1]") && bar.contains("book.template(book.index()).equals(NotebookTemplate.BLANK) ? -1")
                             && bar.contains("row.setMeasureWithLargestChildEnabled(true);"),
                     "Its eye the steps' eyes; no Template eye while the page has no guides; each column as wide as the widest name");
             // Layout v3 (the owner's mockup, 2026-10-26), its rows since 2026-10-28: Menu alone; the block the Dropper and the
-            // Lasso, Refresh; then Show Kinds and the sand timer, Shapes and Play (2026-10-30: "move shapes button to below
-            // visibility and timer, and move fun button beside it"), the wet indicator; no drop on the brush line; no undo or
+            // Lasso, Refresh; then the sand timer, Show Kinds and Play (2026-10-30: "move fun button beside it"; Shapes beside
+            // the timer until 2026-11-05, Play's row since), the wet indicator; no drop on the brush line; no undo or
             // redo in the column (two and three fingers undo and redo).
             int block = bar.indexOf("case BLOCK:"), play = bar.indexOf("case PLAY:");
             check(bar.contains("lasso = app.iconButton(DrawLayout.LASSO, R.drawable.ic_ph_lasso") && bar.indexOf("pickRow.addView(swatches.dropper)") < bar.indexOf("pickRow.addView(lasso)")
-                            && bar.contains("for (View row : new View[]{pickRow, wetRow, playRow, templateRow}) view.addView(row,") && block > 0 && bar.indexOf("ghostRow.addView(ghost, item(fitted.icon))") > 0
-                            && bar.indexOf("wetRow.addView(shapes,") > 0 && bar.indexOf("wetRow.addView(shapes,") < bar.indexOf("wetRow.addView(sandTimer,")
-                            && !bar.contains("templateRow.addView(template,") && bar.indexOf("templateRow.addView(wet,") > bar.indexOf("playRow.addView(play,")
-                            && bar.indexOf("wetRow.addView(sandTimer,") < bar.indexOf("playRow.addView(kinds,") && bar.indexOf("playRow.addView(kinds,") < bar.indexOf("playRow.addView(play,")
-                            && bar.contains("for (View cell : new View[]{wet, kinds, sandTimer, shapes, play}) cell.setLayoutParams(tile(at.half(), at.wet));")
+                            && bar.contains("for (View row : new View[]{pickRow, templateRow}) view.addView(row,") && block > 0 && bar.indexOf("ghostRow.addView(ghost, item(fitted.icon))") > 0
+                            && !bar.contains("templateRow.addView(template,") && bar.indexOf("templateRow.addView(wet,") > 0
+                            && !bar.contains("sandTimer") && !bar.contains("playRow") && !bar.contains("wetRow") && !bar.contains("R.drawable.ic_ph_eye_fill")
+                            && bar.contains("wet.setLayoutParams(tile(at.half(), at.wet));")
+                            && menu.contains("case \"sand\": actions[i] = this::countdownTapped;") && menu.contains("case \"kinds\": actions[i] = inkWashBar::kindsPopup;")
                             && bar.contains("case PLAY: view.addView(ghostRow, ghostPlace(fitted));") && play > block
                             && bar.contains("menuRow.addView(menu[0]") && !bar.contains("menuRow.addView(template") && !bar.contains("brushLine.addView(wet")
-                            && !bar.contains("ic_ph_undo") && !bar.contains("ic_ph_redo") && bar.contains("R.drawable.ic_ph_shapes, this::tapShapes") && bar.contains("R.drawable.ic_ph_confetti, () ->")
-                            && bar.contains("this::kindsPopup") && bar.contains("app.showKind(choice,") && bar.contains("face(null, app.getDrawable(R.drawable.ic_ph_eye_fill), false, true);\n        kinds.iconOnly(open, open);") && !bar.contains("ic_ph_eye_closed")
+                            && !bar.contains("ic_ph_undo") && !bar.contains("ic_ph_redo") && !bar.contains("tapShapes")
+                            && bar.contains("app.showKind(choice,") && !bar.contains("ic_ph_eye_closed")
                             && source("MultiFingerTap").length() > 0 && app.contains("void undo()") && app.contains("void redo()"),
-                    "Menu alone; the Dropper and the Lasso, Shapes and the sand timer, Show Kinds (always the open eye) and Play, the wet indicator, then Refresh after a gap (2026-10-29); no undo or redo buttons");
-            // The smudge tool and the eraser under the tray, a tray row each, the owner's drawings (the spudger, the block eraser).
-            check(bar.contains("case TOOLS: for (int t : new int[]{InkWash.SMUDGE, InkWash.ERASER}) view.addView(tools[t], trayTile(fitted));")
-                            && bar.contains("R.drawable.tool_smudge : R.drawable.tool_eraser") && bar.indexOf("case TOOLS:") < block,
-                    "Under the tray the smudge tool and the eraser, a row each, their drawings; then the block");
+                    "Menu alone; the Dropper and the Lasso, the wet indicator, then Refresh after a gap (2026-10-29); the sand timer and Show Kinds the menu's rows (2026-11-06); no undo or redo buttons");
+            // Fill in (2026-11-06), the smudge tool and the eraser under the tray, a tray row each, the owner's drawings (Fill in's tip as its slot's was, the spudger, the block eraser).
+            check(bar.contains("case TOOLS: for (int t : DrawLayout.AFTER_TRAY) view.addView(tools[t], trayTile(fitted));") && DrawLayout.AFTER_TRAY.length == DrawLayout.TOOL_ROWS
+                            && java.util.Arrays.equals(DrawLayout.AFTER_TRAY, new int[]{ToolSlots.FILL, ToolSlots.SMUDGE, ToolSlots.ERASER})
+                            && bar.contains("R.drawable.tool_smudge : R.drawable.tool_eraser") && bar.contains("if (slot >= ToolSlots.COUNT && slot != ToolSlots.FILL) { showIcon(slot); return; }")
+                            && "tip_fill_in".equals(DrawLayout.drawing(ToolSlots.fill())) && bar.indexOf("case TOOLS:") < block,
+                    "Under the tray Fill in, the smudge tool and the eraser, a row each, their drawings; then the block");
             // The owner (2026-10-28): "we could merge the lasso trash and the lasso": no Trash button, the edge strip's hold
             // still the loop that deletes; Refresh alone in its row, the row its target ("set apart so a finger can press it").
-            check(!bar.contains("ic_ph_recycle") && !bar.contains("tapTrash") && bar.contains("takeUpLasso(true)")
+            check(!bar.contains("ic_ph_recycle") && !bar.contains("tapTrash") && bar.contains("takeUpLasso(heldDeletes)")
                             && !bar.contains("lassoWays") && !bar.contains("lasso.setOnLongClickListener") && bar.contains("lasso.mark(on);")
                             && bar.contains("ghost = app.iconButton(DrawLayout.REFRESH, R.drawable.ic_ph_ghost") && bar.contains("ghost.setLayoutParams(item(at.icon))")
                             && new DrawLayout(SCREENS[0][0], SCREENS[0][1]).icon >= 48 && new DrawLayout(SCREENS[0][0], SCREENS[0][1]).inner >= 48,
                     "No Trash button, the hold's loop deletes; the Lasso only selects, no hold; Refresh a whole row, 48 dp tall at least on the Manta");
-            // The notebook's name follows every change of the notebook's file (open, new, auto-name, rename), takes no touch, goes with the foot row in Zen Mode.
-            check(app.contains("private void named(String path) { drawingName = path; if (inkWashBar != null) inkWashBar.bookName(") && app.split("drawingName = ", -1).length == 3
-                            && bar.contains("bookName.setClickable(false)") && !bar.contains("bookName.setOnClickListener") && app.contains("footRow.addView(inkWashBar.bookName")
+            // The status corner (the notebook's name until 2026-11-02) says Draw Together's status, takes no touch, goes with the foot row in Zen Mode.
+            check(app.contains("inkWashBar.statusCorner(live.status())") && !app.contains("statusCorner(DrawingFiles.name(")
+                            && bar.contains("statusCorner.setClickable(false)") && !bar.contains("statusCorner.setOnClickListener") && app.contains("footRow.addView(inkWashBar.statusCorner")
                             && app.contains("footRow.setVisibility(zen ? View.GONE : View.VISIBLE)"),
-                    "The notebook's name set wherever the file's name is, not tappable, hidden with the foot row in Zen Mode");
+                    "The status corner: the live status, not tappable, hidden with the foot row in Zen Mode");
             check(DrawLayout.LINE_NAME >= 200 && DrawLayout.LINE_NAME + DrawLayout.NOTE_GAP <= 600 - DrawLayout.LINE_GAP,
                     "The name's room fits the narrowest brush line with the note's gap");
-            check(app.contains("names.add(toolboxRight ? DrawLayout.RIGHT_HANDED : DrawLayout.LEFT_HANDED); icons.add(toolboxRight ? R.drawable.ic_ph_hand_pointing_mirrored : R.drawable.ic_ph_hand_pointing)")
+            DrawLayout.Row left = DrawLayout.fileRows(false, "", false, null, false, false, false, false, true).get(3), right = DrawLayout.fileRows(false, "", true, null, false, false, false, false, true).get(3);  // after Import, its line and the browser's Finger Action
+            check(left.words.equals(DrawLayout.LEFT_HANDED) && left.icon.equals("ic_ph_hand_pointing") && right.words.equals(DrawLayout.RIGHT_HANDED) && right.icon.equals("ic_ph_hand_pointing_mirrored")
                             && app.contains("prefs.setToolboxRight(!prefs.toolboxRight()); applyToolboxSide();") && DrawLayout.RIGHT_HANDED.equals("Right-Handed"),
                     "The menu's hand row names the other hand (Left-Handed, or Right-Handed with its hand mirrored), applied at once");
             // A dirty brush: Clean Brush in the smudge tool's chooser; no dab or gauge on any row. The drawn tip's row shows its side
             // bar alone (the owner, 2026-10-26: the held paint's dab "looks like a square at the end, shouldn't be there").
             check(!bar.contains("helds[") && !bar.contains("loads[") && !bar.contains("Double.NaN, held)") && bar.contains("button.iconOnly(face(drawn, null, true, right), face(drawn, null, false, right));")
                             && bar.contains("app.inkWash.dirty(InkWash.SMUDGE)") && bar.contains(", holds paint")
-                            && bar.contains("if (app.inkWash.dirty(tool)) cleanMenu(tool); else app.toolPicker(tool, v)") && ink.contains("DrawLayout.heldGrey(session.held.of("),
+                            && bar.contains("if (app.inkWash.dirty(tool)) cleanMenu(tool); else app.toolPicker(tool, anchor(tool))") && ink.contains("DrawLayout.heldGrey(session.held.of("),
                     "The smudge tool's and the eraser's rows their drawing and side bar alone, no dab (held paint said, not drawn), Clean Brush in its chooser; the slots no dab, no gauge, Clean Brush behind a dirty slot's long press");
             // The Dropper always in its cell (the owner, 2026-10-26: "Dropper | Lasso" showed the Lasso alone with the smudge tool in
             // use: it was drawn as paper with the strip); with the eraser or the smudge tool in use, its pick is the brushes' grey.
@@ -172,8 +207,10 @@ public final class DrawLayoutChecks {
                             && bar.contains("Brush brush = DrawLayout.greys(tool) ? app.inkWash.brush(tool) : null;") && source("ToolSwatches").contains("brush == null ? StrokeMath.clamp(1 - tone / 255.0)"),
                     "The Dropper shown whatever the tool, beside the Lasso; a pick with the eraser or the smudge tool sets the brushes' grey");
             // Their long presses kept: the smudge tool's chooser, the eraser's menu.
-            check(bar.contains("tools[InkWash.ERASER].setOnLongClickListener(v -> { eraserMenu(); return true; });")
-                            && bar.contains("tools[InkWash.SMUDGE].setOnLongClickListener(v -> { if (!app.busy()) { if (app.inkWash.selected != InkWash.SMUDGE) choose(InkWash.SMUDGE); tapSmudge(); } return true; });"),
+            // One long-press path for the rows and Zen Mode's fan (InkWashBar.hold, 2026-11-04).
+            check(bar.contains("button.setOnLongClickListener(v -> { hold(tool); return true; });")
+                            && bar.contains("if (tool == InkWash.ERASER) { eraserMenu(); return; }")
+                            && bar.contains("if (tool == InkWash.SMUDGE) { if (app.inkWash.selected != InkWash.SMUDGE) choose(InkWash.SMUDGE); tapSmudge(); return; }"),
                     "The smudge tool's long press its chooser, the eraser's its menu");
             // The tray's rows to the screen's edge (the owner, 2026-10-27: "move tools slightly left, touching edge"),
             // mirrored with the column on the right: the row over the column's outer margin, its drawing flush there, its
@@ -221,13 +258,12 @@ public final class DrawLayoutChecks {
     static void brushLine() {
         // The owner (2026-10-22): notes at the brush line's right, the name keeping a third at least.
         check(DrawLayout.noteWidth(600) == 400 && DrawLayout.noteWidth(0) == 0, "The brush line: a note two thirds of it at most");
-        // No preview of the stroke (the owner, 2026-10-27: "remove stroke from bottom line brush info"): the name and words
-        // first on the line, and a tap on them still Brush Lab.
+        // No preview of the stroke (the owner, 2026-10-27: "remove stroke from bottom line brush info"), and no tap on the
+        // words (the release pare-down, 2026-11-05: Brush Lab is a slot's long press's Edit Brush alone).
         try {
             String bar = source("InkWashBar");
-            check(!bar.contains("brushPreview") && !bar.contains("linePreview") && bar.contains("brushName.setOnClickListener(v -> { int tool = app.inkWash.selected; if (!app.busy() && tool < ToolSlots.COUNT) app.openBrushLab(tool); });")
-                            && bar.contains("!onWords(brushName, e.getX())"),
-                    "The brush line has no stroke preview; a tap on its words opens Brush Lab, the empty line after them takes none");
+            check(!bar.contains("brushPreview") && !bar.contains("linePreview") && !bar.contains("brushName.setOnClickListener") && !bar.contains("openBrushLab"),
+                    "The brush line has no stroke preview and opens no Brush Lab");
         } catch (java.io.IOException e) { throw new AssertionError("the sources: " + e); }
         check(DrawLayout.brushWords("Wet gouache", null, java.util.Arrays.asList("Gouache", "paint stays wet")).equals("Wet gouache · Gouache, paint stays wet"), "The brush line: name · its card's words");
         check(DrawLayout.brushWords("Fineliner", null, java.util.Arrays.asList("Fineliner")).equals("Fineliner"), "The style left out when it is the name");
@@ -253,7 +289,7 @@ public final class DrawLayoutChecks {
             int iconSide = (right ? s[0] - cell[0] - d.half() : cell[0]) + inset;
             check(Math.abs(iconFoot - iconSide) <= 1 && iconFoot >= 2, "Zen Mode's icon the same " + iconFoot + " dp off the screen's foot as off its side edge, on " + s[0] + " x " + s[1]);
         }
-        check(DrawLayout.ZEN.equals("Zen Mode") && DrawLayout.ZEN_LEAVE.equals("Leave Zen Mode"), "Zen Mode's words, Title Case");
+        check(DrawLayout.ZEN.equals("Zen Mode") && DrawLayout.ZEN_LEAVE.equals("Leave Zen Mode") && DrawLayout.ZEN_HOLD.equals("Hold for Zen Mode"), "Zen Mode's words, Title Case");
     }
     /**
      * The drawing screen's whole layout (the owner, 2026-10-23: "moving the pages bar to the top. keep the zen in the
@@ -288,13 +324,13 @@ public final class DrawLayoutChecks {
             // The notebook's name in the foot's far corner (the owner, 2026-10-27): the corner Zen Mode's button is not in; the
             // line ends where it starts. At its widest ("bottom right name is cut off": 90 dp until then) it takes the room
             // the line's preview had and more, the line keeping its words' room and a note's gap.
-            int[] name = right ? new int[]{0, top, d.bookName(), top + DrawLayout.BRUSH_LINE} : new int[]{w - d.bookName(), top, w, top + DrawLayout.BRUSH_LINE};
+            int[] name = right ? new int[]{0, top, d.statusCorner(), top + DrawLayout.BRUSH_LINE} : new int[]{w - d.statusCorner(), top, w, top + DrawLayout.BRUSH_LINE};
             int[] shortLine = right ? new int[]{name[2], line[1], line[2], line[3]} : new int[]{line[0], line[1], name[0], line[3]};
             check(!overlap(name, zen) && !overlap(name, shortLine) && !overlap(name, column) && !overlap(name, canvas) && name[3] <= h,
                     "The notebook's name clear of Zen Mode's button, the brush line, the column and the canvas at " + at);
             check(shortLine[2] - shortLine[0] == DrawLayout.lineLeast() && DrawLayout.lineLeast() == DrawLayout.LINE_PAD + DrawLayout.LINE_NAME + DrawLayout.NOTE_GAP + DrawLayout.LINE_END
-                            && d.bookName() >= 90 + 86 && (d.compact || LabText.width("A Brief Inventory of Lint", TypeStyle.CAPTION.sp, 0) <= d.bookName()),
-                    "The brush line still holds its words and a note's gap beside the name, the name up to " + d.bookName() + " dp (a long notebook name whole on the Manta) at " + at);
+                            && d.statusCorner() >= 90 + 86 && (d.compact || LabText.width("A Brief Inventory of Lint", TypeStyle.CAPTION.sp, 0) <= d.statusCorner()),
+                    "The brush line still holds its words and a note's gap beside the name, the name up to " + d.statusCorner() + " dp (a long notebook name whole on the Manta) at " + at);
             // Zen Mode's icon sits in the column's middle: its axis the column's.
             check(Math.abs(2 * zen[0] + d.half() - (2 * columnLeft + d.side)) <= 1, "Zen Mode's button on the column's axis at " + at);
             // The canvas as big as with the bar at the foot: the screen less the column, the bar and the line.
@@ -335,7 +371,7 @@ public final class DrawLayoutChecks {
     static boolean overlap(int[] a, int[] b) { return a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]; }
     /** The column's items, rules, padding and stretch, added up, dp. */
     static int used(DrawLayout d) {
-        return 2 * DrawLayout.PAD + d.menuRow() + DrawLayout.TIMER + DrawLayout.total(d.heights(), d.trays) + d.spare;
+        return 2 * DrawLayout.PAD + d.menuRow() + DrawLayout.TIMER + d.layers + DrawLayout.total(d.heights(), d.trays) + d.spare;
     }
     static void fits() {
         for (int[] s : SCREENS) {
@@ -359,13 +395,14 @@ public final class DrawLayoutChecks {
         DrawLayout d = new DrawLayout(1024, 1365);
         check(!d.compact && d.fit == 1 && d.icon == 52 && d.slot == 34 && d.faceSide() == 26 && d.wet == 44,
                 "The Manta in portrait: every item at its preferred height (icons 52, tray rows 34, faces 26 square, small rows 44: room to breathe since 2026-10-28) (fit " + d.fit + ")");
-        // 175 before Shapes and Play's row (2026-10-30).
-        check(d.spare > 120, "and the room the tray and the pairs free is white space before the wet indicator, the ten slots, Zoom and Fun in too: " + d.spare + " dp");
+        // 175 before Shapes and Play's row (2026-10-30); the layer button's row (2026-11-06) takes its 66 from it.
+        check(d.spare + d.layers > 120 && d.spare > 50, "and the room the tray and the pairs free is white space before the wet indicator, the ten slots, Zoom and Fun in too: " + d.spare + " dp");
         // In landscape, since the Edit buttons and the page turner left the column (2026-10-19), at its preferred heights
         // too (with them: icons 48 dp, tray rows 28, faces 27 square).
         DrawLayout landscape = new DrawLayout(1365, 1024);
         // With the brush line under the column (2026-10-22) a little under them: icons 52 or more, tray rows 28, faces 27 square.
-        check(landscape.fit > .75 && landscape.spare >= 0 && landscape.icon >= 42 && landscape.slot >= 32 && landscape.faceSide() >= 25,
+        // The layer button's row (2026-11-06) takes its 66 dp from them: tray rows 30 (32 before).
+        check(landscape.fit > .75 && landscape.spare >= 0 && landscape.icon >= 42 && landscape.slot >= 30 && landscape.faceSide() >= 25,
                 "The Manta in landscape near its preferred heights (fit " + landscape.fit + ", icons " + landscape.icon + ", tray rows " + landscape.slot
                         + ", faces " + landscape.faceSide() + ", " + landscape.spare + " dp to spare)");
         int nomad = new DrawLayout(749, 998).faceSide(), nomadLandscape = new DrawLayout(998, 749).faceSide();
@@ -379,8 +416,9 @@ public final class DrawLayoutChecks {
      */
     static void tray() {
         int[] count = DrawLayout.count(DrawLayout.TRAY_ROWS);
-        check(ToolSlots.COUNT == 10 && DrawLayout.TRAY_ROWS == ToolSlots.COUNT && count[DrawLayout.Item.SLOT.ordinal()] == DrawLayout.TRAY_ROWS + DrawLayout.TOOL_ROWS && ToolSlots.TOOLS == ToolSlots.COUNT + 3,
-                "Ten tray rows, the slots', and the smudge tool's and the eraser's under them; the stamp tool off the column (the refocus, 2026-10-24)");
+        check(ToolSlots.COUNT == 9 && DrawLayout.TRAY_ROWS == ToolSlots.COUNT && DrawLayout.TOOL_ROWS == 3 && count[DrawLayout.Item.SLOT.ordinal()] == DrawLayout.TRAY_ROWS + DrawLayout.TOOL_ROWS && ToolSlots.TOOLS == ToolSlots.COUNT + 4,
+                "Nine tray rows, the slots', and Fill in's, the smudge tool's and the eraser's under them, twelve rows as with ten slots; the stamp tool off the column (the refocus, 2026-10-24)");
+        check(DrawLayout.greys(ToolSlots.FILL) && DrawLayout.greys(0) && !DrawLayout.greys(ToolSlots.SMUDGE) && !DrawLayout.greys(ToolSlots.ERASER), "Fill in has a grey, as a slot; the smudge tool and the eraser none");
         // The owner's drawings of the smudge tool and the eraser (2026-10-26; traced the same day): at most a Manta tray
         // row's stroke tall, so drawn 1:1 there.
         DrawLayout manta = new DrawLayout(1024, 1365);
@@ -483,27 +521,28 @@ public final class DrawLayoutChecks {
         // Layout v4 (the owner, 2026-10-26: "move undo redo eye drop lasso and recycle to below picker"): the block under the
         // dot, the slider and the strip, a gap either side of it.
         check(column.equals(java.util.Arrays.asList(DrawLayout.Part.MENU, DrawLayout.Part.GAP, DrawLayout.Part.TRAY, DrawLayout.Part.GAP, DrawLayout.Part.TOOLS,
-                        DrawLayout.Part.GAP, DrawLayout.Part.FACES, DrawLayout.Part.GAP, DrawLayout.Part.BLOCK, DrawLayout.Part.GAP,
+                        DrawLayout.Part.GAP, DrawLayout.Part.FACES, DrawLayout.Part.LAYERS, DrawLayout.Part.GAP, DrawLayout.Part.BLOCK, DrawLayout.Part.GAP,
                         DrawLayout.Part.TIMER, DrawLayout.Part.STRETCH, DrawLayout.Part.PLAY)),
-                "Top to bottom: Menu, the ten slots, the smudge tool and the eraser, the sizes and greys, the pickers and the Trash, the small rows, the countdown: " + column);
+                "Top to bottom: Menu, the nine slots, Fill in, the smudge tool and the eraser, the sizes and greys, the layer button (2026-11-06), the pickers, the wet indicator, the countdown: " + column);
         for (DrawLayout.Part part : DrawLayout.COLUMN) check(!part.name().startsWith("SWATCH"), "No swatches in the column: " + part);
         // The owner (2026-10-28): undo and redo, Shapes, Play and Refresh out, two rows freed; the sand timer beside the drop.
-        // The owner (2026-10-30): Shapes and Play back, a small row of their own.
-        check(DrawLayout.TOOL_ROWS == 2 && DrawLayout.BLOCK_ROWS == 2 && DrawLayout.PLAY_ROWS == 3 && DrawLayout.GRID_COLUMNS == 2,
-                "The rows past the tray: the smudge tool's and the eraser's; the Dropper and the Lasso, Refresh; Show Kinds and the sand timer, Shapes and Play, the drop");
+        // The owner (2026-10-30): Shapes and Play back, a small row of their own. The owner (2026-11-06): the sand timer, Show
+        // Kinds and Play to the menu, the drop the one small row.
+        check(DrawLayout.TOOL_ROWS == 3 && DrawLayout.BLOCK_ROWS == 2 && DrawLayout.PLAY_ROWS == 1 && DrawLayout.GRID_COLUMNS == 2,
+                "The rows past the tray: Fill in's (2026-11-06), the smudge tool's and the eraser's; the Dropper and the Lasso, Refresh; the drop");
         // The countdown at the top (the owner, 2026-10-21): its row kept on every screen, its widest words inside the column.
         check(DrawLayout.TIMER >= 20 && TypeStyle.LABEL.sp >= 12, "The countdown's row 20 dp or more, its words 12 sp or more");
         for (int[] s : SCREENS) {
             double wide = LabText.width(DrawLayout.WIDEST_COUNTDOWN, TypeStyle.LABEL.sp, TypeStyle.LABEL.tracking);
             check(wide <= new DrawLayout(s[0], s[1]).inner, "\"60:00\" fits the column at " + s[0] + "x" + s[1] + ": " + wide + " dp");
-            // The sand timer a small row's cell beside the wet indicator (2026-10-28), two cells in the column's inside.
+            // The wet indicator a small row's cell, two cells in the column's inside.
             DrawLayout d = new DrawLayout(s[0], s[1]);
-            check(DrawLayout.GRID_COLUMNS * d.half() <= d.inner && d.wet >= 28, "The sand timer's " + d.half() + " x " + d.wet + " dp beside the wet indicator at " + s[0] + "x" + s[1]);
+            check(DrawLayout.GRID_COLUMNS * d.half() <= d.inner && d.wet >= 28, "The wet indicator's " + d.half() + " x " + d.wet + " dp at " + s[0] + "x" + s[1]);
         }
         // The owner (2026-10-22): "the menu on top should be phosphor list and not have a line underneath".
         check(column.subList(0, tray).equals(java.util.Arrays.asList(DrawLayout.Part.MENU, DrawLayout.Part.GAP))
                 && column.subList(column.indexOf(DrawLayout.Part.TIMER), column.size()).equals(java.util.Arrays.asList(DrawLayout.Part.TIMER, DrawLayout.Part.STRETCH, DrawLayout.Part.PLAY)),
-                "Menu alone over the tray (no Brush Lab, no Zoom: 2026-10-21), white space under the countdown (no layers since the refocus, 2026-10-24), Refresh at the foot (2026-10-29)");
+                "Menu alone over the tray (no Brush Lab, no Zoom: 2026-10-21), white space under the countdown (no layers since the refocus, 2026-10-24; the layer button under the picker box, 2026-11-06), Refresh at the foot (2026-10-29)");
         for (int[] s : SCREENS) {
             DrawLayout d = new DrawLayout(s[0], s[1]);
             int apart = d.ghostMargin() + (d.icon - DrawLayout.ZEN_ICON) / 2 + (d.zenHeight() - DrawLayout.ZEN_ICON) / 2;
@@ -664,62 +703,108 @@ public final class DrawLayoutChecks {
      * at most. A slot's long press opens it (a dirty one's Tools too); a tap on the selected slot still does nothing.
      */
     static void picker() {
+        // The owner's list (2026-11-06): a row for every shown tool, once, each a drawing in res or null (its stroke).
+        // Then the bar's own tools out of the picker since 2026-11-06, Fill in and the smudge tool's Water, keeping their drawings.
         java.util.Set<String> seen = new java.util.HashSet<>();
+        java.util.List<String> bars = java.util.Arrays.asList(ToolSlots.FILL_TOOL, "Water");
         for (String[] tool : DrawLayout.PICKER) {
             check(seen.add(tool[0]), "Listed once: " + tool[0]);
-            check(ToolKits.preset(tool[0]) != null, "A Basic tool: " + tool[0]);
+            check(java.util.Arrays.asList(ToolPresets.SHOWN).contains(tool[0]) != bars.contains(tool[0]), "A shown tool or the bar's own: " + tool[0]);
             if (tool[1] != null) drawn(tool[1], 116);
+            check(java.util.Objects.equals(tool[1], DrawLayout.drawing(ToolPresets.named(tool[0]).brush())), tool[0] + " shows " + tool[1]);
         }
+        check(seen.size() == ToolPresets.SHOWN.length + bars.size() && seen.containsAll(bars), "Every shown tool has its row, and Fill in and Water theirs: " + seen.size());
+        check(!ToolPresets.shown().contains(ToolKits.preset("Fill in")) && !ToolPresets.shown().contains(ToolKits.preset("Water")), "Fill in and Water out of the picker (the bar's own)");
         check(!seen.contains(DrawLayout.SHAPES), "Shapes is on the side bar, not in the picker");
-        // Grouped by kind (2026-10-27); the owner's pens, Cover hake and Stamp in, Sumi and Comb out (2026-10-28).
-        check(seen.equals(new java.util.HashSet<>(java.util.Arrays.asList("Steady line", "Ballpoint", "Cheap ballpoint", "Gel pen", "Fountain pen",
-                "Smooth fountain", "Split nib", "Fude pen", "Stipple pen", "Engraving pen", "Felt marker", "Chisel marker", "Permanent marker",
-                "Acrylic paint marker", "Ms. Sketch", "Highlighter", "Springy brush", "Swell brush", "Ink wash brush", "Flat hake", "Cover hake",
-                "Water brush", "Soft wash", "Wet blooms", "Pooling wash", "Masking fluid", "Wax resist", "HB pencil", "Soft charcoal",
-                "Soft pastel", "Wax crayon", "Loaded oils", "Spirograph", "Stamp", "Fill in", "Filled shape", "Dot tone", "Ben-Day brush", "Lemon juice",
-                "Vanishing ink"))) && DrawLayout.PICKER.length == 40, "The grouped picker keeps its tools: " + seen);
-        check(DrawLayout.PICKER[0][0].equals("Steady line") && DrawLayout.PICKER[10][0].equals("Felt marker") && DrawLayout.PICKER[16][0].equals("Springy brush")
-                && DrawLayout.PICKER[27][0].equals("HB pencil"), "Pens first, then markers, brushes; dry media after the washes");
-        // Sumi and Comb, off the picker, keep their drawings on their slots and the Tools page.
-        for (String[] tool : DrawLayout.DRAWN) {
-            drawn(tool[1], 116);
-            check(!seen.contains(tool[0]) && tool[1].equals(DrawLayout.drawing(ToolKits.preset(tool[0]).brush())), tool[0] + " keeps its drawing off the picker");
-        }
+        // The release pare-down (2026-11-05): the picker shows the shown tools; grouped by kind since 2026-11-06 (pickerGroups).
+        java.util.List<ToolPresets.Preset> cells = new DrawLayout.Picker(null, false).tools;
+        check(cells.size() == ToolPresets.shown().size() && cells.containsAll(ToolPresets.shown()), "The picker shows the release's list: " + cells.size());
+        pickerGroups();
+        // Sumi and Comb, shelf tools, show their strokes (Comb's drawing is Big sky's since 2026-11-06).
+        for (String name : new String[]{"Sumi", "Comb", "Fude pen"}) check(DrawLayout.drawing(ToolKits.preset(name).brush()) == null, name + " on the shelf shows its stroke");
+        // A slot still holding the Water brush (retired 2026-10-31) shows its drawing, Water's.
+        check(DrawLayout.drawing(FloatChecks.find("Water brush").brush()) == null, "The retired Water brush shows its stroke: its drawing is Water's now");
         // Ms. Sketch was Mr. Sketch: a brush kept under the old name still comes from it.
         Brush sketch = ToolKits.preset("Ms. Sketch").brush();
         check(ToolPresets.origin(Brush.read("Mr. Sketch\t" + sketch.write().split("\t")[1])) == ToolKits.preset("Ms. Sketch")
                 && DrawLayout.edited(Brush.read("Mr. Sketch\t" + sketch.write().split("\t")[1])) == null, "Mr. Sketch, kept, is Ms. Sketch unchanged");
+        // Renamed 2026-11-06, their codes and seeds kept: a slot holding one under its old name still comes from it.
+        for (String[] renamed : new String[][]{{"Cracks", "Cracking paint"}, {"Big sky", "Flat brush"}, {"Backrun", "Watercolour backrun"}}) {
+            Brush kept = Brush.read(renamed[0] + "\t" + ToolKits.preset(renamed[1]).brush().write().split("\t")[1]);
+            check(ToolPresets.origin(kept) == ToolKits.preset(renamed[1]) && DrawLayout.edited(kept) == null, renamed[0] + ", kept, is " + renamed[1] + " unchanged");
+        }
+        // Watercolour washy, the bar's, shows as Watercolour wash (2026-11-06), its code kept: a slot holding it under the old
+        // name keeps its drawing and offers no reset; changed, it resets to the bar's own.
+        int wash = java.util.Arrays.asList(ToolSlotsChecks.NAMES).indexOf("Watercolour wash");
+        Brush washy = Brush.read("Watercolour washy\t" + ToolSlots.FIRST[wash][2]);
+        check(ToolSlots.first(wash).name().equals("Watercolour wash") && "tip_soft_wash".equals(DrawLayout.drawing(washy)) && DrawLayout.edited(washy) == null
+                && "tip_soft_wash".equals(DrawLayout.drawing(ToolSlots.first(wash))) && DrawLayout.drawing(Brush.read("Watercolour washy 2\t" + ToolSlots.FIRST[wash][2])) == null,
+                "Watercolour washy, kept, is Watercolour wash: its drawing, no reset; a copy its stroke");
+        ModularBrush tunedWashy = washy.parts.copy(); tunedWashy.part(BrushPart.TIP).set(PartDial.WEIGHT, 1.3);
+        ToolPresets.Preset back = DrawLayout.edited(Brush.of(tunedWashy));
+        check(back != null && back.brush().sameAs(ToolSlots.first(wash)), "Watercolour washy changed resets to Watercolour wash");
         check(DrawLayout.RESET.equals("Reset to Default"), "Reset to Default, Title Case");
         reset();
         shapes();
-        for (String label : new String[]{DrawLayout.BRUSH_LAB, DrawLayout.ADVANCED, DrawLayout.TOOLS_FIRST}) {
-            check(label.split(" ").length <= 2, label + ": two words at most");
+        // The foot's buttons two words, Reset to Default a full row's three; the checkbox the owner's own four ("hold opens full
+        // library", 2026-11-06).
+        for (String label : new String[]{DrawLayout.BRUSH_LAB, DrawLayout.ADVANCED, DrawLayout.STUDIO, DrawLayout.TOOLS_FIRST, DrawLayout.RESET}) {
+            check(label.split(" ").length <= (label.equals(DrawLayout.RESET) ? 3 : label.equals(DrawLayout.TOOLS_FIRST) ? 4 : 2), label + ": two words at most, a full row three");
+            if (label.equals(DrawLayout.RESET)) continue;
             for (String w : label.split(" ")) check(Character.isUpperCase(w.charAt(0)), label + ": Title Case");
         }
+        // The foot one row on every tablet (2026-11-06): the browser's four (the app's three since Brush Studio's link went) in menu words, FOOT_PAD in each, the checkbox's 18 dp square
+        // and its 8 dp gap, within the picker's width (its fine edge aside), as wide on every screen (four columns).
+        float foot = 18 + 8;
+        for (String label : new String[]{DrawLayout.BRUSH_LAB, DrawLayout.ADVANCED, DrawLayout.TOOLS_FIRST, DrawLayout.STUDIO})
+            foot += LabText.width(label, TypeStyle.MENU.sp, DrawLayout.PICKER_SPACING) + 2 * DrawLayout.FOOT_PAD;
+        check(foot <= DrawLayout.PICKER_COLUMNS * DrawLayout.pickerCellWidth(), "The picker's foot fits one row: " + foot + " dp of " + DrawLayout.PICKER_COLUMNS * DrawLayout.pickerCellWidth());
+        check(DrawLayout.STUDIO_LINK.equals("https://superdood.org/studio/") && DrawLayout.NO_BROWSER.equals("No browser"), "Brush Studio's link, and its note without a browser");
         for (int[] s : SCREENS) {
             DrawLayout d = new DrawLayout(s[0], s[1]);
-            int columns = DrawLayout.pickerColumns(s[1]);
-            check(columns >= 3 && DrawLayout.pickerHeight(columns) <= s[1] - 2 * DrawLayout.PAD, "The picker fits the height at " + s[0] + "x" + s[1] + ": " + columns + " columns");
+            // Four wide (the owner, 2026-11-06: "make it four wide"), on every tablet either way up; it fits the Manta's height
+            // upright, the drawings smaller (pickerTip, 27 dp); the rest scroll at full size. Since the texture tools (2026-11-06,
+            // Print five rows) the Manta turned and the Nomad upright scroll too: they fit until then, at 18 dp. Since the
+            // library round (2026-11-06: ten textures back on the shelf, the foot one row) they fit again: the Manta upright at
+            // full size, turned at 19 dp, the Nomad upright at 18; the Nomad turned scrolls.
+            int columns = DrawLayout.pickerColumns(s[0] - d.side), tip = DrawLayout.pickerTip(columns, s[1]);
+            boolean fits = !(s[0] == 998 && s[1] == 749);
+            check(columns == 4 && (!fits || DrawLayout.pickerHeight(columns, tip) <= s[1] - 2 * DrawLayout.PAD), "The picker four wide, fitting the height at " + s[0] + "x" + s[1] + ": drawings " + tip + " dp");
+            check(tip == DrawLayout.PICKER_TIP || tip >= DrawLayout.PICKER_TIP_LEAST && fits, "Drawings full size unless smaller ones fit: " + tip);
             check(columns * DrawLayout.pickerCellWidth() + 2 <= s[0] - d.side, "The picker fits beside the column at " + s[0] + "x" + s[1]);
+            check(DrawLayout.pickerCellHeight(tip) >= 26, "No picker target under 26 dp");
         }
-        check(DrawLayout.pickerCellHeight() >= 26, "No picker target under 26 dp");
         for (int slot = 0; slot < ToolSlots.COUNT; slot++) check(DrawLayout.tap(slot, slot) == DrawLayout.Tap.NOTHING, "A tap on the selected slot still does nothing");
         try {
             String bar = source("InkWashBar"), app = source("PaintActivity");
-            check(bar.contains("cleanMenu(tool); else app.toolPicker(tool, v);") && bar.contains("if (choice == 1) app.toolPicker(slot, tools[slot]);") && !bar.contains("app.openTools("),
+            check(bar.contains("cleanMenu(tool); else app.toolPicker(tool, anchor(tool));") && bar.contains("if (choice == 1) app.toolPicker(slot, anchor(slot));") && !bar.contains("app.openTools("),
                     "A slot's long press opens the picker, a dirty one's Tools too; the bar opens the Tools page nowhere else");
-            check(app.contains("Runnable[] acts = {() -> openBrushLab(slot), () -> openTools(slot)};"), "Brush Lab and Advanced act on the slot");
-            // Tools First (the owner, 2026-10-28): one app-wide preference, off at first; on, the long press (a dirty slot's
-            // Tools too, both through toolPicker) opens the Tools page on the slot instead; switched in the picker and on the page.
+            // Brush Studio no longer opens the tablet's browser (2026-11-06, the owner: "it shouldn't be a browser, it should be
+            // the local app version"): Edit Brush is the app's own; Brush Lab's Open sheet shares a brush to the web one.
+            check(app.contains("Runnable[] acts = {() -> openBrushLab(slot), () -> openTools(slot)};") && !app.contains("DrawLayout.STUDIO") && DrawLayout.BRUSH_LAB.equals("Edit Brush"),
+                    "Edit Brush (Brush Lab) and Full Library act on the slot; no Brush Studio in the app's foot");
+            String labPage = source("BrushLabActivity");
+            check(labPage.contains("new LabButton(this, R.drawable.ic_ph_export, DrawLayout.STUDIO, false);") && labPage.contains("studio.setContentDescription(LabLayout.TO_STUDIO);")
+                    && labPage.contains("new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DrawLayout.STUDIO_LINK + \"#\" + android.net.Uri.encode(lab.code())))")
+                    && labPage.contains("catch (android.content.ActivityNotFoundException error) { say(DrawLayout.NO_BROWSER); }") && LabLayout.TO_STUDIO.equals("Share to Brush Studio"),
+                    "Brush Lab's Open sheet: Brush Studio (said Share to Brush Studio) opens this brush's code after the link's #, in the browser, else No browser");
+            // Tools First (the owner, 2026-10-28; Hold Opens Library since 2026-11-06): one app-wide preference, off at first; on, the long press (a dirty slot's
+            // Tools too, both through toolPicker) opens the Tools page on the slot instead; switched in the picker's foot
+            // (on the Tools page always until 2026-11-03, the owner: "also the tools first selector.. huh"); while it is on the
+            // picker never opens, so the Tools page's bar shows it then, the one way to turn it off.
             String prefs = source("PaintPreferences"), tools = source("ToolsActivity");
             check(prefs.contains("boolean toolsFirst() { return flag(TOOLS_FIRST, false); }") && prefs.contains("TOOLS_FIRST = \"tools_first\""), "Tools First is off at first, kept with the app's preferences");
             check(app.contains("void toolPicker(int slot, View anchor) {\n        if (prefs.toolsFirst()) { openTools(slot); return; }"), "With Tools First on, a slot's long press opens the Tools page, not the picker");
-            check(app.contains("first.setText(DrawLayout.TOOLS_FIRST)") && app.contains("prefs.setToolsFirst(on);") && app.contains("rows.addView(first,")
-                    && tools.contains("chip(DrawLayout.TOOLS_FIRST, prefs.toolsFirst())") && tools.contains("prefs.setToolsFirst(on);"), "Tools First switched in the picker's foot and on the Tools page");
-            check(app.contains("ToolPresets.Preset original = DrawLayout.edited(held);") && app.contains("pickBrush(slot, original.brush())"),
+            // A checkbox saying what it does since 2026-11-06 (Brush Lab's As New's box, LabButton.ticked).
+            check(DrawLayout.TOOLS_FIRST.equals("Hold Opens Full Library") && DrawLayout.ADVANCED.equals("Full Library"), "Hold Opens Full Library names the picker's Full Library, the page a hold opens");
+            check(app.contains("new LabButton(this, 0, DrawLayout.TOOLS_FIRST, false).menu().ticked(false);") && app.contains("prefs.setToolsFirst(on);") && app.contains("first.ticked(on);") && app.contains("last.addView(first, 2,")
+                    && tools.contains("if (prefs.toolsFirst()) {\n            LabButton first = new LabButton(this, 0, DrawLayout.TOOLS_FIRST, false).ticked(true);") && tools.contains("prefs.setToolsFirst(on);")
+                    && source("BrushLabActivity").contains("new LabButton(this, 0, LabLayout.AS_NEW, false).ticked(asNew);"),
+                    "Hold Opens Full Library ticked in the picker's foot, its one row; on the Tools page only while ticked (the picker skipped); As New's box");
+            check(app.contains("ToolPresets.Preset original = picker.reset;") && app.contains("pickBrush(slot, original.brush())"),
                     "Reset to Default shows for an edited Basic tool and puts it back with the slot's pick (an Undo step)");
             String picker = app.substring(app.indexOf("void toolPicker(int slot, View anchor) {"));
-            check(picker.indexOf("reset.setText(DrawLayout.RESET)") < picker.indexOf("for (String[] tool : DrawLayout.PICKER)"),
+            check(picker.indexOf("reset.setText(DrawLayout.RESET)") < picker.indexOf("for (int t = 0; t < picker.tools.size(); t++)"),
                     "Reset to Default is the picker's top row (the owner, 2026-10-28)");
             stamp(picker, bar);
         } catch (java.io.IOException e) { throw new AssertionError("the sources: " + e); }
@@ -732,18 +817,75 @@ public final class DrawLayoutChecks {
      */
     static void stamp(String picker, String bar) {
         ToolPresets.Preset stamp = ToolKits.preset("Stamp");
-        check(stamp != null && stamp.brush().parts.stamps() && ToolsPage.Chip.of(stamp.style) == ToolsPage.Chip.PENS, "Stamp is a Basic tool, a Stamp, under Pens");
+        check(stamp != null && stamp.brush().parts.stamps() && ToolsPage.Chip.of(stamp.brush().parts) == ToolsPage.Chip.ODD_ONES, "Stamp is a Basic tool, a Stamp, under Odd Ones");
         check(ModularCode.encode(stamp.brush().parts).equals(ModularCode.encode(ToolSlots.firstStamp().parts.copy(stamp.brush().parts.seed))),
                 "The Stamp is the stamp tool's first brush, at its own seed");
         check(DrawLayout.edited(ToolSlots.first(0)) == null && !"tip_stamp".equals(DrawLayout.drawing(ToolSlots.first(0))), "The first slot's Fineliner is no edited Stamp (another seed)");
         check(DrawLayout.STAMP_MENU.equals("Stamp ▾"), "The picker's stamp row");
-        check(picker.contains("if (held != null && held.parts.stamps()) {") && picker.contains("inkWashBar.stampMenu(slot); });"), "A Stamp's picker offers its stamp menu, on that slot");
+        check(picker.contains("if (picker.stamp) {") && picker.contains("inkWashBar.stampMenu(slot); });"), "A Stamp's picker offers its stamp menu, on that slot");
         check(bar.contains("void stampMenu(int slot) {\n        View owner = tools[slot];") && bar.contains("Brush brush = app.inkWash.slots.brush(slot);")
-                && bar.contains("app.cutStamp(slot); });") && bar.contains("ModularBrush b = app.inkWash.slots.brush(slot).parts.copy();")
-                && bar.contains("if (!app.inkWash.slots.use(slot, Brush.of(b))) return;") && !bar.contains("void stamp() {"),
+                && bar.contains("app.cutStamp(slot); });") && bar.contains("for (DrawLayout.StampRow row : DrawLayout.stampRows(brush)) stampRow(content, slot, row);")
+                && bar.contains("if (!app.inkWash.slots.use(slot, DrawLayout.stamped(app.inkWash.slots.brush(slot), dial, value))) return;") && !bar.contains("void stamp() {"),
                 "The stamp menu acts on the slot's brush: its card, Cut Stamp and its rows; the stamp tool's own path is gone");
     }
     /** Reset to Default (2026-10-27): offered only for a Basic tool whose settings changed, never an unchanged one or a brush of its own. */
+    /**
+     * The picker's order (the owner, 2026-11-06: "in the tray, group alphabetically but divide by type"): the Tools page's
+     * kinds in the chips' order, each kind by name, every shown tool once; a line before each kind but the first.
+     */
+    static void pickerGroups() {
+        java.util.List<String> order = new java.util.ArrayList<>();
+        int last = -1;
+        for (java.util.List<ToolPresets.Preset> group : DrawLayout.pickerGroups()) {
+            ToolsPage.Chip kind = ToolsPage.Chip.of(group.get(0));
+            check(kind.kind() && kind.ordinal() > last, "The kinds in the chips' order: " + kind);
+            last = kind.ordinal();
+            for (int i = 0; i < group.size(); i++) {
+                check(ToolsPage.Chip.of(group.get(i)) == kind, group.get(i).name + " under " + kind);
+                check(i == 0 || group.get(i - 1).shownName().compareToIgnoreCase(group.get(i).shownName()) < 0, kind + " by name: " + group.get(i).shownName());
+                order.add(group.get(i).name);
+            }
+        }
+        check(order.size() == ToolPresets.shown().size() && new java.util.HashSet<>(order).size() == order.size(), "Every shown tool once: " + order.size());
+        DrawLayout.Picker p = new DrawLayout.Picker(null, false);
+        int lines = 0;
+        for (int i = 0; i < p.tools.size(); i++) {
+            check(p.tools.get(i).name.equals(order.get(i)), "The picker in the groups' order: " + p.tools.get(i).name);
+            if (p.divided.get(i)) lines++;
+        }
+        check(!p.divided.get(0) && lines == DrawLayout.pickerGroups().size() - 1, "A line between kinds: " + lines);
+        // Fixed points of today's list: Pens first, alphabetical (Cheap ballpoint before Steady line).
+        check(order.indexOf("Cheap ballpoint") < order.indexOf("Steady line") && ToolsPage.Chip.of(DrawLayout.pickerGroups().get(0).get(0)) == ToolsPage.Chip.PENS,
+                "Pens first, by name");
+        // Effects last (the owner, 2026-11-06: "effect brushes should move to their own section"): the tools that rework
+        // the marks there, each named "… Effect"; Cracks with the paints ("cracks... it's more of a paint").
+        java.util.List<java.util.List<ToolPresets.Preset>> groups = DrawLayout.pickerGroups();
+        java.util.List<String> effects = new java.util.ArrayList<>();
+        for (ToolPresets.Preset e : groups.get(groups.size() - 1)) effects.add(e.name);
+        check(ToolsPage.Chip.of(groups.get(groups.size() - 1).get(0)) == ToolsPage.Chip.EFFECTS
+                && effects.equals(java.util.Arrays.asList("Newsprint", "Photocopier")), "Effects last (Water, Blend and Blur the smudge tool's alone since 2026-11-06): " + effects);
+        for (ToolPresets.Preset t : ToolPresets.shown()) check(effects.contains(t.name) == t.shownName().endsWith(" Effect"), t.shownName() + ": Effects holds the Effect tools alone");
+        check(ToolsPage.Chip.of(ToolKits.preset("Cracking paint")) == ToolsPage.Chip.PAINT, "Cracking paint with the paints");
+        check(ToolsPage.Chip.of(ToolKits.preset("Opaque flat")) == ToolsPage.Chip.PAINT && DrawLayout.drawn("Opaque flat").equals("tip_loaded_oils"), "Opaque flat with the oils, and their drawing");
+        System.out.println("PASS: the tool picker's kinds: " + order);
+    }
+    /** The picker's rows as PaintActivity and the browser draw them (DrawLayout.Picker), and the long press's timing. */
+    static void pickerRows() {
+        ToolPresets.Preset wax = ToolKits.preset("Wax crayon");
+        DrawLayout.Picker p = new DrawLayout.Picker(wax.brush(), false);
+        check(p.tools.size() == ToolPresets.shown().size() && p.reset == null && !p.stamp, "Every shown tool a cell, no reset for an unchanged one");
+        int marked = 0;
+        for (int i = 0; i < p.tools.size(); i++) { check(java.util.Objects.equals(p.drawings.get(i), DrawLayout.drawing(p.tools.get(i).brush())), "Its drawing, its own: " + p.tools.get(i).name); if (p.marked.get(i)) marked++; }
+        check(marked == 1 && p.marked.get(p.tools.indexOf(wax)), "The slot's tool marked, alone");
+        check(!new DrawLayout.Picker(wax.brush(), true).marked.contains(true), "Shapes up on the slot: nothing marked");
+        ModularBrush changed = wax.brush().parts.copy(); changed.part(BrushPart.TIP).set(PartDial.WEIGHT, 1.3);
+        check(new DrawLayout.Picker(Brush.of(changed), false).reset == wax, "An edited Basic tool offers its reset");
+        check(new DrawLayout.Picker(ToolKits.preset("Stamp").brush(), false).stamp, "A Stamp has its menu row");
+        check(DrawLayout.LONG_PRESS_MS == 500 && DrawLayout.LONG_PRESS_SLOP == 8, "The long press is Android 11's: 500 ms, 8 dp");
+        check(DrawLayout.pickerColumns(1024) == DrawLayout.PICKER_COLUMNS && DrawLayout.pickerColumns(390) * DrawLayout.pickerCellWidth() <= 390
+                        && DrawLayout.pickerTip(DrawLayout.pickerColumns(390), 844) == DrawLayout.PICKER_TIP,
+                "The picker's columns as the Manta's, no more than fit a phone's width (full-size drawings, scrolling)");
+    }
     static void reset() {
         ToolPresets.Preset wax = ToolKits.preset("Wax crayon");
         ModularBrush changed = wax.brush().parts.copy(); changed.part(BrushPart.TIP).set(PartDial.WEIGHT, 1.3); Brush edited = Brush.of(changed);
@@ -771,24 +913,33 @@ public final class DrawLayoutChecks {
      */
     static void slotDrawings() {
         for (String[] tool : DrawLayout.PICKER) {
-            Brush brush = ToolKits.preset(tool[0]).brush();
+            Brush brush = ToolPresets.named(tool[0]).brush();
             check(java.util.Objects.equals(tool[1], DrawLayout.drawing(brush)), tool[0] + "'s slot shows its picker drawing, or its stroke: " + DrawLayout.drawing(brush));
         }
         // The owner's Manta, 2026-10-26: three slots showed strokes. Saved copies the library numbered, Brush Lab's dials changed.
         String[][] manta = {
-                {"Sketch pencil\tsketch-pencil.M40i000000000at_47q00_0_000_1jz_25ess00000000000000nz000000000530000005000c099zz.inw", "tip_hb_pencil"},
-                {"Wax crayon 3\twax-crayon.Ma0p600000000at_7zz0_0_ci0_0_0000000000000000000nz0.2f9", "tip_wax_crayon"},
-                {"Ben-Day brush 2\tben-day-brush.Me0ij00000000ll_0i0000000000000000zz265ji000at_0_000_0_25ess00000000000000nz0.2ef", "tip_ben_day"},
+                {"Sketch pencil\tsketch-pencil.M40i000000000at_47q00_0_000_1jz_25ess00000000000000nz000000000530000005000c099zz.inw", null},
+                // 2026-11-01 (the owner: "only limited in house designed tools should have art"): copies show their strokes.
+                {"Wax crayon 3\twax-crayon.Ma0p600000000at_7zz0_0_ci0_0_0000000000000000000nz0.2f9", null},
+                {"Ben-Day brush 2\tben-day-brush.Me0ij00000000ll_0i0000000000000000zz265ji000at_0_000_0_25ess00000000000000nz0.2ef", null},
                 // 2026-10-28: the owner's slot 1, named in lower case, showed none.
                 {"another pencil\t" + ToolSlots.FIRST[0][2], "tip_hb_pencil"},
                 {ToolSlots.first(0).write(), "tip_hb_pencil"}};
-        for (String[] m : manta) check(m[1].equals(DrawLayout.drawing(Brush.read(m[0]))), m[0].split("\t")[0] + " shows " + m[1] + ": " + DrawLayout.drawing(Brush.read(m[0])));
+        for (String[] m : manta) check(java.util.Objects.equals(m[1], DrawLayout.drawing(Brush.read(m[0]))), m[0].split("\t")[0] + " shows " + m[1] + ": " + DrawLayout.drawing(Brush.read(m[0])));
         check(DrawLayout.edited(Brush.read("another pencil\t" + ToolSlots.FIRST[0][2])) == null && DrawLayout.edited(ToolSlots.first(0)) == null,
                 "The owner's pencil is the Basic tool Another pencil: no Reset to Default");
         String wax = ToolKits.preset("Wax crayon").brush().write().split("\t")[1];
-        check("tip_wax_crayon".equals(DrawLayout.drawing(Brush.read("Crayon for skies\t" + wax))), "A renamed Wax crayon keeps its drawing (its style and seed)");
+        check(DrawLayout.drawing(Brush.read("Crayon for skies\t" + wax)) == null, "A renamed Wax crayon shows its stroke: only the tool as it is has its drawing");
         check(DrawLayout.drawing(Brush.read("sloppy-waxy-drag\t" + wax.replaceAll("\\.[0-9a-z]+$", ".1zzzzz"))) == null, "A Brush Lab brush of its own (another seed and name) keeps its stroke");
-        check("tip_hb_pencil".equals(DrawLayout.drawing(ToolKits.preset("Sketch pencil").brush())), "Sketch pencil, not drawn, shows Pencil's one drawing");
+        check(DrawLayout.drawing(ToolKits.preset("Sketch pencil").brush()) == null, "Sketch pencil, not drawn, shows its stroke: no borrowing (2026-11-01)");
+        for (int i = 0; i < ToolSlots.FIRST.length; i++) {
+            String d = DrawLayout.drawn(ToolSlots.FIRST[i][1]);
+            check(d != null && d.equals(DrawLayout.drawing(ToolSlots.first(i))), ToolSlots.FIRST[i][1] + ", on the default bar, shows " + d);
+        }
+        // Shared since the owner's list (2026-11-06): a drawing only on shown tools; a shelf tool shows its stroke.
+        for (ToolPresets.Preset p : ToolPresets.shelf()) check(DrawLayout.drawing(p.brush()) == null, p.name + " on the shelf shows its stroke");
+        for (String[] taken : new String[][]{{"HB pencil", "Another pencil"}, {"Felt marker", "Verve felt"}})
+            check(DrawLayout.drawing(ToolKits.preset(taken[0]).brush()) == null, taken[0] + "'s drawing is " + taken[1] + "'s now");
         check(DrawLayout.drawing(ToolKits.preset("Mold ink").brush()) == null, "Mold ink, not drawn, Ink wash's drawings two, keeps its stroke");
         check(DrawLayout.drawing(null) == null, "No brush, no drawing");
         check(DrawLayout.TIP_TRIM > 0 && DrawLayout.TIP_TRIM < .25f, "The row's edge cuts only the handle's end");
@@ -796,8 +947,9 @@ public final class DrawLayoutChecks {
     /**
      * Shapes (the owner, 2026-10-26: "yes shapes, lets bring them back"): its words Title Case, one word each, said
      * "Rectangle" or "Filled oval" (a line never filled); its outline the slot's size in whole pixels, 1 to 128; the
-     * column's Shapes button (again since 2026-10-30; Play's row from 2026-10-28) opens its menu beside it and has the side
-     * bar while on, in place of the slot's; a pick takes it up on the slot, and any tool chosen puts it down.
+     * Play's Shapes row (since the release pare-down, 2026-11-05; the column's button from 2026-10-30) opens its menu
+     * beside Play, which has the side bar while on, in place of the slot's; a pick takes it up on the slot, and any tool
+     * chosen puts it down.
      */
     static void shapes() {
         for (String label : new String[]{DrawLayout.SHAPES, DrawLayout.FILLED}) check(label.split(" ").length == 1 && Character.isUpperCase(label.charAt(0)), label + ": one Title Case word");
@@ -809,14 +961,14 @@ public final class DrawLayoutChecks {
         try {
             String bar = source("InkWashBar"), app = source("PaintActivity"), pad = source("DrawingPad"), ink = source("InkWash");
             check(new java.io.File("app/src/main/res/drawable/ic_ph_shapes.xml").isFile(), "Shapes has its icon");
-            check(bar.contains("app.shapesMenu(app.inkWash.selected < ToolSlots.COUNT ? app.inkWash.selected : 0, shapes);")
-                    && app.contains("pad.shapes = shapes; pad.shapesOn = true;\n        inkWashBar.lassoChanged();") && bar.contains("shapes.mark(shaping);"),
-                    "Shapes' button opens its menu beside it, its side bar while on; a pick takes Shapes up");
-            check(bar.contains("tools[app.inkWash.selected].mark(!on && !dropping && !shaping);"), "The slot gives its mark to Shapes while Shapes draws with it");
+            check(app.contains("int slot = inkWash.selected < ToolSlots.COUNT ? inkWash.selected : 0;") && app.contains("actions[i] = () -> shapesMenu(slot, anchor);")
+                    && app.contains("pad.shapes = shapes; pad.shapesOn = true;\n        inkWashBar.lassoChanged();"),
+                    "Play's Shapes opens its menu beside Play's; a pick takes Shapes up (the menu's Play row marked while on, 2026-11-06)");
+            check(bar.contains("tools[app.inkWash.selected].mark(!on && !dropping && !shaping);"), "The slot gives its mark to Play's Shapes while Shapes draws with it");
             check(bar.contains("if (app.pad.lassoOn || app.pad.dropperOn || app.pad.shapesOn) { app.pad.shapesOn = false;")
                     && bar.contains("if (app.pad != null && (app.pad.lassoOn || app.pad.dropperOn || app.pad.shapesOn)) { app.pad.shapesOn = false;"), "Any tool chosen puts Shapes down");
-            check(pad.contains("ToolSwatches.Look look = app.inkWash.shape(document);") && pad.contains("beginShape(DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness));")
-                    && ink.contains("ModularStroke.selectLayer(document, brush.parts);"), "A shape lays the slot's grey at its size, on its layer");
+            check(pad.contains("ToolSwatches.Look look = app.inkWash.shape(document);") && pad.contains("beginShape(DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness), samplePoint[0], samplePoint[1]);")
+                    && ink.contains("StrokeStart.shape(document, brush.parts, session);") && source("StrokeStart").contains("ModularStroke.selectLayer(document, parts);"), "A shape lays the slot's grey at its size, on its layer");
         } catch (java.io.IOException e) { throw new AssertionError("the sources: " + e); }
     }
     /** A picker box drawable's numbers, in order (its viewport's dp: 56 x 176). */
@@ -843,11 +995,58 @@ public final class DrawLayoutChecks {
                 "The small rows, no rule");
         try {
             String bar = source("InkWashBar"), app = source("PaintActivity"), wet = source("WetIndicator");
-            check(!app.contains("names.add(DrawLayout.PLAY)") && bar.contains("R.drawable.ic_ph_confetti") && !bar.contains("ic_ph_magnet") && !bar.contains("ic_ph_flip_horizontal")
+            check(!app.contains("names.add(DrawLayout.PLAY)") && !bar.contains("R.drawable.ic_ph_confetti") && !bar.contains("ic_ph_magnet") && !bar.contains("ic_ph_flip_horizontal")
                             && !bar.contains("stampRow.addView") && !bar.contains("LayerColumn"),
-                    "Play (Phosphor confetti) the column's button again (2026-10-30), no menu row; no Magnetic Poetry, Mirrors, stamp tool or layers buttons in the column");
-            check(app.contains("zen ? R.drawable.ic_ph_circle : R.drawable.ic_ph_circle_dashed") && app.contains("DrawLayout.ZEN, R.drawable.ic_ph_circle_dashed"), "Zen Mode: the dashed circle while off, the circle while on (2026-10-29)");
-            check(wet.contains("shown == State.DRY ? R.drawable.ic_drop_dashed") && !wet.contains("DashPathEffect"),
+                    "Play (Phosphor confetti) the menu's row (2026-11-06; the column's button from 2026-10-30); no Magnetic Poetry, Mirrors, stamp tool or layers buttons in the column");
+            check(app.contains("zenButton.iconOnly(zen ? R.drawable.ic_ph_circle : R.drawable.ic_ph_circle_dashed);") && !app.contains("ic_ph_x : zen") && app.contains("if (!zen) message(DrawLayout.ZEN_HOLD);\n        else if (zenFanOpen()) closeZenFan();\n        else openZenFan();") && app.contains("button.setOnLongClickListener(v -> { zenHeld(); return true; });") && app.contains("void zenHeld() { if (!busy()) setZen(!zen); }") && !app.contains("setZen(true);\n        else") && app.contains("DrawLayout.ZEN, R.drawable.ic_ph_circle_dashed")
+                            && source("DrawingPad").contains("if (!flashes()) { refreshRetries = 0; unrefreshed = ghosted = false; app.redrawZen(pageArea()); return; }"),
+                    "Zen Mode: the dashed circle while off, the circle while on, its fan open too (no X, 2026-11-05); only a hold turns it on or off, a tap off says to hold, on opens or closes the fan; the button put back after a page turn or pinch, with Automatic Refresh off too (2026-11-05)");
+            // Every write of the page's pixels to the panel goes through wrote(), which puts Zen's button back, no flash (2026-11-05: "disappears a bit").
+            String pad = source("DrawingPad");
+            check(pad.contains("if (target == previewDirect) previewArea.union(presenting);\n                    wrote(presenting);")
+                            && pad.contains("if (result < 0) queueView(endingArea); else wrote(endingArea);")
+                            && pad.contains("if (direct.refresh(source, area) < 0) { postDelayed(this::refreshFastInk, 8); return; }\n        wrote(area);")
+                            && pad.contains("            }\n        wrote(area);\n        Log.i(ProbeActivity.TAG, \"Area refresh (\"")
+                            && pad.contains("if (presented = turn.present(presented())) wrote(")
+                            && pad.contains("if (zenWritten.isEmpty()) postDelayed(zenBack, CLOSED_MS);")
+                            && pad.contains("app.redrawZen(zenWritten); zenWritten.setEmpty();")
+                            && pad.split("app\\.redrawZen\\(").length == 3 && pad.split("direct\\.refresh\\(").length == 4
+                            && pad.split("\\.present\\(presented\\(\\)").length == 3 && pad.split("\\.endFast\\(").length == 2,
+                    "Zen Mode: strokes, the eraser's ring, wet paint, sharp tiles, a stroke's end, cleaned popups, area refreshes and page turns all put the button back after writing over it (wrote), no extra flash; no other panel write left out");
+            check(pad.contains("java.util.List<RectF> fan = app.zenFanMask();\n        if (fan != null) panel.addAll(fan);") && !pad.contains("app.zenFanPanel()")
+                            && source("PaintActivity").contains("java.util.List<RectF> mask = zenFan.mask();") && pad.split("MagnetDrag\\.minus\\(").length == 5 && pad.split(", covered\\(\\)\\)").length == 3
+                            && source("PaintActivity").contains("RectF area = zenFanPanel();\n        if (area == null) return;\n        zenFan.setVisibility(View.GONE);"),
+                    "Zen Mode's open fan: the fast display keeps off its shape, in steps (drying paint took bits of it, the owner 2026-11-06), every write through the mask; closing it shows what it covered");
+            // In the gap between the fan's wedges (the owner, 2026-11-06: "putting the layers, droplet and lasso between the
+            // two wedges"): the column's own buttons lent, in ZenFan.cell's order, laid over its cells inside the fan's view
+            // (its area, the fast display's mask), the layer button's icon sized to its cell, and home as it closes; no
+            // Menu, Zoom, Dropper or page turner in it.
+            String fanView = source("ZenFanView");
+            check(bar.contains("private View[] zenStrip() { return new View[]{layers, wet, lasso}; }") && !source("PageTurner").contains("turnParts")
+                            && bar.contains("sizeLayers(Ui.dpOf(app, Math.round(cells[ZenFan.LAYERS].height())));") && bar.contains("sizeLayers(fitted.layers);\n        wet.changed();")
+                            && bar.contains("stage.addView(button, index + i, at);") && bar.contains("lentFrom[i].addView(buttons[i], lentAt[i], lentPlace[i]);")
+                            && app.contains("for (int i = 0; i < cells.length; i++) cells[i] = zenFan.cell(i);\n        inkWashBar.lend((ViewGroup) stage, ((ViewGroup) stage).indexOfChild(zenFan) + 1, cells);")
+                            && app.contains("zenFan.setVisibility(View.GONE);\n        inkWashBar.giveBack();")
+                            && fanView.contains("RectF area() { return px(bounds); }") && fanView.contains("RectF cell(int cell) { return px(fan.cell(cell)); }")
+                            && source("ZenFan").contains("for (int i = 0; i < CELLS; i++) {\n            float[] c = cell(i);\n            box[0] = Math.min(box[0], c[0]);"),
+                    "Zen Mode's fan: a small layer button, the droplet and the Lasso in the gap between its wedges, the column's own, lent while it is open, inside the fan's masked area, home as it closes");
+            // The Lasso's menu opens beside the fan, not over it; the hand's change lays the column out again, the buttons home first.
+            check(bar.contains("() -> app.fileMenu(menu[0])") && bar.contains("app.menu(anchor(lasso), \"lasso menu\"")
+                            && bar.contains("private View anchor(View button) { return zenAnchor != null ? zenAnchor : button; }")
+                            && app.contains("void applyToolboxSide() {\n        // Its line holds the column's buttons, laid out again here: home first.\n        closeZenFan();"),
+                    "The Lasso's menu beside Zen Mode's fan while it is open; the buttons home before the column is laid out again");
+            // The brush's dot over Zen's circle only while the fan is open (the owner, 2026-11-06: "change back to nib + shade preview (but only when fan is open)").
+            check(app.contains("zenDot.setVisibility(open ? View.VISIBLE : View.GONE);") && app.contains("if (zenDot == null || inkWashBar == null || !zenFanOpen()) return;")
+                            && app.contains("zenDot.show(inkWash.look(tool), inkWash.brush(tool), DrawLayout.greys(tool));") && source("SwatchBar").contains("app.showZenDot();"),
+                    "Zen Mode: the brush's nib and grey over the circle while the fan is open, the plain circle while it is closed");
+            // The fan stays open while drawing (the owner, 2026-11-06: "Keep tray open when drawing - press to close"): nothing
+            // closes it on a touch outside; Zen's circle's tap does, and round the circle too; a hold there leaves Zen Mode.
+            check(!app.contains("Ui.outside(zenFan") && !fanView.contains("app.closeZenFan()") && fanView.contains("if (at == ZenFan.OUTSIDE) return false;")
+                            && fanView.contains("else if (was == ZenFan.LEAVE && at == ZenFan.LEAVE && !held) app.zenTapped();")
+                            && fanView.contains("if (item == ZenFan.LEAVE) app().zenHeld();") && !source("ZenFan").contains("closes(")
+                            && !pad.contains("app.zenFanOpen()"),
+                    "Zen Mode's fan: drawing keeps it open, the nib's ring still shows; only a tap on Zen's circle closes it, a hold leaves Zen Mode");
+            check(wet.contains("shown == WetLook.State.DRY ? R.drawable.ic_drop_dashed") && !wet.contains("DashPathEffect") && WetLook.icon(WetLook.State.DRY).equals("ic_drop_dashed"),
                     "The dry drop the owner's dashed drop (2026-10-27), the wet ones the owner's half and full drops");
         } catch (java.io.IOException e) { throw new AssertionError("the sources: " + e); }
     }
@@ -860,10 +1059,10 @@ public final class DrawLayoutChecks {
      * (the owner, 2026-10-27).
      */
     static void funLists() {
-        java.util.List<String> labels = new java.util.ArrayList<>(java.util.Arrays.asList(DrawLayout.POETRY, DrawLayout.MIRRORS));
-        check(labels.equals(java.util.Arrays.asList("Magnetic Poetry", "Mirrors")), "Play's first two: Magnetic Poetry, Mirrors");
-        java.util.List<String> play = new java.util.ArrayList<>(java.util.Arrays.asList(DrawLayout.POETRY, DrawLayout.MIRRORS, "Replay Page"));  // PageReplay.REPLAY_PAGE (an Android class), checked in its source below
-        check(String.join(", ", play).equals("Magnetic Poetry, Mirrors, Replay Page"), "Play's rows: " + play);
+        java.util.List<String> labels = new java.util.ArrayList<>(java.util.Arrays.asList(DrawLayout.POETRY, DrawLayout.SHAPES, DrawLayout.SPIROGRAPH, DrawLayout.MIRRORS));
+        check(labels.equals(java.util.Arrays.asList("Magnetic Poetry", "Shapes", "Spirograph", "Mirrors")), "Play's toys: Magnetic Poetry, Shapes, Spirograph, Mirrors");
+        java.util.List<String> play = new java.util.ArrayList<>(java.util.Arrays.asList(DrawLayout.TEXT, DrawLayout.POETRY, DrawLayout.SHAPES, DrawLayout.SPIROGRAPH, DrawLayout.MIRRORS, "Replay Page"));  // PageReplay.REPLAY_PAGE (an Android class), checked in its source below
+        check(String.join(", ", play).equals("Text, Magnetic Poetry, Shapes, Spirograph, Mirrors, Replay Page"), "Play's rows: " + play);
         // The toys that were Play's ready brushes are still Basic tools, in the tool picker (the owner, 2026-10-27).
         for (String toy : new String[]{"Spirograph", "Sumi", "Mold ink", "Vanishing ink", "Lemon juice", "Crayon scratch"})
             check(ToolKits.preset(toy) != null, toy + " is still a Basic tool");
@@ -880,7 +1079,7 @@ public final class DrawLayoutChecks {
             // Its rows and a group line (9 dp, Theme.FINE and its margins).
             check(play.size() * DrawLayout.MENU_ROW + 9 + 2 <= s[1] - 2 * DrawLayout.PAD, "Play's menu fits the height at " + s[0] + "x" + s[1]);
         }
-        // Play's side bar while a toy is on: the magnets' bin, mirrors (Shapes has its own since 2026-10-30).
+        // Play's side bar while a toy is on: the magnets' bin, Text, Shapes, mirrors.
         check(!DrawLayout.playOn(false, false) && DrawLayout.playOn(true, false) && DrawLayout.playOn(false, true), "Play marked while a toy is on");
         // The shade strip's Opacity (2026-10-27): opaque paint alone; a pick is that slot's brush's own Opacity dial, kept
         // per slot, read by the stroke.
@@ -906,10 +1105,10 @@ public final class DrawLayoutChecks {
         try {
             String app = source("PaintActivity");
             String menu = app.substring(app.indexOf("void playMenu(View anchor)"), app.indexOf("menu(anchor, \"play menu\""));
-            check(menu.contains("mirrors.mirrors(anchor)") && menu.contains("pad.words.toggle()") && !menu.contains("shapesMenu(") && !menu.contains("DailyPrompt") && !menu.contains("dailyPrompt(")
-                    && menu.contains("replay.choose(anchor)") && source("PageReplay").contains("REPLAY_PAGE = \"Replay Page\"") && !menu.contains("SURPRISE") && !menu.contains("STAMP") && !menu.contains("Fling") && !app.contains("toggleFling")
-                    && !menu.contains("DIARY_PAGE") && !menu.contains("pickBrush(") && app.contains("inkWash.slots.keep(was)") && source("CardSelector").contains("app.chooseTools(NotebookOptions.Tools.values()[choice])"),
-                    "Play's rows do what they say: the magnets, the mirrors, Replay Page; no Shapes, Self-Portrait Prompt, Stamp, Surprise Me (still Notebook Settings' Tools) or Fling");
+            check(menu.contains("mirrors.mirrors(anchor)") && menu.contains("pad.words.toggle()") && menu.contains("shapesMenu(slot, anchor)") && !menu.contains("DailyPrompt") && !menu.contains("dailyPrompt(")
+                    && menu.contains("replay.choose(anchor)") && DrawLayout.REPLAY_PAGE.equals("Replay Page") && menu.contains("DrawLayout.playRows(") && !menu.contains("SURPRISE") && !menu.contains("STAMP") && !menu.contains("Fling") && !app.contains("toggleFling")
+                    && !menu.contains("DIARY_PAGE") && menu.contains("ToolKits.preset(DrawLayout.SPIROGRAPH)") && app.contains("inkWash.slots.pick(slot, brush)") && source("CardSelector").contains("app.chooseTools(NotebookOptions.Tools.values()[choice])"),
+                    "Play's rows do what they say: the magnets, Shapes, the Spirograph, the mirrors, Replay Page; no Self-Portrait Prompt, Stamp, Surprise Me (still Notebook Settings' Tools) or Fling");
         } catch (java.io.IOException e) { throw new AssertionError(e); }
     }
     /**
@@ -931,10 +1130,12 @@ public final class DrawLayoutChecks {
     /**
      * Finger (what one finger does, {@link FingerTool}): the column's button again (the owner, 2026-10-26: "selecting
      * finger/eraser in dropdown menus is not the right way to do it"; "finger switch to toolbar. single tap to change"),
-     * no menu row; a tap its choices beside it. Its menu's rows (52 dp each: Nothing, Eraser, Smudge and the ten slots) fit the height.
+     * no menu row; a tap its choices beside it. Its menu's rows (52 dp each: Nothing, Eraser, Smudge, Fill in and the nine slots) fit the height.
+     * System Settings' Finger Action since 2026-11-06 (the owner: "move Finger Action out of this menu into System
+     * Settings"): its choices chips, three a line, the slots by their brushes' names; the browser's menu keeps its row.
      */
     static void finger() {
-        check(FingerTool.Choice.values().length == 3 + ToolSlots.COUNT, "The finger's choices: Nothing, Eraser, Smudge and the ten slots");
+        check(FingerTool.Choice.values().length == 4 + ToolSlots.COUNT, "The finger's choices: Nothing, Eraser, Smudge, Fill in and the nine slots");
         for (int[] s : SCREENS) check(FingerTool.Choice.values().length * 52 <= s[1] - 2 * DrawLayout.PAD, "The finger menu's rows fit the height at " + s[0] + "x" + s[1]);
         try {
             String app = source("PaintActivity");
@@ -942,10 +1143,13 @@ public final class DrawLayoutChecks {
             // The owner, 2026-10-27: "the ghost should go where the finger select is now... that can go in the dropdown main
             // menu"; the ghost on the page bar that morning, back in the column since 2026-10-28.
             String turner = source("PageTurner");
-            check(app.contains("icons.add(R.drawable.ic_finger); actions.add(() -> fingerMenu(anchor))") && !bar.contains("app.fingerMenu(")
-                            && bar.contains("app.iconButton(DrawLayout.REFRESH, R.drawable.ic_ph_ghost, () -> { if (app.pad != null) app.pad.flashSoon(\"Refresh button\"); })")
+            String system = source("SystemSettingsPanel");
+            check(!app.contains("fingerMenu(") && !app.contains("case \"finger\"") && DrawLayout.fileRows(false, "", false, null, false, false, false, false, true).stream().anyMatch(r -> "finger".equals(r.key) && "ic_finger".equals(r.icon))
+                            && app.contains("fingers[c.ordinal()] = inkWashBar.fingerName(c);") && app.contains("SystemSettingsPanel.rows(this, fingers)")
+                            && system.contains("row(app, list, SystemSettings.FINGER, null, fingers, app.inkWash.finger().ordinal(), 3, i -> app.inkWash.finger(choices[i]));") && SystemSettings.FINGER.equals("Finger Action")
+                            && bar.contains("app.iconButton(DrawLayout.REFRESH, R.drawable.ic_ph_ghost, () -> { if (app.pad != null) app.pad.refreshAsked(\"Refresh button\"); })")
                             && !turner.contains("ic_ph_ghost") && turner.contains("View[] parts = {zoom.button, turn, new View(app), strip};"),
-                    "Finger is the main menu's row, a pointing hand, its choices beside the menu; Refresh, the ghost, in the column, not the page bar");
+                    "Finger Action is System Settings' row (the browser's menu's row still), its choices the drawing screen's; Refresh, the ghost, in the column, not the page bar");
         } catch (java.io.IOException e) { throw new AssertionError(e); }
     }
     /**
@@ -1007,7 +1211,7 @@ public final class DrawLayoutChecks {
         try {
             String turner = source("PageTurner");
             check(!turner.contains("ic_ph_notebook") && !turner.contains("host::notebook") && !source("InkWashBar").contains("showNotebook"),
-                    "No Notebook button on the page bar (2026-10-27: the menu's Settings and Open Notebook; the pages grid is reached by the back gesture)");
+                    "No Notebook button on the page bar (2026-10-27: the menu's Settings and Notebook Explorer; the pages grid is reached by the back gesture)");
             check(turner.contains("private float edge() { return 1 + app.dp(1); }") && turner.contains("frame.setStrokeWidth(w)") && !turner.contains("frame.setStrokeWidth(1)"),
                     "A preview's right and foot lines a pixel and 1 dp thick (3 px on the Manta), not a bare pixel");
             check(turner.contains("previous.iconHalf = next.iconHalf = DrawLayout.CARET_HALF"), "The carets' icons smaller, in their 32 dp targets");
@@ -1016,37 +1220,85 @@ public final class DrawLayoutChecks {
     /**
      * The layers left the column (the refocus, 2026-10-24; the owner: "layers are not important i'm finding"): no group, no
      * fold. A page that has layers keeps them, and Page Settings (a hold on a page) has a Layers row: a chip a layer to draw
-     * on, Add for a new one on top ({@code LibraryCardChecks.layers}).
+     * on, Add for a new one on top ({@code LibraryCardChecks.layers}). The three layers' trial (the owner, 2026-11-06): one
+     * button straight under the picker box (over Refresh in its first try), its row {@link DrawLayout#LAYERS_ROW} tall, a
+     * tap's third its layer; its icons outlined in the picker box's 1.5 dp lines at the size the column draws them.
      */
     static void layers() {
-        for (DrawLayout.Part part : DrawLayout.Part.values()) check(!part.name().contains("LAYER"), "No layers in the column: " + part);
+        for (DrawLayout.Part part : DrawLayout.Part.values()) check(!part.name().contains("LAYER") || part == DrawLayout.Part.LAYERS, "No layers in the column but the layer button: " + part);
+        java.util.List<DrawLayout.Part> column = java.util.Arrays.asList(DrawLayout.COLUMN);
+        check(column.indexOf(DrawLayout.Part.LAYERS) == column.indexOf(DrawLayout.Part.FACES) + 1, "The layer button straight under the picker box (the owner, 2026-11-06: \"right below the picker\")");
+        // About 36 px a third on the Manta and the Nomad (300 dpi, 160 dp an inch; 40 with the first try's 66 dp), its icon whole inside the row's pad.
+        check(DrawLayout.LAYERS_ROW * 300 / 160 / InkWashLayers.LAYERS >= 36 && DrawLayout.LAYERS_ROW < 66 && DrawLayout.LAYERS_ICON <= DrawLayout.LAYERS_ROW - 2 * DrawLayout.TRAY_TOP,
+                "The layer button's thirds a finger's target, a little smaller than the first try's");
+        for (int[] s : SCREENS) check(new DrawLayout(s[0], s[1]).layers == DrawLayout.LAYERS_ROW, "The layer button its whole row on the Manta and the Nomad, either way up, at " + s[0] + "x" + s[1]);
+        for (String name : new String[]{"layer_top", "layer_middle", "layer_bottom"}) {
+            String icon;
+            try { icon = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("app/src/main/res/drawable/" + name + ".xml"))); } catch (java.io.IOException e) { throw new AssertionError(e); }
+            check(icon.contains("android:height=\"" + DrawLayout.LAYERS_ICON + "dp\"") && icon.contains("android:viewportHeight=\"" + DrawLayout.LAYERS_ICON + "\"")
+                            && icon.split("android:strokeWidth=\"1.5\" android:strokeLineCap=\"round\" android:strokeLineJoin=\"round\"", -1).length == 4 && icon.split("android:fillColor", -1).length == 2,
+                    name + ": three diamonds in 1.5 dp lines, round caps and joins, drawn at its own size in dp, one filled");
+        }
+        for (int[] s : SCREENS) { int row = new DrawLayout(s[0], s[1]).layers; check(row == 0 || row >= DrawLayout.LEAST[DrawLayout.Item.ICON.ordinal()], "The layer button an icon row at the least, or none, at " + s[0] + "x" + s[1] + ": " + row); System.out.println("Layer button at " + s[0] + "x" + s[1] + ": " + row + " dp"); }
         try {
             String screens = source("NotebookScreens"), bar = source("InkWashBar");
-            check(screens.contains("case LAYERS: {") && screens.contains("app.drawOn(page);") && screens.contains("app.newLayer(true)") && !bar.contains("LayerColumn") && !bar.contains("layers."),
-                    "Page Settings' Layers row draws on a layer or adds one; the column has none");
+            check(screens.contains("case LAYERS: {") && screens.contains("app.drawOn(page);") && screens.contains("app.newLayer(true)") && !bar.contains("LayerColumn")
+                            && bar.contains("case LAYERS: view.addView(layers, item(fitted.layers));") && bar.contains("app.pickLayer(DrawLayout.layerAt("),
+                    "Page Settings' Layers row draws on a layer or adds one; the column has the layer button alone");
+            // Its hold (the owner, 2026-11-06: "long press should bring up the visibility options"): Layer 3 over 2 over 1, each
+            // name picking its layer and its eye stepping it as Show Kinds' do (one cell for both), beside the button, in the fan too
+            // (the button itself is lent); a stroke on a hidden layer refused with its note.
+            String app = source("PaintActivity");
+            check(bar.contains("layers.setOnLongClickListener(v -> { layersPopup(); return true; });") && bar.contains("for (int l = InkWashLayers.LAYERS; l >= 1; l--) {")
+                            && bar.contains("step -> app.layerStep(layer, step), () -> { hideLabel(); app.pickLayer(layer); })") && bar.contains("showLabel(list, true, 0, layers);")
+                            && bar.contains("ACTION_LONG_CLICK, DrawLayout.LAYER_VISIBILITY)") && bar.split("private LinearLayout eyeCell\\(", -1).length == 2
+                            && app.contains("layerChange(() -> InkWashLayers.setStep(page, layer, step));")
+                            && app.contains("hidden = DrawLayout.layerHiddenNote(Math.max(1, InkWashLayers.layer(pad.document)));"),
+                    "The layer button's hold: each layer's eye and name beside it, Show Kinds' steps on its pair, an Undo step each; a hidden layer refuses strokes");
+        } catch (java.io.IOException e) { throw new AssertionError(e); }
+        book();
+    }
+    /** Page Bar (the owner, 2026-11-06: "we can move that to the dropdown"; the column's book that morning): the menu's row after Show Kinds, marked while the bar shows, a session's toggle Zen Mode's hiding leaves as it was. */
+    static void book() {
+        check(!java.util.Arrays.toString(DrawLayout.Part.values()).contains("BOOK"), "No book in the column");
+        java.util.List<DrawLayout.Row> rows = DrawLayout.fileRows(true, null, false, null, false, true, false, false, true);
+        int at = rows.indexOf(rows.stream().filter(r -> "pageBar".equals(r.key)).findFirst().orElse(null));
+        check(at > 0 && "kinds".equals(rows.get(at - 1).key) && rows.get(at + 1) == DrawLayout.Row.LINE && rows.get(at).words.equals("Page Bar")
+                        && "ic_ph_open_book".equals(rows.get(at).icon) && rows.get(at).marked && !DrawLayout.fileRows(true, null, false, null, false, true, false, false, false).get(at).marked
+                        && DrawLayout.fileRows(true, "", false, null, false, false, false, false, true).stream().noneMatch(r -> "pageBar".equals(r.key)),
+                "Page Bar the page's group's last row, after Show Kinds, the open book, marked while the bar shows; not the browser's");
+        try {
+            String app = source("PaintActivity"), bar = source("InkWashBar"), fan = source("ZenFan");
+            check(!bar.contains("togglePageBar") && !fan.contains("pageBar") && app.contains("case \"pageBar\": actions[i] = this::togglePageBar;")
+                            && app.contains("inkWashBar.sandShown, playing, !barHidden)") && app.contains("!zen && !barHidden ? View.VISIBLE : View.GONE")
+                            && app.contains("barHidden = !barHidden;") && app.contains("pad.refreshAsked(\"Page bar\")") && !app.contains("prefs.setPageBar"),
+                    "One toggle, the menu's row alone (not Zen Mode's fan), Zen Mode's hiding on top of it, one forced refresh, not kept past the session");
         } catch (java.io.IOException e) { throw new AssertionError(e); }
     }
 
     /**
-     * The owner (2026-10-24): "the toolbar may become 10 slots"; ten since 2026-10-27 ("we're at 8 now might as well have
-     * 10"; {@link DrawLayout#TRAY_ROWS} is the one number). The Manta and the Nomad either way up fit them: nothing under
+     * The owner (2026-10-24): "the toolbar may become 10 slots"; ten from 2026-10-27 ("we're at 8 now might as well have
+     * 10"; {@link DrawLayout#TRAY_ROWS} is the one number), nine since 2026-11-06 with Fill in a tool row of its own, so the
+     * Manta's column holds twelve rows still. The Manta and the Nomad either way up fit them: nothing under
      * its least, nothing past the foot. The tray's rows give way, evenly, the rest as with eight: 34 dp on the Manta upright
      * (as with eight), 32 turned (34), 32 on the Nomad upright (32), 24 turned (30), where the icons, the faces and the
      * small rows stay at their least as with eight.
      */
-    static void tenSlots() {
-        check(DrawLayout.TRAY_ROWS == ToolSlots.COUNT && ToolSlots.COUNT == 10 && new DrawLayout(1024, 1365).trays == ToolSlots.COUNT, "The tray's rows are the slot count, ten");
+    static void allSlots() {
+        check(DrawLayout.TRAY_ROWS == ToolSlots.COUNT && ToolSlots.COUNT == 9 && new DrawLayout(1024, 1365).trays == ToolSlots.COUNT, "The tray's rows are the slot count, nine");
         // With eight (before 2026-10-27), each screen's icon row, face row, small row and how many small rows.
         // The Manta turned 34, the Nomad turned 26, since rows left the column (2026-10-28; 32 and 24 until then); the Nomad
         // 38 and 30 since it shows eight (2026-10-28; 32 and 26 with ten).
         // The Nomad turned 28 since Shapes and Play's small row (2026-10-30; 30 until then).
-        int[] rows = {34, 34, 38, 28};
+        // The Manta turned 30 with the layer button's first row (2026-11-06), 34 again once the sand timer, Show Kinds and Play left (that day).
+        // The Nomad's eight with three tool rows (2026-11-06): 34 upright, 26 turned (38 and 28 with two).
+        int[] rows = {34, 34, 34, 26};
         int[][] eight = {{44, 30, 36, 3}, {44, 30, 36, 3}, {40, 27, 34, 3}, {30, 27, 28, 2}};
         for (int i = 0; i < SCREENS.length; i++) {
             int[] s = SCREENS[i];
             DrawLayout d = new DrawLayout(s[0], s[1]);
             check(d.fit >= 0 && d.spare >= 0 && d.slot >= DrawLayout.LEAST[DrawLayout.Item.SLOT.ordinal()] && d.trayStroke() >= 16 && d.slot == rows[i],
-                    "Ten slots fit " + s[0] + "x" + s[1] + ": fit " + d.fit + ", spare " + d.spare + ", rows " + d.slot + " dp");
+                    "Nine slots and three tool rows fit " + s[0] + "x" + s[1] + ": fit " + d.fit + ", spare " + d.spare + ", rows " + d.slot + " dp");
             check(d.icon >= eight[i][0] - 1 && d.face >= eight[i][1] - 1 && d.wet >= eight[i][2] - 1,
                     "The other rows as with eight, at most a dp less, at " + s[0] + "x" + s[1] + ": icons " + d.icon + ", faces " + d.face + ", small rows " + d.wet);
         }
@@ -1058,8 +1310,8 @@ public final class DrawLayoutChecks {
     }
     /**
      * The owner (2026-10-28): "eight slots for the nomad it's fine. Just cut off the bottom two." The Nomad either way up
-     * shows slots 1 to 8, the Manta all ten, the Tools page's Toolbar as many; slots 9 and 10 stay stored (the toolbar is
-     * the same), and one of them selected gives way to the first on the Nomad.
+     * shows slots 1 to 8, the Manta all nine, the Tools page's Toolbar as many; slot 9 stays stored (the toolbar is
+     * the same), and selected gives way to the first on the Nomad.
      */
     static void nomadEight() {
         for (int[] s : SCREENS) {
@@ -1068,12 +1320,12 @@ public final class DrawLayoutChecks {
             check(d.trays == want && new ToolsLayout(s[0], s[1]).slotCount == want, "The column and the Toolbar show " + want + " at " + s[0] + "x" + s[1]);
             for (int slot = 0; slot < ToolSlots.COUNT; slot++)
                 check(DrawLayout.slotHidden(slot, d.trays) == (slot >= want), "Slot " + (slot + 1) + (slot >= want ? " gives way to the first" : " stays selected") + " at " + s[0] + "x" + s[1]);
-            for (int tool : new int[]{ToolSlots.ERASER, ToolSlots.SMUDGE, ToolSlots.STAMP}) check(!DrawLayout.slotHidden(tool, d.trays), "The other tools stay selected: " + tool);
+            for (int tool : new int[]{ToolSlots.ERASER, ToolSlots.SMUDGE, ToolSlots.STAMP, ToolSlots.FILL}) check(!DrawLayout.slotHidden(tool, d.trays), "The other tools stay selected: " + tool);
         }
         try {
             String bar = source("InkWashBar");
             check(bar.contains("int shown = Math.min(rules.slotsShown(), fitted.trays);") && bar.contains("DrawLayout.slotHidden(selected, shown)) selectTool(0);")
-                    && !source("ToolSlots").contains("trays"), "The bar hides slots 9 and 10 on the Nomad and selects the first; the toolbar keeps all ten");
+                    && !source("ToolSlots").contains("trays"), "The bar hides slot 9 on the Nomad and selects the first; the toolbar keeps all nine");
         } catch (java.io.IOException e) { throw new AssertionError("the sources: " + e); }
     }
     /** {@code dp} in the Manta's pixels, 1920 across its 1024 dp. */
@@ -1151,6 +1403,30 @@ public final class DrawLayoutChecks {
             check(DrawLayout.shadeAt(inset, inset, px, endpoint) == 0 && DrawLayout.shadeAt(inset + px - 1, inset, px, endpoint) == 1 && mid > 0 && mid < 1,
                     "White at the box's top, a grey at its middle (" + mid + "), black at its foot" + where);
         }
+    }
+    /**
+     * The column's parts' tops ({@link DrawLayout#tops}, the browser's column): stacked from the top's pad down to the foot
+     * over Zen Mode's cell, each its height, the stretch what is left (the spare less the snug gaps' and Refresh's margin
+     * room); the gaps InkWashBar gives, the picker box's two at half.
+     */
+    static void tops() {
+        int[][] screens = {{1404, 1872}, {1024, 1366}, {820, 1180}, {1180, 820}, {390, 844}, {749, 998}, {998, 749}};
+        for (int[] s : screens) {
+            DrawLayout d = new DrawLayout(s[0], s[1]);
+            int[] top = d.tops();
+            for (int i = 0; i < DrawLayout.COLUMN.length; i++)
+                check(top[i + 1] - top[i] == (DrawLayout.COLUMN[i] == DrawLayout.Part.STRETCH ? top[i + 1] - top[i] : d.partHeight(i)) && top[i + 1] >= top[i], s[0] + "x" + s[1] + ": part " + i);
+            check(top[0] == DrawLayout.PAD && top[DrawLayout.COLUMN.length] == d.columnHeight() - DrawLayout.PAD || d.spare < 0, s[0] + "x" + s[1] + ": foot " + top[DrawLayout.COLUMN.length]);
+            int stretch = java.util.Arrays.asList(DrawLayout.COLUMN).indexOf(DrawLayout.Part.STRETCH);
+            check(d.spare < 0 || top[stretch + 1] - top[stretch] == d.spare + 2 * d.gap - d.gap / 2 * 2 - d.ghostMargin(), s[0] + "x" + s[1] + ": stretch " + (top[stretch + 1] - top[stretch]) + ", spare " + d.spare);
+            int gaps = 0;
+            for (int g = 0; g < DrawLayout.GAPS; g++) gaps += d.gapHeight(g);
+            check(gaps == (DrawLayout.GAPS - 2) * d.gap + d.gap / 2 * 2, "the picker box's gaps at half");
+        }
+        try {
+            String bar = source("InkWashBar");
+            check(bar.contains("app.dp(at.gapHeight(g))") && !bar.contains("gapIndex"), "InkWashBar sizes its gaps by DrawLayout.gapHeight");
+        } catch (java.io.IOException e) { throw new AssertionError(e); }
     }
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 }

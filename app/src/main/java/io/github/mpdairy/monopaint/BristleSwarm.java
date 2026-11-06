@@ -207,7 +207,9 @@ final class BristleSwarm {
     static int[] stamp(FloatTiles into, FloatTiles wetD, StrokePaper paper, ResolvedBrush.Swarm b, StrokePoints pts, double radius, LineStamper.Meta meta) {
         int[] rect = StrokeMath.emptyRect(into.width, into.height);
         if (pts.count < 1) return rect;
-        if (meta.swarm == null) meta.swarm = new State(b, radius, pts.x[0], pts.y[0], into.width, into.height, into.step());
+        // On a fine grid (sharp dry brushes): the swarm walks the page as ever (its trail field the page's), its hairs laid at the grid's points.
+        FineGrid fine = into.grid;
+        if (meta.swarm == null) meta.swarm = new State(b, radius, pts.x[0], pts.y[0], fine != null ? fine.pageWidth : into.width, fine != null ? fine.pageHeight : into.height, into.step());
         State S = meta.swarm;
         Dabs dabs = S.dabs;
         dabs.clear();
@@ -239,7 +241,7 @@ final class BristleSwarm {
                 S.dirx = hx / m; S.diry = hy / m;
                 double ga = b.gSize != 0 || b.gDark != 0 ? pts.ga(j, k, t) : 0;
                 step(S, b, dabs, lerp(pts.x[j], pts.x[k], t), lerp(pts.y[j], pts.y[k], t), lerp(pts.v[j], pts.v[k], t),
-                        lerp(pts.p[j], pts.p[k], t), lerp(pts.d[j], pts.d[k], t), lean, ga, pts.own(j, k, t), into.width, into.height, rect);
+                        lerp(pts.p[j], pts.p[k], t), lerp(pts.d[j], pts.d[k], t), lean, ga, pts.own(j, k, t), fine, into.width, into.height, rect);
             }
         }
         S.done = Math.max(S.done, pts.count);
@@ -249,7 +251,7 @@ final class BristleSwarm {
 
     /** swStep: one step of every hair with the pen at {@code px, py}, {@code own} of its own paint still laid (Paint Load); their dabs go to {@code dabs}. */
     private static void step(State S, ResolvedBrush.Swarm b, Dabs dabs, double px, double py, double v, double p, double d, double lean, double ga,
-                             double own, int width, int height, int[] rect) {
+                             double own, FineGrid fine, int width, int height, int[] rect) {
         double R = S.R, k = S.k, spr = b.splay, dry = b.dryness;
         int N = S.n;
         double dx = S.dirx, dy = S.diry, nx = -dy, ny = dx, cs = S.cs, sn = S.sn, sd = S.sd * k, gain = S.gain, sat = S.sat;
@@ -295,11 +297,14 @@ final class BristleSwarm {
             double thr = dry <= 0 ? 9 : held + .1;
             if (thr <= -.05) continue;
             double dark = lerp(.42, 1, clamp(S.company[i] / 3.0)) * lerp(.72, 1, clamp(S.load[i] * 1.4)) * dk * b.amount;
-            double rb = S.rb[i] * k * grow, x = S.x[i], y = S.y[i], fx = swept ? S.fx[i] : x, fy = swept ? S.fy[i] : y;
+            double rb = S.rb[i] * k * grow, x = S.x[i], y = S.y[i], fx = swept ? S.fx[i] : x, fy = swept ? S.fy[i] : y, cx = px, cy = py;
+            // On a grid: the dab in its points, its edge a point wide.
+            if (fine != null) { x = fine.gridX(x); y = fine.gridY(y); fx = fine.gridX(fx); fy = fine.gridY(fy); cx = fine.gridX(cx); cy = fine.gridY(cy); rb *= fine.k; }
             int reach = (int)Math.ceil(rb + 1);
             int x0 = Math.max(0, (int)Math.floor(Math.min(x, fx) - reach)), x1 = Math.min(width - 1, (int)Math.ceil(Math.max(x, fx) + reach));
             int y0 = Math.max(0, (int)Math.floor(Math.min(y, fy) - reach)), y1 = Math.min(height - 1, (int)Math.ceil(Math.max(y, fy) + reach));
-            dabs.add(x, y, rb, dark, thr, d, px, py, nx, ny, fx, fy);
+            if (fine != null && (x1 < x0 || y1 < y0)) continue;
+            dabs.add(x, y, rb, dark, thr, d, cx, cy, nx, ny, fx, fy);
             StrokeMath.grow(rect, x0, y0, x1, y1);
         }
         for (int i = 0; i < N; i++) S.deposit(S.x[i], S.y[i], 1);
@@ -381,7 +386,7 @@ final class BristleSwarm {
         // Lanes matter only once some are bare: a dry hair past its first streaks, or a big head's tufts.
         double held = thr < 1.2 ? thr - .1 : 9;
         boolean laned = S.bare > 0 || held < .85;
-        double lw = S.laneWidth, along = d / (LANE_RUN * S.k);
+        double lw = S.laneWidth * (into.grid != null ? into.grid.k : 1), along = d / (LANE_RUN * S.k);
         ln.dab++;
         int x0 = Math.max(0, (int)Math.floor(Math.min(x, fx) - reach)), x1 = Math.min(w - 1, (int)Math.ceil(Math.max(x, fx) + reach));
         float when = (float)d;

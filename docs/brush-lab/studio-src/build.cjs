@@ -3,7 +3,8 @@
 // The engine is the Modular Brush Lab's, read from ../prototypes/modular-lab-src as it stands (never copied): its core
 // files in the lab's build order, then any other engine file there (newmods.js and the like), so additions to the lab
 // show up here when rebuilt. ui.js is the lab's page and is left out. The paper scans come from the lab's page, the
-// typeface from the app's res/font (SIL OFL 1.1). Also writes studio-src/out/node-engine.cjs for the Node checks.
+// typeface from the app's res/font (SIL OFL 1.1). The app's own engine, compiled to WebAssembly (web/engine), draws where the
+// browser can run it, the lab's engine elsewhere. Also writes studio-src/out/node-engine.cjs for the Node checks.
 "use strict";
 const fs = require("fs"), path = require("path");
 const { LAB, engineFiles } = require("../engine-files.cjs");
@@ -32,14 +33,32 @@ const fonts = face("ia_writer_duo_regular.ttf", 400) + "\n" + face("ia_writer_du
 const ofl = read(path.join(REPO, "app", "src", "main", "assets", "fonts", "OFL.txt"));
 const esc = t => t.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
+// ---------- the app's engine, compiled to WebAssembly (web/engine/build.sh; Gradle skips it when no Java changed) ----------
+// Built here, not committed: the page always draws with the Java as it stands (a committed .wasm would go stale on the
+// next engine change), and the page stays one file, as it is published (the artifact, superdood.org/studio).
+const ENGINE_OUT = path.join(REPO, "web", "engine", "out");
+require("child_process").execFileSync("bash", [path.join(REPO, "web", "engine", "build.sh")], { stdio: "inherit" });
+const gz64 = f => require("zlib").gzipSync(fs.readFileSync(path.join(ENGINE_OUT, f)), { level: 9 }).toString("base64");
+
 // ---------- the page ----------
 const studio = ["qr.js", "render.js", "studio.js"].map(f => read(path.join(HERE, f)));
+// The Community library (community.js) goes on the end of studio.js: it uses the page's names and adds to its ACT.
+studio[2] += "\n;\n" + read(path.join(HERE, "community.js"));
+// The Guide tab (guide.js, on the end of studio.js too) shows Brush Lab Dials' tiles (dial-demo-src: render.js, tiles.js,
+// view.js and view.css, never copied), limited to what the app offers (app-features.json, from the app's enums).
+const DIALS_SRC = path.join(HERE, "..", "dial-demo-src");
+studio[2] += "\n;\n" + read(path.join(HERE, "guide.js"));
+const guide = "const APP_FEATURES = " + JSON.stringify(JSON.parse(read(path.join(HERE, "..", "app-features.json")))) + ";\n" +
+  ["render.js", "tiles.js", "view.js"].map(f => read(path.join(DIALS_SRC, f))).join("\n;\n");
 // Brush export (export.js) with its Procreate template, the archive of a real brush (procreate-template.json, MIT).
 const tpl = JSON.parse(read(path.join(HERE, "procreate-template.json")));
 const exporter = "const PROCREATE_TEMPLATE = " + JSON.stringify({ source: tpl.source, license: tpl.license, archive: tpl.archive }) + ";\n" + read(path.join(HERE, "export.js"));
-const parts = { FONTS: fonts, CSS: read(path.join(HERE, "studio.css")), TEXTURES: textures, ENGINE: "\"use strict\";\n" + engine,
+const parts = { FONTS: fonts, CSS: read(path.join(HERE, "studio.css")) + "\n" + read(path.join(DIALS_SRC, "view.css")) + "\n" + read(path.join(HERE, "guide.css")),
+  TEXTURES: textures, ENGINE: "\"use strict\";\n" + engine, GUIDE: "\"use strict\";\n" + guide,
   RENDER: "\"use strict\";\n" + studio[1], QR: "\"use strict\";\n" + studio[0], EXPORT: "\"use strict\";\n" + exporter, STUDIO: "\"use strict\";\n" + studio[2], OFL: esc(ofl),
   ENGINE_FILES: files.join(", "),
+  TEAVM: read(path.join(ENGINE_OUT, "mbd-engine.wasm-runtime.js")), MBDENGINE: read(path.join(REPO, "web", "engine", "engine.js")),
+  WASM: gz64("mbd-engine.wasm"), WASMASSETS: gz64("mbd-assets.bin"),
   // Last: its mark is inside studio.js. The owner's favourite brushes, one code a line.
   FAVOURITES: JSON.stringify(fs.existsSync(path.join(HERE, "..", "favourites.txt")) ? read(path.join(HERE, "..", "favourites.txt")).split("\n").map(l => l.trim()).filter(l => l && !l.startsWith("#")) : []) };
 for (const [k, v] of Object.entries(parts)) if (/<\/script/i.test(v) || ((k === "CSS" || k === "FONTS") && /<\/style/i.test(v))) throw new Error("closing tag inside " + k);
@@ -52,8 +71,14 @@ for (const [k, v] of Object.entries(parts)) {
 if (/@@[A-Z_]+@@/.test(page)) throw new Error("unfilled mark " + /@@[A-Z_]+@@/.exec(page)[0]);
 const out = path.join(HERE, "..", "studio.html");
 fs.writeFileSync(out, page);
+// The Community library's admin page (the admin page's source, not in this repo): the same engine, to draw each brush waiting.
+if (fs.existsSync(path.join(HERE, "..", "community-server", "admin.html"))) {  // not in the public repo
+let admin = read(path.join(HERE, "..", "community-server", "admin.html"));
+for (const k of ["FONTS", "CSS", "TEXTURES", "ENGINE", "RENDER"]) admin = admin.split("/*@@" + k + "@@*/").join(parts[k]);
+fs.writeFileSync(path.join(HERE, "..", "community-admin.html"), admin);
+}
 // The engine and the tile renderer for Node (no DOM): the checks load this.
 fs.mkdirSync(path.join(HERE, "out"), { recursive: true });
 fs.writeFileSync(path.join(HERE, "out", "node-engine.cjs"), "\"use strict\";\n" + engine + "\n;\n" + studio[1] + "\n;\n" + studio[0] + "\n;\n" + exporter +
-  "\nmodule.exports = { TEXTURES, PROCREATE_TEMPLATE, writeBplist, procreateSet, procreateValues, exportGrain, SHAPE_PX, GRAIN_PX, switchChoice, studioJob, encodeM, readAnyCode, rollStyle, normBrush, cloneBrush, PARTS, CHOICES, DIALS, selfTest, qrMatrix, builtins, WILDCARD, STYLE_NAMES, plainWords, brushWords, sayWords, VOICE_MISSED };\n");
+  "\nmodule.exports = { appRead, appCode, appParts, appEdit, useWasm: E => { STUDIO_WASM = E; }, TEXTURES, PROCREATE_TEMPLATE, writeBplist, procreateSet, procreateValues, exportGrain, SHAPE_PX, GRAIN_PX, switchChoice, studioJob, encodeM, readAnyCode, newerShape, freshPart, normPart, rollStyle, normBrush, cloneBrush, PARTS, CHOICES, DIALS, selfTest, qrMatrix, builtins, WILDCARD, STYLE_NAMES, plainWords, brushWords, sayWords, VOICE_MISSED };\n");
 console.log("built " + path.relative(REPO, out) + " " + (page.length / 1024).toFixed(0) + " KB; engine: " + files.join(", "));

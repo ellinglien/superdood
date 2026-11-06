@@ -56,18 +56,15 @@ public final class LibraryCardChecks {
         // The rows, all on the one page (no More since 2026-10-27, the owner: "just include everything on that page"), in
         // three groups: the page, the rules, the cover.
         check(LibraryCard.GROUPS.equals(Arrays.asList(
-                Arrays.asList(LibraryCard.Part.TEMPLATE, LibraryCard.Part.RANDOM_FROM, LibraryCard.Part.PAGE_COLOUR, LibraryCard.Part.TRANSPARENCY, LibraryCard.Part.NIB_PREVIEW, LibraryCard.Part.SELF_PORTRAIT),
+                Arrays.asList(LibraryCard.Part.TEMPLATE, LibraryCard.Part.RANDOM_FROM, LibraryCard.Part.SURFACE, LibraryCard.Part.NIB_PREVIEW),
                 Arrays.asList(LibraryCard.Part.NO_ERASING, LibraryCard.Part.TIMED, LibraryCard.Part.LOCK_PAGES, LibraryCard.Part.TOOLS),
-                Arrays.asList(LibraryCard.Part.COVER, LibraryCard.Part.COVER_PICTURE))) && LibraryCard.rows().size() == 12, "The twelve rows in three groups " + LibraryCard.GROUPS);
+                Arrays.asList(LibraryCard.Part.COVER, LibraryCard.Part.COVER_PICTURE))) && LibraryCard.rows().size() == 10, "The ten rows in three groups (Page Colour and See-Through Pages Page Settings' since 2026-11-05, no Self-Portrait Prompt) " + LibraryCard.GROUPS);
         // Lock Pages (2026-10-27): Off and On in the row, greyed while nothing is timed.
         check(!LibraryCard.opens(LibraryCard.Part.LOCK_PAGES) && LibraryCard.value(LibraryCard.Part.LOCK_PAGES, d, CoverDesign.DEFAULT) == null
                 && LibraryCard.tap(LibraryCard.Part.LOCK_PAGES, d) == LibraryCard.Tap.NOTHING && LibraryCard.key(LibraryCard.Part.LOCK_PAGES).equals("Lock Pages"), "Lock Pages is set in its row");
         // Nib Preview (2026-10-29): Off and On in the row, on by default.
         check(!LibraryCard.opens(LibraryCard.Part.NIB_PREVIEW) && LibraryCard.value(LibraryCard.Part.NIB_PREVIEW, d, CoverDesign.DEFAULT) == null && d.nibPreview
                 && LibraryCard.tap(LibraryCard.Part.NIB_PREVIEW, d) == LibraryCard.Tap.NOTHING && LibraryCard.key(LibraryCard.Part.NIB_PREVIEW).equals("Nib Preview"), "Nib Preview is set in its row, on by default");
-        // Self-Portrait Prompt (2026-10-30): Off and On in the row, off by default.
-        check(!LibraryCard.opens(LibraryCard.Part.SELF_PORTRAIT) && LibraryCard.value(LibraryCard.Part.SELF_PORTRAIT, d, CoverDesign.DEFAULT) == null && !d.selfPortrait
-                && LibraryCard.tap(LibraryCard.Part.SELF_PORTRAIT, d) == LibraryCard.Tap.NOTHING && LibraryCard.key(LibraryCard.Part.SELF_PORTRAIT).equals("Self-Portrait Prompt"), "Self-Portrait Prompt is set in its row, off by default");
         check(!LibraryCard.locksApply(d) && LibraryCard.locksApply(d.withSeconds(180)) && LibraryCard.locksApply(d.withTemplate(NotebookTemplate.DIARY_PAGE)), "and applies while a page is timed: Timed Pages or a timed template");
         check(!LibraryCard.opens(LibraryCard.Part.COVER_PICTURE)
                 && LibraryCard.key(LibraryCard.Part.RANDOM_FROM).equals("Random Template") && LibraryCard.key(LibraryCard.Part.COVER_PICTURE).equals("Cover Picture")
@@ -76,7 +73,8 @@ public final class LibraryCardChecks {
         try {
             String selector = DrawLayoutChecks.source("CardSelector");
             check(DrawLayoutChecks.source("DrawingPad").contains("lassoOn || !app.rules().nibPreview || stroke != null) { hideOutline(); return; }"), "Nib Preview off: the hover ring hides (the Dropper's and the eraser's rings stay)");
-            check(selector.contains("if (!o.template.random()) templates.removeIf(NotebookTemplate::random);"), "The Template screen offers Random only to a notebook that is Random (Random Template sets it)");
+            check(selector.contains("CardSheet.offered(o)") && CardSheet.offered(d).stream().noneMatch(NotebookTemplate::random)
+                    && CardSheet.offered(d.withTemplate(NotebookTemplate.random(null))).stream().anyMatch(NotebookTemplate::random), "The Template screen offers Random only to a notebook that is Random (Random Template sets it)");
         } catch (java.io.IOException e) { throw new AssertionError(e); }
         check(CardSheet.GUIDES_TITLE.equals("Template Visibility") && CardSheet.chips(CardSheet.Screen.TEMPLATE, d.withTemplate(NotebookTemplate.LINED)) && !CardSheet.chips(CardSheet.Screen.TEMPLATE, d)
                 && !CardSheet.chips(CardSheet.Screen.PAGE_TEMPLATE, d.withTemplate(NotebookTemplate.LINED)), "The chips are on the Template screen, with a template");
@@ -144,7 +142,7 @@ public final class LibraryCardChecks {
         d = random;
         for (LibraryCard.Part p : LibraryCard.Part.values()) {
             // Show Through, Layers and Move are Page Settings' alone; Page Colour, Cover Picture, Lock Pages and Nib Preview set in their rows.
-            if (p == LibraryCard.Part.LOCK_PAGES || p == LibraryCard.Part.NIB_PREVIEW || p == LibraryCard.Part.SELF_PORTRAIT || p == LibraryCard.Part.PAGE_COLOUR || p == LibraryCard.Part.SHOW_THROUGH || p == LibraryCard.Part.COVER_PICTURE || p == LibraryCard.Part.LAYERS || p == LibraryCard.Part.MOVE) continue;
+            if (p == LibraryCard.Part.LOCK_PAGES || p == LibraryCard.Part.NIB_PREVIEW || p == LibraryCard.Part.PAGE_COLOUR || p == LibraryCard.Part.SHOW_THROUGH || p == LibraryCard.Part.COVER_PICTURE || p == LibraryCard.Part.LAYERS || p == LibraryCard.Part.MOVE) continue;
             LibraryCard.Tap tap = LibraryCard.tap(p, d);
             check(p == LibraryCard.Part.NAME ? tap == LibraryCard.Tap.RENAME : p == LibraryCard.Part.NO_ERASING ? tap == LibraryCard.Tap.TOGGLE
                     : tap == LibraryCard.Tap.CHOOSE && LibraryCard.screen(p) != null, p + ": what a tap does");
@@ -302,10 +300,10 @@ public final class LibraryCardChecks {
     static void pageSettings() {
         NotebookOptions d = NotebookOptions.DEFAULT, lined = d.withTemplate(NotebookTemplate.LINED);
         TracingPaper off = TracingPaper.plain(3), on = off.withPaper(TracingPaper.TRACING);
-        List<LibraryCard.Part> seven = Arrays.asList(LibraryCard.Part.TEMPLATE, LibraryCard.Part.PAGE_COLOUR, LibraryCard.Part.SHOW_THROUGH, LibraryCard.Part.NO_ERASING, LibraryCard.Part.TIMED,
+        List<LibraryCard.Part> seven = Arrays.asList(LibraryCard.Part.TEMPLATE, LibraryCard.Part.PAGE_COLOUR, LibraryCard.Part.SURFACE, LibraryCard.Part.TRANSPARENCY, LibraryCard.Part.SHOW_THROUGH, LibraryCard.Part.NO_ERASING, LibraryCard.Part.TIMED,
                 LibraryCard.Part.LAYERS, LibraryCard.Part.MOVE);
         check(LibraryCard.pageRows(on, true).equals(seven), "The rows: " + LibraryCard.pageRows(on, true));
-        check(!LibraryCard.pageRows(off, true).contains(LibraryCard.Part.SHOW_THROUGH) && !LibraryCard.pageRows(on, false).contains(LibraryCard.Part.SHOW_THROUGH) && LibraryCard.pageRows(off, true).size() == 6,
+        check(!LibraryCard.pageRows(off, true).contains(LibraryCard.Part.SHOW_THROUGH) && !LibraryCard.pageRows(on, false).contains(LibraryCard.Part.SHOW_THROUGH) && LibraryCard.pageRows(off, true).size() == 8,
                 "Show Through only while See-Through Pages is on, and not for a page of layers");
         layers();
         check(LibraryCard.pageTitle(2).equals("Page 3") && LibraryCard.key(LibraryCard.Part.SHOW_THROUGH).equals("Show Through") && LibraryCard.PAGE_SETTINGS.equals("Page Settings"), "Its title and keys");
@@ -348,7 +346,8 @@ public final class LibraryCardChecks {
             for (LibraryCard.Part p : seven) {
                 float key = LibraryCard.Layout.keyWidth(p), value = 0;
                 String[] chips = p == LibraryCard.Part.PAGE_COLOUR ? new String[]{LibraryCard.NOTEBOOKS} : p == LibraryCard.Part.SHOW_THROUGH ? LibraryCard.SHOW_STEPS
-                        : p == LibraryCard.Part.TEMPLATE ? new String[0] : LibraryCard.ruleChoices(p, d.withSeconds(3600));
+                        : p == LibraryCard.Part.TEMPLATE ? new String[0] : p == LibraryCard.Part.TRANSPARENCY ? new String[]{NotebookRules.OFF, NotebookRules.ON}
+                        : LibraryCard.ruleChoices(p, d.withSeconds(3600));
                 for (String c : chips) value += 2 * 8 + LabText.width(c, TypeStyle.CAPTION.sp, LabText.UKULELE);
                 if (p == LibraryCard.Part.PAGE_COLOUR) value += 6 * (LibraryCard.Layout.SWATCH + LibraryCard.Layout.SWATCH_GAP);
                 if (p == LibraryCard.Part.SHOW_THROUGH) value += 8 + 32;

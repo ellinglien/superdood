@@ -19,7 +19,7 @@ public final class CarrySmudgeChecks {
         if (args.length > 1 && args[0].equals("pairs")) { pairs(new File(args[1])); return; }
         verbose = args.length > 0;
         codes(); goldens(); acceptance(); quickRule(); ownLayer(); noHalos(); penDownPage(); undo(); settlesFirst(); gravity(); eraser(); cores(); rolls(); sweep();
-        System.out.println("PASS: Smudge's codes round-trip byte for byte; six brushes draw the web lab's golden pages (at 16 greys, at most 0.1% of pixels one grey off); a finger lays only its smudge and goes quick past the panel's reach, showing its footprint; a smear drags a line a brush width, a stump softens hatching without darkening it, Lift lightens a wash and greys gouache over dark, Drag bends a line; a smudge moves only its own layer, never lightens the wash under an ink smear, reads the page as found when drawn quick, is one Undo, comes after what still settled, ignores the page's tilt, is erased as any mark, draws the same on several cores; Smudge rolls after every part at the lab's weights, every other part as before; every tip, medium, smudge and drying draws");
+        System.out.println("PASS: Smudge's codes round-trip byte for byte; six brushes draw the web lab's golden pages (at 16 greys, at most 0.1% of pixels one grey off); a finger lays only its smudge and goes quick past the panel's reach, showing its footprint; a smear drags a line a brush width, a stump softens hatching without darkening it, Lift lightens a wash and greys gouache over dark, Drag bends a line; a smudge moves only its own layer, never lightens the wash under an ink smear, reads the page as found when drawn quick, is one Undo, comes after what still settled, ignores the page's tilt, is erased as any mark, draws the same on several cores, its plane seen whole by a quick render while the pen's thread fills it; Smudge rolls after every part at the lab's weights, every other part as before; every tip, medium, smudge and drying draws");
     }
     static boolean verbose;
     static void note(String s) { if (verbose) System.out.println(s); }
@@ -95,7 +95,7 @@ public final class CarrySmudgeChecks {
     /** The kinds {@code b} lays: a brush with paint of its own smudges its kind's plane, where the checks lay its marks. */
     static int kinds(ModularBrush b) { return ResolvedBrush.of(b, 20, .5).kind; }
     static ModularBrush brush(String code) { ModularBrush b = ModularCode.decode(code); check(b != null, "decodes: " + code); return b; }
-    static ModularBrush with(ModularBrush b, PartChoice life) { ModularBrush c = b.copy(); c.set(BrushPart.LIFE, new ModularBrush.Part(life)); return c; }
+    static ModularBrush with(ModularBrush b, PartChoice life) { ModularBrush c = LaterChecks.withoutLater(b); c.set(BrushPart.LIFE, new ModularBrush.Part(life)); return c; }
     static ModularBrush load(ModularBrush b, double load) { ModularBrush c = b.copy(); if (c.part(BrushPart.CARRY).has(PartDial.LOAD)) c.part(BrushPart.CARRY).set(PartDial.LOAD, load); return c; }
     static int q(int tone) { return Math.round(tone / 17f); }
     /** The mean tone shown in the box {@code x0..x1, y0..y1}. */
@@ -197,8 +197,7 @@ public final class CarrySmudgeChecks {
             check(size <= 12 ? drag >= 17 : near >= 12 && drag >= 8, "Smear (" + size + " px) drags a black line a brush width along: " + near + ", " + drag);
         }
         // A stump over pencil hatching softens the lines (edge contrast down 40% or more) without darkening the average.
-        ModularBrush stump = null;
-        for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals("Stump")) stump = p.brush().parts;
+        ModularBrush stump = FloatChecks.preset("Stump");
         ToneDocument hatched = page(InkWashLayers.INK, (x, y) -> Math.floorMod(x, 9) < 3 ? 90 : 255);
         double edgeBefore = edges(hatched), meanBefore = mean(hatched, 100, 380, 172, 188);
         live(hatched, stump, 28, 1, null, across(40, 440, 180));
@@ -414,6 +413,45 @@ public final class CarrySmudgeChecks {
             }
             check(crc[0].equals(crc[1]), g[0] + " at " + size + " px draws the same on several cores as on one");
         }
+        fillRace();
+    }
+    /**
+     * A quick render composes (CarryPlane#has, then #takeFresh and #tone, over its whole rectangle) while the pen's
+     * thread fills the plane's tiles further on: a tile it sees filled it sees whole. Three readers on the tile being
+     * filled, 400 planes (before 2026-11-02 a reader saw a tile's coverage without its marks in about every plane: the
+     * TrailChecks crash).
+     */
+    static void fillRace() {
+        ToneDocument d = page(InkWashLayers.WASH, CarrySmudgeChecks::mark);
+        d.selectLayer(InkWashLayers.WASH);
+        CarryPlane whole = new CarryPlane(d, false);
+        whole.fill(0, 0, W - 1, H - 1);
+        int columns = whole.columns(), tiles = columns * whole.rows();
+        java.util.concurrent.atomic.AtomicReference<Throwable> failed = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicInteger next = new java.util.concurrent.atomic.AtomicInteger(-1);
+        for (int round = 0; round < 400 && failed.get() == null; round++) {
+            CarryPlane plane = new CarryPlane(d, false);
+            Thread[] readers = new Thread[3];
+            for (int i = 0; i < readers.length; i++) {
+                int me = i;
+                readers[i] = new Thread(() -> {
+                    try {
+                        for (int k; (k = next.get()) < tiles; ) {
+                            if (k < 0) continue;
+                            int x = Math.min(W - 1, k % columns * CarryPlane.SIDE + me * 19), y = Math.min(H - 1, k / columns * CarryPlane.SIDE + me * 23);
+                            if (plane.has(x, y) && (plane.takeFresh(x, y) || plane.tone(x, y) != whole.tone(x, y)))
+                                throw new AssertionError("tile " + k + " seen filled with other tones or marks at " + x + ", " + y);
+                        }
+                    } catch (Throwable e) { failed.compareAndSet(null, e); }
+                });
+                readers[i].start();
+            }
+            for (int k = 0; k < tiles; k++) { next.set(k); plane.fill(k % columns * CarryPlane.SIDE, k / columns * CarryPlane.SIDE, k % columns * CarryPlane.SIDE, k / columns * CarryPlane.SIDE); }
+            next.set(tiles);
+            for (Thread t : readers) try { t.join(); } catch (InterruptedException e) { throw new IllegalStateException(e); }
+            next.set(-1);
+        }
+        check(failed.get() == null, "a quick render reading the plane while the pen's thread fills it sees each tile whole: " + failed.get());
     }
 
     // ---- 12. rolls; 13. the sweep ----
@@ -473,7 +511,8 @@ public final class CarrySmudgeChecks {
                 s.finish();
                 String what = tip + " " + medium + " " + carry + " " + life;
                 // A resist draws on the page's masking fluid (and smudges nothing); Clear Water on the water lays clear rings on a bath with nothing floating.
-                check(!ModularStrokeChecks.same(before, all(d)) || medium == PartChoice.RESIST && d.hasMask() || carry == PartChoice.CLEAR_WATER && life == PartChoice.FLOAT, what + " draws");
+                // So do Scrape and Reprint, which lay no paint either.
+                check(!ModularStrokeChecks.same(before, all(d)) || medium == PartChoice.RESIST && d.hasMask() || (carry == PartChoice.CLEAR_WATER || carry == PartChoice.SCRAPE || carry == PartChoice.REPRINT) && life == PartChoice.FLOAT, what + " draws");
                 check(s.carryMissed() == 0, what + ": the smudge found its page everywhere it went");
                 n++;
             }

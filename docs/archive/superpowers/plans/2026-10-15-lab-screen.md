@@ -21,7 +21,6 @@
 - Never `git add -A` or `git commit -a`; add files by name. Leave the untracked `docs/monopaint-ideas-draft.md` alone. Commit messages end with:
   ```
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-  Claude-Session: https://claude.ai/code/session_01E7BSCi595U3kgRpEiXR6YV
   ```
 - Java 8 only (no `var`, `List.of`, `String.repeat`, switch expressions). Format numbers with `Locale.ROOT`.
 - Paths are under `app/src/main/java/io/github/mpdairy/monopaint/` (main) or `app/src/test/java/io/github/mpdairy/monopaint/` (checks) unless given in full.

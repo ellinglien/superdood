@@ -153,12 +153,14 @@ final class Placement {
     /** stampPlaced. wetD: the Fast-wet distance map or null; wetGap: the body buffer the split's wet gap goes to, or null. */
     static int[] stamp(FloatTiles into, FloatTiles wetD, FloatTiles wetGap, StrokePaper paper, ResolvedBrush.Pen b, ResolvedBrush.Body body,
                        StrokePoints pts, double size, double bodySize, boolean last, int from, LineStamper.Window win) {
-        int w = into.width, h = into.height, count = pts.count, step = into.step();
+        // On a fine grid (sharp dry brushes): the lines worked out on the page, each laid at the grid's points.
+        FineGrid fine = into.grid;
+        int w = fine != null ? fine.pageWidth : into.width, h = fine != null ? fine.pageHeight : into.height, count = pts.count, step = into.step();
         double[] bristles = b.bristles();
-        Geometry gm = new Geometry(paper, b, body, pts, size, bodySize, last, win, w, h);
+        Geometry gm = new Geometry(paper.page(), b, body, pts, size, bodySize, last, win, w, h);
         double cosA = gm.cosA, sinA = gm.sinA;
         int n = gm.n;
-        int[] rect = StrokeMath.emptyRect(w, h);
+        int[] rect = StrokeMath.emptyRect(into.width, into.height);
         StrokeMath.Span span = new StrokeMath.Span();
         for (int k = Math.max(1, from); k < count; k++) {
             int steps = gm.steps(k);
@@ -173,8 +175,10 @@ final class Placement {
                     double cx = gm.cx, cy = gm.cy, ink = gm.ink, a = gm.a, bb = gm.bb;
                     int nBr = (int)Math.min(BRISTLES, (g > 0 ? 4 : 6) + Math.round(a));
                     int R = (int)Math.ceil(a + 1.5);
-                    int x0 = Math.max(0, (int)Math.floor(cx - R)), x1 = Math.min(w - 1, (int)Math.ceil(cx + R));
-                    int y0 = Math.max(0, (int)Math.floor(cy - R)), y1 = Math.min(h - 1, (int)Math.ceil(cy + R));
+                    if (fine != null) { cx = fine.gridX(cx); cy = fine.gridY(cy); a *= fine.k; bb *= fine.k; R *= fine.k; }
+                    int x0 = Math.max(0, (int)Math.floor(cx - R)), x1 = Math.min(into.width - 1, (int)Math.ceil(cx + R));
+                    int y0 = Math.max(0, (int)Math.floor(cy - R)), y1 = Math.min(into.height - 1, (int)Math.ceil(cy + R));
+                    if (fine != null && (x1 < x0 || y1 < y0)) continue;
                     // Each row visits only the span of an ellipse that holds every pixel the line can cover: as LineStamper's
                     // without a soft edge, coverage needs dist < 1 + 0.5 / bb.
                     double grown = 1 + 0.5 / bb;

@@ -1,6 +1,6 @@
 # TileSmile app handoff plan
 
-> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not My Bad Drawings.
+> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not Superdood.
 
 Requested scope, 2026-09-24, updated during implementation. The 0.23 document
 app implements the foundation, all five tools, saved custom presets, and an

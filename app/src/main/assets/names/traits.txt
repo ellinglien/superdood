@@ -1,16 +1,20 @@
-# A new brush's name, said by what it is, deadpan and in Title Case (the owner, 2026-10-29: "mostly deadpan"; "have the
-# brush names hint at what the brush does for sure"). Every name has its part, the word for what makes it, and most its
-# describer too. About one in five is its three words: a fun word, a describer and the part ("Sloppy Inky Drag"). The
-# rest are one of eight forms from [deadpan] ("Polite Smear", "Regrettable Inky Hake", "Dusty Aunt Charcoal", "Inky
-# Pen Junior", "Smear of Mild Regret", "Wash for Beginners", "Inky Pen Situation", "Budget Dusty Charcoal"). About one
-# in six has a made-up word: the describer's stem or the part with an ending from [deadpan]'s nonsense line
-# ("Wobblefuzz", "Smudgekins"). A name that won't wrap to two lines of a card (12 letters a line) takes the next form,
-# then its words, then just the describer and part.
-# Each section below is a list of lines: something a brush can have (as brush codes name it), a colon, then its words,
-# short and lowercase, one word each (-y and -ish welcome). A brush takes the first line it has, top to bottom, and one
-# of its words picked by its seed, so two alike brushes still differ. Drying and smudges count when they aren't the
-# style's usual, a paper only with a strong grain. "any" is every brush. A line starting with # is a note; a word in
-# square brackets starts a section.
+# A new brush's name, said by what it is, in Title Case, kind and gently funny (the owner, 2026-10-29: "mostly deadpan";
+# "have the brush names hint at what the brush does for sure"; 2026-11-02: "it's ok but seems to repeat quite often").
+# Three kinds, picked by the brush's seed:
+# - About half (55 in 100) a paint colour's: a word of [colour] and one of [noun] by what the brush has, sometimes
+#   another [colour] word before ("Harbour Fog", "Burnt Toast", "Thumb Print", "Rainy Harbour Fog").
+# - About 30 in 100 a deadpan form, with the part: twenty-four of them, their words from [deadpan] ("Polite Smear",
+#   "Dusty Aunt Charcoal", "Smear of Mild Regret", "Pen with Opinions", "Smidge of Pencil", "Wash on a Tuesday",
+#   "Charcoal in Disguise", "Pen and Sons"). About one in six has a made-up word: the describer's stem or the part
+#   with an ending from [deadpan]'s nonsense line ("Wobblefuzz", "Smudgekins").
+# - The rest the part and a name from folks.txt ("Wash McGrath", "Pencil Delores").
+# A name that won't wrap to two lines of a card (12 letters a line) takes the next one; a name repeating one of the
+# library's last ten in its form or a word (not the part's or describer's) takes the next one too.
+# Each keyed section below is a list of lines: something a brush can have (as brush codes name it), a colon, then its
+# words, short and lowercase, one word each (-y and -ish welcome). A brush takes the first line it has, top to bottom
+# ([colour] and [noun]: see there), and one of its words picked by its seed, so two alike brushes still differ.
+# Drying and smudges count when they aren't the style's usual, a paper only with a strong grain. "any" is every brush.
+# A line starting with # is a note; a word in square brackets starts a section.
 
 [part]
 # The part that makes it, most telling first: special tips, then smudges, then tips, then the medium.
@@ -140,15 +144,157 @@ medium.graphite: tidy humble quiet modest sober plain shy pensive bookish studio
 medium.ink: tidy prim neat crisp keen proper dainty earnest snappy perky
 any: brisk spry jaunty nimble bright swift
 
+[colour]
+# A paint colour's first word, as a paint chip's: a place, a weather, a time, what the brush calls to mind. Most telling
+# first, as [describer]; a name's first word is of the first line the brush has, a word before it of the first two (but
+# "any", which only a brush with no other takes).
+blend.invert: backward upside mirror inside negative topsy
+blend.behind: hidden backroom tucked quiet curtain
+blend.white: chalk frost snowy pearl milky blizzard
+life.fade: faded bygone ghost twilight attic vanished
+life.lemon: lemon secret sneaky pantry whisper
+life.halo: cellar basement fridge musty stale
+life.float: harbour pond bathtub lagoon drifting
+tip.flick: whisker quick zippy cheeky snappy
+medium.fling: splashy rowdy messy kitchen spilled toddler
+tip.spiro: dizzy loopy carousel whirly spinning
+tip.stamp: postal rubber parcel library office
+medium.dust: dusty sooty chimney ashen fireside hearth
+medium.bloom: blooming dewy garden spring meadow cloudy
+medium.backrun: tidal seaside frilly rippled lacy
+medium.bleed: soggy blotted tissue drizzly feathery
+life.drips: leaky gutter rainy drizzle dripping
+life.runs: runny downhill slippery rainy trickle
+life.pool: puddle soggy sidewalk rainy
+medium.pool: puddle soggy sidewalk rainy
+life.sink: silty sandy riverbed muddy cove
+life.blend: swirly marbled stormy eddy tumbled
+life.wetpaint: wet dewy fresh sticky tacky glossy
+life.dry: damp drying humid steamy muggy
+medium.splatter: speckled splotchy freckled muddy confetti
+medium.impasto: lumpy crusty chunky porridge buttery stucco
+tip.dry: scratchy thirsty parched brittle bristly gravel
+carry.water: rainy watery soggy kitchen drizzly
+carry.comb: combed groomed barber tidy parted
+carry.stump: thumb smudged hazy blurry fogged
+carry.smudge: thumb rainy blurry foggy steamy elbow
+carry.lift: pale lifted ghost whisper erased rubbed
+carry.drag: muddy dragged slushy heavy trudging
+carry.stayin: stuffed packed snug filled
+carry.pload: oily buttery greasy glossy rich velvet
+tip.bristles: scruffy shaggy broom haystack wiry tousled
+tip.split: forked twin double paired
+tip.multi: raked furrowed garden ridged corduroy
+tip.hake: broad sweeping wide prairie open
+tip.chisel: carved slanted angled sharp granite
+tip.flat: office formal ledger quill clerk
+tip.filbert: almond oval pebble rounded
+tip.stipple: dotted peppered pebbly grainy
+tip.hatch: ruled lined tweed plaid gingham
+tip.handhatch: sketchy wicker tweed lined thatched
+tip.wobble: wobbly shaky jelly rickety bumpy wonky
+tip.taper: pointy needle spire icicle slender
+medium.scratch: scraped scuffed etched rusty
+medium.crayon: playroom lunchbox birthday recess fridge
+medium.wax: candle waxy beeswax chapel
+medium.resist: masked rubber taped stencil hidden
+medium.screen: printed comic halftone tabloid poster
+medium.tone: comic dotted halftone cartoon
+medium.ink: midnight inky squid fountain postcard telegram night
+medium.wash: harbour foggy misty rainy damp drizzly overcast wet
+medium.cover: barn shed fence porch kitchen garage saltbox
+medium.charcoal: burnt chimney smoky sooty campfire bonfire hearth
+medium.graphite: school library homework notebook quiet attic study desk
+any: kitchen cottage porch harbour garden attic
+
+[noun]
+# A paint colour's last word, a thing: keyed and ordered as [colour]; of the first two lines the brush has.
+blend.invert: photo pancake mirror
+blend.behind: curtain closet shadow cupboard
+blend.white: frost snowbank milk cloud moth
+life.fade: memory postcard photo echo goodbye daydream
+life.lemon: secret letter note message riddle diary
+life.halo: cheese bread sandwich yogurt pickle
+life.float: raft duck buoy dinghy bobber lily
+tip.flick: eyelash comma tail feather
+medium.fling: spill splash sneeze gravy
+tip.spiro: doily pinwheel seashell lollipop
+tip.stamp: postmark receipt ticket envelope
+medium.dust: sweep ash cinder ember mantel
+medium.bloom: petal blossom peony cloud bouquet
+medium.backrun: tide lace seafoam cabbage
+medium.bleed: tissue blotter napkin feather
+life.drips: faucet gutter icicle umbrella
+life.runs: window raincoat teardrop
+life.pool: puddle gumboot bathmat saucer
+medium.pool: puddle gumboot bathmat saucer
+life.sink: pebble sandbar beach
+life.blend: marble storm swirl latte
+life.wetpaint: bench railing fence
+life.dry: towel laundry mitten sock
+medium.splatter: freckle sprinkle mudflap
+medium.impasto: porridge frosting icing butter
+tip.dry: straw haystack doormat twig
+carry.water: rain drizzle teapot
+carry.comb: haircut lawn furrow
+carry.stump: print fog window
+carry.smudge: print window fog steam mitten
+carry.lift: eraser ghost whisper
+carry.drag: slush mud boot sled
+carry.stayin: pillow quilt pocket
+carry.pload: butter gravy toffee syrup
+tip.bristles: broom beard mop
+tip.split: fork twins wishbone
+tip.multi: furrow field corduroy
+tip.hake: sky prairie bay
+tip.chisel: slate granite flint
+tip.flat: quill ledger memo
+tip.filbert: almond egg bean
+tip.stipple: pepper gravel sesame
+tip.hatch: fence trellis plaid
+tip.handhatch: basket hedge
+tip.wobble: pudding canoe ladder
+tip.taper: steeple carrot
+medium.scratch: rink skate record
+medium.crayon: card placemat menu mural sticker
+medium.wax: cake lantern
+medium.resist: stencil tape
+medium.screen: flyer coupon poster
+medium.tone: funnies flyer
+medium.ink: octopus letter crow beetle raven tuxedo
+medium.wash: fog cardigan puddle window mist teacup gull
+medium.cover: door mailbox shutter dory bucket
+medium.charcoal: toast sweep ember kettle crust skillet
+medium.graphite: scribble margin sudoku recipe almanac shavings
+any: kettle cardigan teapot mitten biscuit
+
 [deadpan]
-# Not keyed by what a brush has: the deadpan forms' words, a line each. manner: "Polite Smear"; relative: "Dusty Aunt
-# Charcoal"; edition: "Inky Pen Junior"; mild and concern: "Smear of Mild Regret"; nonsense: a made-up word's ending
-# ("wobblefuzz", "smudgekins").
-manner: polite nervous regrettable apologetic reluctant sensible earnest suspicious hopeful modest tired puzzled sincere decent humble cautious sheepish dutiful unbothered optimistic sleepy worried confident tentative bashful
-relative: uncle aunt cousin nephew niece neighbour grandpa grandma landlord roommate
-edition: deluxe classic junior lite original
-mild: mild some minor modest slight faint passing
-concern: regret concern doubt worry interest suspicion unease bother
+# Not keyed by what a brush has: the deadpan forms' words, a line each, in Title Case in a name ("Polite Smear").
+# manner: "Polite Smear", "Sleepy Pen Junior"; relative: "Dusty Aunt Charcoal", "Cousin Wash"; edition: "Inky Pen
+# Junior"; mild and concern: "Smear of Mild Regret"; audience: "Wash for Beginners"; event: "Inky Pen Situation";
+# budget: "Budget Dusty Charcoal"; hedge: "Allegedly Pen"; having: "Pen with Opinions"; day: "Wash on a Tuesday";
+# ordinal: "Second Inky Pen"; group: "Inky Pen Society"; leave: "Pencil on Holiday"; state: "Charcoal in Disguise";
+# afterword: "Inky Pen Anyway"; review: "Smear Revisited"; company: "Pen and Sons"; measure: "Smidge of Pencil";
+# nonsense: a made-up word's ending ("wobblefuzz", "smudgekins"). No word in two lines.
+manner: polite nervous regrettable apologetic reluctant sensible earnest suspicious hopeful modest tired puzzled sincere decent humble cautious sheepish dutiful unbothered optimistic sleepy worried confident tentative bashful patient courteous wistful bewildered gracious flustered thoughtful startled agreeable diligent dignified punctual hesitant contented peckish wary grateful bemused frazzled tactful resigned unhurried contrite stoic civil chipper rumpled baffled homesick overdressed
+relative: uncle aunt cousin nephew niece neighbour grandpa grandma landlord roommate nan pop granny gramps auntie stepdad godmother godfather sister brother coworker classmate penpal babysitter lodger tenant boarder skipper buddy chum
+edition: deluxe classic junior lite original senior mini plus special reissue sequel prototype remix encore turbo
+mild: mild some minor slight faint passing lingering moderate fleeting vague nagging occasional creeping growing partial general lukewarm mounting sudden private
+concern: regret concern doubt worry interest suspicion unease bother dismay alarm confusion surprise nostalgia longing curiosity hesitation remorse wonder delight relief fondness optimism misgiving indignation
+audience: beginners emergencies tuesdays weekends sundays grownups later company experts visitors optimists introverts mornings librarians amateurs
+event: situation incident affair business matter episode kerfuffle palaver saga ordeal undertaking arrangement development phase
+budget: budget discount bargain clearance generic surplus emergency economy spare backup knockoff standard
+hedge: allegedly technically mostly probably basically arguably roughly nearly apparently supposedly reportedly somewhat almost
+having: feelings opinions ambitions baggage questions secrets manners boundaries hobbies notions theories excuses complaints potential intentions principles
+day: monday tuesday wednesday thursday friday saturday sunday weeknight
+ordinal: second another leftover extra fallback previous understudy substitute borrowed
+group: club society committee guild league council union circle chapter collective auxiliary association
+leave: holiday break probation sabbatical loan trial standby tour purpose vacation call duty
+state: disguise training denial progress theory moderation waiting hiding retirement transit question spirit
+afterword: again anyway regardless somehow eventually meanwhile otherwise nonetheless instead indoors outdoors upstairs overnight
+review: revisited unplugged remastered abridged explained returns reloaded continued restored revised unabridged annotated
+company: friends associates sons daughters partners family neighbours colleagues accomplices crew others pals
+measure: bit spot dash smidge touch hint pinch scrap whiff lick dollop speck
 nonsense: fuzz monger whistle wump kins wick doodle ery
 
 # ---- A new notebook's title ----

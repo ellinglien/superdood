@@ -79,7 +79,7 @@ public class OilChecks {
         String code = ModularCode.encode(oil);
         ModularBrush.Part c = oil.part(BrushPart.CARRY);
         check(oil.choice(BrushPart.TIP) == PartChoice.FILBERT && PartChoice.FILBERT.index() == 9 && code.contains(".M99"), "the Filbert is Tip choice 9: " + code);
-        check(PartChoice.of(BrushPart.TIP, 10) == PartChoice.STAMP && PartChoice.of(BrushPart.TIP, 11) == PartChoice.SPIRO && PartChoice.of(BrushPart.TIP, 12) == PartChoice.HAND_HATCH && PartChoice.of(BrushPart.TIP, 13) == null && ModularCode.decode(code.replace(".M99", ".M9d")) == null, "the Stamp, the Spiro and Hand Hatch after the Filbert, no Tip choice past them");
+        check(PartChoice.of(BrushPart.TIP, 10) == PartChoice.STAMP && PartChoice.of(BrushPart.TIP, 11) == PartChoice.SPIRO && PartChoice.of(BrushPart.TIP, 12) == PartChoice.HAND_HATCH && PartChoice.of(BrushPart.TIP, 13) == PartChoice.RULING && PartChoice.of(BrushPart.TIP, 17) == null && ModularCode.newer(code.replace(".M99", ".M9h")), "the Stamp, the Spiro, Hand Hatch and the nibs after the Filbert, no Tip choice past them (a code with one is a newer version's)");
         check(oil.choice(BrushPart.CARRY) == PartChoice.DRAG && Math.abs(c.get(PartDial.PLOAD) - .55) < 1e-3 && c.get(PartDial.PMIN) == PartDial.PMIN.def, "Oil paint is a Drag with Paint Load .55 at the default Starting Load");
         // Paint Load on is written after Keeps Paint; a Starting Load set too after it; both round-trip.
         c.set(PartDial.PMIN, .1);
@@ -220,7 +220,8 @@ public class OilChecks {
         // Two strokes at the Starting Load lay as far as each other.
         stroke(d, s, "A", oil(), 40, 1, line(20, 50, 620, 50, .8)); ends[0] = reach(d, 20, 620, 50, 255);
         stroke(d, s, "A", oil(), 40, 1, line(20, 120, 620, 120, .8)); ends[1] = reach(d, 20, 620, 120, 255);
-        check(ends[0] > 20 && Math.abs(ends[0] - ends[1]) <= 2, "every stroke starts with its Starting Load: " + ends[0] + ", " + ends[1] + " px");
+        // Within 5 px (2 until the surfaces, 2026-11-01: a whole surface's grain differs more from row to row than its 256 px scan did).
+        check(ends[0] > 20 && Math.abs(ends[0] - ends[1]) <= 5, "every stroke starts with its Starting Load: " + ends[0] + ", " + ends[1] + " px");
         double start = ResolvedBrush.of(oil(), 40, 1).loaded.start * ResolvedBrush.of(oil(), 40, 1).loaded.full;
         check(ends[0] > .4 * start && ends[0] < start + 40, "as far as a quarter load lays: " + ends[0] + " of " + Math.round(start));
         // A rub loads it: half its load is left after a short stroke, and starts the next.
@@ -317,8 +318,8 @@ public class OilChecks {
     /** A brush without Paint Load: no paint to spend at any sample (the stampers read 1 without a lookup). */
     static void off() {
         for (ToolPresets.Preset p : ToolPresets.all()) {
-            // Loaded oils (the wet paint spec) is Oil paint's Wet successor: it runs out too.
-            if (p.name.equals("Oil paint") || p.name.equals("Loaded oils")) continue;
+            // Loaded oils (the wet paint spec) is Oil paint's Wet successor: it runs out too; the Dip nib's line runs dry (MediaChecks).
+            if (p.name.equals("Oil paint") || p.name.equals("Loaded oils") || p.name.equals("Dip nib")) continue;
             ResolvedBrush r = ResolvedBrush.of(p.brush().parts, 60, 1);
             check(r.loaded == null && (r.body == null || !r.body.crescent), p.name + " never runs out");
         }

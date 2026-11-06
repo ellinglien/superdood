@@ -1,18 +1,18 @@
 package io.github.mpdairy.monopaint;
 
-/** Textures: scans replace the paper's fine and mid noise for one brush; plain is the paper's own. */
+/** Textures: a surface replaces the paper's fine and mid noise (made whole: SurfaceChecks); plain is the paper's own; a 256-pixel scan read as the brushes once read it (a Surface tile's picture). */
 public final class BrushTextureChecks {
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
         scans(); plain(); mid(); ink(); paint();
-        System.out.println("PASS: each texture reads its 256-pixel scan once (CC0 or Unsplash) (mean 128, spread about 52), mid noise is the scan at three times the scale and tiles; plain is the paper's own grain; a textured brush's tooth and granulation follow its scan, the same pixels every time");
+        System.out.println("PASS: each surface is made once and kept (mean 128, spread about 52), its scan readable as before (mid noise the scan at three times the scale, tiling); plain is the paper's own grain; a textured brush's tooth and granulation follow its surface, the same pixels every time");
     }
     static void scans() {
         for (BrushTexture t : BrushTexture.values()) {
             if (t == BrushTexture.PLAIN) { check(t.grain() == PaperGrain.PLAIN, "Plain is the paper's own grain"); continue; }
             PaperGrain g = t.grain();
-            check(g != PaperGrain.PLAIN && g.fine.length == 256 * 256 && g.midSide == 768, t.label + " reads its 256-pixel scan");
-            check(t.grain() == g, "A scan is read once");
+            check(g != PaperGrain.PLAIN && g.fine.length == SurfaceGrain.SIDE * SurfaceGrain.SIDE && t.swatch().fine.length == 256 * 256 && t.swatch().midSide == 768, t.label + " is made whole, its scan read as before");
+            check(t.grain() == g, "A surface is made once while in use");
             double sum = 0, squares = 0;
             for (byte b : g.fine) { int v = b & 255; sum += v; squares += v * v; }
             double mean = sum / g.fine.length, sd = Math.sqrt(squares / g.fine.length - mean * mean);
@@ -28,7 +28,7 @@ public final class BrushTextureChecks {
         check(PaperGrain.PLAIN.spread == 1.22f, "Plain keeps tooth's spread");
     }
     static void mid() {
-        PaperGrain g = BrushTexture.CANVAS.grain();
+        PaperGrain g = BrushTexture.CANVAS.swatch();
         for (int y = 0; y < 256; y += 3) for (int x = 0; x < 256; x += 5) {
             check(g.mid(3 * x, 3 * y) == g.fine(x, y), "Mid at three times the scale lands on the scan's pixels");
             int a = g.fine(x, y), b = g.fine(x + 1, y), between = g.mid(3 * x + 1, 3 * y);

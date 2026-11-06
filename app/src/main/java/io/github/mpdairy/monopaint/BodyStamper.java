@@ -59,6 +59,8 @@ final class BodyStamper {
     /** As {@link #stamp(FloatTiles, FloatTiles, StrokePaper, ResolvedBrush.Body, StrokePoints, double, int, LineStamper.Meta, boolean)}, laying only inside {@code clip} (null for the page); the dabs and their spacing are the same. */
     static int[] stamp(FloatTiles into, FloatTiles wetD, StrokePaper paper, ResolvedBrush.Body b, StrokePoints pts, double size, int from, LineStamper.Meta meta, boolean last, int[] clip) {
         int w = into.width, h = into.height, n = pts.count, step = into.step();
+        // On a fine grid (sharp dry brushes): each dab worked out on the page, then laid at the grid's points; the clip is the grid's.
+        FineGrid fine = into.grid;
         int cl = clip != null ? clip[0] : 0, ct = clip != null ? clip[1] : 0, cr = clip != null ? clip[2] : w - 1, cb = clip != null ? clip[3] : h - 1;
         int[] rect = StrokeMath.emptyRect(w, h);
         double tilt = b.tilt, softK = lerp(lerp(0.08, 0.012, b.crisp ? 1 : clamp(b.cover)), 0.6, b.soft);
@@ -117,9 +119,11 @@ final class BodyStamper {
                 double edge = Math.max(1, r * softK);
                 double R = Math.ceil(A + 1), c = StrictMath.cos(th), sn = StrictMath.sin(th);
                 if (R > gap.widest) gap.widest = (int)R;
+                // On a grid: in its points, the soft edge as wide on the page, its least a point.
+                if (fine != null) { int q = fine.k; x = fine.gridX(x); y = fine.gridY(y); edge = Math.max(1, r * q * softK); r *= q; A *= q; B *= q; R *= q; }
                 int x0 = Math.max(cl, (int)Math.floor(x - R)), x1 = Math.min(cr, (int)Math.ceil(x + R));
                 int y0 = Math.max(ct, (int)Math.floor(y - R)), y1 = Math.min(cb, (int)Math.ceil(y + R));
-                if (clip != null && (x1 < x0 || y1 < y0)) continue;
+                if ((clip != null || fine != null) && (x1 < x0 || y1 < y0)) continue;
                 Dab dab = new Dab();
                 dab.x = x; dab.y = y; dab.r = r; dab.edge = edge; dab.A = A; dab.B = B; dab.c = c; dab.sn = sn; dab.dens = dens; dab.d = d;
                 dab.dirx = dirx; dab.diry = diry; dab.x0 = x0; dab.x1 = x1; dab.y0 = y0; dab.y1 = y1;

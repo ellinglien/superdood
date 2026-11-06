@@ -90,7 +90,7 @@ final class ScreenShots {
                     settle(300);
                 }
                 {
-                    // Randomize: the slot changed (its dot, Back to the slot's brush), then Undo.
+                    // Randomize: a new brush in the slot, then Undo.
                     Object state = get(lab, "lab");
                     main(() -> { call(state, "randomize", new Class<?>[0]); call(lab, "render", new Class<?>[0]); });
                     settle(2500);
@@ -115,8 +115,8 @@ final class ScreenShots {
     // The Tools page
 
     /**
-     * The Tools page at the Manta's size and the Nomad's, portrait and landscape, on each tab; then a Basic tool tapped
-     * (it stays, underlined), a stroke drawn on the scratch pad with it, and Undo after it. Laid out and drawn off the screen
+     * The Tools page at the Manta's size and the Nomad's, portrait and landscape, under several chips; then a Basic tool
+     * tapped (it stays, underlined) and a stroke drawn on the try strip with it. Laid out and drawn off the screen
      * at the screen's size in dp ({@link #page}), so the panel may sleep and the Nomad needs no simulation.
      */
     private void tools(String size, boolean nomad) throws Exception {
@@ -127,15 +127,12 @@ final class ScreenShots {
             Activity tools = launch(new Intent(test.getTargetContext(), ToolsActivity.class).putExtra(ToolsActivity.SLOT, 1), false);
             try {
                 Object page = get(tools, "page");
-                // The Tools tab under All, as a first visit (the page remembers the last tab and chip); each other tab;
-                // a tab under a chip it has nothing of (the empty grid).
-                Object[][] views = {{ToolsPage.Tab.BASIC, ToolsPage.Chip.ALL, ""}, {ToolsPage.Tab.RECENT, ToolsPage.Chip.ALL, "-recent"}, {ToolsPage.Tab.SAVED, ToolsPage.Chip.ALL, "-saved"},
-                        {ToolsPage.Tab.BASIC, ToolsPage.Chip.WASHES, "-basic-washes"}, {ToolsPage.Tab.BASIC, ToolsPage.Chip.DRY_MEDIA, "-basic-dry-media"},
-                        {ToolsPage.Tab.SAVED, ToolsPage.Chip.PRINT, "-saved-print"}, {ToolsPage.Tab.KITS, ToolsPage.Chip.ALL, "-kits"},
-                        {ToolsPage.Tab.BASIC, ToolsPage.Chip.ALL, null}};
+                // A kind (the slot's, as a first visit; the page remembers the last chip), Recent, Saved, another kind, Kits.
+                Object[][] views = {{ToolsPage.Chip.BRUSHES, ""}, {ToolsPage.Chip.RECENT, "-recent"}, {ToolsPage.Chip.SAVED, "-saved"},
+                        {ToolsPage.Chip.DRY_MEDIA, "-dry-media"}, {ToolsPage.Chip.KITS, "-kits"}, {ToolsPage.Chip.BRUSHES, null}};
                 for (Object[] v : views) {
-                    main(() -> { call(page, "tab", new Class<?>[]{ToolsPage.Tab.class}, v[0]); call(page, "filter", new Class<?>[]{ToolsPage.Chip.class}, v[1]); });
-                    if (v[2] != null) page(tools, name + v[2], w, h);
+                    main(() -> call(page, "filter", new Class<?>[]{ToolsPage.Chip.class}, v[0]));
+                    if (v[1] != null) page(tools, name + v[1], w, h);
                 }
                 // A kit's sheet over the page.
                 if (!ToolKits.all().isEmpty()) {
@@ -151,9 +148,6 @@ final class ScreenShots {
                 View pad = (View) get(get(tools, "test"), "pad");
                 stroke(pad);
                 page(tools, name + "-tried", w, h);
-                Object undo = get(tools, "undo");
-                main(() -> ((View) undo).performClick());
-                page(tools, name + "-undone", w, h);
             } finally {
                 main(tools::finish);
                 settle(500);
@@ -311,7 +305,7 @@ final class ScreenShots {
     }
     /**
      * The drawing screen, laid out: it starts on the shelf, so a notebook is opened (the open one, else the one with fewest
-     * pages past one) and its page drawn on, anything it shows over it (the Daily Prompt) closed.
+     * pages past one) and its page drawn on, anything it shows over it closed.
      */
     private void drawingScreen(PaintActivity app) throws Exception {
         laidOut(app);
@@ -387,7 +381,7 @@ final class ScreenShots {
     /**
      * The drawing screen and everything that opens over it, at the Manta's size and the Nomad's: Zen, the menus a tap or a
      * hold opens (Menu, Finger, Fun, Mirrors, the eraser's, the smudge tool's, the stamp's, the size slider held, the Dropper beside the wet indicator, a layer's, a
-     * page's options), the words bin, the rotate prompt, a note, the dialogs (Time is up, Delete page, the Daily Prompt,
+     * page's options), the words bin, the rotate prompt, a note, the dialogs (Time is up, Delete page,
      * New Notebook, Rename, Import PDF's box, Pages, Settings), the shelf and its notebook menu, a notebook's pages, its
      * library card and each card screen. Each is opened as a tap or a hold would, drawn as its windows draw ({@link #composite}),
      * then closed; one that fails is reported and passed by. The checks build's own notebook only.
@@ -419,7 +413,7 @@ final class ScreenShots {
                 // A Lined page at Half, then Show Kinds' popup with its Template eye; Left-Handed, the column on the right. Each put back after.
                 NotebookOptions[] guides = new NotebookOptions[1];
                 step(app, nomad, "draw-" + s + "-template", () -> { guides[0] = app.book.options(); app.setNotebookOptions(guides[0].withTemplate(NotebookTemplate.LINED).withGuidesShown(NotebookOptions.HALF)); }, null);
-                step(app, nomad, "menu-" + s + "-template", () -> bar.kinds.performClick(), () -> { bar.hideLabel(); app.setNotebookOptions(guides[0]); });
+                step(app, nomad, "menu-" + s + "-template", () -> bar.kindsPopup(), () -> { bar.hideLabel(); app.setNotebookOptions(guides[0]); });
                 boolean hand = app.prefs.toolboxRight();
                 step(app, nomad, "draw-" + s + "-left-handed", () -> { app.prefs.setToolboxRight(!hand); app.applyToolboxSide(); }, () -> { app.prefs.setToolboxRight(hand); app.applyToolboxSide(); });
                 // The size slider (2026-10-24) on the first slot: the pen held on it two fifths down, its tab there (no preview on
@@ -451,22 +445,17 @@ final class ScreenShots {
                     app.inkWash.slots.swatches.useGrey(InkWash.key(selected), kept);
                     call(bar, "showBrush", new Class<?>[]{int.class}, selected);
                 });
-                step(app, nomad, "menu-" + s + "-play", () -> app.playMenu(bar.play), null);
+                step(app, nomad, "menu-" + s + "-play", () -> app.playMenu(bar.menu), null);
                 // Page Settings: a hold on a page's preview (the screen-reader action's path), a screen over the drawing screen.
                 step(app, nomad, "page-" + s + "-settings", () -> call(get(bar.turner, "strip"), "options", new Class<?>[]{int.class}, app.book.stacks().of(Math.max(0, app.book.index()))), app.notebooks::hide);
                 step(app, nomad, "draw-" + s + "-words-bin", () -> app.pad.words.toggle(), () -> app.pad.words.close());
                 step(app, nomad, "draw-" + s + "-rotate-prompt", () -> call(app.rotationPrompt, "suggest", new Class<?>[]{int.class}, 90), () -> app.rotationPrompt.hide());
                 step(app, nomad, "draw-" + s + "-time-up", () -> bar.timeUp(() -> { }), bar::hideLabel);
                 step(app, nomad, "dialog-" + s + "-delete-page", () -> app.notebooks.confirmDelete(0, () -> { }), null);
-                step(app, nomad, "dialog-" + s + "-daily-prompt", () -> {
-                    java.util.List<DailyPrompt.Card> cards = DailyPrompt.load(DrawingStorage.sharedAllowed(app) ? DrawingStorage.shared() : null);
-                    if (!cards.isEmpty()) app.dailyPrompt(cards, 0);
-                }, null);
                 step(app, nomad, "dialog-" + s + "-new-notebook", app::newNotebook, null);
                 step(app, nomad, "dialog-" + s + "-rename", app::renameNotebook, null);
                 step(app, nomad, "dialog-" + s + "-import-pdf", () -> app.showDialog(new android.app.AlertDialog.Builder(app).setTitle(PictureImport.IMPORT)
                         .setMessage(PictureImport.importing(3, 12)).setNegativeButton(PictureImport.CANCEL, null)), null);
-                step(app, nomad, "dialog-" + s + "-pages", () -> call(app, "showPageOverview", new Class<?>[0]), null);
                 step(app, nomad, "shelf-" + s, app.notebooks::showShelf, app.notebooks::hide);
                 step(app, nomad, "shelf-" + s + "-notebook-menu", () -> {
                     main(app.notebooks::showShelf);
@@ -474,6 +463,9 @@ final class ScreenShots {
                     main(() -> { View tile = longClickable(app.notebooks.view); if (tile != null) tile.performLongClick(); });
                 }, app.notebooks::hide);
                 step(app, nomad, "notebook-" + s + "-pages", () -> app.notebooks.showPages(app.book.index()), app.notebooks::hide);
+                // The page's › from the first page (the strip's tab follows), and the bar's Notebook Settings opening the list (2026-11-03).
+                step(app, nomad, "notebook-" + s + "-next", () -> { app.notebooks.showPages(0); ((View) get(app.notebooks, "next")).performClick(); }, app.notebooks::hide);
+                step(app, nomad, "notebook-" + s + "-settings-button", () -> { app.notebooks.showPages(0); ((View) get(app.notebooks, "settingsButton")).performClick(); }, app.notebooks::hide);
                 // The settings list (LibraryCard), then with all nine rows: Random (Random From), an older
                 // notebook's off-swatch grey (no swatch chosen), No Erasing on and locked; its options put back after.
                 step(app, nomad, "notebook-" + s + "-settings", app.notebooks::showCard, app.notebooks::hide);

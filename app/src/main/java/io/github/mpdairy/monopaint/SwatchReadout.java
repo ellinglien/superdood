@@ -59,10 +59,12 @@ final class SwatchReadout extends View {
 
     /**
      * Shows {@code look} as {@code brush} draws it (null: the eraser or the smudge tool, round), its grey only with {@code
-     * greys}: the side bar's ({@link SwatchBar}) and Brush Lab's beside its picker box.
+     * greys}: the side bar's ({@link SwatchBar}) and Brush Lab's beside its picker box. A brush that lays no paint of its
+     * own ({@link WildSample#reworks}: Reprint, a palette knife, Water) shows paper in the edge, as the smudge tool: the
+     * area it works, not a grey it lays (2026-11-01).
      */
     void show(ToolSwatches.Look look, Brush brush, boolean greys) {
-        show(look.px, greys && brush != null ? ModularSizes.swatch(brush.parts, look.darkness) : -1,
+        show(look.px, greys && brush != null && !WildSample.reworks(brush.parts) ? ModularSizes.swatch(brush.parts, look.darkness) : -1,
                 brush == null ? null : FootprintSweep.atRest(ResolvedBrush.of(brush.parts, look.px, look.darkness)));
     }
 

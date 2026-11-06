@@ -14,7 +14,8 @@ import android.widget.PopupWindow;
 /**
  * Import Image's placing (the owner, 2026-10-22; docs/archive/superpowers/specs/2026-10-22-import-design.md): the picture shows
  * over the page, fitted inside it and centred ({@link PictureImport.Frame}), with a square handle at its lower right, and
- * a bar along the page's foot with <b>Cancel</b> and <b>Place</b>. Until one is tapped every touch on the page is the
+ * a bar along the page's foot with <b>Lighter</b>, <b>Darker</b>, <b>More Contrast</b> and <b>Less Contrast</b> (a step
+ * each tap, {@link PictureImport#SHADES} each way, {@link PictureImport#STEPS}), <b>Cancel</b> and <b>Place</b>. Until one is tapped every touch on the page is the
  * picture's, the pen's or a finger's alike: a drag moves it, a drag from the handle resizes it, two fingers pinch it, its
  * shape always kept. Place lays it ({@link PictureImport#lay}, the caller's), Cancel leaves the page as it was; leaving
  * the page or the screen cancels it too. Nothing is in the page until Place.
@@ -25,8 +26,8 @@ import android.widget.PopupWindow;
  * PictureImport#lay} will lay it, and the area it crossed gets one clean refresh.
  */
 final class PicturePlacer {
-    /** What Place does with the picture where it lies. */
-    interface Place { void at(Bitmap picture, PictureImport.Frame frame); }
+    /** What Place does with the picture where it lies, {@code shade} steps Lighter or Darker and {@code contrast} More or Less Contrast ({@link PictureImport#greys(int[], int, int)}). */
+    interface Place { void at(Bitmap picture, PictureImport.Frame frame, int shade, int contrast); }
 
     private final PaintActivity app;
     private final WordsMode.Host host;
@@ -34,18 +35,15 @@ final class PicturePlacer {
     private final Paint ink = new Paint(), paper = new Paint();
     /** The picture, decoded no larger than it needs for the page; null while nothing is being placed. */
     private Bitmap picture;
-    private PictureImport.Frame frame;
+    /** Where it lies and how the pointers move it ({@link PictureImport.Placing}); null while nothing is being placed. */
+    private PictureImport.Placing placing;
     /** The page it is being placed on: another page shown cancels it. */
     private ToneDocument page;
     private Place place;
     private PopupWindow bar;
-    /** What a touch does: nothing yet, moves it, resizes it from the handle, pinches it; or waits for every pointer to lift. */
-    private enum Gesture { NONE, MOVE, CORNER, PINCH, LIFTING }
-    private Gesture gesture = Gesture.NONE;
+    /** The bar's {@link PictureImport#STEPS} buttons, each off once its last step is taken. */
+    private LabButton[] steps;
     private int first = -1, second = -1;
-    /** The frame as the gesture found it, and where its pointers landed (page px): the first's, the handle's offset, the pinch's middle and spread. */
-    private PictureImport.Frame start;
-    private float downX, downY, midX, midY, spread;
     /** Where the outline has been this gesture, page px: what the lift refreshes. */
     private final Rect travelled = new Rect();
     private boolean framePosted;
@@ -64,7 +62,7 @@ final class PicturePlacer {
     /** Whether a picture is being placed. */
     boolean active() { return picture != null; }
     /** Whether a pointer is moving it. */
-    boolean dragging() { return gesture != Gesture.NONE && gesture != Gesture.LIFTING; }
+    boolean dragging() { return placing != null && placing.dragging(); }
 
     /** Starts placing {@code picture} on the page shown, fitted inside it and centred; Place runs {@code place}. */
     void begin(Bitmap picture, Place place) {
@@ -72,10 +70,10 @@ final class PicturePlacer {
         page = host.page();
         if (page == null || host.raster() == null) { picture.recycle(); return; }
         this.picture = picture; this.place = place;
-        frame = PictureImport.Frame.fitted(picture.getWidth(), picture.getHeight(), shown(), page.width, page.height);
+        placing = new PictureImport.Placing(PictureImport.Frame.fitted(picture.getWidth(), picture.getHeight(), shown(), page.width, page.height));
         showBar();
         drawPicture(); host.present();
-        host.refresh("picture shown", rect(frame.drawn()));
+        host.refresh("picture shown", rect(placing.frame.drawn()));
     }
     /** What the canvas shows of the page, page px {left, top, right, bottom}: its corners' page points. */
     private int[] shown() {
@@ -92,15 +90,15 @@ final class PicturePlacer {
     private void end(boolean placed) {
         if (picture == null) return;
         app.pad.removeCallbacks(frameStep); framePosted = false;
-        Rect area = overlay.isEmpty() ? null : rect(frame.drawn());
+        Rect area = overlay.isEmpty() ? null : rect(placing.frame.drawn());
         overlayOff();
         host.fastPreview(false);
-        gesture = Gesture.NONE; first = second = -1;
-        Bitmap laid = picture; PictureImport.Frame at = frame; Place then = place;
-        picture = null; place = null; page = null;
+        first = second = -1;
+        Bitmap laid = picture; PictureImport.Frame at = placing.frame; int shade = placing.shade(), contrast = placing.contrast(); Place then = place;
+        picture = null; place = null; page = null; placing = null; steps = null;
         PopupWindow shown = bar; bar = null;
         if (shown != null) shown.dismiss();
-        if (placed) then.at(laid, at);
+        if (placed) then.at(laid, at, shade, contrast);
         laid.recycle();
         host.present();
         if (area != null && !placed) host.refresh("picture cancelled", area);
@@ -110,16 +108,24 @@ final class PicturePlacer {
 
     private void showBar() {
         RectF pad = Popups.bounds(app.root, app.pad);
-        int height = app.dp(64), gap = app.dp(WordBinLayout.BUTTON_GAP);
+        int height = app.dp(PictureImport.BAR), gap = app.dp(WordBinLayout.BUTTON_GAP);
         LinearLayout row = new LinearLayout(app);
         row.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
         row.setPadding(gap, 0, gap, 0);
         row.setBackground(Ui.outline(Theme.PAPER, app.dp(Theme.BASE), Theme.INK, 0));
         LabButton cancel = new LabButton(app, 0, PictureImport.CANCEL, false), placed = new LabButton(app, 0, PictureImport.PLACE, true);
+        steps = new LabButton[PictureImport.STEPS.length];
+        for (int i = 0; i < steps.length; i++) {
+            int step = i;
+            steps[i] = new LabButton(app, 0, PictureImport.STEPS[i], false);
+            steps[i].setOnClickListener(v -> step(step));
+        }
+        LabButton[] all = java.util.Arrays.copyOf(steps, steps.length + 2);
+        all[steps.length] = cancel; all[steps.length + 1] = placed;
         cancel.setOnClickListener(v -> cancel());
         placed.setOnClickListener(v -> end(true));
-        for (LabButton b : new LabButton[]{cancel, placed}) {
-            LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-2, app.dp(44));
+        for (LabButton b : all) {
+            LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-2, app.dp(PictureImport.BUTTON));
             at.leftMargin = gap;
             row.addView(b, at);
         }
@@ -135,6 +141,13 @@ final class PicturePlacer {
         });
         host.cover(panel);
         Popups.show(bar, app.root, bounds);
+    }
+    /** Button {@code step} of {@link PictureImport#STEPS} (Lighter, Darker, More or Less Contrast): one step, the picture shown again with it, one clean refresh where it lies. */
+    private void step(int step) {
+        if (picture == null || dragging() || !placing.step(step)) return;
+        for (int i = 0; i < steps.length; i++) steps[i].setEnabled(placing.canStep(i));
+        overlayOff(); drawPicture(); host.present();
+        host.refresh("picture shaded", rect(placing.frame.drawn()));
     }
 
     // The canvas's hooks
@@ -162,30 +175,27 @@ final class PicturePlacer {
             case MotionEvent.ACTION_DOWN:
                 first = id; second = -1;
                 float[] p = host.toPage(event.getX(index), event.getY(index));
-                start = frame; downX = p[0]; downY = p[1];
-                gesture = frame.onHandle(p[0], p[1]) ? Gesture.CORNER : Gesture.MOVE;
-                if (gesture == Gesture.CORNER) { downX -= frame.x + frame.w; downY -= frame.y + frame.h; }
-                travelled.set(rect(frame.drawn()));
+                placing.down(p[0], p[1]);
+                travelled.set(rect(placing.frame.drawn()));
                 overlayOff(); host.fastPreview(true); drawOutline(); host.present();
                 return true;
             case MotionEvent.ACTION_POINTER_DOWN:
-                if (gesture != Gesture.MOVE && gesture != Gesture.CORNER || second >= 0) return true;
-                second = id; start = frame; gesture = Gesture.PINCH;
-                float[] a = pointer(event, first), b = pointer(event, second);
-                if (a == null || b == null) { gesture = Gesture.LIFTING; return true; }
-                midX = (a[0] + b[0]) / 2; midY = (a[1] + b[1]) / 2; spread = Math.max(1, (float) Math.hypot(a[0] - b[0], a[1] - b[1]));
+                if (!placing.dragging() || placing.pinching() || second >= 0) return true;
+                float[] a = pointer(event, first), b = pointer(event, id);
+                if (a == null || b == null) { placing.lifting(); return true; }
+                if (placing.pinch(a[0], a[1], b[0], b[1])) second = id;
                 return true;
             case MotionEvent.ACTION_MOVE:
                 moved(event);
                 return true;
             case MotionEvent.ACTION_POINTER_UP:
                 // One finger of a pinch lifts: it is done, the other waits to lift.
-                if (gesture == Gesture.PINCH && (id == first || id == second)) { moved(event); lift(); gesture = Gesture.LIFTING; }
+                if (placing.pinching() && (id == first || id == second)) { moved(event); lift(); placing.lifting(); }
                 return true;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 if (dragging()) { moved(event); lift(); }
-                gesture = Gesture.NONE; first = second = -1;
+                placing.up(); first = second = -1;
                 return true;
             default:
                 return true;
@@ -198,18 +208,8 @@ final class PicturePlacer {
     }
     /** The pointers moved: the frame follows, its outline a frame at most every {@link WordsMode#FRAME_MS}. */
     private void moved(MotionEvent event) {
-        PictureImport.Frame next = frame;
-        float[] a = pointer(event, first);
-        if (gesture == Gesture.MOVE && a != null) next = start.moved(a[0] - downX, a[1] - downY);
-        else if (gesture == Gesture.CORNER && a != null) next = start.cornerTo(a[0] + downX, a[1] + downY);
-        else if (gesture == Gesture.PINCH) {
-            float[] b = pointer(event, second);
-            if (a == null || b == null) return;
-            float mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, d = (float) Math.hypot(a[0] - b[0], a[1] - b[1]);
-            next = start.scaled(d / spread, midX, midY, mx - midX, my - midY);
-        }
-        if (next == frame) return;
-        frame = next;
+        float[] a = pointer(event, first), b = placing.pinching() ? pointer(event, second) : a;
+        if (a == null || b == null || !placing.moved(a[0], a[1], b[0], b[1])) return;
         if (!framePosted) {
             framePosted = true;
             app.pad.postDelayed(frameStep, Math.max(0, WordsMode.FRAME_MS - (SystemClock.uptimeMillis() - lastFrame)));
@@ -226,7 +226,7 @@ final class PicturePlacer {
         app.pad.removeCallbacks(frameStep); framePosted = false;
         overlayOff();
         host.fastPreview(false);
-        travelled.union(rect(frame.drawn()));
+        travelled.union(rect(placing.frame.drawn()));
         drawPicture(); host.present();
         host.refresh("picture moved", new Rect(travelled));
     }
@@ -237,7 +237,7 @@ final class PicturePlacer {
     private void drawOutline() {
         Bitmap raster = host.raster();
         if (raster == null) return;
-        int[] r = frame.rect(), h = handle();
+        int[] r = placing.frame.rect(), h = placing.frame.handle();
         int t = MagnetDrag.OUTLINE;
         for (int[] band : new int[][]{{r[0] - t, r[1] - t, r[2] + t, r[1]}, {r[0] - t, r[3], r[2] + t, r[3] + t}, {r[0] - t, r[1], r[0], r[3]}, {r[2], r[1], r[2] + t, r[3]}, h})
             overlay.add(rect(band), raster);
@@ -257,6 +257,7 @@ final class PicturePlacer {
     private void drawPicture() {
         Bitmap raster = host.raster();
         if (raster == null || picture == null) return;
+        PictureImport.Frame frame = placing.frame;
         overlay.add(rect(frame.drawn()), raster);
         if (overlay.isEmpty()) return;
         overlay.save(raster);
@@ -269,7 +270,7 @@ final class PicturePlacer {
                 int rows = Math.min(BAND, shown.bottom - top);
                 Rect band = new Rect(shown.left, top, shown.right, top + rows);
                 region(picture, frame, band, greys);
-                PictureImport.greys(greys);
+                PictureImport.greys(greys, placing.shade(), placing.contrast());
                 raster.getPixels(under, 0, w, band.left, band.top, w, rows);
                 for (int y = 0; y < rows; y++) for (int x = 0; x < w; x++) {
                     int i = y * w + x, g = greys[i];
@@ -283,14 +284,8 @@ final class PicturePlacer {
         Canvas c = canvas(raster);
         int[] r = frame.rect();
         ring(c, r[0] - 1, r[1] - 1, r[2] + 1, r[3] + 1, 1, ink);
-        drawHandle(c, handle());
+        drawHandle(c, frame.handle());
         overlay.queue(host::show);
-    }
-    /** The handle's square, centred on the frame's lower right. */
-    private int[] handle() {
-        int[] r = frame.rect();
-        int half = Math.round(PictureImport.Frame.HANDLE / 2);
-        return new int[]{r[2] - half, r[3] - half, r[2] + half, r[3] + half};
     }
     /** A square of ink with a paper edge, so it shows on paper and on ink alike. */
     private void drawHandle(Canvas c, int[] h) {
@@ -298,7 +293,7 @@ final class PicturePlacer {
         c.drawRect(h[0] + 3, h[1] + 3, h[2] - 3, h[3] - 3, ink);
     }
     /** A ring {@code width} px wide just inside {@code l, t, r, b}, as four rectangles. */
-    private static void ring(Canvas c, int l, int t, int r, int b, int width, Paint paint) {
+    static void ring(Canvas c, int l, int t, int r, int b, int width, Paint paint) {
         c.drawRect(l, t, r, t + width, paint); c.drawRect(l, b - width, r, b, paint);
         c.drawRect(l, t + width, l + width, b - width, paint); c.drawRect(r - width, t + width, r, b - width, paint);
     }

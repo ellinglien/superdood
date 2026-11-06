@@ -20,13 +20,13 @@ public final class FilledShapeChecks {
         Assets.install(Assets.folder(Assets.FOLDER));
         if (args.length > 0 && args[0].equals("page")) { page(); return; }
         if (args.length > 1 && args[0].equals("pictures")) { pictures(new File(args[1])); return; }
-        codes(); areas(); drawn(); String tone = tone(); tiny(); mirrors();
+        codes(); areas(); drawn(); fillIn(); String tone = tone(); tiny(); mirrors();
         String heap = heap();
-        System.out.println("PASS: Filled Shape is Smudge choice 6 and its code reads back, older codes as they were; a square, a concave C, a figure eight's two lobes, a star's middle and a loop gone round twice fill; drawn, the outline closes and fills inside only, one Undo step and Redo; a dot and a short line stay strokes; Copy Strokes fills each image, Real Mirror the kept side; " + tone + "; " + heap);
+        System.out.println("PASS: Filled Shape is Smudge choice 6 and its code reads back, older codes as they were, hidden from Brush Lab but on a brush holding it; a square, a concave C, a figure eight's two lobes, a star's middle and a loop gone round twice fill; drawn, the outline closes and fills inside only, one Undo step and Redo; Fill in fills a loop on open paper, floods the shape it starts in as before, a short line a stroke; a dot and a short line stay strokes; Copy Strokes fills each image, Real Mirror the kept side; " + tone + "; " + heap);
     }
 
     static ModularBrush preset(String name) {
-        for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals(name)) return p.brush().parts;
+        for (ToolPresets.Preset p : ToolPresets.withRetired()) if (p.name.equals(name)) return p.brush().parts;
         throw new AssertionError("no preset " + name);
     }
     static ModularBrush shaped(ModularBrush b) { ModularBrush c = b.copy(); c.set(BrushPart.CARRY, new ModularBrush.Part(PartChoice.SHAPE)); return c; }
@@ -35,7 +35,7 @@ public final class FilledShapeChecks {
     // ---- codes ----
 
     static void codes() {
-        check(PartChoice.SHAPE.index() == 6 && PartChoice.of(BrushPart.CARRY, 6) == PartChoice.SHAPE && PartChoice.of(BrushPart.CARRY, 7) == null
+        check(PartChoice.SHAPE.index() == 6 && PartChoice.of(BrushPart.CARRY, 6) == PartChoice.SHAPE && PartChoice.of(BrushPart.CARRY, 7) == PartChoice.SCRAPE
                 && PartChoice.SHAPE.key.equals("shape") && PartChoice.SHAPE.label.equals("Filled Shape") && PartChoice.SHAPE.dials.isEmpty() && PartChoice.SHAPE.macro == null,
                 "Filled Shape is Smudge choice 6, no dials");
         ModularBrush b = ink();
@@ -47,6 +47,10 @@ public final class FilledShapeChecks {
         ModularBrush f = preset("Filled shape");
         check(FilledShape.fills(f) && !FilledShape.fills(preset("Fill in")) && ResolvedBrush.of(f, 30, 1).carry == null, "the Filled shape preset fills shapes and smudges nothing");
         check(ModularFeatures.seedOnly(PartChoice.SHAPE) && !ModularFeatures.varies(PartChoice.SHAPE), "never a variation's swap");
+        // Merged into Fill in (2026-10-31): hidden from Brush Lab as Hand Hatch is, but its chip shows on a brush holding it.
+        BrushLab lab = ModularLabChecks.lab(0, 1);
+        check(!ModularFeatures.offered(PartChoice.SHAPE) && !lab.chips(BrushPart.CARRY).contains(PartChoice.SHAPE), "not offered: no Filled Shape chip in Brush Lab");
+        check(lab.put(Brush.of(f)) && lab.chips(BrushPart.CARRY).contains(PartChoice.SHAPE), "a Filled Shape brush in Brush Lab shows its chip");
         check(ModularWords.choiceWords(f, BrushPart.CARRY).equals("Shape") && ModularWords.plainWords(f).contains("Fills the shape it outlines.") && ModularWords.caption(f).contains("filled shape"),
                 "its words: " + ModularWords.plainWords(f) + " / " + ModularWords.caption(f));
     }
@@ -94,7 +98,10 @@ public final class FilledShapeChecks {
 
     /** {@code b}'s stroke along {@code path} as the drawing screen draws it ({@link InkWash#stroke}): live or quick, lifted, worked after lift, finished. */
     static boolean draw(ToneDocument d, ModularBrush b, double size, double darkness, double[][] path) {
-        DrawingStroke s = FilledShape.of(d, b, QuickStroke.start(d, b, size, darkness, null), size, darkness, null);
+        return draw(FilledShape.of(d, b, QuickStroke.start(d, b, size, darkness, null), size, darkness, null), path);
+    }
+    /** {@code s} along {@code path}: sampled, lifted, worked after lift, finished. */
+    static boolean draw(DrawingStroke s, double[][] path) {
         for (int i = 0; i < path.length; i++) {
             double[] p = path[i];
             s.sample((float) p[0], (float) p[1], ToolSettings.pressure((float) p[2]), Float.NaN, Float.NaN, (long) p[3]);
@@ -157,6 +164,50 @@ public final class FilledShapeChecks {
     /** How far apart the outline's mean tone and the inside's may be, of 255: before the fix they were 25 to 45 apart. */
     static final double TONE_GAP = 10;
     static double mean(ToneDocument d, int x0, int x1, int y0, int y1) { double s = 0; for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) s += d.compositeTone(x, y); return s / ((x1 - x0 + 1) * (y1 - y0 + 1)); }
+
+    /**
+     * Fill in (Stay in Lines at Flood 1, {@link FilledShape#fillsLoops}; the owner, 2026-10-31): a loop on open paper closes
+     * and fills as Filled shape's, one Undo step; the same loop inside an inked shape floods that shape, byte for byte as
+     * the stroke alone lays it; a short line on open paper stays the stroke. Colouring pen (Flood below 1) never fills a loop.
+     */
+    static void fillIn() {
+        ModularBrush b = preset("Fill in");
+        check(FilledShape.fillsLoops(b) && !FilledShape.fills(b) && !FilledShape.fillsLoops(preset("Colouring pen")) && !FilledShape.fillsLoops(preset("Filled shape")), "Fill in fills loops, the Colouring pen doesn't");
+        double[][] loop = FillMirrorChecks.path(new double[]{300, 200}, new double[]{500, 200}, new double[]{500, 400}, new double[]{300, 400});
+        {
+            ToneDocument d = blank();
+            byte[][] before = BlendChecks.all(d);
+            int[] was = shown(d);
+            check(draw(d, b, 16, .8, loop), "Fill in draws a loop");
+            int[] now = shown(d);
+            int inside = 0, dry = 0, outside = 0;
+            for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
+                boolean changed = now[y * W + x] != was[y * W + x];
+                if (x > 320 && x < 480 && y > 220 && y < 380) { inside++; if (!changed) dry++; }
+                if ((x < 280 || x > 520 || y < 180 || y > 420) && changed) outside++;
+            }
+            check(dry < inside / 50 && outside == 0, "Fill in on open paper: the loop fills (" + dry + " of " + inside + " dry), nothing outside (" + outside + ")");
+            check(now[300 * W + 300] < was[300 * W + 300], "Fill in on open paper: the loop closed");
+            check(d.undo() && BlendChecks.same(BlendChecks.all(d), before), "Fill in on open paper: one Undo takes loop and fill back");
+        }
+        // Inside an inked box: the flood fills the box, the loop isn't closed or filled on its own.
+        ToneDocument[] two = new ToneDocument[2];
+        for (int k = 0; k < 2; k++) {
+            ToneDocument d = two[k] = blank();
+            BlendChecks.live(d, BlendChecks.brush(FillChecks.PEN), 6, 1, null, FillChecks.box(100, 100, 800, 560));
+            DrawingStroke s = QuickStroke.start(d, b, 16, .8, null);
+            draw(k == 0 ? FilledShape.of(d, b, s, 16, .8, null) : s, loop);
+        }
+        check(BlendChecks.same(BlendChecks.all(two[0]), BlendChecks.all(two[1])) && two[0].compositeTone(150, 500) < 255, "Fill in inside a shape floods it, as before");
+        // A short line on open paper: the stroke alone.
+        double[][] line = FillMirrorChecks.path(new double[]{300, 300}, new double[]{340, 310});
+        for (int k = 0; k < 2; k++) {
+            ToneDocument d = two[k] = blank();
+            DrawingStroke s = QuickStroke.start(d, b, 16, .8, null);
+            draw(k == 0 ? FilledShape.of(d, b, s, 16, .8, null) : s, line);
+        }
+        check(BlendChecks.same(BlendChecks.all(two[0]), BlendChecks.all(two[1])) && two[0].compositeTone(320, 305) < 255, "Fill in's short line on open paper stays a stroke");
+    }
 
     static void tiny() {
         ModularBrush shape = ink(), plain = ink();

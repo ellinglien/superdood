@@ -13,7 +13,7 @@ import java.util.zip.Inflater;
  * A notebook's PDF in Documents ({@link NotebookPdf}): it parses (every object where its table says, read back by a
  * small reader here), a page each the page's size, the front cover first and labelled Cover, then 1, 2, …; an outline
  * of the cover and a day at a time; the document's info; invisible words where they belong (title, page, days,
- * template, card, each magnet's word on its tile); greys exactly as the PNG copy has them, 1, 2 or 4 bits a pixel when a
+ * template, each magnet's word on its tile); greys exactly as the PNG copy has them, 1, 2 or 4 bits a pixel when a
  * page has 16 greys or fewer; only changed pages drawn again and an unchanged PDF not written; handwriting kept (a
  * marked PDF rewritten only while pages keep their numbers, else a new "T 2.pdf"); never a file the app didn't write
  * replaced; renames and deletes followed; 250 pages in 40 MB of heap.
@@ -35,7 +35,7 @@ public final class NotebookPdfChecks {
         } finally { NotebookMigrationChecks.delete(dir); }
         System.out.println("PASS: notebook PDF: it parses, every object where its table says; a page each at the page's size, the cover first labelled Cover then 1, 2, 3; "
                 + "an outline of the cover then a day at a time, its pages under it; Title, Author, Subject, Keywords and days in its info; invisible Courier words: title and page, "
-                + "made and changed days, template, the card's words, each magnet's word at its tile's baseline; greys as the PNG copy has them at 1, 2 and 4 bits under 17 greys, 8 above; "
+                + "made and changed days, template, each magnet's word at its tile's baseline; greys as the PNG copy has them at 1, 2 and 4 bits under 17 greys, 8 above; "
                 + "only a changed page drawn again, an unchanged PDF not written again; with handwriting beside it, pages changed in place or added rewrite it, a page gone makes \"T 2.pdf\" and leaves it; "
                 + "another's file and a lone mark are passed over; a rename moves the PDF and its handwriting, a delete keeps a PDF with handwriting; the old PDF beside the PNGs goes; 250 pages in 40 MB");
     }
@@ -65,7 +65,7 @@ public final class NotebookPdfChecks {
             NotebookExport.Png png = NotebookExport.read(NotebookExport.png(page.layerSnapshot(), 7));
             check(png.bits == bits[k], "Page " + k + " at " + bits[k] + " bits: " + png.bits);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            NotebookPdf.write(out, "Greys", "Greys", "", Collections.singletonList(new NotebookPdf.Sheet(7, 1, 1, false, "", "", Collections.emptyList())), i -> png);
+            NotebookPdf.write(out, "Greys", "Greys", "", Collections.singletonList(new NotebookPdf.Sheet(7, 1, 1, false, "", Collections.emptyList())), i -> png);
             Pdf pdf = new Pdf(out.toByteArray());
             int[] shown = pdf.image(pdf.pages().get(0));
             for (int y = 0; y < H; y++) for (int x = 0; x < W; x++)
@@ -80,7 +80,6 @@ public final class NotebookPdfChecks {
         String name = "2026-10-23_Tome of Checks";
         List<PackedPage> pages = new ArrayList<>();
         ToneDocument first = page(1, PEN);
-        first.placePrompt("1 min | Eyes closed: a giraffe.");
         first.placeMagnets(Magnets.of(Arrays.asList(new Magnets.Magnet("moon", 120, 200, 0, 0), new Magnets.Magnet("tide", 150, 300, 25, 1))));
         pages.add(packed(first));
         pages.add(packed(page(2, PEN)));
@@ -96,12 +95,12 @@ public final class NotebookPdfChecks {
         check(kids.size() == 3, "The front cover and two pages, no back cover: " + kids.size());
         check(pdf.dict(kids.get(1)).contains("/MediaBox [0 0 72.00 96.00]"), "A page at its size at 300 ppi");
         check(pdf.dict(1).contains("/PageLabels << /Nums [0 << /P (Cover) >> 1 << /S /D >>] >>"), "Labelled Cover, 1, 2");
-        check(pdf.outline().equals(Arrays.asList("Cover", "Oct 23, 2026", "  Page 1: Eyes closed: a giraffe.", "  Page 2")), "The outline: " + pdf.outline());
+        check(pdf.outline().equals(Arrays.asList("Cover", "Oct 23, 2026", "  Page 1", "  Page 2")), "The outline: " + pdf.outline());
         String info = pdf.dict(5);
         check(info.contains("/Title " + NotebookPdf.hex("Tome of Checks")) && info.contains("/Author " + NotebookPdf.hex(AppName.NAME)) && info.contains("/Subject " + NotebookPdf.hex("Lined"))
                 && info.contains("/Keywords " + NotebookPdf.hex(AppName.NAME + ", notebook, Lined")) && info.contains("/CreationDate (D:20261023120000)") && info.contains("/ModDate (D:20261023120000)"), "Its info: " + info);
         Map<String, double[]> words = pdf.words(kids.get(1));
-        check(words.containsKey("Tome of Checks, page 1") && words.containsKey("Oct 23, 2026") && words.containsKey("Lined") && words.containsKey("Eyes closed: a giraffe."), "The page's words: " + words.keySet());
+        check(words.containsKey("Tome of Checks, page 1") && words.containsKey("Oct 23, 2026") && words.containsKey("Lined"), "The page's words: " + words.keySet());
         check(pdf.content(kids.get(1)).startsWith("q 72.00 0 0 96.00 0 0 cm /Page Do Q\nBT 3 Tr\n"), "Under the picture, invisible");
         // "moon" untilted: its baseline 12 px under the tile's centre, starting half its 4 × 0.6 em to the left.
         double[] moon = words.get("moon");
@@ -123,7 +122,7 @@ public final class NotebookPdfChecks {
         done = update(export, docs, name, "Tome of Checks", pages, lined, DAY2);
         check(done.drawn == 2 && p1.lastModified() == p1Time, "Only the changed page and the new one drawn: " + done.drawn);
         pdf = new Pdf(Files.readAllBytes(done.pdf.toPath()));
-        check(pdf.outline().equals(Arrays.asList("Cover", "Oct 23, 2026", "  Page 1: Eyes closed: a giraffe.", "  Page 2", "Oct 24, 2026", "  Page 3")), "Days follow pages: " + pdf.outline());
+        check(pdf.outline().equals(Arrays.asList("Cover", "Oct 23, 2026", "  Page 1", "  Page 2", "Oct 24, 2026", "  Page 3")), "Days follow pages: " + pdf.outline());
         check(pdf.words(pdf.pages().get(2)).containsKey("Oct 23, 2026, changed Oct 24, 2026"), "Page 2 made Oct 23, changed Oct 24");
         // Its PNGs already there (a copy from before the PDF said its words): read again for them, not drawn.
         new File(export, name + "/" + NotebookPdf.STATE).delete();

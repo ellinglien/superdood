@@ -61,7 +61,7 @@ const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/M
     ok(await p.evaluate(() => DEMO.R.workers.length > 0 && !DEMO.R.inPage), "workers draw the tiles");
     await p.waitForFunction(() => DEMO.TILES.every(t => t.complete), { timeout: 240000, polling: 500 });
     ok(await p.evaluate(() => DEMO.TILES.every(t => !t.failed)), "every tile drawn in the page (" + await p.evaluate(() => DEMO.TILES.length) + ")");
-    ok(await p.evaluate(() => document.querySelectorAll("#main .tile").length) === tiles.length, "a card for every tile");
+    ok(await p.evaluate(() => document.querySelectorAll("#main .dg-tile").length) === tiles.length, "a card for every tile");
     await p.evaluate(() => DEMO.TILES.find(t => t.sweep === "after").el.scrollIntoView()); await new Promise(r => setTimeout(r, 1500));
     const clock = await p.evaluate(() => { const t = DEMO.TILES.find(t => t.visible && t.sweep === "after"); return t ? t.title + ": " + t.clockText.textContent : ""; });
     ok(/: .+/.test(clock), "an after-lift tile on screen runs its clock (" + clock + ")");

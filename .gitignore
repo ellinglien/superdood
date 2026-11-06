@@ -17,6 +17,8 @@ keystore.properties
 VERIFICATION.md
 .DS_Store
 docs/brush-lab/studio.html
+docs/brush-lab/community-admin.html
+__pycache__/
 docs/brush-lab/dial-demo.html
 docs/brush-lab/match-lab.html
 .claude/

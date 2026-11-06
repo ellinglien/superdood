@@ -25,7 +25,7 @@ final class DocumentCodec {
     /**
      * TSM4's layers, then a flag and the masking fluid if set, then tagged sections (a tag, a length, its bytes; a
      * reader skips tags it doesn't know) and an end tag, all inside the checksum. Written only when a page needs a
-     * section (a layer, or the masking fluid, keeping paint the eraser can't take; magnets; a shaded paper; mirrors; fading marks); others keep
+     * section (a layer, or the masking fluid, keeping paint the eraser can't take; magnets; text boxes; a shaded paper; mirrors; fading marks); others keep
      * writing TSM3 or TSM4, byte for byte.
      */
     private static final int SECTIONS_MAGIC = 0x54534d35; // TSM5
@@ -88,8 +88,18 @@ final class DocumentCodec {
      */
     private static final int FADE_TAG = 0x46414445; // FADE
     /**
-     * Inkwash: a section: the page's strokes for Replay ({@link StrokeLog#encode}), written only when it has some. A reader
-     * without it skips it and opens the page without a replay.
+     * Inkwash: a section: the page's marks Later's media still change by the clock (Salt, Plastic Wrap, Feathering,
+     * Foxing: {@link FadingInk#encode}, as laid and as finished), written only while it has some. Apart from FADE so a
+     * reader before them skips it and opens the page as it showed when saved, the marks staying so, and FADE stays as
+     * it was.
+     */
+    private static final int MEDIA_TAG = 0x4c415452; // LATR
+    /** Whether {@code fades} holds a mark of Later's media ({@code media}) or of Fading or Lemon Juice. */
+    private static boolean holds(java.util.List<FadingInk.Mark> fades, boolean media) { for(FadingInk.Mark m:fades) if(FadingInk.media(m.kind)==media) return true; return false; }
+    /**
+     * Inkwash: a section: the page's strokes and Lasso edits for Replay ({@link StrokeLog#encode}, never past {@link
+     * StrokeLog#MOST_BYTES}), written only when it has some. A reader without it skips it and opens the page without a
+     * replay; so does this one for a log version it doesn't know or a section longer than it takes.
      */
     private static final int REPLAY_TAG = 0x52504c59; // RPLY
     /**
@@ -97,11 +107,7 @@ final class DocumentCodec {
      * when it has. A reader before it skips it, and shows the design whole.
      */
     private static final int WORN_TAG = 0x574f524e; // WORN
-    /**
-     * Inkwash: a section: the Daily Prompt card the page was given ({@link DailyPrompt#line}, UTF-8), written only when it has
-     * one. A reader before it skips it and opens the page without its prompt.
-     */
-    private static final int PROMPT_TAG = 0x50524d54; // PRMT
+    // Inkwash: PRMT (0x50524d54), a Self-Portrait Prompt card the page was given, until its cut (2026-11-05): passed over as any section this doesn't read.
     /**
      * Inkwash: a section: the page's Timed Sections ({@link TimedSections#encode}), written only once they have started. A
      * reader before it skips it and opens the page with its sections not started.
@@ -112,6 +118,24 @@ final class DocumentCodec {
      * isn't Full. A reader before it skips it and shows every kind in full.
      */
     private static final int KINDS_SHOWN_TAG = 0x4b53484e; // KSHN
+    /**
+     * Inkwash: a section: the page's text boxes ({@link TextBoxes#encode}), written only when it has some. A reader before
+     * it skips it and opens the drawing without them ({@code TextOlderReaderCheck}); a later version's is skipped by this one.
+     */
+    private static final int TEXT_TAG = 0x54455854; // TEXT
+    /**
+     * Inkwash: a section: Vector Ink's lines ({@link VectorLines#encode}), for each layer that holds them its index (a byte),
+     * their length (an int) and their bytes; written only when a layer holds them. Its pixels are in the layers' part as
+     * any layer's, so a reader before it skips it and opens the page as drawn, its lines plain pixels.
+     */
+    private static final int LINES_TAG = 0x4c494e45; // LINE
+    /**
+     * Inkwash: a section: which of the Replay log's strokes are sharp dry brushes' ({@link StrokeLog#encodeSharp}: each
+     * one's place among the RPLY section's entries, its plane and the zoom it was drawn at), written only beside an RPLY
+     * section that has some. Their pixels are in the layers' part as any stroke's, so a reader before it skips it and
+     * opens the page as drawn; a page whose log doesn't read leaves it out too.
+     */
+    private static final int SHARP_TAG = 0x53485250; // SHRP
     /** After the last section. */
     private static final int END_TAG = 0;
     /** Inkwash: the deflate level for bytes only the recovery file keeps ({@link java.util.zip.Deflater#BEST_SPEED}). */
@@ -133,7 +157,7 @@ final class DocumentCodec {
         for(ToneDocument.Layer layer:snapshot.layers) kinded|=layer.kinded();
         boolean planed=false;
         for(ToneDocument.Layer layer:snapshot.layers) planed|=planes(layer)!=0;
-        boolean wax=snapshot.mask!=null&&snapshot.mask.keeps(), words=!snapshot.magnets.isEmpty(), shaded=snapshot.paper!=255, mirrored=!snapshot.mirrors.isEmpty(), timed=snapshot.clock.kept(), fading=!snapshot.fades.isEmpty(), replay=!snapshot.log.isEmpty(), worn=snapshot.wear!=null, prompted=snapshot.prompt!=null, paced=snapshot.sections.started(), shown=snapshot.kindsShown!=0, sections=keeps||wax||words||shaded||prints||kinded||planed||mirrored||timed||fading||replay||worn||prompted||paced||shown;
+        boolean wax=snapshot.mask!=null&&snapshot.mask.keeps(), words=!snapshot.magnets.isEmpty(), shaded=snapshot.paper!=255, mirrored=!snapshot.mirrors.isEmpty(), timed=snapshot.clock.kept(), fading=holds(snapshot.fades,false), media=holds(snapshot.fades,true), replay=!snapshot.log.isEmpty(), worn=snapshot.wear!=null, paced=snapshot.sections.started(), shown=snapshot.kindsShown!=0, typed=!snapshot.texts.isEmpty(), lined=lined(snapshot.layers), sections=lined||keeps||wax||words||typed||shaded||prints||kinded||planed||mirrored||timed||fading||media||replay||worn||paced||shown;
         DataOutputStream header=new DataOutputStream(stream);
         header.writeInt(sections ? SECTIONS_MAGIC : snapshot.mask != null ? MASK_MAGIC : OPACITY_MAGIC); header.writeInt(snapshot.width); header.writeInt(snapshot.height);
         java.util.zip.Deflater deflater=new java.util.zip.Deflater(level);
@@ -170,7 +194,10 @@ final class DocumentCodec {
                 for(ToneDocument.Layer layer:snapshot.layers) {
                     int kinds=layer.kinded()?layer.kinds&7:0;
                     data.writeByte(kinds);
-                    if(Integer.bitCount(kinds)>1) { data.writeByte(layer.kindBase&7); if(layer.kind!=null) data.write(layer.kind); else zeros(data,pixels); }
+                    // Without a plane every pixel holds its kinds (a Lasso's piece, a merge), so they are its base; a plane's base
+                    // of 0 (no kind before it) is written as all, the way it reads.
+                    int base=layer.kind==null?kinds:(layer.kindBase&7)!=0?layer.kindBase&7:ToneDocument.KIND_ALL;
+                    if(Integer.bitCount(kinds)>1) { data.writeByte(base); if(layer.kind!=null) data.write(layer.kind); else zeros(data,pixels); }
                 }
             }
             if(planed) {
@@ -198,17 +225,32 @@ final class DocumentCodec {
             }
             if(mirrored) { byte[] mirrors=snapshot.mirrors.encode(); data.writeInt(MIRRORS_TAG); data.writeInt(mirrors.length); data.write(mirrors); }
             if(timed) { byte[] clock=snapshot.clock.encode(); data.writeInt(TIME_TAG); data.writeInt(clock.length); data.write(clock); }
-            if(fading) { byte[] fades=FadingInk.encode(snapshot.fades,snapshot.layers); data.writeInt(FADE_TAG); data.writeInt(fades.length); data.write(fades); }
+            if(fading) { byte[] fades=FadingInk.encode(snapshot.fades,snapshot.layers,false); data.writeInt(FADE_TAG); data.writeInt(fades.length); data.write(fades); }
+            if(media) { byte[] fades=FadingInk.encode(snapshot.fades,snapshot.layers,true); data.writeInt(MEDIA_TAG); data.writeInt(fades.length); data.write(fades); }
             if(replay) { byte[] log=snapshot.log.encode(); data.writeInt(REPLAY_TAG); data.writeInt(log.length); data.write(log); }
+            byte[] sharp=replay?snapshot.log.encodeSharp():null;
+            if(sharp!=null) { data.writeInt(SHARP_TAG); data.writeInt(sharp.length); data.write(sharp); }
             if(worn) { byte[] wear=snapshot.wear.encode(); data.writeInt(WORN_TAG); data.writeInt(wear.length); data.write(wear); }
-            if(prompted) { byte[] prompt=snapshot.prompt.getBytes(java.nio.charset.StandardCharsets.UTF_8); data.writeInt(PROMPT_TAG); data.writeInt(prompt.length); data.write(prompt); }
             if(paced) { byte[] pace=snapshot.sections.encode(); data.writeInt(PACE_TAG); data.writeInt(pace.length); data.write(pace); }
             if(shown) { data.writeInt(KINDS_SHOWN_TAG); data.writeInt(1); data.writeByte(snapshot.kindsShown); }
+            if(typed) { byte[] texts=snapshot.texts.encode(); data.writeInt(TEXT_TAG); data.writeInt(texts.length); data.write(texts); }
+            if(lined) {
+                java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+                DataOutputStream lines=new DataOutputStream(bytes);
+                for(int i=0;i<snapshot.layers.size();i++) {
+                    VectorLines kept=snapshot.layers.get(i).lines;
+                    if(kept==null) continue;
+                    byte[] one=kept.encode(); lines.writeByte(i); lines.writeInt(one.length); lines.write(one);
+                }
+                data.writeInt(LINES_TAG); data.writeInt(bytes.size()); bytes.writeTo(data);
+            }
             if(sections) data.writeInt(END_TAG);
             data.flush(); new DataOutputStream(compressed).writeLong(crc.getValue());
             compressed.finish(); compressed.flush();
         } finally { deflater.end(); }
     }
+    /** Inkwash: whether a layer holds Vector Ink lines ({@link #LINES_TAG}). */
+    private static boolean lined(java.util.List<ToneDocument.Layer> layers) { for(ToneDocument.Layer l:layers) if(l.lines!=null) return true; return false; }
     /** Inkwash: {@link #PLANES_TAG}'s bit for a layer whose base holds paint. */
     private static final int BASE=1<<ToneDocument.PLANES;
     /** Inkwash: {@code layer}'s look ({@link ToneDocument#sheets}), its tones then its coverages, a row at a time. */
@@ -256,23 +298,23 @@ final class DocumentCodec {
                 mask=new ToneDocument.Layer("Masking fluid",true,tones,alpha);
             } else if(hasMask) consume(data,width*height*2);
             Magnets[] magnets={Magnets.NONE};
+            TextBoxes[] texts={TextBoxes.NONE};
             Mirrors[] mirrors={Mirrors.NONE};
             int[] paper={255};
             PageClock[] clock={PageClock.NONE};
             StrokeLog[] log={StrokeLog.NONE};
             CoverWear[] wear={null};
-            String[] prompt={null};
             int[] kindsShown={0};
             TimedSections[] pace={null};
             java.util.List<java.util.List<FadingInk.Mark>> fades=new java.util.ArrayList<>();
-            if(sections) readSections(data,width,height,count,retain?layers:null,mask,magnets,mirrors,paper,clock,fades,log,wear,prompt,pace,kindsShown);
+            if(sections) readSections(data,width,height,count,retain?layers:null,mask,magnets,texts,mirrors,paper,clock,fades,log,wear,pace,kindsShown);
             long checksum=crc.getValue();
             if(new DataInputStream(compressed).readLong()!=checksum) throw new IOException("Painting checksum mismatch");
             if(compressed.read()!=-1) throw new IOException("Extra painting data");
             if(!retain) return null;
             ToneDocument document=new ToneDocument(width,height,layers,active,mask);
-            document.placeMagnets(magnets[0]); document.placeMirrors(mirrors[0]); document.placePaper(paper[0]); document.placeClock(clock[0]); document.placeLog(log[0]); document.placeWear(wear[0]); document.placePrompt(prompt[0]); document.placeSections(pace[0]); document.placeKindsShown(kindsShown[0]);
-            if(!fades.isEmpty()) document.placeFades(fades.get(0));
+            document.placeMagnets(magnets[0]); document.placeTexts(texts[0]); document.placeMirrors(mirrors[0]); document.placePaper(paper[0]); document.placeClock(clock[0]); document.placeLog(log[0]); document.placeWear(wear[0]); document.placeSections(pace[0]); document.placeKindsShown(kindsShown[0]);
+            if(!fades.isEmpty()) { java.util.List<FadingInk.Mark> all=new java.util.ArrayList<>(); for(java.util.List<FadingInk.Mark> f:fades) all.addAll(f); document.placeFades(all); }
             return document;
         } finally { inflater.end(); }
     }
@@ -280,17 +322,19 @@ final class DocumentCodec {
      * TSM5's sections, to the end tag: each a tag, a length and its bytes, at most one of each known tag; a tag this
      * reader doesn't know is skipped. {@code layers} receive their shares (null: read and checked only), and
      * {@code mask} (the masking fluid, or null) its own, {@code magnets[0]} the page's magnets, {@code mirrors[0]} its
-     * mirrors, {@code paper[0]} its paper tone, {@code clock[0]} its clock, {@code fades} its fading marks (with {@code layers}), {@code wear[0]} where a cover's design is rubbed off {@code prompt[0]} its prompt, {@code pace[0]} its Timed Sections and {@code kindsShown[0]} Show Kinds' steps.
+     * mirrors, {@code paper[0]} its paper tone, {@code clock[0]} its clock, {@code fades} its fading marks (with {@code layers}), {@code wear[0]} where a cover's design is rubbed off, {@code pace[0]} its Timed Sections and {@code kindsShown[0]} Show Kinds' steps.
      */
-    private static void readSections(DataInputStream data,int width,int height,int count,java.util.ArrayList<ToneDocument.Layer> layers,ToneDocument.Layer mask,Magnets[] magnets,Mirrors[] mirrors,int[] paper,PageClock[] clock,java.util.List<java.util.List<FadingInk.Mark>> fades,StrokeLog[] log,CoverWear[] wear,String[] prompt,TimedSections[] pace,int[] kindsShown) throws IOException {
+    private static void readSections(DataInputStream data,int width,int height,int count,java.util.ArrayList<ToneDocument.Layer> layers,ToneDocument.Layer mask,Magnets[] magnets,TextBoxes[] texts,Mirrors[] mirrors,int[] paper,PageClock[] clock,java.util.List<java.util.List<FadingInk.Mark>> fades,StrokeLog[] log,CoverWear[] wear,TimedSections[] pace,int[] kindsShown) throws IOException {
         // Inkwash: the largest section, kind planes': every layer's four, each up to four bytes a pixel.
         int pixels=width*height;
         long most=ToneDocument.MAX_LAYERS*(1+ToneDocument.PLANES*(4L*pixels+2));
-        boolean erasable=false, wax=false, words=false, shaded=false, printed=false, kinded=false, planed=false, mirrored=false, timed=false, fading=false, replay=false;
+        boolean erasable=false, wax=false, words=false, typed=false, shaded=false, printed=false, kinded=false, planed=false, mirrored=false, timed=false, fading=false, media=false, replay=false;
+        byte[] sharp=null;
         for(int sections=0;;sections++) {
             if(sections>64) throw new IOException("Too many painting sections");
             int tag=data.readInt();
-            if(tag==END_TAG) return;
+            // Inkwash: the sharp strokes marked on the log as read, whichever came first.
+            if(tag==END_TAG) { if(sharp!=null) log[0]=log[0].withSharp(sharp); return; }
             int length=data.readInt();
             if(length<0||length>most) throw new IOException("Invalid painting section");
             if(tag==MASK_SHARE_TAG) {
@@ -307,6 +351,14 @@ final class DocumentCodec {
                 if(length>Magnets.MOST_BYTES) throw new IOException("Invalid magnet section");
                 byte[] section=new byte[length]; data.readFully(section);
                 magnets[0]=Magnets.decode(section,width,height);
+                continue;
+            }
+            if(tag==TEXT_TAG) {
+                if(typed) throw new IOException("Repeated painting section");
+                typed=true;
+                if(length>TextBoxes.MOST_BYTES) throw new IOException("Invalid text section");
+                byte[] section=new byte[length]; data.readFully(section);
+                texts[0]=TextBoxes.decode(section,width,height);
                 continue;
             }
             if(tag==MIRRORS_TAG) {
@@ -327,10 +379,31 @@ final class DocumentCodec {
                 clock[0]=read;
                 continue;
             }
+            if(tag==LINES_TAG) {
+                if(length>16+(long)count*(5+16)+9L*2*VectorLines.MOST_POINTS*count) throw new IOException("Invalid lines section");
+                if(layers==null) { consume(data,length); continue; }
+                byte[] section=new byte[length]; data.readFully(section);
+                DataInputStream in=new DataInputStream(new java.io.ByteArrayInputStream(section));
+                // A layer's lines this version doesn't read are left out: the layer is its pixels, as drawn.
+                for(int left=length;left>=5;) {
+                    int index=in.readUnsignedByte(), n=in.readInt();
+                    if(n<0||n>left-5) throw new IOException("Invalid lines section");
+                    byte[] one=new byte[n]; in.readFully(one); left-=5+n;
+                    if(index<count&&layers.get(index).lines==null) layers.get(index).lines=VectorLines.decode(one);
+                }
+                continue;
+            }
+            if(tag==SHARP_TAG) {
+                if(sharp!=null) throw new IOException("Repeated painting section");
+                if(length>StrokeLog.MOST_BYTES) { consume(data,length); sharp=new byte[0]; continue; }
+                sharp=new byte[length]; data.readFully(sharp);
+                continue;
+            }
             if(tag==REPLAY_TAG) {
                 if(replay) throw new IOException("Repeated painting section");
                 replay=true;
-                if(length>StrokeLog.MOST_BYTES) throw new IOException("Invalid replay section");
+                // Longer than this reader takes: skipped, as one that doesn't read (the pixels are the page; the log is extra).
+                if(length>StrokeLog.MOST_BYTES) { consume(data,length); continue; }
                 byte[] section=new byte[length]; data.readFully(section);
                 StrokeLog read=StrokeLog.decode(section);
                 if(read!=null) log[0]=read; // one that doesn't read is left out: the page opens without a replay
@@ -342,7 +415,16 @@ final class DocumentCodec {
                 if(length>(ToneDocument.MOST_FADING+1L)*pixels+(long)FadingInk.MOST_MARKS*64) throw new IOException("Invalid fading section");
                 if(layers==null) { consume(data,length); continue; }
                 byte[] section=new byte[length]; data.readFully(section);
-                fades.add(FadingInk.decode(section,width,height,layers));
+                fades.add(FadingInk.decode(section,width,height,layers,false));
+                continue;
+            }
+            if(tag==MEDIA_TAG) {
+                if(media) throw new IOException("Repeated painting section");
+                media=true;
+                if(length>(ToneDocument.MOST_FADING+1L)*pixels+(long)FadingInk.MOST_MARKS*64) throw new IOException("Invalid fading section");
+                if(layers==null) { consume(data,length); continue; }
+                byte[] section=new byte[length]; data.readFully(section);
+                fades.add(FadingInk.decode(section,width,height,layers,true));
                 continue;
             }
             if(tag==PACE_TAG) {
@@ -356,13 +438,6 @@ final class DocumentCodec {
             if(tag==KINDS_SHOWN_TAG) {
                 if(length!=1) { consume(data,length); continue; } // not a record this reads: every kind in full
                 kindsShown[0]=data.readUnsignedByte();
-                continue;
-            }
-            if(tag==PROMPT_TAG) {
-                if(prompt[0]!=null) throw new IOException("Repeated painting section");
-                if(length<1||length>DailyPrompt.MOST_BYTES) { consume(data,length); continue; } // too long to be a card: the page opens without it
-                byte[] section=new byte[length]; data.readFully(section);
-                prompt[0]=new String(section,java.nio.charset.StandardCharsets.UTF_8);
                 continue;
             }
             if(tag==WORN_TAG) {
@@ -429,7 +504,10 @@ final class DocumentCodec {
                     if(Integer.bitCount(kinds)>1) {
                         if((left-=1+pixels)<0) throw new IOException("Short kind section");
                         base=data.readUnsignedByte();
-                        if(base<1||base>7) throw new IOException("Invalid kind section");
+                        // 0: written with no kind before its plane (2026-11-02, a notebook that wouldn't open): read as paint of
+                        // no known kind, which counts as all, as everywhere else.
+                        if(base==0) base=ToneDocument.KIND_ALL;
+                        if(base>7) throw new IOException("Invalid kind section");
                     }
                     if(layers==null) { if(base!=0) consume(data,pixels); continue; }
                     ToneDocument.Layer layer=layers.get(i);

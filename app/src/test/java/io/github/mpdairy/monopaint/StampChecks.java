@@ -13,10 +13,10 @@ import java.util.Map;
 public final class StampChecks {
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
-        cut(); spacing(); tap(); fade(); rests(); codes(); fallback(); words(); media(); quick();
+        cut(); spacing(); tap(); fade(); rests(); codes(); fallback(); words(); media(); quick(); slots();
         System.out.println("PASS: a Stamp's lasso, in marching ants, cuts the ink inside, trimmed (nothing inside: none), Brush Lab's an Undo step;its prints land every Spacing along the line and a tap prints once; "
                 + "Ink Fade None keeps every print as dark as the first, on it fades print by print; a rest of over a second inks it afresh, a shorter one carries the ink over; "
-                + "drawn quick it ends as live; a code round-trips with its nib in the store, a code without its nib prints round, and every other code is byte for byte; never rolled; its words; ink, wash and Print Shading lay it");
+                + "drawn quick it ends as live; a slot's Cut Stamp gives its Stamp the nib (none: Nothing to cut), its menu's presets in the dials' words; a code round-trips with its nib in the store, a code without its nib prints round, and every other code is byte for byte; never rolled; its words; ink, wash and Print Shading lay it");
     }
 
     static final int W = 700, H = 400;
@@ -297,6 +297,48 @@ public final class StampChecks {
             for (int y = 0; y < FlickFlingChecks.H; y++) for (int x = 0; x < FlickFlingChecks.W; x++) if (live.compositeTone(x, y) != fast.compositeTone(x, y)) differ++;
             check(differ == 0 && FlickFlingChecks.ink(live, 0, FlickFlingChecks.W, 0, FlickFlingChecks.H) > 5000, m + ": quick ends as live (" + differ + " px differ)");
         }
+    }
+
+    /** The drawing screen's Cut Stamp and stamp menu ({@link ToolSlots#cutStamp}, {@link DrawLayout#stampRows}), the Manta's and the browser's. */
+    static void slots() {
+        StampNib.forget();
+        try {
+            ToolSlots slots = new ToolSlots(mapStore(new HashMap<>()), new java.util.Random(5));
+            slots.use(0, ToolSlots.firstStamp());
+            ToneDocument page = new ToneDocument(W, H);
+            int[] block = new int[20 * 14];
+            PictureImport.lay(page, 50, 30, 20, 14, block);
+            float[] xs = {40, 90, 90, 40}, ys = {20, 20, 60, 60};
+            check(slots.cutStamp(0, page, xs, ys, 4).equals(StampNib.DONE), "a slot's Cut Stamp: Stamp cut");
+            StampNib nib = StampNib.of(slots.brush(0).parts.nib);
+            check(nib != null && nib.width == 20 && nib.height == 14 && slots.brush(0).parts.stamps(), "the slot's Stamp prints the ink inside, trimmed");
+            check(slots.undo() == 0 && slots.brush(0).parts.nib == 0, "an Undo step");
+            Brush was = slots.brush(0);
+            check(slots.cutStamp(0, page, new float[]{300, 340, 340, 300}, new float[]{100, 100, 140, 140}, 4).equals(StampNib.NOTHING) && slots.brush(0).sameAs(was), "nothing inside: Nothing to cut, the slot as it was");
+            check(slots.cutStamp(1, page, xs, ys, 4).equals(StampNib.NOTHING) && slots.brush(1).parts.nib == 0, "a slot without a Stamp: Nothing to cut");
+            StringBuilder rows = new StringBuilder();
+            for (DrawLayout.StampRow r : DrawLayout.stampRows(was)) rows.append(r.label).append(':').append(String.join(",", r.words)).append('=').append(r.marked).append(';');
+            check(rows.toString().equals("Turns:On,Off=0;Spacing:12%,50%,100%=0;Ink Fade:None,22%,Strong=1;"), "the stamp menu's rows: " + rows);
+            Brush spaced = DrawLayout.stamped(was, PartDial.STAMP_SPACING, .5);
+            check(DrawLayout.stampRows(spaced).get(1).marked == 1 && spaced.parts.part(BrushPart.TIP).get(PartDial.STAMP_SPACING) == .5, "a chip sets its dial");
+            // Make Stamp on the Lasso's bar (2026-11-02): the piece lifted round the block is the nib, as Cut Stamp's lasso's.
+            float[] loop = {40, 20, 90, 20, 90, 60, 40, 60};
+            FloatingSelection piece = LassoPlanes.lift(page, loop, 4);
+            StampNib fromPiece = LassoPieces.nib(piece);
+            check(fromPiece != null && fromPiece.width == 20 && fromPiece.height == 14, "the piece's ink, trimmed, as Cut Stamp's");
+            check(slots.makeStamp(piece, 1, 8) == 0 && slots.brush(0).parts.nib != 0 && slots.brush(1).parts.nib == 0, "a Stamp on the bar takes it, slot 1 in use or not");
+            ToolSlots none = new ToolSlots(mapStore(new HashMap<>()), new java.util.Random(5));
+            check(!none.brush(3).parts.stamps() && none.makeStamp(piece, 3, 8) == 3 && none.brush(3).parts.stamps() && none.brush(3).parts.nib != 0,
+                    "no Stamp on the bar: the slot in use becomes one");
+            check(none.undo() == 3 && !none.brush(3).parts.stamps(), "an Undo step");
+            check(none.makeStamp(piece, ToolSlots.ERASER, 8) == 0,
+                    "the eraser in use: the first slot");
+            // The hint until the first stamp is printed (DrawLayout.stampHint).
+            check(StampNib.MAKE.equals(DrawLayout.stampHint(ToolSlots.firstStamp(), false)) && StampNib.PRINT.equals(DrawLayout.stampHint(slots.brush(0), false))
+                    && DrawLayout.stampHint(slots.brush(0), true) == null && DrawLayout.stampHint(none.brush(1), false) == null,
+                    "the hint: Make Stamp's way, then how to print; none once printed or for another brush");
+            for (String w : new String[]{StampNib.MAKE, StampNib.PRINT}) check(w.length() <= 30 && !w.toLowerCase().contains("you"), "a note's length, no you: " + w);
+        } finally { StampNib.forget(); }
     }
 
     static BrushLibrary.Store mapStore(Map<String, String> kept) {

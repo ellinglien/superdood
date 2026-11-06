@@ -518,7 +518,7 @@ final class NotebookMigration {
     }
     /** {@code name} as one the app takes: other signs as spaces, at most 64 letters; {@code otherwise} if nothing is left. */
     static String safeName(String name, String otherwise) {
-        String safe = name.replaceAll("[^\\p{L}\\p{N} _-]+", " ").replaceAll(" +", " ").trim();
+        String safe = DrawingFiles.signsAsSpaces(name).replaceAll(" +", " ").trim();
         if (safe.length() > 64) safe = safe.substring(0, 64).trim();
         return safe.isEmpty() || safe.equals("_recovery") ? otherwise : safe;
     }

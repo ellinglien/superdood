@@ -28,8 +28,12 @@ public final class ModularStyleChecks {
             for (int n = 0; n < 300; n++) {
                 ModularBrush b = style.roll(random);
                 check(b.style == style && !b.name.isEmpty() && b.seed >= 0 && b.seed <= 0xffffffffL, style.name + " rolls a named brush in itself");
+                // As a version before Later holds it: a roll's mischief is in Drying (every roll's Later is one it holds, LaterChecks).
+                ModularBrush j = b.joined();
+                check(j != null && !j.later(), style.name + " rolls a Later an older version holds");
                 for (BrushPart part : BrushPart.values()) {
-                    ModularBrush.Part p = b.part(part);
+                    if (part == BrushPart.LATER) continue;
+                    ModularBrush.Part p = j.part(part);
                     // Float: rolled rarely from the seed, after every part (FloatChecks counts it), Spread .3–.8, Drift .5.
                     if (p.choice == PartChoice.FLOAT) {
                         check(style.floatOdds() > 0 && p.get(PartDial.F_SPREAD) >= .3 && p.get(PartDial.F_SPREAD) <= .8 && p.get(PartDial.DRIFT) == .5, style.name + " rolls Float only with odds, Spread .3–.8, Drift .5");
@@ -145,8 +149,11 @@ public final class ModularStyleChecks {
             ModularBrush.Part tip = b.part(BrushPart.TIP);
             check(tip.get(PartDial.DRY) + tip.get(PartDial.WOBBLE) <= 1.1 + 1e-9, "Anything goes caps a tip's roughness");
         }
-        // Resist rolls only with Watercolor (the lab's odds); the Stamp never (it needs a cut), nor Crayon, the Spiro, Stay in Lines or Wet (the presets'), nor the photo papers.
-        for (PartChoice c : PartChoice.values()) if (c.part != BrushPart.HAND && ModularFeatures.offered(c) && c != PartChoice.RESIST && c != PartChoice.STAMP && c != PartChoice.CRAYON && c != PartChoice.SPIRO && c != PartChoice.STAY_IN && c != PartChoice.SHAPE && c != PartChoice.HAND_HATCH && c != PartChoice.WET_PAINT && !ModularFeatures.photoPaper(c)) check(seen.contains(c), "Anything goes reaches " + c);
+        // Resist rolls only with Watercolor (the lab's odds); the Stamp never (it needs a cut), nor Crayon, Vector Ink, the Spiro, Stay in Lines or Wet (the presets'), nor the photo papers.
+        for (PartChoice c : PartChoice.values()) if (c.part != BrushPart.HAND && ModularFeatures.offered(c) && c != PartChoice.RESIST && c != PartChoice.STAMP && c != PartChoice.CRAYON && c != PartChoice.VECTOR && c != PartChoice.SPIRO && c != PartChoice.STAY_IN && c != PartChoice.SHAPE && c != PartChoice.HAND_HATCH && c != PartChoice.WET_PAINT && c != PartChoice.SCRAPE && c != PartChoice.REPRINT && !FadingInk.media(c.clocked()) && !ModularFeatures.photoPaper(c) && !ResolvedBrush.nib(c)) check(seen.contains(c), "Anything goes reaches " + c);
+        // Later's media (LaterMediaChecks) are never rolled either.
+        for (PartChoice c : LaterMediaChecks.MEDIA) check(!seen.contains(c), "Anything goes never rolls " + c);
+        check(!seen.contains(PartChoice.SCRAPE) && !seen.contains(PartChoice.REPRINT), "Anything goes never rolls Scrape or Reprint");
         check(!seen.contains(PartChoice.RESIST) && !seen.contains(PartChoice.STAMP) && !seen.contains(PartChoice.CRAYON) && !seen.contains(PartChoice.SPIRO) && !seen.contains(PartChoice.STAY_IN) && !seen.contains(PartChoice.SHAPE) && !seen.contains(PartChoice.HAND_HATCH) && !seen.contains(PartChoice.WET_PAINT), "but never Resist, the Stamp, Crayon, the Spiro, Stay in Lines, Filled Shape, Hand Hatch or Wet");
         check(seen.contains(PartChoice.CUSTOM) && seen.contains(PartChoice.STEADY), "and Custom and Steady hands");
     }

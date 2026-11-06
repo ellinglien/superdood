@@ -17,9 +17,10 @@ public final class BrushNamesChecks {
     public static void main(String[] args) throws IOException {
         Assets.install(Assets.folder(Assets.FOLDER));
         lists(); fresh(); kin(); edited();
-        traitList(); traits(); nonsense(); deadpan(); mold(); ties(); traitKin(); rolls(); sameAsLab();
+        traitList(); folkList(); traits(); nonsense(); deadpan(); mold(); ties(); traitKin(); rolls(); variety(); sameAsLab();
         System.out.println("PASS: names come from two text files: adjectives (-y and -ish welcome) and one- or two-syllable produce (no kiwi); a drawing is adjective-produce; a variation keeps the family part, and an older two-word name becomes adjective-family; an edited list with a BOM or blank lines, or an empty or missing list, never breaks naming;"
-                + " a rolled brush is named for what it is, deadpan and in Title Case (one in five its words: Sloppy Inky Drag; the rest Polite Smear, Regrettable Inky Hake, Dusty Aunt Charcoal, Inky Pen Junior, Smear of Mild Regret, Wash for Beginners, Inky Pen Situation, Budget Dusty Charcoal; about one in six with a made-up word: wobblefuzz, smudgekins), every name saying its part, from traits.txt's sections (most telling first: sloppy inky drag, giddy bloomy hake, gruff dusty chisel), the words picked by its seed so alike brushes differ; Mold (key halo) is mold; a variation keeps the rest under another word of its first word's line, and an older drip-plum keeps drip; 2,000 rolls are as before but for the name, and draw nothing more; the web lab's copy of the list is the same and names 19 app codes as the app does");
+                + " a rolled brush is named for what it is, in Title Case: about half a paint colour's by what it has (Harbour Fog, Burnt Toast, Rainy Harbour Fog), about a third one of 24 deadpan forms saying its part (Polite Smear, Smear of Mild Regret, Pen with Opinions, Smidge of Pencil; about one in six with a made-up word: wobblefuzz, smudgekins), the rest its part and a name (Wash McGrath), the words picked by its seed so alike brushes differ; Mold (key halo) is mold; a variation keeps the rest under another word of its first word's line, and an older drip-plum keeps drip; 2,000 rolls are as before but for the name, and draw nothing more;"
+                + " 500 saves in a row never repeat a deadpan form or a word of the last ten names, all fit two lines of a card, none rude; the web lab's copy of the list has the app's trait words, and 19 app codes name as pinned");
     }
     static void lists() {
         List<String> adjectives = BrushNames.adjectives(), produce = BrushNames.produce();
@@ -83,11 +84,26 @@ public final class BrushNamesChecks {
     /** names/traits.txt: three keyed sections of short words, every key one a brush can have, each ending in "any"; [deadpan]'s lines; [title]'s. */
     static void traitList() {
         Map<String, Map<String, List<String>>> sections = BrushNames.traits();
-        check(sections.keySet().equals(new HashSet<>(Arrays.asList(BrushNames.PART, BrushNames.DESCRIBER, BrushNames.FUN, BrushNames.DEADPAN, BrushNames.TITLE))), "traits.txt has its four brush sections and the notebook titles': " + sections.keySet());
+        check(sections.keySet().equals(new HashSet<>(Arrays.asList(BrushNames.PART, BrushNames.DESCRIBER, BrushNames.FUN, BrushNames.COLOUR, BrushNames.NOUN, BrushNames.DEADPAN, BrushNames.TITLE))), "traits.txt has its six brush sections and the notebook titles': " + sections.keySet());
         titleLists(sections);
         Map<String, List<String>> deadpan = sections.get(BrushNames.DEADPAN);
-        check(deadpan.keySet().equals(new HashSet<>(Arrays.asList("manner", "relative", "edition", "mild", "concern", "nonsense"))), "[deadpan]'s six lines: " + deadpan.keySet());
-        for (List<String> line : deadpan.values()) for (String w : line) check(w.matches("[a-z]{3,11}"), "A deadpan word is one short lowercase word: " + w);
+        Set<String> lines = new HashSet<>(Arrays.asList("nonsense"));
+        for (String f : BrushNames.FORMS) for (java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\{([a-z]+)\\}").matcher(f); m.find(); )
+            if (!m.group(1).equals("part") && !m.group(1).equals("describer")) lines.add(m.group(1));
+        check(deadpan.keySet().equals(lines) && BrushNames.FORMS.length == 24, "[deadpan] has a line for each word the 24 forms take, and nonsense: " + deadpan.keySet() + " " + lines);
+        // A form is known by its words (BrushNames.form), so no word is in two lines.
+        Set<String> once = new HashSet<>();
+        int deadpanWords = 0;
+        for (List<String> line : deadpan.values()) for (String w : line) {
+            check(w.matches("[a-z]{3,11}"), "A deadpan word is one short lowercase word: " + w);
+            check(once.add(w), "A deadpan word in one line only: " + w);
+            deadpanWords++;
+        }
+        check(deadpanWords >= 300, "Many deadpan words (54 before 2026-11-02): " + deadpanWords);
+        for (String section : new String[]{BrushNames.COLOUR, BrushNames.NOUN}) for (List<String> line : sections.get(section).values()) for (String w : line)
+            check(!once.contains(w), "A paint colour's word is no deadpan word, so its name is no form: " + w);
+        for (Map.Entry<String, Map<String, List<String>>> s : sections.entrySet()) for (List<String> line : s.getValue().values()) for (String w : line)
+            check(kind(w), "Kind words only: " + w);
         for (String end : deadpan.get("nonsense")) check(end.matches("[a-z]{3,7}"), "A nonsense ending is short: " + end);
         Set<String> known = knownKeys(), words = new HashSet<>();
         boolean y = false, ish = false;
@@ -107,6 +123,24 @@ public final class BrushNamesChecks {
         check(words.containsAll(Arrays.asList("drag", "chisel", "hake", "nib", "charcoal", "inky", "dusty", "bloomy", "waxy", "sloppy", "giddy", "patient")), "The owner's words are there");
         for (List<String> line : deadpan.values()) words.addAll(line);
         check(BrushNames.traitWords().equals(words), "Every word a variation can tell");
+    }
+
+    /** Words no name has, whole or inside another (the owner: "nothing rude"). */
+    static final List<String> RUDE = Arrays.asList("damn", "hell", "crap", "poop", "fart", "butt", "arse", "ass", "sexy", "drunk", "tipsy", "stupid", "dumb", "ugly", "fat", "idiot", "loser", "kill", "dead", "hate", "karen", "hickey"),
+            WORST = Arrays.asList("fuck", "shit", "cunt", "cock", "dick", "piss");
+    static boolean kind(String text) {
+        String t = text.toLowerCase(java.util.Locale.ROOT);
+        for (String r : WORST) if (t.contains(r)) return false;
+        for (String w : t.split(" ")) if (RUDE.contains(w)) return false;
+        return true;
+    }
+    /** names/folks.txt: ordinary, old-fashioned and Newfoundland names, one a line, each once, short, kind. */
+    static void folkList() {
+        List<String> folks = BrushNames.folks();
+        check(folks.size() >= 60 && new HashSet<>(folks).size() == folks.size(), "folks.txt loads whole, each name once: " + folks.size());
+        for (String f : folks) check(f.matches("(Ma?c)?[A-Z][a-z]+") && f.length() <= BrushNames.LINE_LETTERS && kind(f), "A name is one Title Case word that fits a card's line, kind: " + f);
+        check(folks.containsAll(Arrays.asList("Delores", "Bartholomew", "McGrath")), "The owner's names are there");
+        for (String f : BrushNames.FOLKS_DEFAULT) check(folks.contains(f), "The built-in names are the file's: " + f);
     }
 
     /** A new notebook's title's lists: [title]'s eight lines, short words. */
@@ -205,10 +239,10 @@ public final class BrushNamesChecks {
             check(made > 120 && made < 220 && (seen.contains("giddy dustwhistle chisel") || seen.contains("giddy shy chiselkins")), "About one name in six has a made-up word: " + made + " " + seen);
         }
     }
-    /** A name's shape: Title Case words, "of" and "for" between (the owner, 2026-10-29: Title Case). */
-    static final String FORM = "[A-Z][a-z]+( ([A-Z][a-z]+|of|for)){1,3}";
+    /** A name's shape: Title Case words (a McGrath too), the forms' small words between (the owner, 2026-10-29: Title Case). */
+    static final String FORM = "[A-Z][a-z]+( ((Ma?c)?[A-Z][a-z]+|of|for|on|a|in|with|and)){1,3}";
     /** The forms' own words. */
-    static final Set<String> FORM_WORDS = new HashSet<>(Arrays.asList("of", "for", "beginners", "situation", "budget"));
+    static final Set<String> FORM_WORDS = new HashSet<>(Arrays.asList("of", "for", "on", "a", "in", "with", "and"));
     /** Whether {@code name} is {@code b}'s words, plain or made up, not a deadpan form. */
     static boolean plainName(ModularBrush b, String name) {
         return name.equalsIgnoreCase(String.join(" ", BrushNames.words(b))) || name.equalsIgnoreCase(String.join(" ", BrushNames.plainWords(b)));
@@ -222,25 +256,36 @@ public final class BrushNamesChecks {
     static void deadpan() {
         int forms = 0;
         Set<String> seen = new HashSet<>();
+        Set<Integer> kinds = new HashSet<>();
         for (int seed = 0; seed < 500; seed++) {
             ModularBrush b = brush("Fineliner", seed, PartChoice.HAKE, PartChoice.WASH, PartDial.BLOOM, .6);
+            List<String> all = BrushNames.deadpan(BrushNames.words(b), BrushNames.plainWords(b), (int) b.seed ^ 0x7a175);
+            check(all.size() >= 10, "A brush has many deadpan forms to try (a made-up describer: those with it): " + all);
+            for (String f : all) {
+                check(f.matches(FORM) && f.toLowerCase(java.util.Locale.ROOT).contains("hake") && BrushNames.form(f) >= 0, "Each deadpan form says hake: " + f);
+                kinds.add(BrushNames.form(f));
+            }
             String n = BrushNames.name(b);
             seen.add(n);
-            check(n.toLowerCase(java.util.Locale.ROOT).contains("hake") && n.length() <= Brush.NAME_MAX && BrushNames.twoLines(n), "A bloomy hake's name says hake: " + n);
-            if (plainName(b, n)) continue;
+            check(n.length() <= Brush.NAME_MAX && BrushNames.twoLines(n) && n.matches(FORM), "A bloomy hake's name fits: " + n);
+            if (BrushNames.form(n) < 0) continue;
             forms++;
-            check(n.matches(FORM), "A deadpan form: " + n);
             String kin = BrushNames.kin(n, seed, new Random(seed));
             // (the same name where its first word's line has no other: "Hake of Some Regret")
             check(kin.endsWith(n.substring(n.indexOf(' '))) && Character.isUpperCase(kin.charAt(0)) ||!BrushNames.traitWords().contains(n.substring(0, n.indexOf(' ')).toLowerCase(java.util.Locale.ROOT)),
                     "A deadpan name's variation keeps all but its first word: " + n + ", " + kin);
         }
-        check(forms > 330 && forms < 470 && seen.stream().anyMatch(x -> x.contains(" of ")) && seen.stream().anyMatch(x -> x.endsWith(" Situation")), "Most are deadpan forms: " + forms + " " + seen);
+        check(kinds.size() == BrushNames.FORMS.length, "Every form is made, and known again: " + kinds.size());
+        check(forms > 100 && forms < 220 && seen.stream().anyMatch(x -> x.contains(" of ")) && seen.size() > 250, "About a third are deadpan forms: " + forms + ", " + seen.size() + " names");
+        // A paint colour's names and a part's name are no form; its kin keeps its last word under another first word of its line.
+        check(BrushNames.form("Harbour Fog") < 0 && BrushNames.form("Wash McGrath") < 0 && BrushNames.form("Polite Smear") == 0 && BrushNames.form("Sleepy Pen Junior") == 21
+                && BrushNames.form("Wash for Beginners") == 5 && BrushNames.form("Inky Pen for Beginners") == 23, "Forms are known by their words");
+        check(BrushNames.kin("Harbour Fog", 3, new Random(1)).matches("[A-Z][a-z]+ Fog") && !BrushNames.kin("Harbour Fog", 3, new Random(1)).equals("Harbour Fog"), "A paint colour's variation: " + BrushNames.kin("Harbour Fog", 3, new Random(1)));
         check(BrushNames.kin("Polite Smear", 3, new Random(1)).matches("[A-Z][a-z]+ Smear") && BrushNames.kin("Dusty Aunt Charcoal", 3, new Random(1)).equals("Sooty Aunt Charcoal")
                 && BrushNames.kin("Smear of Mild Regret", 3, new Random(1)).equals("Smudge of Mild Regret"), "Variations: " + BrushNames.kin("Polite Smear", 3, new Random(1)));
     }
-    /** checks.js nameChecks' too: a plain Fineliner at seeds 0 to 63, each name's first letter. */
-    static final String SEEDS = "UTIILPPSPOIBLSBIICIBILHDWIIIPBKIPPNSRISIBPLIIIPPNIDLCBIIPEIIPINI";
+    /** A plain Fineliner at seeds 0 to 63, each name's first letter, pinned (checks.js nameChecks has the lab's older ones). */
+    static final String SEEDS = "MFIIIPFPMPSFBSGLAFLTSINSMPPIPLNISMFIPRILDSILILINMMILIMTBPPMLIIIP";
     /**
      * Mold (choice key {@code halo}, shown as Mold): its word is "mold", by the key, never the label; ahead of a tip;
      * and the rolls that turn an Ink wash or Fineliner into Mold are mostly named for it.
@@ -252,7 +297,7 @@ public final class BrushNamesChecks {
         int molds = 0, moldNamed = 0;
         for (String style : new String[]{"Ink wash", "Fineliner", ModularStyle.ANYTHING_GOES}) for (int i = 0; i < 600; i++) {
             ModularBrush b = ModularStyle.named(style).roll(new Random(9000L + i));
-            if (b.choice(BrushPart.LIFE) != PartChoice.HALO) continue;
+            if (b.mischief() != PartChoice.LATER_MOLD) continue;
             molds++;
             if (BrushNames.plainWords(b).get(2).equals("mold") && b.name.equals(BrushNames.name(b))) moldNamed++;
         }
@@ -270,7 +315,7 @@ public final class BrushNamesChecks {
             for (String w : name.split("-")) picks.append(w.charAt(0));
         }
         check(names.size() >= 30, "Alike brushes mostly differ: " + names.size() + " names of 64");
-        check(picks.toString().equals(SEEDS), "as in the lab: " + picks);
+        check(picks.toString().equals(SEEDS), "as pinned: " + picks);
     }
     /** checks.js nameChecks' too: "drip-plum"'s variations at seeds 0, 7919, 15838 … */
     static final String KIN = "drip-yam drip-garlic drip-cherry drip-pear drip-garlic drip-peach drip-carrot drip-date ";
@@ -320,7 +365,9 @@ public final class BrushNamesChecks {
         List<ModularStyle> all = ModularStyle.all();
         Set<String> names = new HashSet<>();
         List<String> examples = new ArrayList<>();
-        int forms = 0, madeUp = 0;
+        int forms = 0, madeUp = 0, colours = 0, folks = 0;
+        Set<String> folkWords = new HashSet<>();
+        for (String f : BrushNames.folks()) folkWords.add(f.toLowerCase(java.util.Locale.ROOT));
         for (int i = 0; i < 2000; i++) {
             ModularStyle s = all.get(i % all.size());
             Random on = new Random(4040 + i), off = new Random(4040 + i);
@@ -330,55 +377,107 @@ public final class BrushNamesChecks {
             String plain = b.name.substring(0, b.name.indexOf('-'));
             check(on.nextInt() == off.nextInt() && a.seed == b.seed && ModularCode.encode(rename(a.copy(), b.name)).equals(ModularCode.encode(b)), "A roll named for what it is is otherwise as before: " + a.name + ", " + b.name);
             check(BrushNames.adjectives().contains(plain) && a.name.equals(BrushNames.name(a)) && a.name.length() <= Brush.NAME_MAX && BrushNames.twoLines(a.name)
-                    && a.name.matches(FORM), "Its name is its words or a deadpan form: " + a.name);
-            check(a.name.toLowerCase(java.util.Locale.ROOT).contains(hint(a)), "It says its part: " + a.name + " " + BrushNames.plainWords(a));
-            if (!plainName(a, a.name)) forms++;
-            for (String w : a.name.toLowerCase(java.util.Locale.ROOT).split(" ")) if (!BrushNames.traitWords().contains(w) && !FORM_WORDS.contains(w)) { madeUp++; break; }
+                    && a.name.matches(FORM) && kind(a.name), "Its name is Title Case, fits and is kind: " + a.name);
+            String low = a.name.toLowerCase(java.util.Locale.ROOT), last = low.substring(low.lastIndexOf(' ') + 1);
+            boolean folk = folkWords.contains(last), form = BrushNames.form(a.name) >= 0;
+            // A paint colour's name hints by its words ([colour] and [noun], by what the brush has); the rest say the part.
+            if (!form && !folk && !plainName(a, a.name)) {
+                colours++;
+                for (String w : low.split(" ")) check(BrushNames.traits().get(BrushNames.COLOUR).values().stream().anyMatch(l -> l.contains(w)) || BrushNames.traits().get(BrushNames.NOUN).values().stream().anyMatch(l -> l.contains(w)), "A paint colour's words: " + a.name);
+            } else check(low.contains(hint(a)), "It says its part: " + a.name + " " + BrushNames.plainWords(a));
+            if (form) forms++;
+            if (folk) folks++;
+            for (String w : low.split(" ")) if (!BrushNames.traitWords().contains(w) && !FORM_WORDS.contains(w) && !folkWords.contains(w)) { madeUp++; break; }
             names.add(a.name);
             if (i % 97 == 0 && examples.size() < 10) examples.add(a.name);
         }
-        check(names.size() > 1000 && forms > 1300 && forms < 1700 && madeUp > 150 && madeUp < 400, "Rolls' names vary: " + names.size() + " of 2000, " + forms + " deadpan forms, " + madeUp + " made up " + examples);
+        // The mix (the owner, 2026-11-02): paint colours about 55 in 100, deadpan 30, a part's name 15.
+        check(names.size() > 1500 && colours > 900 && colours < 1300 && forms > 450 && forms < 750 && folks > 180 && folks < 420 && madeUp > 50 && madeUp < 300,
+                "Rolls' names vary and mix: " + names.size() + " of 2000, " + colours + " paint colours, " + forms + " deadpan forms, " + folks + " part's names, " + madeUp + " made up " + examples);
     }
     /**
-     * The web lab (parts.js) carries the list as one string; it is the app's file, line for line, in the lab's sources,
-     * its page, Brush Studio and Brush Scan. App codes the lab names the same (checks.js nameChecks holds these too).
+     * The owner, 2026-11-02: "it's ok but seems to repeat quite often". 500 rolled brushes saved one after another, each
+     * named by the library ({@link BrushLab#suggestion}'s way): every name fits, is kind and is the same given again; no
+     * deadpan form and no word but a part's or describer's comes twice in any ten saves in a row; many forms and words.
+     * (Before, the same 500: 10 shapes, one shape up to 6 times in ten saves, a first word up to 4 times.)
+     */
+    static void variety() {
+        List<ModularStyle> all = ModularStyle.all();
+        List<String> library = new ArrayList<>(), forms = new ArrayList<>();
+        Set<String> firsts = new HashSet<>(), words = new HashSet<>();
+        for (int i = 0; i < 500; i++) {
+            ModularBrush b = all.get(i % all.size()).roll(new Random(777 + i));
+            List<String> recent = new ArrayList<>(library);
+            Collections.reverse(recent);
+            java.util.function.Predicate<String> taken = n -> library.stream().anyMatch(x -> BrushLibrary.sameName(x, n));
+            String n = BrushNames.name(b, taken, recent);
+            check(n.equals(BrushNames.name(b.copy(), taken, new ArrayList<>(recent))) && n.equals(BrushNames.described(b, b.name, taken, recent)), "The same brush and library, the same name: " + n);
+            check(n.length() <= Brush.NAME_MAX && BrushNames.twoLines(n) && n.matches(FORM) && kind(n) && !taken.test(n), "Every name fits two lines of a card, is kind and new: " + n);
+            library.add(n);
+            forms.add(BrushNames.form(n) >= 0 ? "#" + BrushNames.form(n) : null);
+            firsts.add(n.substring(0, n.indexOf(' ')));
+            words.addAll(BrushNames.marks(n));
+        }
+        int formRepeats = 0, wordRepeats = 0;
+        for (int i = 0; i + BrushNames.RECENT < library.size(); i++) {
+            Map<String, Integer> seen = new java.util.HashMap<>();
+            for (int j = i; j <= i + BrushNames.RECENT; j++) for (String m : BrushNames.marks(library.get(j))) seen.merge(m, 1, Integer::sum);
+            for (Map.Entry<String, Integer> e : seen.entrySet()) if (e.getValue() > 1) { if (e.getKey().startsWith("#")) formRepeats++; else wordRepeats++; }
+        }
+        Set<String> kinds = new HashSet<>(forms);
+        kinds.remove(null);
+        check(formRepeats == 0 && wordRepeats < 10, "No deadpan form and hardly a word again in any eleven saves in a row: " + formRepeats + ", " + wordRepeats);
+        check(kinds.size() >= 22 && firsts.size() > 180 && words.size() > 350, "Many forms and words: " + kinds.size() + " forms, " + firsts.size() + " first words, " + words.size() + " words");
+        // A part's name and the recent ones: the latest ten only.
+        ModularBrush b = brush("Fineliner", 5, PartChoice.WASH);
+        String n = BrushNames.name(b), other = BrushNames.name(b, x -> false, Collections.singletonList(n));
+        List<String> old = new ArrayList<>(Collections.nCopies(BrushNames.RECENT, "Plain Brush"));
+        old.add(n);
+        check(!other.equals(n) && Collections.disjoint(BrushNames.marks(other), BrushNames.marks(n)) && BrushNames.name(b, x -> false, old).equals(n), "A repeat of the latest name is passed by, of an older one not: " + n + ", " + other);
+    }
+    /**
+     * The web lab (parts.js) carries the list as one string, the older list (2026-10-29): the lab's and Brush Studio's
+     * JS copy names in the older eight forms where the app's engine isn't loaded. Its [part], [describer] and [fun] are
+     * the app's, line for line, in the lab's sources, its page, Brush Studio and Brush Scan. App codes the app names as pinned.
      */
     static void sameAsLab() throws IOException {
-        List<String> file = Assets.lines("names/traits.txt");
+        Map<String, Map<String, List<String>>> app = BrushNames.traits();
         String line = null;
         for (String l : Files.readAllLines(Paths.get("docs/brush-lab/prototypes/modular-lab-src/parts.js"), StandardCharsets.UTF_8))
             if (l.startsWith("const NAMES_TRAITS = ")) line = l;
         check(line != null, "parts.js has NAMES_TRAITS");
         String text = line.substring(line.indexOf('"') + 1, line.lastIndexOf('"')).replace("\\n", "\n").replace("\\\"", "\"");
-        check(Assets.lines(text.getBytes(StandardCharsets.UTF_8)).equals(file), "The web lab's traits are traits.txt's");
+        Map<String, Map<String, List<String>>> lab = BrushNames.traits(Assets.lines(text.getBytes(StandardCharsets.UTF_8)));
+        for (String s : new String[]{BrushNames.PART, BrushNames.DESCRIBER, BrushNames.FUN})
+            check(lab.get(s).equals(app.get(s)), "The web lab's [" + s + "] is traits.txt's");
         for (String page : new String[]{"docs/brush-lab/prototypes/modular-lab.html", "docs/brush-lab/studio.html", "docs/brush-lab/match-lab.html"})
             check(new String(Files.readAllBytes(Paths.get(page)), StandardCharsets.UTF_8).contains(line), page + " carries the same traits");
         for (int i = 0; i < LAB_NAMED.length; i += 2) {
             ModularBrush b = ModularCode.decode(LAB_NAMED[i]);
             String got = b == null ? "?" : BrushNames.name(b);
-            check(LAB_NAMED[i + 1].equals(got), "An app code names as the lab names it: " + LAB_NAMED[i + 1] + ", " + got + " " + LAB_NAMED[i]);
+            check(LAB_NAMED[i + 1].equals(got), "An app code names as pinned: " + LAB_NAMED[i + 1] + ", " + got + " " + LAB_NAMED[i]);
         }
     }
-    /** App rolls' codes and the names the app gives them now, as checks.js nameChecks has them. */
+    /** App rolls' codes (checks.js nameChecks has them, with the lab's older names) and the names the app gives them now. */
     static final String[] LAB_NAMED = {
-            "wild-plum.M00j40p000000at_000zz6400000000000_0_044_1jz_82500000000005w0000nz0.1o028zx", "Inkish Pen Situation",
-            "jumbo-okra.M10i0hpxm3d00at_000ve0000000000000_0_000_1jz_8zj0000000000i60000nz0.10hs76", "Regrettable Pen",
-            "split-mango.M24fvokcxi06l9s00_0apzz0000000000000_0_100_1jz_8u700i8000000990000nz0.zwz2n7", "Inkish Split Situation",
-            "smear-plum.M40i000000000at_4ht3b_3hmjsat_3sj_1jz_8egh500myeb00000000nz0.1154jqa", "Fuzzmonger Smear Junior",
-            "float-quince.M60i0000000008t_1zued00000000ee_0_0h0_3lldii0_8p90000000000000000nz0.d21ddj", "Lazy Blotchy Float",
-            "bristle-radish.Mb6vuj8jsqli0_2v400at_0_2qe_1jz_8dz0000000000000000nz0.171wrh6", "Ribbed Bristle",
-            "lift-apple.M80fy000000000v_2zz00at_177at_100_1jz_8720000000000000000nz0.xgo4h0", "Painty Niece Lift",
-            "lead-okra.Md22h84hw00rqs500ot_4ziua_0_000_1ul_8xb00dr00000000bz00nz1.qbqfn0", "Polite Scratchy Nib",
-            "dust-bean.M51sgeei03s3fck00at_383lkdnwe_0_0xu_1jz_8uvlj00ufg700000000nz0.1eetlzr", "Chisel of Some Bother",
-            "crease-parsnip.Mb0i00000yo007v_14hat00770000ee_0_4nj_1jz_8na0000000000000000nz0.ss1dt7", "Wash of Faint Worry",
-            "hatch-bean.Md887dj671zzm3_2u900at_0_04u_1qe_80000ep008g00gy8z00nz0.4oy7gg", "Budget Creamy Hatch",
-            "paint-beet.Md2a8qjeb006vik0066_2wp00at_0_26b_1re_8sx0000kf0000000000nz0.12l96hy", "Budget Scratchy Nib",
-            "under-lychee.M70i000on0000uq_1om00f70000phee2_0_000_1jz_8o20000000000000000nz0.169plr8", "Wash of Minor Worry",
-            "laid-shallot.Mb25aeei00000u100ak_19qat00770000ee_0_2ln_1jz_8fy0000000000000000nz0.gdoqm5", "Scratchy Cousin Nib",
-            "rake-date.Md5c08gdu00j0df75_2v3dmat_0_100_1va_8pn000000000000d500nz0.mig41m", "Budget Ridged Rake",
-            "white-quince.M80f6000000003k_2zz00at1_177at_04r_1jz_87c0000000000000000nz0.y41duu", "Chalky Lift Situation",
-            "invert-kale.Md0bmh92cfc00aj_1htdc00008700ee3_0_500_1et_8eyoy00000000q60000nz0.yo9dw8", "Odd Flipped Wash",
-            "mask-lychee.M60i000000000en_5_0_100_1jz_8em0000000000000000nz0.1qim1tm", "Prim Rubbery Mask",
-            "grain-date.Md0ayfd000082yf_0g8ny0000000000000_0_1n6_1t2_8000000ky00pt000000nz0.rdle15", "Pen for Beginners"};
+            "wild-plum.M00j40p000000at_000zz6400000000000_0_044_1jz_82500000000005w0000nz0.1o028zx", "Telegram Octopus",
+            "jumbo-okra.M10i0hpxm3d00at_000ve0000000000000_0_000_1jz_8zj0000000000i60000nz0.10hs76", "Pen Debbie",
+            "split-mango.M24fvokcxi06l9s00_0apzz0000000000000_0_100_1jz_8u700i8000000990000nz0.zwz2n7", "Speck of Split",
+            "smear-plum.M40i000000000at_4ht3b_3hmjsat_3sj_1jz_8egh500myeb00000000nz0.1154jqa", "Fuzzmonger Buddy Smear",
+            "float-quince.M60i0000000008t_1zued00000000ee_0_0h0_3lldii0_8p90000000000000000nz0.d21ddj", "Harbour Duck",
+            "bristle-radish.Mb6vuj8jsqli0_2v400at_0_2qe_1jz_8dz0000000000000000nz0.171wrh6", "Wiry Mop",
+            "lift-apple.M80fy000000000v_2zz00at_177at_100_1jz_8720000000000000000nz0.xgo4h0", "Allegedly Lift",
+            "lead-okra.Md22h84hw00rqs500ot_4ziua_0_000_1ul_8xb00dr00000000bz00nz1.qbqfn0", "Nib Winnifred",
+            "dust-bean.M51sgeei03s3fck00at_383lkdnwe_0_0xu_1jz_8uvlj00ufg700000000nz0.1eetlzr", "Dusty Twig",
+            "crease-parsnip.Mb0i00000yo007v_14hat00770000ee_0_4nj_1jz_8na0000000000000000nz0.ss1dt7", "Gravel Teacup",
+            "hatch-bean.Md887dj671zzm3_2u900at_0_04u_1qe_80000ep008g00gy8z00nz0.4oy7gg", "Lined Mailbox",
+            "paint-beet.Md2a8qjeb006vik0066_2wp00at_0_26b_1re_8sx0000kf0000000000nz0.12l96hy", "Dutiful Nib Prototype",
+            "under-lychee.M70i000on0000uq_1om00f70000phee2_0_000_1jz_8o20000000000000000nz0.169plr8", "Backroom Curtain",
+            "laid-shallot.Mb25aeei00000u100ak_19qat00770000ee_0_2ln_1jz_8fy0000000000000000nz0.gdoqm5", "Bargain Scratchy Nib",
+            "rake-date.Md5c08gdu00j0df75_2v3dmat_0_100_1va_8pn000000000000d500nz0.mig41m", "Skipper Rake",
+            "white-quince.M80f6000000003k_2zz00at1_177at_04r_1jz_87c0000000000000000nz0.y41duu", "Blizzard Eraser",
+            "invert-kale.Md0bmh92cfc00aj_1htdc00008700ee3_0_500_1et_8eyoy00000000q60000nz0.yo9dw8", "Backward Pancake",
+            "mask-lychee.M60i000000000en_5_0_100_1jz_8em0000000000000000nz0.1qim1tm", "Rubber Tape",
+            "grain-date.Md0ayfd000082yf_0g8ny0000000000000_0_1n6_1t2_8000000ky00pt000000nz0.rdle15", "Grainy Pen Instead"};
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 }

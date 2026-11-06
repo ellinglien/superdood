@@ -27,7 +27,7 @@ public final class LassoChecks {
         return doc;
     }
     /** Layer {@code index}'s (-1: the fluid) planes over w × h at x, y, one after another: its base's, then each kind plane's (blank where none). */
-    private static byte[] planes(ToneDocument doc, int index, int x, int y, int w, int h) {
+    static byte[] planes(ToneDocument doc, int index, int x, int y, int w, int h) {
         int n = w * h, kinds = index < 0 ? 0 : ToneDocument.PLANES;
         byte[] t = new byte[n], a = new byte[n], s = new byte[n], p = new byte[n], k = new byte[n], all = new byte[5 * n * (1 + kinds)];
         for (int plane = -1; plane < kinds; plane++) {
@@ -38,7 +38,7 @@ public final class LassoChecks {
         }
         return all;
     }
-    private static byte[][] whole(ToneDocument doc) {
+    static byte[][] whole(ToneDocument doc) {
         return new byte[][]{planes(doc, 0, 0, 0, doc.width, doc.height), planes(doc, 1, 0, 0, doc.width, doc.height), planes(doc, -1, 0, 0, doc.width, doc.height)};
     }
     /** Layer {@code layer}'s coverage at x, y as it looks: its base and kind planes. */

@@ -22,7 +22,7 @@ enum PartDial {
     HEAD_TURN(BrushPart.TIP, "headTurn", "Head Follows", 0, "Stroke", "Page"),
     GAP(BrushPart.TIP, "gap", "Tine Gap", 0, 1, .55),
     COUNT(BrushPart.TIP, "count", "Lines", 2, 5, 3, true),
-    REACH(BrushPart.TIP, "reach", "Spacing", 0, 1, .6),
+    REACH(BrushPart.TIP, "reach", "Line Spacing", 0, 1, .6),
     HAIRS(BrushPart.TIP, "hairs", "Hairs", 6, 32, 26, true),
     COHESION(BrushPart.TIP, "cohesion", "Clump", 0, 1, .55),
     SPLAY(BrushPart.TIP, "splay", "Splay", 0, 1, .45),
@@ -43,8 +43,12 @@ enum PartDial {
      * ({@link ModularCode#ADDED}).
      */
     BUILD_UP(BrushPart.TIP, "hold", "Build-Up", 0, "Off", "Slow", "Fast"),
-    /** Hatch ({@link HatchStamper}): the lines' spacing and weight, their angle on the page (or to the stroke), how many directions pressure crosses. */
-    PITCH(BrushPart.TIP, "pitch", "Spacing", 0, 1, .4),
+    /**
+     * Hatch ({@link HatchStamper}): the lines' spacing and weight, their angle on the page (or to the stroke), how many
+     * directions pressure crosses. Line Spacing as a Rake's (one concept: how far apart lines laid side by side are),
+     * not a Stamp's Spacing, how far apart its prints land (docs/TEXT-STYLE.md, one term per concept, 2026-10-31).
+     */
+    PITCH(BrushPart.TIP, "pitch", "Line Spacing", 0, 1, .4),
     LINE_W(BrushPart.TIP, "lineW", "Line Weight", 0, 1, .3),
     HANGLE(BrushPart.TIP, "hangle", "Line Angle", 0, 180, 45),
     LAYERS(BrushPart.TIP, "layers", "Layers", 1, 3, 3, true),
@@ -54,6 +58,13 @@ enum PartDial {
      * written only when on ({@link ModularCode#ADDED}); rolled rarely from the seed ({@link ModularStyle#rollFlick}).
      */
     FLICK(BrushPart.TIP, "flick", "Flick", 0, 1, 0),
+    /**
+     * Wears Down (the module gaps, 2026-10-31: an erodible tip, a pencil or a stick going blunt): how fast a Round or
+     * Chisel line's tip grows a flat facet on the side it leans on as it draws ({@link StrokePoints#wornAt}); drawn on
+     * the facet the line is broader and flatter on that side, and turning the pen brings back a sharp edge. Within a
+     * stroke only, so a replay draws it the same. After Flick, written only when on ({@link ModularCode#ADDED}); never rolled.
+     */
+    WEAR(BrushPart.TIP, "wear", "Wears Down", 0, 1, 0),
     /**
      * Stamp (mischief-lab-2.html's; {@link StampStamper}): how far apart its prints land, a share of its size: small, a
      * continuous nib trail; large, separate prints (a tap prints once).
@@ -93,6 +104,8 @@ enum PartDial {
     HLEN(BrushPart.TIP, "hlen", "Line Length", 0, 1, .5),
     HWOB(BrushPart.TIP, "hwob", "Wobble", 0, 1, .5),
     HENDS(BrushPart.TIP, "hends", "Taper Out", 0, 1, .7),
+    /** Brayer's ({@link Brayer}): how much of what it rolls over it picks up, to print again a turn later. */
+    PICKUP(BrushPart.TIP, "pickup", "Pick Up Paint", 0, 1, .5),
     // Medium
     WET(BrushPart.MEDIUM, "wet", "Wet", 0, 1, 0),
     LINE(BrushPart.MEDIUM, "line", "Pen Line", 0, 1, 1),
@@ -128,11 +141,11 @@ enum PartDial {
     /**
      * Screen (the mischief modules spec, Stage 1): a print screen the mark's greys reach the page through, pure black and
      * white by a threshold fixed to the page ({@link PrintScreen}): none, halftone, engraving (a line screen), dither,
-     * grain, then (appended, so old codes read as before) rosette, Ben-Day, crosshatch, wavy lines, mezzotint and diamond dots, then stipple, woodcut, scribble and hatching, whose look changes as they darken; shown as {@link PrintScreen#LABEL} (the owner's "Print shading"). After
+     * grain, then (appended, so old codes read as before) rosette, Ben-Day, crosshatch, wavy lines, mezzotint and diamond dots, then stipple, woodcut, scribble and hatching, whose look changes as they darken, then risograph, photocopy and soft dither (blue noise; 2026-10-31), then maze, brick, basketweave, waves (seigaiha), honeycomb and rings, lines thickening with the grey (2026-11-06), then pixels and stitches, a grey a cell (the same day); shown as {@link PrintScreen#LABEL} (the owner's "Print shading"). After
      * Blend on every medium that has it, with its own dials after it, each written only when not its default
      * ({@link ModularCode#ADDED}).
      */
-    SCREEN(BrushPart.MEDIUM, "screen", PrintScreen.LABEL, 0, "None", "Halftone", "Engraving", "Dither", "Grain", "Rosette", "Ben-Day", "Crosshatch", "Wavy Lines", "Mezzotint", "Diamond Dots", "Stipple", "Woodcut", "Scribble", "Hatching"),
+    SCREEN(BrushPart.MEDIUM, "screen", PrintScreen.LABEL, 0, "None", "Halftone", "Engraving", "Dither", "Grain", "Rosette", "Ben-Day", "Crosshatch", "Wavy Lines", "Mezzotint", "Diamond Dots", "Stipple", "Woodcut", "Scribble", "Hatching", "Risograph", "Photocopy", "Soft Dither", "Maze", "Brick", "Basketweave", "Waves", "Honeycomb", "Rings", "Pixels", "Stitches"),
     /** Screen's and Tone's cell, page px (the prototype's 3 to 16; a pixel there is about one of the Manta's, 6 px about .5 mm), and their angle. */
     CELL(BrushPart.MEDIUM, "cell", "Pattern Size", 3, 16, 6, true),
     S_ANGLE(BrushPart.MEDIUM, "sangle", "Angle", 0, 90, 45),
@@ -156,6 +169,13 @@ enum PartDial {
     WAX(BrushPart.MEDIUM, "wax", "Wax", 0, 1, .6),
     /** Crayon's Scratch: On, a thin blade that scrapes back to white (scratch-through on a black page). */
     SCRATCH(BrushPart.MEDIUM, "scratch", "Scratch", 0, "Off", "On"),
+    /**
+     * Water-Soluble, shown as Dissolves (explore-media, 2026-11-01): a water-soluble pencil, or ink that isn't waterproof. On, the mark lies
+     * with the washes (its pair's wash half, as paint, {@link ResolvedBrush#soluble}), so Clear Water (the Water brush)
+     * dissolves it into a wash as it does a dried wash, and the eraser takes it as paint. Last of Ink's, Charcoal's and
+     * Graphite's dials, written only when on ({@link ModularCode#ADDED}); never rolled or varied.
+     */
+    SOLUBLE(BrushPart.MEDIUM, "soluble", "Dissolves", 0, "Off", "On"),
     // Carry
     PICK(BrushPart.CARRY, "pick", "Pick Up Paint", 0, 1, .4),
     LAY(BrushPart.CARRY, "lay", "Lay Down Paint", 0, 1, .5),
@@ -186,6 +206,14 @@ enum PartDial {
     /** Paint Load's Starting Load: the share of a full load every stroke starts with (the owner: "start with a small load"). Last, written only when off its default. */
     PMIN(BrushPart.CARRY, "pmin", "Starting Load", 0, 1, .25),
     /**
+     * Smear's and Clear Water's Press (the owner, 2026-10-30: two smudge tools that use pressure as real media do): how
+     * far a firm press takes the brush from what its light touch does ({@link ResolvedBrush.Carry#pressed}). Smear's,
+     * Press to Push: Soften falls toward 0, so a light touch softens in place and a firm one pushes paint along. Clear
+     * Water's, Press to Lift: Lay Down Paint and the wet it leaves fall toward 0, so a light touch re-wets paint and a firm
+     * one blots it off. Off, as before. Last in their lists, written only when on ({@link ModularCode#ADDED}); never rolled.
+     */
+    PRESS(BrushPart.CARRY, "press", "Press to Push", 0, 1, 0),
+    /**
      * Stay in Lines' Flood (mischief-lab-2.html's Spread; "spread" is an engine word on screen, docs/TEXT-STYLE.md): how
      * far the wash runs on past the brush inside the ink lines, {@link StayIn#reach}: 220 × flood² of the prototype's px
      * (about 35 mm at 1); 0, the brush alone; 1, the whole shape ("Fills").
@@ -210,22 +238,50 @@ enum PartDial {
     G_POOL(BrushPart.LIFE, "pool", "Pools Downhill", 0, 1, 0),
     SINK(BrushPart.LIFE, "sink", "Grainy", 0, 1, 0),
     BLEND(BrushPart.LIFE, "blend", "Rock to Blend", 0, 1, 0),
+    /**
+     * Later's (roadmap step 7): Float's floating time, Drying Time's range and key as Float's own Drying Time was (the
+     * retired {@link PartChoice#FLOAT} still holds that one), shown as it is.
+     */
+    FLOAT_TIME(BrushPart.LATER, "drying", "Floating Time", 0, 1, 0),
     /** Float: how big a tap's drop is (small rings to wide rings), and how fast floating paint drifts on a tilted page. */
-    F_SPREAD(BrushPart.LIFE, "spread", "Ring Size", 0, 1, .5),
-    DRIFT(BrushPart.LIFE, "drift", "Drift Downhill", 0, 1, .5),
+    F_SPREAD(BrushPart.LATER, "spread", "Ring Size", 0, 1, .5),
+    DRIFT(BrushPart.LATER, "drift", "Drift Downhill", 0, 1, .5),
     /**
      * Halo (the new modules spec, {@link HaloGrowth}): how far its veins reach past the stroke (12 to 80 px, wider with
      * a broad tip, at most three times its width), and how many scouts grow them and how fast veins darken.
      */
-    H_REACH(BrushPart.LIFE, "reach", "Mold Length", 0, 1, .5),
-    GROWTH(BrushPart.LIFE, "growth", "Mold Growth", 0, 1, .5),
+    H_REACH(BrushPart.LATER, "reach", "Mold Length", 0, 1, .5),
+    GROWTH(BrushPart.LATER, "growth", "Mold Growth", 0, 1, .5),
     /**
      * Fading's and Lemon Juice's time (the mischief modules spec, Stage 3; {@link FadingInk}), seconds: how long a
-     * fading mark takes to go (10 s to 2 min) and lemon juice to darken in (10 s to 10 min; minutes since the owner, 2026-10-30:
-     * "make it appear minutes late instead of right away. maybe 5 minutes?").
+     * fading mark takes to go (1 s to 2 min) and lemon juice to darken in (1 s to 10 min). From 1 s and fresh at it since
+     * the owner, 2026-11-06 ("30s seems like a long time to wait"); before, from 10 s, so an older code's time reads a few
+     * seconds shorter (codes hold a step over the dial's range, {@link ModularCode}).
      */
-    FADE_IN(BrushPart.LIFE, "fadeIn", "Fades In", 10, 120, 20),
-    DRY_IN(BrushPart.LIFE, "dryIn", "Dries In", 10, 600, 300),
+    FADE_IN(BrushPart.LATER, "fadeIn", "Fades In", 1, 120, 1),
+    DRY_IN(BrushPart.LATER, "dryIn", "Dries In", 1, 600, 1),
+    /**
+     * Later's media's macro dials (2026-10-31, {@link LaterMedia}): Salt's grains (few to many), Plastic Wrap's crinkle
+     * (its facets fine to coarse, 14 to 60 px), Feathering's hairlines (short to long, 3 to 17 px), Foxing's spots (few to
+     * many). Salt's and Plastic Wrap's time is Dries In, Foxing's too (shown Ages In); Feathering's its own Spreads In,
+     * seconds.
+     */
+    GRAINS(BrushPart.LATER, "grains", "Grains", 0, 1, .5),
+    CRINKLE(BrushPart.LATER, "crinkle", "Crinkle", 0, 1, .4),
+    THREADS(BrushPart.LATER, "threads", "Thread Length", 0, 1, .35),
+    SPOTS(BrushPart.LATER, "spots", "Spots", 0, 1, .45),
+    SPREAD_IN(BrushPart.LATER, "spreadIn", "Spreads In", 1, 20, 1),
+    /**
+     * Later's crafts and ageing (2026-11-01, {@link LaterMedia}): Letterpress's impression (light to deep), Torn Paper's
+     * edge (neat to ragged), Cross-Stitch's stitch, a cell of the fabric's grid (6 to 10 px), Cracks' cracks (few to many),
+     * Tarnish's darkening (light to deep). Letterpress's and Torn Paper's time is Spreads In (shown Prints In, Tears In),
+     * the others' Dries In (Stitches In, Ages In, Tarnishes In).
+     */
+    IMPRESSION(BrushPart.LATER, "impression", "Impression", 0, 1, .5),
+    TEAR(BrushPart.LATER, "tear", "Torn Edge", 0, 1, .5),
+    STITCH(BrushPart.LATER, "stitch", "Stitch Size", 6, 10, 8, true),
+    CRACKS(BrushPart.LATER, "cracks", "Cracks", 0, 1, .5),
+    TARNISH(BrushPart.LATER, "tarnish", "Tarnish", 0, 1, .5),
     /**
      * Wet's one dial (the wet paint spec; the owner's "one Stays Wet dial", 2026-10-22): how wet MonoPaint's wet canvas
      * keeps the paint ({@link ResolvedBrush.Wet}): how much of what lies under new paint mixes into it and how freely it
@@ -297,7 +353,20 @@ enum PartDial {
      * paper's tooth), held upright a crisp line as ever ({@link ResolvedBrush.Pen#shade}). After Gradient's, last of the
      * hand's, written only when on ({@link ModularCode#ADDED}).
      */
-    SIDE_SHADE(BrushPart.HAND, "tshade", "Tilt Shading", 0, 1, 0);
+    SIDE_SHADE(BrushPart.HAND, "tshade", "Tilt Shading", 0, 1, 0),
+    /**
+     * Steady Hand (the module gaps spec, 2026-10-31, top-10 item 2; Procreate's StreamLine, Lazy Nezumi): the mark is laid
+     * by a tip on a stiff, well-damped spring that trails the pen a little, so a wobbly slow hand draws a smooth line; the
+     * faster the hand the less ({@link SteadyHand}). After Tilt Shading, last of the hand's, written only when on
+     * ({@link ModularCode#ADDED}).
+     */
+    STEADY_HAND(BrushPart.HAND, "smooth", "Steady Hand", 0, 1, 0),
+    /**
+     * Long Stick (the same spec: Matisse's charcoal tied to a bamboo pole): the tip is weighted and its spring loose, so it
+     * swings and overshoots, quick turns looping ({@link SteadyHand}). After Steady Hand, last of the hand's, written
+     * only when on ({@link ModularCode#ADDED}).
+     */
+    LONG_STICK(BrushPart.HAND, "stick", "Long Stick", 0, 1, 0);
 
     /** The hand's nine cells (parts.js HAND_CELLS): pressure, tilt and speed, each to size, dark and width/angle. */
     static final PartDial[] HAND_CELLS = {PS, PD, PW, TS, TD, TW, SS, SD, SW};
@@ -341,6 +410,8 @@ enum PartDial {
     boolean underScreen() { return this == CELL || this == S_ANGLE || this == MIS || this == S_GAIN || this == UNEVEN; }
     /** Flick or Fling ({@link FlickFling}): off, a variation leaves it off, as it does gravity's. */
     boolean mischief() { return this == FLICK || this == FLING; }
+    /** Steady Hand or Long Stick ({@link SteadyHand}): off, a variation leaves it off, as it does Flick and Fling. */
+    boolean follows() { return this == STEADY_HAND || this == LONG_STICK; }
     /** One of gravity's dials: Slow's and Quick's five, Charcoal's Dust, the hand's page tilt. Rolls leave them off. */
     boolean gravity() {
         switch (this) { case RUNS: case DRIPS: case G_POOL: case SINK: case BLEND: case DUST: case GS: case GD: case GW: return true; default: return false; }
@@ -354,7 +425,7 @@ enum PartDial {
         switch (this) {
             case WEIGHT: case GAIN: return "×" + fixed(v, 2);
             case ANGLE: case HANGLE: case S_ANGLE: return Math.round(v) + "°";
-            case CELL: return Math.round(v) + " px";
+            case CELL: case STITCH: return Math.round(v) + " px";
             case MIS: return v < .5 ? "off" : Math.round(v) + " px";
             case COUNT: case HAIRS: case LAYERS: return String.valueOf(Math.round(v));
             case INK_LOAD: return fixed(v, 2);
@@ -367,8 +438,8 @@ enum PartDial {
             case PHASE: return Math.round(v * 90) + "°";
             // Whole millimetres from 10: "10 mm" keeps a value to six characters, the lab's 12 sp value column (LabLayout.VALUE_WIDEST).
             case WINDOW: return fixed(v, v >= 9.95 ? 0 : 1) + " mm";
-            case DRYING: return fixed(wetMs(v) / 1000.0, 1) + " s";
-            case FADE_IN: return Math.round(v) + " s";
+            case DRYING: case FLOAT_TIME: return fixed(wetMs(v) / 1000.0, 1) + " s";
+            case FADE_IN: case SPREAD_IN: return Math.round(v) + " s";
             case DRY_IN: { long s = Math.round(v); return s < 60 ? s + " s" : s / 60 + ":" + String.format(java.util.Locale.ROOT, "%02d", s % 60); }
             case FLOOD: return v < .005 ? "Brush" : v > .995 ? "Fills" : Math.max(1, Math.round(StayIn.mm(v))) + " mm";
             case GRADE: return grade(v);

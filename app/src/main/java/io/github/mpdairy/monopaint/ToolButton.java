@@ -43,6 +43,8 @@ final class ToolButton extends Button {
     private Drawable centerIcon;
     /** Drawn instead of the icon while unmarked, so the icon itself shows the selection, with no dot; or null. */
     private Drawable unmarkedIcon;
+    /** Its picture without the selection's mark (a tray row's, for Zen Mode's fan, {@link ZenFanView}). */
+    Drawable plainIcon() { return unmarkedIcon != null ? unmarkedIcon : centerIcon; }
     /** The icon in white, for {@link #selectionInverted}; made when first needed. */
     private Drawable invertedIcon;
     private int iconResource;

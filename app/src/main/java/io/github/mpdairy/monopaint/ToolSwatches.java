@@ -7,7 +7,7 @@ import java.util.Locale;
  * need per tool memory for size and shade"; one size and one grey for every brush from 2026-10-24 to 27). The size
  * slider, the size swatches, the grey strip, the grey bar and the Dropper set the picked tool's ({@link #useSize},
  * {@link #useGrey}); picking another tool brings back its own ({@link #look}), and a brush picked into a slot takes the
- * slot's, unless it brings its own ({@link #LOOK}, 2026-10-28). The eraser has no grey. Kept in the slots' store, read each time. Pure, checked on the desktop.
+ * slot's, unless it brings its own ({@link #LOOK}, 2026-10-28; a Basic tool's starting one, {@link ToolPresets#look}, 2026-11-02). The eraser has no grey. Kept in the slots' store, read each time. Pure, checked on the desktop.
  * <p>
  * Four swatches since 2026-10-19 (the owner's "1 more size and swatch option"), three before. Each list's three older
  * swatches stay where they were always kept, in their order (so an older build reads them as it did); the fourth, at
@@ -111,12 +111,14 @@ final class ToolSwatches {
         double px = diameter(brush, preset), darkness = grey(InkWashShades.Shade.saved(store.get(ToolSlots.SHADE + key)).ordinal());
         if (brush == null) {
             Double own = number(store.get(ERASER_PX));
-            return new Look(preset, own != null ? StrokeMath.clamp(own, ERASER_LEAST, ModularSizes.MAX) : px, darkness);
+            return new Look(preset, own != null ? ownPx(true, own) : px, darkness);
         }
         Double ownPx = number(store.get(PX + key)), own = number(store.get(DARK + key)), before = number(store.get(GREY + key));
-        return new Look(preset, ownPx != null ? StrokeMath.clamp(ownPx, ModularSizes.MIN, ModularSizes.MAX) : px,
+        return new Look(preset, ownPx != null ? ownPx(false, ownPx) : px,
                 own != null ? StrokeMath.clamp(own) : ModularSizes.sinceBlack(brush.parts, before != null ? StrokeMath.clamp(before) : darkness));
     }
+    /** A tool's own size as it draws at it, px: the eraser's ({@code eraser}) at least {@link #ERASER_LEAST}, a brush's at least {@link ModularSizes#MIN}; at most {@link ModularSizes#MAX}. */
+    static double ownPx(boolean eraser, double px) { return StrokeMath.clamp(px, eraser ? ERASER_LEAST : ModularSizes.MIN, ModularSizes.MAX); }
     /** The tool kept under {@code key} draws at size swatch {@code i}. */
     void chooseSize(String key, int i) { useSize(key, size(i)); }
     /** Sets size swatch {@code i} to {@code px} (1.5–360), and the tool kept under {@code key} draws at it. */
@@ -160,23 +162,29 @@ final class ToolSwatches {
      * rewrites keep it. Set by {@link LibraryCleanup}; a slot the brush is put in takes it ({@link #bring}).
      */
     static final String LOOK = "brush_look_";
+    /** {@link #LOOK}'s key for {@code brush}: its code with the name's slug in letters only, as before codes kept digits (2026-10-31), so a look kept then still finds it. */
+    static String lookKey(Brush brush) { String code = ModularCode.encode(brush.parts); return LOOK + BrushCode.slug(brush.name()) + code.substring(code.indexOf('.')); }
     /** {@code brush} brings {@code px}, and {@code darkness} (null: none, the slot's grey stays) into any slot it is put in. */
     void setLook(Brush brush, double px, Double darkness) {
-        store.put(LOOK + ModularCode.encode(brush.parts), write(px) + (darkness == null ? "" : "," + write(darkness)));
+        store.put(lookKey(brush), write(px) + (darkness == null ? "" : "," + write(darkness)));
     }
     /**
      * {@code from} was saved over as {@code to} (Brush Lab's Save, {@link BrushLibrary#update}): its own size and grey, if
      * it has them, are {@code to}'s now, unless {@code to} has its own already.
      */
     void moveLook(Brush from, Brush to) {
-        String was = LOOK + ModularCode.encode(from.parts), now = LOOK + ModularCode.encode(to.parts), look = store.get(was);
+        String was = lookKey(from), now = lookKey(to), look = store.get(was);
         if (look == null || was.equals(now)) return;
         if (store.get(now) == null) store.put(now, look);
         store.put(was, null);
     }
-    /** {@code brush} was put in the tool kept under {@code key}: the tool takes the brush's own size and grey, where it has them ({@link #LOOK}). */
+    /**
+     * {@code brush} was put in the tool kept under {@code key}: the tool takes the brush's own size and grey, where it has
+     * them ({@link #LOOK}), else a Basic tool's starting ones ({@link ToolPresets#look}).
+     */
     void bring(String key, Brush brush) {
-        String look = store.get(LOOK + ModularCode.encode(brush.parts));
+        String look = store.get(lookKey(brush));
+        if (look == null) look = ToolPresets.look(brush);
         if (look == null) return;
         String[] parts = look.split(",");
         Double px = number(parts[0]), darkness = parts.length > 1 ? number(parts[1]) : null;

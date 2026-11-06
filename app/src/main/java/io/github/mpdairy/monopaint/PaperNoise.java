@@ -40,14 +40,16 @@ final class PaperNoise {
         return out;
     }
     /** Adds {@code weight} times smooth noise on a lattice {@code cell} pixels apart, wrapping so it tiles. */
-    private static void octave(float[] sum, int side, int cell, float weight, int seed) {
+    static void octave(float[] sum, int side, int cell, float weight, int seed) { octave(sum, side, cell, weight, seed, 0, side); }
+    /** As {@link #octave(float[], int, int, float, int)}, rows {@code from} to {@code to} alone (a share of the work). */
+    static void octave(float[] sum, int side, int cell, float weight, int seed, int from, int to) {
         int cells = side / cell;
         float[] lattice = new float[cells * cells], blend = new float[cell];
         for (int y = 0; y < cells; y++) for (int x = 0; x < cells; x++) lattice[y * cells + x] = lattice(x, y, seed);
         for (int i = 0; i < cell; i++) blend[i] = smooth((i + .5f) / cell);
         // A row's lattice values, blended down from the lattice rows above and below it, then across.
         float[] row = new float[cells + 1];
-        for (int y = 0; y < side; y++) {
+        for (int y = from; y < to; y++) {
             int y0 = y / cell * cells, y1 = (y / cell + 1) % cells * cells;
             float ty = blend[y % cell];
             for (int x = 0; x < cells; x++) row[x] = weight * mix(lattice[y0 + x], lattice[y1 + x], ty);

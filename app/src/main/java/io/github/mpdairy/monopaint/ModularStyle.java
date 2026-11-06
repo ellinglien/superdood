@@ -250,12 +250,15 @@ final class ModularStyle {
         }
         for (BrushPart part : BrushPart.values()) if (old == null || !locks.parts.contains(part)) rollGravity(b.part(part), locks.dials, random);
         for (BrushPart part : BrushPart.values()) if (old == null || !locks.parts.contains(part)) rollLate(b, part, old == null ? null : old.part(part), locks.dials, random);
-        if (old == null || !locks.parts.contains(BrushPart.LIFE)) rollFloat(b);
+        // The mischief rolls lay a retired Drying choice (Float, Mold, Fading, Lemon Juice), which normalize splits into Drying
+        // and Later at the end (ModularBrush#split): so every roll is what it was before Later. Neither part locked.
+        boolean mischief = old == null || !locks.parts.contains(BrushPart.LIFE) && !locks.parts.contains(BrushPart.LATER);
+        if (mischief) rollFloat(b);
         if (old == null || !locks.parts.contains(BrushPart.TIP)) rollBristles(b, old == null ? null : old.part(BrushPart.TIP), locks.dials, new Random(b.seed ^ 0xb415e5L));
         if (old == null || !locks.parts.contains(BrushPart.TIP)) rollPattern(b);
         keepErasable(b, old);
         if (old == null || !locks.parts.contains(BrushPart.MEDIUM) && !locks.dials.contains(M_BLEND)) rollBlend(b);
-        if (old == null || !locks.parts.contains(BrushPart.LIFE)) rollHalo(b);
+        if (mischief) rollHalo(b);
         if (old == null || !locks.parts.contains(BrushPart.MEDIUM) && !locks.dials.contains(LINE)) rollCore(b);
         if (old == null || !locks.parts.contains(BrushPart.TIP)) rollRake(b);
         if (old == null || !locks.parts.contains(BrushPart.MEDIUM)) rollTone(b);
@@ -265,7 +268,7 @@ final class ModularStyle {
         if (old == null || !locks.parts.contains(BrushPart.MEDIUM) && !locks.dials.contains(FLING)) rollFling(b);
         if (old == null || !locks.parts.contains(BrushPart.TIP)) rollFilbert(b);
         if (old == null || !locks.parts.contains(BrushPart.CARRY) && !locks.dials.contains(PLOAD)) rollPaintLoad(b);
-        if (old == null || !locks.parts.contains(BrushPart.LIFE)) rollFade(b);
+        if (mischief) rollFade(b);
         b.normalize();
         // Last, from the finished brush and its seed: what stands out takes the adjective's place ("drip-plum").
         b.name = BrushNames.described(b, name);
@@ -369,7 +372,7 @@ final class ModularStyle {
      */
     void rollHalo(ModularBrush b) {
         int n = haloRolls ? haloOdds() : 0;
-        if (n == 0 || b.choice(BrushPart.LIFE) == FLOAT || !(hash(b, HALO_SALT, 0) < 1.0 / n)) return;
+        if (n == 0 || b.floats() || !(hash(b, HALO_SALT, 0) < 1.0 / n)) return;
         ModularBrush.Part p = ModularBrush.switchTo(b.part(BrushPart.LIFE), HALO);
         p.set(H_REACH, lerp(.3, .8, hash(b, HALO_SALT, 1)));
         p.set(GROWTH, lerp(.3, .8, hash(b, HALO_SALT, 2)));
@@ -390,7 +393,7 @@ final class ModularStyle {
      */
     void rollClearWater(ModularBrush b) {
         int n = waterRolls ? waterOdds() : 0;
-        if (n == 0 || b.choice(BrushPart.LIFE) == FLOAT || !(hash(b, WATER_SALT, 0) < 1.0 / n)) return;
+        if (n == 0 || b.floats() || !(hash(b, WATER_SALT, 0) < 1.0 / n)) return;
         ModularBrush.Part p = new ModularBrush.Part(CLEAR_WATER);
         p.set(PICK, lerp(.35, .75, hash(b, WATER_SALT, 1)));
         p.set(LAY, lerp(.4, .8, hash(b, WATER_SALT, 2)));
@@ -471,8 +474,8 @@ final class ModularStyle {
      * first, Fades In 15 to 60 s from the seed too; else Lemon Juice, Dries In 3 to 7 min.
      */
     void rollFade(ModularBrush b) {
-        PartChoice life = b.choice(BrushPart.LIFE);
-        if (life == FLOAT || life == HALO) return;
+        PartChoice later = b.mischief();
+        if (later == LATER_FLOAT || later == LATER_MOLD) return;
         int fade = fadeRolls ? fadeOdds() : 0, lemon = lemonRolls ? lemonOdds() : 0;
         if (fade > 0 && hash(b, FADE_SALT, 0) < 1.0 / fade) {
             ModularBrush.Part p = new ModularBrush.Part(FADE);
@@ -588,9 +591,20 @@ final class ModularStyle {
         c.set(part, keepLocked(rollPart(part, old, locks.dials, random), old, locks.dials));
         rollGravity(c.part(part), locks.dials, random);
         rollLate(c, part, old, locks.dials, random);
+        if (part == BrushPart.LATER) c.set(part, keepLocked(rollChoice(rollLater(b, random), old, locks.dials, random), old, locks.dials));
         if (part == BrushPart.TIP) rollBristles(c, old, locks.dials, random);
         if (part == BrushPart.MEDIUM) keepErasable(c, b);
         return c.normalize();
+    }
+
+    /**
+     * Later's die: one of its mischief, evenly, that goes with the brush's Drying ({@link PartChoice#goesWith}); never
+     * Off (After's own chip is there for that).
+     */
+    private static PartChoice rollLater(ModularBrush b, Random random) {
+        List<PartChoice> all = new ArrayList<>();
+        for (PartChoice c : BrushPart.LATER.choices()) if (c != LATER_OFF && ModularFeatures.offered(c) && c.goesWith(b.choice(BrushPart.LIFE))) all.add(c);
+        return all.isEmpty() ? LATER_OFF : all.get((int) (random.nextDouble() * all.size()));
     }
 
     /**
@@ -637,8 +651,13 @@ final class ModularStyle {
             // defaults, drawing nothing from random.
             if (d == SCREEN || d.underScreen() || d == PATTERN || d == TTONE) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : c.defaultOf(d)); continue; }
             // Smear's Soften is never rolled: 0, today's smear, drawing nothing from random.
-            if (d == SOFTEN) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
+            // Wears Down neither (branch explore-knife): off, drawing nothing from random.
+            if (d == SOFTEN || d == WEAR) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
             // Keeps Paint is never rolled either: off, a smudge that starts each stroke clean, drawing nothing from random.
+            // Press to Push and Press to Lift neither: off, drawing nothing from random.
+            // Water-Soluble neither: off, drawing nothing from random.
+            if (d == SOLUBLE) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
+            if (d == PRESS) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
             if (d == KEEPS) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
             // Paint Load and its Starting Load neither: off and the default, drawing nothing from random (Oils' from the seed, rollPaintLoad).
             if (d == PLOAD || d == PMIN) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : c.defaultOf(d)); continue; }

@@ -39,6 +39,14 @@ final class WildSample {
     /** Where the loop's pressure is full, of the way along it: light at the start, firm from here to the end. */
     static final double LOOP_FIRM = .6;
     private static final Map<String, int[]> kept = new LinkedHashMap<>(KEPT, .75f, true);
+    /**
+     * The surface samples are drawn on (the surface spec, 2026-11-01: Brush Lab's previews use the open notebook's):
+     * the drawing screen sets it to the page's as it opens one. Null, each brush on its own paper, as the engine drew
+     * before surfaces (the desktop checks). Samples are kept by it too.
+     */
+    static volatile BrushTexture surface;
+    /** The page shown is on {@code s}: samples show it from now, and its grain is made out of the way ({@link BrushTexture#warm}). */
+    static void show(BrushTexture s) { surface = s; if (s != null) s.warm(); }
     /** The pixels {@link #kept} holds. */
     private static long keptPixels;
 
@@ -255,14 +263,15 @@ final class WildSample {
     /** As above at {@code size} px: a slot's tile or tray stroke at the slot's own size and grey. */
     static int[] modular(ModularBrush b, double darkness, Shape shape, float size, int width, int height, boolean keep) {
         float ref = shape == Shape.LOOP ? reach(width, height) : height;
-        // A smudge that lays little paint of its own (a Stump) shows over a grey band on its own layer, for it to smear.
+        // A smudge that lays little paint of its own (a Stump) shows over a grey band on its own layer, for it to smear,
+        // and the area it works dotted round its stroke ({@link #outlined}).
         boolean smears = smearsMostly(b);
         // A Spiro in Ring sizes its ring in a stroke of its own (DrawingPad.RingSetup): its loop is a tap, the whole rosette mid-tile.
         Supplier<float[][]> points = shape == Shape.LOOP && SpiroStamper.ring(ResolvedBrush.of(b, size, darkness).pattern)
                 ? () -> new float[][]{{width / 2f, height / 2f, (float) TYPICAL_PRESS, 0}}
                 : () -> typical(points(shape, width, height, size, ModularSizes.samplePad(size, ref)));
         return modular(b, darkness, shape + " " + size, size, points, width, height, keep,
-                page -> { if (smears) band(page, .42, .58, 150, ownLayer(b)); }, ModularWords.clearWater(b) ? ref : 0, true);
+                page -> { if (smears) band(page, .42, .58, 150, ownLayer(b)); }, ModularWords.clearWater(b) ? ref : 0, true, smears);
     }
     /**
      * The pressure travel a hand usually draws at (match-lab's "usual pressure of 0.6"): every brush's loop and tray
@@ -280,6 +289,18 @@ final class WildSample {
     }
     /** Whether {@code b} smudges and lays under half its own paint: on blank paper it would show little or nothing. */
     static boolean smearsMostly(ModularBrush b) { ResolvedBrush r = ResolvedBrush.of(b, 8, 1); return r.carry != null && r.carry.moves && r.load < .5; }
+    /** Whether {@code b} only reworks the marks there, laying little or no paint of its own: a smudge ({@link #smearsMostly}) or clear water. */
+    static boolean reworks(ModularBrush b) { return smearsMostly(b) || ModularWords.clearWater(b); }
+    /**
+     * Brush {@code b}'s name {@code name} as shown (cards, the tool picker, the bar, the brush line, Brush Lab's title, a
+     * kit's steps): one that only reworks the marks there ({@link #reworks}) says "Effect" after it
+     * ("Water Effect", "Palette knife Effect"; the owner, 2026-11-02: "they should use the word 'effect' in their name";
+     * 2026-11-03: "caps for Water Effect"), unless the name says it already. Display only: the name kept, in codes and the library, never changes.
+     */
+    static String shownName(String name, ModularBrush b) {
+        if (name == null || name.isEmpty() || !reworks(b) || name.matches("(?i).*\\beffects?\\b.*")) return name;
+        return name + " Effect";
+    }
     /** The layer {@code b} draws on: ink for ink, charcoal and graphite, wash for wash and cover ({@link ModularStroke#selectLayer}). */
     private static int ownLayer(ModularBrush b) { return ModularSizes.inks(b) ? InkWashLayers.INK : InkWashLayers.WASH; }
 
@@ -307,12 +328,12 @@ final class WildSample {
             case LIFE: points = () -> wave(width, height, pad, amp * .7f, 1, Press.LIFT, false); break;
             default: points = () -> typical(wave(width, height, pad, amp, 1.25, Press.SWELL, false));
         }
-        boolean rings = b.choice(BrushPart.LIFE) == PartChoice.FLOAT && (role == BrushPart.LIFE || ModularWords.clearWater(b));
+        boolean rings = b.floats() && (role == BrushPart.LIFE || role == BrushPart.LATER || ModularWords.clearWater(b));
         return modular(b, ModularSizes.sampleDarkness(b), role.toString(), size, points, width, height, true, page -> {
             if (role == BrushPart.MEDIUM || role == BrushPart.LIFE) band(page, .42, .58, 150, InkWashLayers.WASH);
             // A smudge moves only its own layer: the band and strip are on it.
             if (role == BrushPart.CARRY && !shape) { band(page, .42, .58, 60, ownLayer(b)); band(page, .2, .24, 40, ownLayer(b)); }
-        }, rings ? ref : 0, shape);
+        }, rings ? ref : 0, shape, false);
     }
     /**
      * How far a loop reaches in a {@code width × height} tile, the size its mark is measured against: its width, or .73
@@ -325,10 +346,10 @@ final class WildSample {
     /**
      * {@code b}'s stroke at {@code size} and {@code darkness} along {@code points}, over what {@code under} lays on the
      * blank page first; kept by its settings, the darkness, {@code what} it shows and the tile, if {@code keep}. A Filled
-     * Shape's closed and filled if {@code shapes} ({@link FilledShape}).
+     * Shape's closed and filled if {@code shapes} ({@link FilledShape}); the area it works dotted round it if {@code footprint} ({@link #outlined}).
      */
     private static int[] modular(ModularBrush b, double darkness, String what, float size, Supplier<float[][]> points, int width, int height,
-                                 boolean keep, Consumer<ToneDocument> under, float rings, boolean shapes) {
+                                 boolean keep, Consumer<ToneDocument> under, float rings, boolean shapes, boolean footprint) {
         String key = "parts " + b.key() + " " + String.format(Locale.ROOT, "%.3f", darkness);
         boolean dark = darkGround(b);
         // A resist shows by what refuses to take: a wash laid over it, every role (no band under it).
@@ -340,12 +361,63 @@ final class WildSample {
             else if (dark) band(page, 0, 1, DARK_GROUND, InkWashLayers.WASH);
             if (resist) return washedOver(page, shaped(page, b, size, darkness, shapes));
             under.accept(page);
-            return rings > 0 ? new FloatSample(page, b, size, darkness, rings) : shaped(page, b, size, darkness, shapes);
+            if (rings > 0) return new FloatSample(page, b, size, darkness, rings);
+            DrawingStroke s = shaped(page, b, size, darkness, shapes);
+            return footprint ? outlined(page, ResolvedBrush.of(b, size, darkness), s) : s;
         });
+    }
+    /** The footprint's dots: one {@link #FOOTPRINT_DOT} px square every {@link #FOOTPRINT_EVERY} px or so of its edge, ink. */
+    static final int FOOTPRINT_DOT = 2, FOOTPRINT_EVERY = 8;
+    /**
+     * {@code stroke} (a brush's that only reworks the marks there: a smudge, Water, a palette knife, Reprint), and when it
+     * finishes, the area it works dotted round it in ink: at each sample the ring the pen shows hovering there ({@link
+     * HoverNib#nib}, at that sample's pressure), their outer edge. On blank paper such a stroke shows nothing but over its
+     * band, so its size would not show (the owner, 2026-11-01: "hard to see what area is going to be affected theres no
+     * preview size"). Dots, as the hover ring's, so the outline reads as a reach, not a mark the brush lays.
+     */
+    private static DrawingStroke outlined(ToneDocument page, ResolvedBrush r, DrawingStroke stroke) {
+        List<float[]> at = new ArrayList<>();
+        return new DrawingStroke() {
+            @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY) { sample(x, y, pressure, tiltX, tiltY, PenSpeed.UNTIMED); }
+            @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY, long time) {
+                at.add(new float[]{x, y, (float) HoverNib.nib(r, ToolSettings.travel(pressure))[0] / 2});
+                stroke.sample(x, y, pressure, tiltX, tiltY, time);
+            }
+            @Override public boolean finish() { boolean changed = stroke.finish(); dotEdge(page, footprint(at, page.width, page.height)); return changed; }
+        };
+    }
+    /** Which pixels of a {@code width × height} tile lie within any of the discs {@code at} (x, y, radius). */
+    static boolean[] footprint(List<float[]> at, int width, int height) {
+        boolean[] in = new boolean[width * height];
+        for (float[] d : at) {
+            int x0 = Math.max(0, (int) Math.floor(d[0] - d[2])), x1 = Math.min(width - 1, (int) Math.ceil(d[0] + d[2]));
+            int y0 = Math.max(0, (int) Math.floor(d[1] - d[2])), y1 = Math.min(height - 1, (int) Math.ceil(d[1] + d[2]));
+            for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
+                float dx = x + .5f - d[0], dy = y + .5f - d[1];
+                if (dx * dx + dy * dy <= d[2] * d[2]) in[y * width + x] = true;
+            }
+        }
+        return in;
+    }
+    /**
+     * Ink dots on {@code in}'s edge (a pixel in it with one beside it out; the tile's sides are no edge), on the ink layer: one
+     * where {@code (x + 2y) mod FOOTPRINT_EVERY} is 0, so they space out along the edge whichever way it runs.
+     */
+    private static void dotEdge(ToneDocument page, boolean[] in) {
+        int w = page.width, h = page.height, n = FOOTPRINT_DOT;
+        int[] ink = new int[n * n];
+        page.selectLayer(InkWashLayers.INK);
+        page.begin();
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+            if (!in[y * w + x] || (x + 2 * y) % FOOTPRINT_EVERY != 0) continue;
+            boolean edge = x > 0 && !in[y * w + x - 1] || x < w - 1 && !in[y * w + x + 1] || y > 0 && !in[(y - 1) * w + x] || y < h - 1 && !in[(y + 1) * w + x];
+            if (edge) page.setTones(Math.min(x, w - n), Math.min(y, h - n), n, n, ink);
+        }
+        page.finish();
     }
     /** {@code b}'s stroke on {@code page}; a Filled Shape's filled at its finish if {@code shapes}. */
     private static DrawingStroke shaped(ToneDocument page, ModularBrush b, float size, double darkness, boolean shapes) {
-        DrawingStroke s = ModularStroke.start(page, b, size, darkness, null);
+        DrawingStroke s = SteadyHand.of(b, ModularStroke.start(page, b, size, darkness, null));
         return shapes ? FilledShape.of(page, b, s, size, darkness, null) : s;
     }
     /**
@@ -458,12 +530,15 @@ final class WildSample {
         return shape == Shape.LOOP ? loop(width, height, loopPad, 0, 0) : tray(width, height, size, trayAmp(size, height));
     }
     /** The pixels kept under {@code full}, or the {@code points} drawn by {@code maker}'s stroke, then kept if {@code keep}. */
-    private static int[] keep(String full, Supplier<float[][]> points, int width, int height, boolean keep, Maker maker) {
+    private static int[] keep(String what, Supplier<float[][]> points, int width, int height, boolean keep, Maker maker) {
+        // Kept by the surface it shows too.
+        BrushTexture on = surface;
+        String full = (on == null ? "own" : on.label) + " " + what;
         synchronized (kept) {
             int[] pixels = kept.get(full);
             if (pixels != null) return pixels;
         }
-        int[] pixels = draw(points.get(), width, height, maker);
+        int[] pixels = draw(points.get(), width, height, on, maker);
         if (!keep) return pixels;
         synchronized (kept) {
             int[] replaced = kept.put(full, pixels);
@@ -475,8 +550,9 @@ final class WildSample {
         return pixels;
     }
 
-    private static int[] draw(float[][] points, int width, int height, Maker maker) {
+    private static int[] draw(float[][] points, int width, int height, BrushTexture on, Maker maker) {
         ToneDocument page = InkWashLayers.blank(width, height);
+        page.surface = on;
         DrawingStroke stroke = maker.start(page);
         // Points without a tilt have no reading: tilt changes nothing, as for a pen held upright, and a wide Tilt range
         // draws its natural hold rather than its upright fine point.

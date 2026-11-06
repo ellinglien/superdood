@@ -14,6 +14,9 @@ import java.util.Arrays;
  * places, the lattice point {@code (x >> shift, y >> shift)}, a tile holding {@link #SIDE} of them each way, indexed
  * at {@code ((ly & 63) << 6) | (lx & 63)}. Callers looping over pixels visit the lattice ({@link #up},
  * {@link #step}) and fetch a tile once per run inside it. With shift 0 lattice and page are the same. Pure.
+ * <p>
+ * With a {@link #grid} it holds a {@link FineGrid}'s points instead of the page's pixels (sharp dry brushes): its
+ * coordinates are the grid's, every point held.
  */
 final class FloatTiles {
     static final int SHIFT = 6, SIDE = 1 << SHIFT, MASK = SIDE - 1;
@@ -23,12 +26,17 @@ final class FloatTiles {
     final int shift;
     /** Lattice points a row and a column hold. */
     final int latticeWidth, latticeHeight;
+    /** The fine grid its points are, or null: the page's pixels. */
+    final FineGrid grid;
     private final int columns, rows;
     private final float[][] tiles;
 
     FloatTiles(int width, int height, float fill) { this(width, height, fill, 0); }
-    FloatTiles(int width, int height, float fill, int shift) {
-        this.width = width; this.height = height; this.fill = fill; this.shift = shift;
+    /** {@code grid}'s points, each {@code fill} until written. */
+    FloatTiles(FineGrid grid, float fill) { this(grid.width, grid.height, fill, 0, grid); }
+    FloatTiles(int width, int height, float fill, int shift) { this(width, height, fill, shift, null); }
+    private FloatTiles(int width, int height, float fill, int shift, FineGrid grid) {
+        this.width = width; this.height = height; this.fill = fill; this.shift = shift; this.grid = grid;
         latticeWidth = (width + (1 << shift) - 1) >> shift; latticeHeight = (height + (1 << shift) - 1) >> shift;
         columns = (latticeWidth + MASK) >> SHIFT; rows = (latticeHeight + MASK) >> SHIFT;
         tiles = new float[columns * rows][];

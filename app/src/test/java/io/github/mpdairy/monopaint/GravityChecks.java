@@ -267,7 +267,9 @@ public final class GravityChecks {
             check(cv(ws) >= .04 && cv(ws) <= .2 && wlo >= .7 && whi <= 1.35, f("Drips: widths a little varied (CV %.2f, %.2f–%.2f× the mean)", cv(ws), wlo, whi));
             List<Double> sg = new ArrayList<>(gaps); java.util.Collections.sort(sg);
             double med = sg.get(sg.size() / 2) / wm;
-            check(least >= wm && cv(gaps) >= .2 && med >= 3 && med <= 6, f("Drips: spaced unevenly about the edge's wavelength: median gap %.1f widths, CV %.2f, never closer than %.1f widths", med, cv(gaps), least / wm));
+            // Never closer than about a drip's width (a pair is laid TWIN_GAP of its own width apart): 0.995 of the mean
+            // width since the paper's grain shows a little less (StrokePaper.SHOWS, 2026-11-02), so within 5 %.
+            check(least >= .95 * wm && cv(gaps) >= .2 && med >= 3 && med <= 6, f("Drips: spaced unevenly about the edge's wavelength: median gap %.1f widths, CV %.2f, never closer than %.1f widths", med, cv(gaps), least / wm));
             check(joins >= 1, f("Drips: two side by side join now and then (%d over 12 strokes)", joins));
             double ml = mean(lens), ma = mean(loads), cov = 0, vl = 0, va = 0;
             for (int i = 0; i < lens.size(); i++) { double x = loads.get(i) - ma, y = lens.get(i) - ml; cov += x * y; va += x * x; vl += y * y; }
@@ -496,7 +498,7 @@ public final class GravityChecks {
             ModularBrush b = ModularCode.decode(p.code);
             check(ModularCode.encode(b).equals(p.code) || HandHatchChecks.handHatch(p.code), "An old code writes back as it was (Hand Hatch's as Hatch): " + p.code);
             // Float's paint drifts on a tilted page while it floats, as it should.
-            if (usesGravity(b) || b.choice(BrushPart.LIFE) == PartChoice.FLOAT) continue;
+            if (usesGravity(b) || b.mischief() == PartChoice.LATER_FLOAT) continue;
             if (drawn++ % 3 != 0) continue;
             double size = ModularSizes.inks(b) ? 8 : 50;
             diff += differ(draw(b, t -> PageTilt.LEVEL, washPts(40, 260, 100, 30), size, false).page, draw(b, t -> PageTilt.of(.3, .9), washPts(40, 260, 100, 30), size, false).page);

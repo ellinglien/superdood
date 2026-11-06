@@ -11,12 +11,14 @@ const here = f => fs.readFileSync(path.join(__dirname, f), "utf8");
 const { LAB, engineFiles } = require("../engine-files.cjs");
 const engine = engineFiles().map(f => fs.readFileSync(path.join(LAB, f), "utf8"));
 const mine = ["imaging.js", "analyze.js", "fit.js", "paper.js", "samples.js"].filter(f => fs.existsSync(path.join(__dirname, f))).map(here);
-// The app's drawn tools (DrawLayout.PICKER, in its order) with their share codes (ToolPresets.ROWS), read from the app's
+// The app's drawn tools (DrawLayout.PICKER, in its order) with their share codes (ToolPresets.ROWS, ToolSlots.FIRST), read from the app's
 // source at build time, so the fit compares the photo with the tools as they stand.
 const APP = path.join(__dirname, "..", "..", "..", "app", "src", "main", "java", "io", "github", "mpdairy", "monopaint");
 const presets = fs.readFileSync(path.join(APP, "ToolPresets.java"), "utf8"), layout = fs.readFileSync(path.join(APP, "DrawLayout.java"), "utf8");
 const rows = presets.slice(presets.indexOf("ROWS = {"), presets.indexOf("RETIRED = {"));
-const codeOf = new Map([...rows.matchAll(/\{"[^"]+", "([^"]+)", "([^"]+)", "[^"]*", "\d+"\}/g)].map(m => [m[1], m[2]]));
+// A row may carry a last field (Cracks' "40,0.8"); the default bar's brushes (ToolSlots.FIRST) are drawn too (2026-11-06).
+const slots = fs.readFileSync(path.join(APP, "ToolSlots.java"), "utf8"), first = slots.slice(slots.indexOf("FIRST = {")).split("};")[0];
+const codeOf = new Map([...rows.matchAll(/\{"[^"]+", "([^"]+)", "([^"]+)", "[^"]*", "\d+"(?:, "[^"]*")?\}/g), ...first.matchAll(/\{"[A-Z]+", "([^"]+)", "([^"]+)", "[^"]*", "[^"]*"\}/g)].map(m => [m[1], m[2]]));
 const picker = [...layout.slice(layout.indexOf("PICKER = {")).split("};")[0].matchAll(/\{"([^"]+)", "tip_/g)].map(m => m[1]);
 if (picker.length < 10 || picker.some(n => !codeOf.has(n))) throw new Error("DrawLayout.PICKER or ToolPresets.ROWS didn't read: " + picker.filter(n => !codeOf.has(n)));
 const drawn = "const DRAWN_TOOLS = " + JSON.stringify(picker.map(n => [n, codeOf.get(n)])) + ";";

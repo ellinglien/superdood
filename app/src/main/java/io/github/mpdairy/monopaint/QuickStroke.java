@@ -152,6 +152,12 @@ final class QuickStroke implements LiftingStroke {
      * stroke the drawing screen and Brush Lab's test page draw starts here ({@link InkWash#stroke}).
      */
     static DrawingStroke start(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session) {
+        // Steady Hand and Long Stick: the pen's samples reach the stroke through the tip's spring.
+        return SteadyHand.of(brush, begin(document, brush, size, darkness, session));
+    }
+    private static DrawingStroke begin(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session) {
+        // The surface: the page's, whatever paper the brush names (ModularBrush#onSurface).
+        brush = brush.onSurface(document.surface);
         ResolvedBrush r = ResolvedBrush.of(brush, size, darkness);
         // Wet (the wet paint spec): laid into the pair's wet paint, final under the pen; without a session (a sample), as Instant.
         if (r.wet != null && session != null) return new WetPaintStroke(document, brush, r, session);
@@ -162,7 +168,8 @@ final class QuickStroke implements LiftingStroke {
         Boolean always = benchAlways;
         // Draw once (the experiment): Pastels and Dry brush as Instant, quick, with no preview, each pixel written once.
         if (drawOnce && drawsOnce(brush)) {
-            if (brush.choice(BrushPart.LIFE) == PartChoice.FAST_WET) { brush = ResolvedBrush.asInstant(brush); r = ResolvedBrush.of(brush, size, darkness); }
+            ModularBrush laid = laidAs(brush);
+            if (laid != brush) { brush = laid; r = ResolvedBrush.of(brush, size, darkness); }
             always = true;
         }
         return (always != null ? always : quick(r)) ? new QuickStroke(document, brush, size, darkness, session, r) : new ModularStroke(document, brush, size, darkness, session);
@@ -174,12 +181,17 @@ final class QuickStroke implements LiftingStroke {
      * each pixel). Off by default; switched by the drawing screen from its launch ({@code drawOnce}, {@link PaintActivity}).
      */
     static volatile boolean drawOnce;
+    /** {@code brush} as its stroke lays it (on its surface already): Draw once's Pastels and Dry brush lay Quick as Instant. */
+    static ModularBrush laidAs(ModularBrush brush) {
+        return drawOnce && drawsOnce(brush) && brush.choice(BrushPart.LIFE) == PartChoice.FAST_WET && !brush.later() ? ResolvedBrush.asInstant(brush) : brush;
+    }
     /** Whether {@link #drawOnce} draws {@code brush} so: a Pastels or Dry brush one. */
     static boolean drawsOnce(ModularBrush brush) { return "Pastels".equals(brush.style.name) || "Dry brush".equals(brush.style.name); }
     /** The live-stroke bench's override of {@link #quick}: true, every stroke quick; false, every one live; null, the rule. */
     static volatile Boolean benchAlways;
     /** As {@link #start}, quick whatever the rule says: for the checks and the bench. */
     static QuickStroke quickly(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session) {
+        brush = brush.onSurface(document.surface);
         ModularStroke.selectLayer(document, brush);
         ResolvedBrush r = ResolvedBrush.of(brush, size, darkness);
         ModularStroke.prepare(document, r);
@@ -221,10 +233,13 @@ final class QuickStroke implements LiftingStroke {
     private final boolean once;
     /**
      * A smudge with no paint of its own that trails (the owner, 2026-10-23: smudges "take a second to show the effect"):
-     * no preview; the render composes whenever it has caught up, and the true smudge is written under the pen too, not
+     * no preview; the render composes whenever it has caught up and, while behind, every {@link #composeMs}
+     * ({@link #composesNow}), and the true smudge is written under the pen too, not
      * only behind it, so the smear shows as it is made rather than at lift.
      */
     private final boolean underPen;
+    /** The render thread's priority while the pen is down: the lowest, but a smudge's under the pen ({@link #underPen}) the usual. */
+    private final int priority;
     /** Paint Load: the share of its own paint under which the preview shows the brush as smudging only. */
     static final double SHOWN = .5;
     /**
@@ -311,6 +326,8 @@ final class QuickStroke implements LiftingStroke {
 
     private QuickStroke(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session, ResolvedBrush r) {
         this.document = document; this.session = session; this.r = r; this.brush = brush; this.size = size;
+        // Wears Down: the preview's tip wears as the true stroke's does.
+        pts.wear = r.pen.wear;
         gradient = GreyGradient.of(brush, darkness, session == null ? null : session.swatches);
         tilt = session != null ? session.tilt : () -> PageTilt.LEVEL;
         handTilt = ModularStroke.handTilt(r);
@@ -329,6 +346,7 @@ final class QuickStroke implements LiftingStroke {
         previewed = trails ? marks : null;
         boolean smudgeOnly = r.body == null && !r.line && r.carry != null && r.carry.moves;
         underPen = trails && smudgeOnly;
+        priority = underPen ? Thread.NORM_PRIORITY : Thread.MIN_PRIORITY;
         int across = underPen ? (int) Math.ceil((2 * r.carry.r + 2) / ToneDocument.TILE) + 1 : 0;
         trailMost = Math.max(TRAIL_TILES, 2 * across * across);
         // A smudge with no paint of its own shows its smudge's footprint (as the light wash, ModularCompose.flatTone); one
@@ -350,10 +368,17 @@ final class QuickStroke implements LiftingStroke {
         document.shareBase(true);
         // Its own thread and helpers, at the lowest priority while the pen is down ({@link Cores#quiet}): the pen's
         // thread never waits for it.
+        if (renderAtLift) return;
         Thread thread = new Thread(this::render, "Inkwash quick render");
         thread.setDaemon(true);
         thread.start();
     }
+    /**
+     * No second thread (the app's engine in the browser, web/engine): the true stroke is rendered at lift, on the thread
+     * that calls {@link #develop}, from every sample; the preview shows while the pen is down. The page ends the same
+     * (QuickStrokeChecks.sameAsLive). Off on the Manta.
+     */
+    static volatile boolean renderAtLift;
 
     @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY) { sample(x, y, pressure, tiltX, tiltY, PenSpeed.UNTIMED); }
     @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY, long time) {
@@ -461,6 +486,17 @@ final class QuickStroke implements LiftingStroke {
             if (n > 0) { trailTiles += n; trailWrites++; }
         } finally { composing.unlock(); }
     }
+    /**
+     * Whether the render thread composes what it has drawn now, {@code sinceMs} of its time after its last compose: a
+     * stroke's preview shows under the pen, so the render composes only every {@link #composeMs} while it keeps ahead of
+     * the pen ({@code waited} for samples since, {@code caughtUp} now). A smudge shown under the pen ({@link #underPen})
+     * has no preview: it composes whenever it has caught up, and every {@link #composeMs} while it is behind, so a big
+     * smudge the Manta can't keep up with shows its smear along the way as the render reaches it, not only when the pen
+     * pauses or lifts (the owner, 2026-11-04: "is there a way to update the area as it's being passed over?").
+     */
+    static boolean composesNow(boolean underPen, boolean waited, boolean caughtUp, long sinceMs) {
+        return underPen ? caughtUp || sinceMs >= composeMs : waited && caughtUp && sinceMs >= composeMs;
+    }
     /** No samples wait for the render thread. */
     private boolean caughtUp() { synchronized (incoming) { return incoming.isEmpty(); } }
 
@@ -472,8 +508,9 @@ final class QuickStroke implements LiftingStroke {
      */
     private void render() {
         Thread me = Thread.currentThread();
-        me.setPriority(Thread.MIN_PRIORITY);
-        Cores.quiet(true);
+        // A smudge shown under the pen has no preview for the pen's thread to draw: its render is all there is to see, so
+        // it runs at the usual priority (its helpers stay quiet). At the lowest, the Manta's busy cores left it starved.
+        if (!renderAtLift) { me.setPriority(priority); Cores.quiet(true); }
         try {
             boolean last = false, waited = false;
             long composed = System.nanoTime(), lifting = 0, framed = 0;
@@ -498,8 +535,9 @@ final class QuickStroke implements LiftingStroke {
                 }
                 // What it has drawn, composed off the page every composeMs, so the lift is left only the newest; only
                 // while it keeps ahead of the pen (it has waited for samples since, and none wait now): drawing them
-                // comes first. A smudge shown under the pen composes whenever none wait, so the newest shows too.
-                if (!last && (waited || underPen) && full.composesOffPage() && System.nanoTime() - composed >= (underPen ? 0 : composeMs) * 1_000_000 && caughtUp()) {
+                // comes first. A smudge shown under the pen composes whenever none wait, so the newest shows too, and
+                // every composeMs while it is behind (composesNow).
+                if (!last && full.composesOffPage() && composesNow(underPen, waited, caughtUp(), (System.nanoTime() - composed) / 1_000_000)) {
                     // Trail: the pen's thread writes what it composed behind the pen; never while it composes.
                     if (trails) composing.lock();
                     try {
@@ -557,6 +595,7 @@ final class QuickStroke implements LiftingStroke {
      */
     @Override public boolean develop(long nanos) {
         if (done) return false;
+        if (renderAtLift && isLifted() && !rendered) render();
         synchronized (incoming) {
             if (!lifted) return false;
             long end = System.nanoTime() + Math.min(nanos, Long.MAX_VALUE / 4);
@@ -588,6 +627,8 @@ final class QuickStroke implements LiftingStroke {
     @Override public boolean buildsWhileHeld() { return full.buildsWhileHeld(); }
     @Override public float ringGuide(float pressure, float tiltX, float tiltY) { return full.ringGuide(pressure, tiltX, tiltY); }
     @Override public int ringMode() { return full.ringMode(); }
+    /** A stump's other half, shown from the render's dabs as they land ({@link ModularStroke#unwritten}). */
+    @Override public Unwritten unwritten() { return full.unwritten(); }
     /** How many samples the stroke has had; how many the true stroke has drawn so far. */
     int samples() { synchronized (incoming) { return received; } }
     int rendered() { return fed; }
@@ -786,7 +827,8 @@ final class QuickStroke implements LiftingStroke {
                 if (screen != null && opaque == null && now <= (screen.tone ? Math.min(base[i], PrintScreen.DOT_TONE) : 0)) continue;
                 // Screen: its dots where the flat mark inks, as the compose lays them, built on the print tone there
                 // (the preview writes none: it is as the stroke found it); nothing elsewhere.
-                if (screen != null && !screen.ink(prints ? 1 - Math.round(PrintScreen.printed(document.printTone(x, y), screened, covers ? r.cover : 0)) / 255.0 : screened, x, y, document.height)) continue;
+                double inked = screen == null ? 0 : prints ? 1 - Math.round(PrintScreen.printed(document.printTone(x, y), screened, covers ? r.cover : 0)) / 255.0 : screened;
+                if (screen != null && !screen.ink(inked, x, y, document.height)) continue;
                 // White and Invert: over the page under it, shown whole (opaque); Behind: only where the page is blank.
                 if (opaque != null) {
                     int u = under != null ? under.tone(x, y) : base[i], want = screen == null ? dot[u] : mode == ResolvedBrush.BlendMode.WHITE ? 255 : 255 - u;
@@ -795,7 +837,8 @@ final class QuickStroke implements LiftingStroke {
                 }
                 if (fill == TOOTH && Crayon.tooth(x, y) < peaks) continue;
                 if (mode == ResolvedBrush.BlendMode.BEHIND && under != null && ModularCompose.blank(under.tone(x, y)) < .5) continue;
-                int want = screen == null ? dot[base[i]] : screen.tone ? Math.min(base[i], PrintScreen.DOT_TONE) : 0;
+                // Pixels and Stitches: the cell's grey (the preview's, pixel by pixel; the lift composes whole cells).
+                int want = screen == null ? dot[base[i]] : screen.tone ? Math.min(base[i], PrintScreen.DOT_TONE) : screen.cells ? Math.min(base[i], 255 - screen.dark(inked, x, y)) : 0;
                 if (covers && screen == null ? want != now : want < now) { tones[from - a + i] = want; any = true; }
             }
             return any;

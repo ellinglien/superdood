@@ -413,6 +413,19 @@ function heldDensity(d, washK, f) {
   const x = d * washK;
   return x <= KNEE ? d * (1 - f) : strength((1 - f) * laid(x)) / washK;
 }
+// Light over dark (the app's ResolvedBrush.lightOver): how opaque a light grey lays over darker marks. A dry stick's or
+// pencil's line and an opaque print, all of it; a pen's line or a Marker's flat ink, none at mid grey or darker, easing
+// up to all of it by a grey of 150 (of 255); anything else (transparent ink, washes, a Blend, Resist or smudge) darkens only.
+function lightOver(R) {
+  const gray = 255 * (1 - R.shade);
+  if (!(gray > 0) || (R.blend && R.blend !== "own") || R.resist || R.carry) return 0;
+  if (R.screen) return R.cover > 0 && (R.line || R.body) ? 1 : 0;
+  if (R.rule !== "ink") return R.line ? 1 : 0;
+  const pen = R.lineInk && R.line && R.parts.w < .5, marker = R.markerInk && R.body && !R.line;
+  if (!(pen || marker) || !(R.life === "none" || R.life === "wet" && pen) || R.fade || R.halo || R.float || !(gray > 128)) return 0;
+  const t = Math.min(1, (gray - 128) / 22);
+  return t * t * (3 - 2 * t);
+}
 function composeStroke(st, rect, phase) {
   const { surf, R } = st, { w, fine, mid } = surf, L = surf.L, page = surf.page, base = surf.base;
   const x0 = Math.max(0, rect[0]), y0 = Math.max(0, rect[1]), x1 = Math.min(surf.w - 1, rect[2]), y1 = Math.min(surf.h - 1, rect[3]);
@@ -426,18 +439,31 @@ function composeStroke(st, rect, phase) {
   const hold = R.hold, spread = R.spread, grade = R.grade;
   // Erasable: the stroke's paint over the kept tones too, as much as it won't erase (all of it for ink, none for pencil).
   const kept = surf.kept && st.e < 1 ? surf.kept : null, kb = kept ? surf.keptBase : null, ke = 1 - st.e;
+  // Light over dark: where the page under it is darker than its grey, its line lays that grey by its reach (lit of it
+  // opaque, the rest darkening), and a light pen's body covers as opaque paint does.
+  const lit = lightOver(R), lightShare = R.parts.inkShare * R.load, litBody = lit > 0 && rule === "ink";
+  // The page under it (planes.js planesUnder: the planes stacked; on one plane, its base), and what each pixel's write
+  // covers (cv: -1 transparent, as its darkness), the found coverage (the app's held) for light over dark.
+  const U = surf.under || base, CB = surf.covBase, behind = R.blend === "behind";
+  let cv = -1;
   // The stroke's tone at pixel i of row y over under (its line coverage c, its body d).
   const toneOf = (under, i, y, c, d) => {
     let tone = under, gray = tint && under < paint ? paint + (under - paint) * tint : paint;
+    const light = lit > 0 && paint > U[i];
     if (d > 0) {
+      const cover = light && litBody ? lit : R.cover;
+      let reach;
       if (preview) {
         const t = previewWash(under, R.previewShade);
-        tone = cover > 0 ? lerp(t, lerp(under, gray, Math.min(1, d)), cover) : t;
+        reach = Math.min(1, d);
+        tone = cover > 0 ? lerp(t, lerp(under, gray, reach), cover) : t;
       } else {
         const dd = Math.min(1.6, d), glaze = under * (1 - Math.fround(laid(dd * washK)));
-        tone = cover > 0 ? lerp(glaze, lerp(under, gray, Math.min(1, dd / body)), cover) : glaze;
+        reach = Math.min(1, dd / body);
+        tone = cover > 0 ? lerp(glaze, lerp(under, gray, reach), cover) : glaze;
         if (relief && relief[i]) tone = clamp(tone + relief[i], 0, 255);
       }
+      if (cover > 0) cv = Math.max(cv, cover * reach * (behind ? blankOf(U[i]) : 1));
     }
     if (c > 0) {
       let a = c;
@@ -457,17 +483,58 @@ function composeStroke(st, rect, phase) {
         a = c * smoothstep(1 - depth - soft, 1 - depth + soft, hp) * (1 - .5 * fl * fl) + c * .15 * spread;
       }
       if (keep) a *= keep[i];
-      if (a > 0) tone = tone * (1 - Math.fround(a * inkK));
+      const k = light ? Math.min(1, a * lightShare) : 0, held = CB ? CB[i] : 0;
+      if (k > 0 && lit < 1) { const dark = tone * (1 - Math.fround(a * inkK)); tone = dark + (tone + (paint - tone) * k - dark) * lit; cv = Math.max(cv, held + (1 - held) * k * lit); }
+      else if (k > 0) { tone += (paint - tone) * k; cv = Math.max(cv, held + (1 - held) * k); }
+      else if (a > 0 && !light) tone = tone * (1 - Math.fround(a * inkK));
     }
     return tone;
   };
   for (let y = y0; y <= y1; y++) for (let i = y * w + x0, e = y * w + x1; i <= e; i++) {
     const c = L[i], d = Bsrc[i], under = base[i];
-    if (c <= 0 && d <= 0) { page[i] = under; if (kept) kept[i] = kb[i]; continue; }
+    if (c <= 0 && d <= 0) { page[i] = under; if (kept) kept[i] = kb[i]; if (CB && surf.cov) surf.cov[i] = CB[i]; continue; }
+    cv = -1;
     page[i] = toneOf(under, i, y, c, d);
+    if (cv >= 0) planeCover(surf, i, cv);
     if (kept) { const k0 = kb[i]; kept[i] = k0 + (toneOf(k0, i, y, c, d) - k0) * ke; }
   }
 }
+// The app's lattice (ModularStroke.latticePx, FloatTiles.expand): a stroke whose marks reach wider than 50 px (a pen's,
+// ink, charcoal or graphite, 100 px; never a pattern's) is worked out on every other pixel each way and stretched back,
+// the Manta's speed for big strokes, its edges a pixel softer. Here every pixel is worked out and the compose reads the
+// odd ones as the stretch makes them: the mean of the two or four lattice points around.
+function swarmReach(b, radius) {
+  const Rp = Math.max(2, radius), k = Math.max(1, Rp / 10), R = Rp / k, press = !b.pressure ? 1 : 1 + .5 * b.pressure;
+  return 2 * (1.15 * Rp * (.8 + 1.05 * b.spreadH) * press + Math.max(.55, R * .1) * 1.25 * k * 1.4 * (1 + 1.2 * (b.tiltSize || 0)));
+}
+function strokeReach(R) {
+  let line = R.line ? R.inkSize * (1 + .6 * R.pen.pressure) * (1 + 1.06 * (R.pen.fuzz || 0)) : 0;
+  if (R.linePlaced) line = Math.max(line, R.placeSize);
+  if (R.line && R.lineTip === "bristles") line = swarmReach(R.lineSwarm, R.inkSize / 2);
+  const body = !R.body ? 0 : R.bodyTip === "bristles" ? swarmReach(R.bodySwarm, R.bodySize / 2) : R.bodySize;
+  return Math.max(line, body);
+}
+// Where the lattice starts, px (ModularStroke.latticePx; checks of every pixel set it to Infinity, as LatticeChecks.everyPixel).
+let LATTICE_PX = 50;
+const latticed = R => !R.pat && strokeReach(R) > (R.lineInk || R.rule === "charcoal" || R.rule === "graphite" ? Math.max(LATTICE_PX, 100) : LATTICE_PX);
+function stretchLattice(surf, src, dst, x0, y0, x1, y1) {
+  const w = surf.w, lw = (surf.w + 1) >> 1, lh = (surf.h + 1) >> 1, at = (lx, ly) => src[(2 * Math.min(ly, lh - 1)) * w + 2 * Math.min(lx, lw - 1)];
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const lx = x >> 1, ly = y >> 1, p = at(lx, ly);
+    dst[y * w + x] = !(x & 1) ? (!(y & 1) ? p : Math.fround((p + at(lx, ly + 1)) * .5))
+      : !(y & 1) ? Math.fround((p + at(lx + 1, ly)) * .5) : Math.fround((p + at(lx + 1, ly) + at(lx, ly + 1) + at(lx + 1, ly + 1)) * .25);
+  }
+}
+const composeEvery = composeStroke;
+composeStroke = function (st, rect, phase) {
+  if (!st.lattice) return composeEvery(st, rect, phase);
+  // Over the rect asked (its callers read and restore only that), which the stampers' own margins already pad.
+  const s = st.surf, x0 = Math.max(0, rect[0]), y0 = Math.max(0, rect[1]), x1 = Math.min(s.w - 1, rect[2]), y1 = Math.min(s.h - 1, rect[3]);
+  const L = s.L, W = s.W, D = s.D, sl = lazyBuf(s, "latL"), sw = lazyBuf(s, "latW"), sd = lazyBuf(s, "latD");
+  stretchLattice(s, L, sl, x0, y0, x1, y1); stretchLattice(s, W, sw, x0, y0, x1, y1); stretchLattice(s, D, sd, x0, y0, x1, y1);
+  s.L = sl; s.W = sw; s.D = sd;
+  try { composeEvery(st, [x0, y0, x1, y1], phase); } finally { s.L = L; s.W = W; s.D = D; }
+};
 const quantTone = v => Math.round(v / 17) * 17;
 // The page on a canvas: 16 greys, as the Manta shows them.
 function showPage(ctx, surf, rect) {
@@ -492,7 +559,7 @@ const FLOAT_STILL = 3, FLOAT_HOLD = 150;   // Float: within 3 px of pen-down, a 
 const firstAt = (pts, d) => { let k = 1; while (k < pts.length - 1 && pts[k].d < d) k++; return k; };
 class Stroke {
   constructor(surf, B, size, shade, host) {
-    this.surf = surf; this.R = resolve(B, size, shade); this.host = host || null; this.e = this.R.erase;
+    this.surf = surf; this.R = resolve(B, size, shade); this.host = host || null; this.e = this.R.erase; this.lattice = latticed(this.R);
     useTexture(surf, { texture: this.R.paper });
     surf.base.set(surf.page);
     // The first paint that isn't wholly erasable gives the page its kept tones (paper: until now everything erased).
@@ -607,7 +674,7 @@ class Stroke {
     const R = this.R, s = this.surf, pts = this.pts;
     return withScratch(s, buf, () => {
       if (R.lineTip === "hake") return stampHake(s, R.lineHake, pts, R.inkSize, this.mL, R.lineHake.softK);
-      if (R.lineTip === "bristles") { this.swL ??= swarmStart(s, R.lineSwarm, R.inkSize / 2, pts[0]); return swarmFeed(this.swL, pts, buf); }
+      if (R.lineTip === "bristles") { this.swL ??= swarmStart(s, R.lineSwarm, R.inkSize / 2, pts[0], this.lattice ? 2 : 1); return swarmFeed(this.swL, pts, buf); }
       if (R.linePlaced) { s.wetBuf = R.body ? s.W : null; const r = stampPlaced(s, R.pen, R.placeBody, pts, R.inkSize, R.placeSize, final, from, win); if (this.mL.widest < R.lineReach) this.mL.widest = R.lineReach; return r; }
       return stampLine(s, R.pen, pts, R.inkSize, final, from, clip, this.mL, win);
     });
@@ -615,7 +682,7 @@ class Stroke {
   stampW(buf, final, from) {
     const R = this.R, s = this.surf, pts = this.pts;
     return withScratch(s, buf, () => {
-      if (R.bodyTip === "bristles") { this.swW ??= swarmStart(s, R.bodySwarm, R.bodySize / 2, pts[0]); return swarmFeed(this.swW, pts, buf); }
+      if (R.bodyTip === "bristles") { this.swW ??= swarmStart(s, R.bodySwarm, R.bodySize / 2, pts[0], this.lattice ? 2 : 1); return swarmFeed(this.swW, pts, buf); }
       if (R.bodyTip === "placed") { s.wetBuf = null; return stampPlaced(s, R.bodyPen, R.bodyGeom, pts, R.bodyLineSize, R.bodyPlaceSize, final, from, null); }
       return stampBody(s, R.body, pts, R.bodySize, from, this.mW, final);
     });
@@ -728,9 +795,11 @@ class Stroke {
       const p0 = pts[k - 1], p1 = pts[k], seg = p1.d - p0.d, sp = C.spacing;
       while (this.cd <= p1.d) {
         const t = seg > 0 ? clamp((this.cd - p0.d) / seg) : 1, x = lerp(p0.x, p1.x, t), y = lerp(p0.y, p1.y, t), pr = lerp(p0.p, p1.p, t);
-        if (C.soften < 1) grow(rect, this.carryDab(x, y, pr));
-        if (C.soften > 0) {
-          const len = Math.hypot(p1.x - p0.x, p1.y - p0.y), sr = this.stumpDab(x, y, pr, len > 0 ? (p1.x - p0.x) / len : 0, len > 0 ? (p1.y - p0.y) / len : 0);
+        // Press to Push: a firm press works less as a stump, more as the smear.
+        const sf = softenAt(C, pr);
+        if (sf < 1) grow(rect, this.carryDab(x, y, pr, sf));
+        if (sf > 0) {
+          const len = Math.hypot(p1.x - p0.x, p1.y - p0.y), sr = this.stumpDab(x, y, pr, len > 0 ? (p1.x - p0.x) / len : 0, len > 0 ? (p1.y - p0.y) / len : 0, sf);
           if (sr) grow(rect, sr);
         }
         this.cd += sp;
@@ -745,7 +814,7 @@ class Stroke {
   // darker and longer streaks; more Lay down, stronger right behind the line and a shorter tail. Lift takes twice as
   // readily and soaks up 1 − Lay down of what it holds (a damp brush), so the track lightens. Opaque
   // Lift has no pass (its cover hides the page): what it covers tints its paint (composeStroke). Pressure scales it.
-  carryDab(x, y, pr) {
+  carryDab(x, y, pr, soften = this.R.carry.soften) {
     const C = this.R.carry, s = this.surf, base = s.base, w = s.w, r = C.r, S = C.stride, N = C.n, side = 2 * N + 1, K0 = s.keptBase;
     this.cbuf ??= new Float32Array(side * side).fill(NaN);
     // Keeps Paint: the paint the surface's brush kept from its last stroke, as this reservoir holds it; Clear Water: the
@@ -754,11 +823,13 @@ class Stroke {
     if (C.kind === "water" && !this.found) { this.found = Float32Array.from(base); this.wet = new Float32Array(w * s.h); }
     const press = .45 + .55 * pr, buf = this.cbuf, edge = Math.max(1, r * .3), pass = 1 / C.hits, kept = this.held, wet = this.wet;
     const lift = C.kind === "lift" || C.kind === "water";
+    // Press to Lift: a firm press lays less back and leaves less wet, a damp tissue's blot.
+    const share = wetShareAt(C, pr), lay = share < 1 ? C.lay * share : C.lay;
     let take = 1 - Math.pow(1 - Math.min(.95, (lift ? 2 : 1) * C.pick * press), pass);
     // Lift soaks up 1 − Lay down of what it holds over a radius of travel: it stays damp, so it keeps lifting.
-    let give = 1 - Math.pow(1 - C.lay * press, pass), soak = lift ? 1 - Math.pow(C.lay * press, pass) : 0;
+    let give = 1 - Math.pow(1 - lay * press, pass), soak = lift ? 1 - Math.pow(lay * press, pass) : 0;
     // Part stump (Smear's Soften): the reservoir trades the rest.
-    if (C.soften > 0) { take *= 1 - C.soften; give *= 1 - C.soften; }
+    if (soften > 0) { take *= 1 - soften; give *= 1 - soften; }
     const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(w - 1, Math.ceil(x + r)), y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(s.h - 1, Math.ceil(y + r));
     for (let py = y0; py <= y1; py++) {
       const dy = py + .5 - y, jy = (Math.round(dy / S) + N) * side;
@@ -771,7 +842,7 @@ class Stroke {
         // A cell's first touch reads the page, so a stroke never smears at its very start; Lift's starts clean, so it lifts at once.
         let bj = buf[j];
         if (bj !== bj) { bj = lift ? C.paper : under; if (kept && kept[j] === kept[j]) bj += (kept[j] - bj) * C.keep; }
-        if (wet && c > wet[i]) wet[i] = c;
+        if (wet && c * share > wet[i]) wet[i] = c * share;
         // Tones: lower is darker. m > 0: the page is darker and the brush takes; m < 0: the brush gives.
         const d = bj - under, m = d * (d > 0 ? take : give) * c;
         base[i] = held ? (under + m) * k / PAPER_TONE : under + m;
@@ -786,11 +857,11 @@ class Stroke {
   // is the strength, pressure scales it, spread over this stroke's dabs as MonoPaint's are over its own (.24 r apart). A
   // Rake or Split nib combs: a little stump at each tine, a pixel taken by its nearest, dragging only what it meets
   // behind it, by .7 × strength × (1 − q), so its streaks run on. Returns the rectangle it changed, or null.
-  stumpDab(x, y, pr, ux, uy) {
+  stumpDab(x, y, pr, ux, uy, soften = this.R.carry.soften) {
     const C = this.R.carry, s = this.surf, base = s.base, w = s.w, h = s.h, K0 = s.keptBase, tines = C.tines;
     if (tines && ux === 0 && uy === 0) return null;
     const R = tines ? C.tineReach : C.r, press = .45 + .55 * pr;
-    const wt = clamp(.7 * C.soften * C.pick * press), f0 = 1 - Math.pow(1 - wt, C.spacing / Math.max(.5, .24 * R));
+    const wt = clamp(.7 * soften * C.pick * press), f0 = 1 - Math.pow(1 - wt, C.spacing / Math.max(.5, .24 * R));
     if (!(f0 > 0)) return null;
     const blur = C.blur, pX = Math.round(ux * C.r * .25), pY = Math.round(uy * C.r * .25), own = tines ? 0 : .2, comb = !!tines;
     // Only what the eraser could take moves (as carryDab): over kept tone k the loose paint is the page's tone over k's.
@@ -936,7 +1007,9 @@ class Stroke {
     for (let y = Math.max(0, r[1]); y <= Math.min(h - 1, r[3]); y++) for (let x = Math.max(0, r[0]); x <= Math.min(w - 1, r[2]); x++) {
       const i = y * w + x; if (!(wet[i] > 0)) continue;
       const k = Math.floor((y - y0) / q) * cw + Math.floor((x - x0) / q), d = (base[i] - f0[i]) / PAPER_TONE;
-      wc[k] += wet[i]; if (d > 0) { lifted[k] += d * C.lay; total += d * C.lay; }
+      // Press to Lift: what a firm press lifted, leaving little wet, mostly stays in the brush.
+      const dl = d * C.lay * (C.press > 0 ? wet[i] : 1);
+      wc[k] += wet[i]; if (d > 0) { lifted[k] += dl; total += dl; }
     }
     if (!(total > 1e-3)) return null;
     const reach = Math.max(1, Math.round(.7 * sig / q)), spread = blur(blur(lifted, cw, ch, reach), cw, ch, reach), water = blur(wc, cw, ch, Math.max(1, reach >> 1));
@@ -971,6 +1044,13 @@ class Stroke {
     }
   }
 }
+// Press (the app's ResolvedBrush.Carry.pressed): how far pressure travel pr has taken a smudge from its light touch, 0 to
+// its Press: nothing up to .25 (a light hand, .05 to .25), all of it from .85 (a hard one, .88 and up), smooth between.
+// Smear's Soften falls with it (Press to Push), Clear Water's Lay Down Paint and the wet it leaves (Press to Lift).
+const PRESS_LIGHT = .25, PRESS_FIRM = .85;
+const pressedAt = (C, pr) => C.press > 0 ? C.press * smoothstep(PRESS_LIGHT, PRESS_FIRM, pr) : 0;
+const softenAt = (C, pr) => C.press > 0 ? C.soften * (1 - pressedAt(C, pr)) : C.soften;
+const wetShareAt = (C, pr) => C.kind === "water" && C.press > 0 ? 1 - pressedAt(C, pr) : 1;
 // ===================================================================================================================
 // The eraser (the app's EraseBothStroke): each pixel it passes goes, once a stroke, to what can't be erased: the kept
 // tones, paper wherever everything was erasable. However hard it is pressed, it never takes permanent paint (the owner,

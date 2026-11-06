@@ -15,4 +15,6 @@ interface LiftingStroke extends DrawingStroke {
     boolean develop(long nanos);
     /** Whether its brush lays through a print screen, pure black and white ({@link ResolvedBrush#screen}): the bench's "screen" fast panel path ({@link StrokePanel#wants}). */
     default boolean screened() { return false; }
+    /** Stay in Lines: whether it keeps to a shape of the ink lines ({@link StayIn}), waiting for the shape to be found; false on open paper. */
+    default boolean inShape() { return false; }
 }

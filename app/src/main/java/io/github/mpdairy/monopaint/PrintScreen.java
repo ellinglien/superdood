@@ -33,11 +33,22 @@ final class PrintScreen {
      * Screen's ten (halftone dots, an engraver's lines, Bayer dither, grain; then rosette, Ben-Day, crosshatch, wavy lines,
      * mezzotint, diamond dots; then stipple, woodcut, scribble and hatching, whose look changes as they darken) in
      * {@link PartDial#SCREEN}'s order, and Tone's eleven patterns ({@link PartDial#PATTERN}'s order)
-     * after them: new ones are appended, so every old code reads as before.
+     * after them: new ones are appended, so every old code reads as before. Then Print Shading's three after Hatching
+     * (riso, photocopy, blue noise: 2026-10-31, branch explore-screen), after Tone's so no Kind moves ({@link #print}); then
+     * six patterns whose lines thicken with the grey (maze, brick, basketweave, waves, honeycomb, rings: 2026-11-06);
+     * then pixels and stitches, a grey a cell ({@link #cells}, the same day).
      */
     enum Kind {
         HALFTONE, LINES, DITHER, GRAIN, ROSETTE, BENDAY, CROSSHATCH, WAVY, MEZZOTINT, DIAMOND, STIPPLE, WOODCUT, SCRIBBLE, HATCHING,
-        DOTS, TONE_LINES, SAND, GRADIENT, TONE_CROSS, TONE_WAVY, TONE_MEZZO, TONE_STIPPLE, TONE_WOODCUT, TONE_SCRIBBLE, TONE_HATCHING
+        DOTS, TONE_LINES, SAND, GRADIENT, TONE_CROSS, TONE_WAVY, TONE_MEZZO, TONE_STIPPLE, TONE_WOODCUT, TONE_SCRIBBLE, TONE_HATCHING,
+        RISO, PHOTOCOPY, BLUE_NOISE,
+        MAZE, BRICK, BASKET, WAVES, HONEYCOMB, RINGS,
+        PIXELS, STITCHES
+    }
+    /** Print Shading's option {@code screen} (1 on, {@link PartDial#SCREEN}'s order) as its Kind: Halftone to Hatching, then those after Tone's. */
+    static Kind print(int screen) {
+        int first = Kind.HATCHING.ordinal() + 1;
+        return Kind.values()[screen <= first ? screen - 1 : Kind.RISO.ordinal() + screen - 1 - first];
     }
     /** A Tone dot on its layer: tone 1 (black on the panel's 16 greys) at coverage 254, which no other brush lays. */
     static final int DOT_TONE = 1, DOT_COVERAGE = 254;
@@ -51,21 +62,34 @@ final class PrintScreen {
     final int misX, misY;
     /** Tone: the pattern at {@link #level} over the fill, in dots. */
     final boolean tone;
+    /**
+     * Pixels and Stitches (2026-11-06, the owner: "a pixel texture brush", "have them be able to be different shades", "maybe
+     * also a cross-stitch texture"): not black dots but a grey a cell of a grid fixed to the page, {@link #cell} px, turned
+     * Angle − 45 (square to the page at the default 45). The compose reads the mark at each cell's centre
+     * ({@link #centre}, {@code ModularCompose.composeCells}), so a cell is laid whole or not at all, in one of
+     * {@link #CELL_STEPS} greys ({@link #dark}): a solid square, or one cross-stitch with the fabric white round it.
+     */
+    final boolean cells;
     private final double ca, sa, inv;
     /** Rosette's four screens' angles (15, 75, 0 and 45 degrees at the default 45), as cosine and sine. */
     private final double[] rc = new double[4], rs = new double[4];
-    /** Grain's grain, page px. */
+    /** Grain's grain, page px (riso's, the photocopy's and soft dither's texel too). */
     private final int grain;
+    /** Riso's, the photocopy's or soft dither's tile ({@link Stochastic}); null for the rest. */
+    private final float[] tile;
 
     private PrintScreen(Kind kind, double cell, double angle, double mis, double gain, double uneven, double level) {
         this.kind = kind; this.cell = cell; this.angle = angle; this.gain = gain; this.uneven = uneven; this.level = level;
-        tone = kind.ordinal() >= Kind.DOTS.ordinal();
+        tone = kind.ordinal() >= Kind.DOTS.ordinal() && kind.ordinal() <= Kind.TONE_HATCHING.ordinal();
+        cells = kind == Kind.PIXELS || kind == Kind.STITCHES;
         misX = (int) Math.round(mis * .8); misY = (int) Math.round(mis * .6);
-        double a = Math.toRadians(angle);
+        double a = Math.toRadians(cells ? angle - 45 : angle);
         ca = Math.cos(a); sa = Math.sin(a); inv = 1 / Math.max(1, cell);
         grain = Math.max(1, (int) Math.round(cell / 6));
         if (kind == Kind.ROSETTE) for (int i = 0; i < 4; i++) { double r = Math.toRadians(angle + ROSETTE[i]); rc[i] = Math.cos(r); rs[i] = Math.sin(r); }
-        evens = family(kind) >= 0;
+        evens = family(kind) >= 0 || kind == Kind.RISO || kind == Kind.PHOTOCOPY;
+        // Its stochastic tile, made when the brush resolves, not at its first pixel (a stroke's start).
+        tile = kind == Kind.RISO ? Stochastic.grain() : kind == Kind.PHOTOCOPY ? Stochastic.toner() : kind == Kind.BLUE_NOISE ? Stochastic.blue() : null;
         kept = keeps(kind) ? new AtomicReferenceArray<>(TILES * TILES) : null;
     }
 
@@ -76,7 +100,7 @@ final class PrintScreen {
             return new PrintScreen(Kind.values()[Kind.DOTS.ordinal() + (int) medium.get(PartDial.PATTERN)], cell, angle, 0, 0, 0, medium.get(PartDial.TTONE));
         int screen = (int) medium.get(PartDial.SCREEN, 0);
         if (screen <= 0) return null;
-        return new PrintScreen(Kind.values()[screen - 1], cell, angle, medium.get(PartDial.MIS), medium.get(PartDial.S_GAIN), medium.get(PartDial.UNEVEN), 1);
+        return new PrintScreen(print(screen), cell, angle, medium.get(PartDial.MIS), medium.get(PartDial.S_GAIN), medium.get(PartDial.UNEVEN), 1);
     }
 
     /**
@@ -100,18 +124,38 @@ final class PrintScreen {
      * {@code height} tall (Tone's gradient runs down it): mischief-lab.html's {@code bit1} and its render's
      * second pass. Ink gain swells a dot by a ragged pixel where a neighbour's threshold would ink; Uneven thins the ink
      * in soft blots and drops specks where it ran thin.
+     *
+     * <p>{@code x, y} may lie between pixels (pixel {@code i}'s centre at {@code i}): a kept stroke's point on a
+     * {@link FineGrid} (sharp dry brushes, "Screentone as built"). A screen worked out from the page's position
+     * ({@link #between}) reads its threshold there, so a dot is the same dot, rounder; the rest, and Ink gain's and
+     * Uneven's specks, read the page pixel the point lies in. At a pixel's centre, as ever.
      */
-    boolean ink(double a, int x, int y, int height) {
+    boolean ink(double a, double x, double y, int height) {
         if (!(a > 0)) return false;
+        if (cells) return dark(a, (int) Math.floor(x + .5), (int) Math.floor(y + .5)) > 0;
         if (tone) return a * (kind == Kind.GRADIENT ? clamp(level * 2 * (y + .5) / height) : level) > threshold(x, y);
-        double blot = uneven > 0 ? PaperNoise.low(x, y) / 255.0 : 0, t = a * (1 - uneven * .55 * blot);
+        int px = (int) Math.floor(x + .5), py = (int) Math.floor(y + .5);
+        double blot = uneven > 0 ? PaperNoise.low(px, py) / 255.0 : 0, t = a * (1 - uneven * .55 * blot);
         boolean b = t > threshold(x, y);
         if (!b && gain > 0) {
             int n = (t > threshold(x - 1, y) ? 1 : 0) + (t > threshold(x + 1, y) ? 1 : 0) + (t > threshold(x, y - 1) ? 1 : 0) + (t > threshold(x, y + 1) ? 1 : 0);
-            if (n > 0 && hash(x, y, 17) < gain * (.22 + .18 * n)) b = true;
+            if (n > 0 && hash(px, py, 17) < gain * (.22 + .18 * n)) b = true;
         }
-        if (b && uneven > 0 && hash(x, y, 23) < uneven * (.04 + .14 * blot)) b = false;
+        if (b && uneven > 0 && hash(px, py, 23) < uneven * (.04 + .14 * blot)) b = false;
         return b;
+    }
+    /** The threshold at page position {@code x, y} ({@link #ink}): a pixel's {@link #threshold(int, int)}; between pixels, a screen's worked out there ({@link #between}). */
+    private double threshold(double x, double y) {
+        int ix = (int) x, iy = (int) y;
+        if (ix == x && iy == y) return threshold(ix, iy);
+        return between(kind) ? worked(x, y) : threshold((int) Math.floor(x + .5), (int) Math.floor(y + .5));
+    }
+    /** Whether {@code kind}'s threshold is worked out from the page's position (its dots and lines finer between pixels), not a pixel's own (a hash, a tile, Bayer's). */
+    static boolean between(Kind kind) {
+        switch (kind) {
+            case DITHER: case GRAIN: case SAND: case BLUE_NOISE: case RISO: case PHOTOCOPY: return false;
+            default: return true;
+        }
     }
 
     /**
@@ -128,7 +172,7 @@ final class PrintScreen {
     /** Whether {@code kind}'s thresholds are {@link #kept}. */
     private static boolean keeps(Kind kind) {
         switch (kind) {
-            case ROSETTE: case BENDAY: return true;
+            case ROSETTE: case BENDAY: case RISO: case PHOTOCOPY: return true;
             default: return family(kind) >= 0;
         }
     }
@@ -162,12 +206,22 @@ final class PrintScreen {
     /** The threshold at page pixel {@code x, y} worked out afresh (the four evened kinds' to a float's precision). */
     double worked(int x, int y) {
         switch (kind) {
-            case MEZZOTINT: case TONE_MEZZO: return mezzotint(x, y);
-            case STIPPLE: case TONE_STIPPLE: case WOODCUT: case TONE_WOODCUT: case SCRIBBLE: case TONE_SCRIBBLE: case HATCHING: case TONE_HATCHING:
-                return (float) evened(kind, (x * ca + y * sa) * inv, (-x * sa + y * ca) * inv, cell);
             case DITHER: return (BAYER[(y & 7) << 3 | (x & 7)] + .5) / 64;
             case GRAIN: return hash(Math.floorDiv(x, grain), Math.floorDiv(y, grain), 3);
             case SAND: return hash(x, y, 5);
+            case BLUE_NOISE: return tile[Stochastic.at(Math.floorDiv(x, grain), Math.floorDiv(y, grain), Stochastic.SIDE)];
+            case RISO: return riso(x, y);
+            case PHOTOCOPY: return photocopy(x, y);
+            default: return worked((double) x, y);
+        }
+    }
+    /** The threshold of a screen worked out from the page's position ({@link #between}) at {@code x, y}, between pixels too. */
+    private double worked(double x, double y) {
+        switch (kind) {
+            case MEZZOTINT: case TONE_MEZZO: return mezzotint(x, y);
+            case STIPPLE: case TONE_STIPPLE: case WOODCUT: case TONE_WOODCUT: case SCRIBBLE: case TONE_SCRIBBLE: case HATCHING: case TONE_HATCHING:
+            case MAZE: case BRICK: case BASKET: case WAVES: case HONEYCOMB: case RINGS:
+                return (float) evened(kind, (x * ca + y * sa) * inv, (-x * sa + y * ca) * inv, cell);
             default: break;
         }
         double u = (x * ca + y * sa) * inv, v = (-x * sa + y * ca) * inv;
@@ -243,11 +297,52 @@ final class PrintScreen {
     /** A triangle wave: 0 on a line's centre, 1 midway between lines. */
     private static double tri(double t) { return Math.abs(t - Math.floor(t) - .5) * 2; }
     /** Mezzotint: dashes lying along the angle in rows a third of a cell wide, each row its own dash length and shift, each dash its own rank. */
-    private double mezzotint(int x, int y) {
+    private double mezzotint(double x, double y) {
         double w = Math.max(1, cell / 3), px = x * ca + y * sa, py = -x * sa + y * ca;
         int j = (int) Math.floor(py / w);
         double len = cell * (.6 + 1.2 * hash(j, 0, 51));
         return hash((int) Math.floor((px + hash(j, 0, 52) * len) / len), j, 53);
+    }
+
+    // ---- Pixels and Stitches: a grey a cell ----
+
+    /**
+     * A cell's greys: its darkness rounded up to one of eight steps, spaced evenly in the panel's dots
+     * ({@link DotPattern#pickerTone}): a block reads as one clear shade and the next step as clearly darker, where every
+     * grey between would leave neighbouring blocks a dot or two apart, reading as noise.
+     */
+    static final int CELL_STEPS = 8;
+    private static final int[] STEP_DARK = new int[CELL_STEPS + 1];
+    static { for (int k = 0; k <= CELL_STEPS; k++) STEP_DARK[k] = 255 - DotPattern.pickerTone((int) Math.round(255.0 * (CELL_STEPS - k) / CELL_STEPS)); }
+
+    /** The page pixel at the centre of the cell holding page pixel {@code x, y}, into {@code at} (x, then y): where the mark is read for the whole cell. */
+    void centre(int x, int y, int[] at) {
+        double u = (Math.floor((x * ca + y * sa) * inv) + .5) * cell, v = (Math.floor((-x * sa + y * ca) * inv) + .5) * cell;
+        at[0] = (int) Math.round(u * ca - v * sa); at[1] = (int) Math.round(u * sa + v * ca);
+    }
+    /**
+     * How dark (0 to 255) a cell whose mark is {@code a} dark (0 to 1, at its centre) leaves page pixel {@code x, y} in it;
+     * 0 where it lays nothing. Pixels: the whole cell its step's grey. Stitches: one cross-stitch in that grey, its two
+     * threads round and twisted as Cross-Stitch's ({@link LaterMedia#threadCover}), the top one over the bottom, the
+     * fabric round them white.
+     */
+    int dark(double a, int x, int y) {
+        if (!(a > 0)) return 0;
+        int t = STEP_DARK[(int) Math.max(1, Math.ceil(Math.min(1, a) * CELL_STEPS - 1e-9))];
+        if (kind == Kind.PIXELS) return t;
+        double u = (x * ca + y * sa) * inv, v = (-x * sa + y * ca) * inv;
+        int i = (int) Math.floor(u), j = (int) Math.floor(v);
+        float c = (float) cell, lu = (float) ((u - i) * cell) + .5f, lv = (float) ((v - j) * cell) + .5f, wide = .13f * c + .3f, q = 0;
+        for (int leg = 0; leg < 2; leg++) {
+            // Corner to corner, a little in: the bottom thread up, the top one down over it.
+            float ax = .12f * c, ay = leg == 0 ? .88f * c : .12f * c, len = .76f * c * (float) Math.sqrt(2), ux = (float) Math.sqrt(.5), uy = leg == 0 ? -ux : ux;
+            float rx = lu - ax, ry = lv - ay, along = rx * ux + ry * uy, across = -rx * uy + ry * ux;
+            float cov = LaterMedia.threadCover(along, across, len, wide);
+            if (cov <= 0) continue;
+            float s = Math.min(255, t * LaterMedia.threadShade(along, across, wide, (float) unit(mix(i, j, 191 + leg)))) * cov;
+            q = leg == 1 ? Math.min(255, s + q * (1 - cov) * LaterMedia.threadUnder(across, wide)) : Math.max(q, s);
+        }
+        return Math.round(q);
     }
 
     // ---- The four whose look changes as they darken: a field ranked, then evened so the share inked is the darkness ----
@@ -261,13 +356,19 @@ final class PrintScreen {
         int i = (int) Math.max(0, Math.min(EVEN_BINS - 2, Math.floor(f)));
         return e[i] + (e[i + 1] - e[i]) * Math.max(0, Math.min(1, f - i));
     }
-    /** Which of the four: 0 stipple, 1 woodcut, 2 scribble, 3 hatching (a Print Shading and its Screentone twin alike); -1 for every other kind. */
+    /** Which field: 0 stipple, 1 woodcut, 2 scribble, 3 hatching (a Print Shading and its Screentone twin alike), 4 to 9 maze to rings; -1 for every other kind. */
     private static int family(Kind kind) {
         switch (kind) {
             case STIPPLE: case TONE_STIPPLE: return 0;
             case WOODCUT: case TONE_WOODCUT: return 1;
             case SCRIBBLE: case TONE_SCRIBBLE: return 2;
             case HATCHING: case TONE_HATCHING: return 3;
+            case MAZE: return 4;
+            case BRICK: return 5;
+            case BASKET: return 6;
+            case WAVES: return 7;
+            case HONEYCOMB: return 8;
+            case RINGS: return 9;
             default: return -1;
         }
     }
@@ -275,17 +376,65 @@ final class PrintScreen {
     private static final double RAW_MOST = 2.5;
     private static final int EVEN_BINS = 1024;
     /** Each field's share of a page at or under each raw value, to .999 (so full darkness inks every pixel): its rank, evened. */
-    private static final AtomicReferenceArray<double[]> EVEN = new AtomicReferenceArray<>(4);
+    private static final AtomicReferenceArray<double[]> EVEN = new AtomicReferenceArray<>(10);
 
     /**
      * The raw field at {@code u, v} (cells): lower inks first. Stipple: dots on a jittered lattice appear one by one in
      * their own order, small, then (all there) grow and merge. Woodcut: lines that waver, broken at first, thicken until
      * only broken white lines are left. Scribble: three looping scribbles, each laid over the last as it darkens.
      * Hatching: hatch strokes, short and a little askew, one direction, then a second and a third, then each again
-     * between its rows.
+     * between its rows. Maze to rings (4 to 9): the distance to their lines, scaled to run 0 to 2, so a line thickens with
+     * the grey until the page is black; each continuous across its tiles (no seam).
      */
     static double raw(int family, double u, double v, double cell) {
         switch (family) {
+            case 4: {
+                // Maze: Truchet tiles two cells across, each a pair of quarter arcs on opposite corners, which pair a hash of the tile.
+                double x = u / 2, y = v / 2;
+                int i = (int) Math.floor(x), j = (int) Math.floor(y);
+                double fx = x - i, fy = y - j;
+                if ((mix(i, j, 97) & 1) != 0) fx = 1 - fx;
+                return 4 * Math.min(Math.abs(Math.sqrt(fx * fx + fy * fy) - .5), Math.abs(Math.sqrt((1 - fx) * (1 - fx) + (1 - fy) * (1 - fy)) - .5));
+            }
+            case 5: {
+                // Brick: running bond, courses two cells tall, bricks twice as long, every other course shifted half a brick.
+                double y = v / 2;
+                int r = (int) Math.floor(y);
+                double fy = y - r, x = u / 4 + (r & 1) * .5, fx = x - Math.floor(x);
+                return 4 * Math.min(Math.min(fy, 1 - fy), 2 * Math.min(fx, 1 - fx));
+            }
+            case 6: {
+                // Basketweave: blocks of three strands a cell wide, across and down in turn; a strand's end draws back from the
+                // block's edge (white there till last), so it meets the next block's without a seam.
+                double x = u / 3, y = v / 3;
+                int i = (int) Math.floor(x), j = (int) Math.floor(y);
+                boolean flat = ((i + j) & 1) == 0;
+                double across = flat ? y - j : x - i, along = flat ? x - i : y - j;
+                return 2 * Math.max(tri(3 * across), 1 - 6 * Math.min(along, 1 - along));
+            }
+            case 7: return 6 * waves(u / 3, v / 3);
+            case 8: {
+                // Honeycomb: hexagons two cells across, the distance to the nearest wall.
+                double x = u / 2, y = v / 2, h = Math.sqrt(3) / 2, best = 9, dx = 0, dy = 0;
+                int j0 = (int) Math.floor(y / h);
+                for (int j = j0; j <= j0 + 1; j++) {
+                    double shift = (j & 1) * .5, sx = Math.rint(x - shift) + shift, ex = x - sx, ey = y - j * h, d = ex * ex + ey * ey;
+                    if (d < best) { best = d; dx = ex; dy = ey; }
+                }
+                return 4 * (.5 - Math.max(Math.abs(dx), Math.max(Math.abs(.5 * dx + h * dy), Math.abs(-.5 * dx + h * dy))));
+            }
+            case 9: {
+                // Rings: circles a cell apart round the nearest of centres seven cells apart, each nudged by a hash.
+                double best = 1e9;
+                int i0 = (int) Math.floor(u / RING_GAP), j0 = (int) Math.floor(v / RING_GAP);
+                for (int i = i0 - 1; i <= i0 + 1; i++) for (int j = j0 - 1; j <= j0 + 1; j++) {
+                    int h = mix(i, j, 101);
+                    double cx = (i + .5 + (unit(h) - .5) * .5) * RING_GAP, cy = (j + .5 + (unit(h * 0x9e3779b1) - .5) * .5) * RING_GAP;
+                    best = Math.min(best, (u - cx) * (u - cx) + (v - cy) * (v - cy));
+                }
+                best = Math.sqrt(best);
+                return 4 * Math.abs(best - Math.rint(best));
+            }
             case 0: {
                 // Dots a cell apart; a dot's own size, at least a pixel and a half across.
                 double r0 = Math.max(.75, cell * .2) / cell, best = 9;
@@ -353,6 +502,27 @@ final class PrintScreen {
             }
         }
     }
+    private static final double RING_GAP = 7;
+    /**
+     * Seigaiha at {@code x, y} (scales of radius 1): rows of circles one apart, each two apart along its row and every
+     * other row shifted one, a lower row over the one above it; each scale three arcs. The distance to the nearest line:
+     * the front scale's arcs, or the rim of a scale over it.
+     */
+    private static double waves(double x, double y) {
+        int top = (int) Math.floor(y), row = top;
+        double cx = 0;
+        for (int j = top + 1; j >= top; j--) {
+            row = j;
+            cx = 2 * Math.rint((x - (j & 1)) / 2) + (j & 1);
+            if ((x - cx) * (x - cx) + (y - j) * (y - j) < 1) break;
+        }
+        double r = Math.sqrt((x - cx) * (x - cx) + (y - row) * (y - row)), k = Math.max(1, Math.rint(3 * r)), d = Math.abs(3 * r - k) / 3;
+        for (int j = row + 1; j <= row + 2; j++) {
+            double i0 = Math.floor((x - (j & 1)) / 2);
+            for (int i = 0; i < 2; i++) { double ex = x - (2 * (i0 + i) + (j & 1)); d = Math.min(d, Math.abs(Math.sqrt(ex * ex + (y - j) * (y - j)) - 1)); }
+        }
+        return d;
+    }
     /** How many of a scribble's field's levels a unit holds. */
     private static final double SCRIBBLE_K = .55;
     /** Hatching's three directions off the angle (Hatch's turns), as cosine and sine. */
@@ -387,6 +557,138 @@ final class PrintScreen {
             for (int i = 0; i < EVEN_BINS; i++) { sum += count[i]; e[i] = .998 * (sum - count[i] / 2.0) / (n * n) + 1e-6 * i; }
             EVEN.set(k, e);
             return e;
+        }
+    }
+
+    // ---- The stochastic three: riso, photocopy, blue noise (Soft Dither), from tiles made once ----
+
+    /**
+     * Riso: the duplicator's grain screen, a fine clumpy stochastic dither ({@link Stochastic#grain}), through soy ink
+     * that lies unevenly: thinner in soft blots, so solids print grainy with specks of paper, and now and then a faint
+     * roller streak across the feed (along the page's rows), fixed to the page. A threshold over 1 never inks.
+     */
+    private double riso(int x, int y) {
+        double t = grained(x, y);
+        double blot = PaperNoise.blob(x, y) / 255.0, low = PaperNoise.low(x, y) / 255.0;
+        double ink = 1 - .16 * cube(blot) - .06 * low - streak(x, y);
+        return (float) ((.02 + .96 * t) / ink);
+    }
+    /** A roller streak's share of ink taken at page pixel {@code x, y}: a band of rows, one in {@link #STREAK_ROWS} on about half the bands, fading along its length. */
+    private static double streak(int x, int y) {
+        int band = Math.floorDiv(y, STREAK_ROWS);
+        if (hash(band, 0, 131) > .5) return 0;
+        double at = band * STREAK_ROWS + 30 + hash(band, 0, 132) * (STREAK_ROWS - 60), width = 4 + 5 * hash(band, 0, 133);
+        double d = Math.abs(y - at) / width;
+        if (d >= 1) return 0;
+        return (.18 + .14 * hash(band, 0, 134)) * (1 - d * d) * (.55 + .45 * sin1(x / 700.0 + hash(band, 0, 135)));
+    }
+    private static final int STREAK_ROWS = 260;
+    /**
+     * Photocopy: greys snap toward black or white at a threshold near the middle that drifts across the page (the
+     * copier's uneven lamp, {@link PaperNoise#low} stretched four times), broken by clumpy toner so edges go ragged;
+     * a scattered speck of toner wherever a mark lies at all, and in large blacks a faint mottle of flecks where none
+     * took.
+     */
+    private double photocopy(int x, int y) {
+        if (hash(x, y, 141) < .05 * cube(PaperNoise.blob(x, y) / 255.0)) return (float) 1.02;
+        if (hash(x, y, 142) < .012) return (float) (.08 + .14 * hash(x, y, 143));
+        double lamp = PaperNoise.low(Math.floorDiv(x, 4), Math.floorDiv(y, 4)) / 255.0 - .5;
+        double t = grained(x, y);
+        return (float) (.5 + .28 * lamp + .24 * (t - .5));
+    }
+    private static double cube(double v) { return v * v * v; }
+    /**
+     * A grain tile's threshold at page pixel {@code x, y}, {@link #grain} px a texel: each tile's copy shifted by its own
+     * hashed offset, so no row or column of the tile lines up across the page (a clumpy tile's rows differ in mean, and
+     * repeated they read as faint stripes); the seams cut clumps a pixel or two across, unseen.
+     */
+    private double grained(int x, int y) {
+        int gx = Math.floorDiv(x, grain), gy = Math.floorDiv(y, grain), h = mix(Math.floorDiv(gx, Stochastic.WIDE), Math.floorDiv(gy, Stochastic.WIDE), 181);
+        return tile[Stochastic.at(gx + h, gy + (h >>> 8), Stochastic.WIDE)];
+    }
+
+    /**
+     * The tiles, each made on its first use (a brush's resolve, {@link #tile}), the same every time: blue noise 64 px,
+     * the grains 128 (a 64-px clump repeats visibly).
+     */
+    static final class Stochastic {
+        static final int SIDE = 64, N = SIDE * SIDE, WIDE = 128;
+        /**
+         * Blue noise: Ulichney's void-and-cluster ranks, each pixel's threshold its rank's share, so any grey is that
+         * share of pixels spread as evenly as can be, with no lattice to see (Bayer's) and no clumps (Grain's).
+         */
+        static float[] blue() { return Blue.TILE; }
+        /** Riso's grain: white noise softened a little, ranked: clumps of a pixel or two. */
+        static float[] grain() { return Grain.TILE; }
+        /** The copier's toner: softened more, so its clumps are bigger. */
+        static float[] toner() { return Toner.TILE; }
+        private static final class Blue { static final float[] TILE = voidAndCluster(); }
+        private static final class Grain { static final float[] TILE = clumpy(.9, .2, 161); }
+        private static final class Toner { static final float[] TILE = clumpy(1.1, .12, 171); }
+        static int at(int x, int y, int side) { return (y & side - 1) * side + (x & side - 1); }
+        private static int at(int x, int y) { return at(x, y, SIDE); }
+
+        private static float[] voidAndCluster() {
+            int r = 6;
+            double sigma = 1.5;
+            double[] g = new double[(2 * r + 1) * (2 * r + 1)];
+            for (int dy = -r; dy <= r; dy++) for (int dx = -r; dx <= r; dx++) g[(dy + r) * (2 * r + 1) + dx + r] = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+            boolean[] on = new boolean[N];
+            double[] e = new double[N];
+            int ones = 0;
+            for (int i = 0; i < N; i++) if (hash(i % SIDE, i / SIDE, 151) < .1) { on[i] = true; ones++; spread(e, g, r, i, 1); }
+            // Move the tightest cluster to the largest void until it would land where it was.
+            for (int k = 0; k < N; k++) {
+                int c = most(e, on, true);
+                on[c] = false; spread(e, g, r, c, -1);
+                int v = most(e, on, false);
+                on[v] = true; spread(e, g, r, v, 1);
+                if (v == c) break;
+            }
+            boolean[] start = on.clone();
+            double[] e0 = e.clone();
+            int[] rank = new int[N];
+            for (int k = ones - 1; k >= 0; k--) { int c = most(e, on, true); on[c] = false; spread(e, g, r, c, -1); rank[c] = k; }
+            on = start; e = e0;
+            for (int k = ones; k < N; k++) { int v = most(e, on, false); on[v] = true; spread(e, g, r, v, 1); rank[v] = k; }
+            float[] t = new float[N];
+            for (int i = 0; i < N; i++) t[i] = (rank[i] + .5f) / N;
+            return t;
+        }
+        /** The set pixel ({@code set}) with the most energy (the tightest cluster), or the clear one with the least (the largest void). */
+        private static int most(double[] e, boolean[] on, boolean set) {
+            int best = -1;
+            for (int i = 0; i < N; i++) if (on[i] == set && (best < 0 || (set ? e[i] > e[best] : e[i] < e[best]))) best = i;
+            return best;
+        }
+        /** Adds {@code sign} of the Gaussian {@code g} round pixel {@code i} to {@code e}, wrapping (the tile tiles). */
+        private static void spread(double[] e, double[] g, int r, int i, int sign) {
+            int x = i % SIDE, y = i / SIDE, w = 2 * r + 1;
+            for (int dy = -r; dy <= r; dy++) for (int dx = -r; dx <= r; dx++) e[at(x + dx, y + dy)] += sign * g[(dy + r) * w + dx + r];
+        }
+        /** White noise ({@code salt}) on a {@link #WIDE} tile, softened by a Gaussian {@code sigma} px wide, {@code white} of it added back, ranked. */
+        private static float[] clumpy(double sigma, double white, int salt) {
+            int n = WIDE * WIDE, r = (int) Math.ceil(3 * sigma);
+            double[] w = new double[n], soft = new double[n], g = new double[(2 * r + 1) * (2 * r + 1)];
+            for (int dy = -r; dy <= r; dy++) for (int dx = -r; dx <= r; dx++) g[(dy + r) * (2 * r + 1) + dx + r] = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+            for (int i = 0; i < n; i++) w[i] = hash(i % WIDE, i / WIDE, salt);
+            for (int i = 0; i < n; i++) {
+                int x = i % WIDE, y = i / WIDE;
+                double s = 0, sum = 0;
+                for (int dy = -r; dy <= r; dy++) for (int dx = -r; dx <= r; dx++) { double k = g[(dy + r) * (2 * r + 1) + dx + r]; s += k * w[at(x + dx, y + dy, WIDE)]; sum += k; }
+                soft[i] = s / sum + white * (w[i] - .5);
+            }
+            return ranked(soft);
+        }
+        /** Each value's rank among them, as its share: a threshold that inks exactly a grey's share. */
+        private static float[] ranked(double[] v) {
+            int n = v.length;
+            Integer[] order = new Integer[n];
+            for (int i = 0; i < n; i++) order[i] = i;
+            java.util.Arrays.sort(order, (p, q) -> Double.compare(v[p], v[q]) != 0 ? Double.compare(v[p], v[q]) : Integer.compare(p, q));
+            float[] t = new float[n];
+            for (int k = 0; k < n; k++) t[order[k]] = (k + .5f) / n;
+            return t;
         }
     }
 

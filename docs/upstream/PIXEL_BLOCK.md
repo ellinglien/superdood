@@ -1,6 +1,6 @@
 # Pixel Block comparison — 0.11
 
-> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not My Bad Drawings.
+> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not Superdood.
 
 Follow-up: [GRAY_DENSITY.md](GRAY_DENSITY.md) records the user's gradient
 comparison and 0.12's nonlinear density calibration. The initial linear

@@ -25,7 +25,8 @@ import java.util.List;
  * the drag, after the lift and until it is quiet; and the readout dot's grey against the grey in use.
  * Argument: -e pickerBench true; -e pickerBench press, the slow buttons' presses alone (Menu and Play opened and
  * closed, three rounds); -e pickerBench pages, page turns on the page bar (a notebook of four pages in the checks
- * app's own folder: ‹ and › taps, a turn after a stroke). Lines go to logcat, tag InkBench.
+ * app's own folder: ‹ and › taps, a turn after a stroke); -e pickerBench tools, the tool picker opened on a slot
+ * (cold, warmed, again: {@link #toolPicker}). Lines go to logcat, tag InkBench.
  */
 final class PickerBench {
     private static PaintActivity app;
@@ -149,6 +150,25 @@ final class PickerBench {
             app.finish();
             return;
         }
+        if ("tools".equals(mode)) {
+            // The tool picker, a slot's long press (PaintActivity.toolPicker), three ways: cold, no picture kept (the first
+            // opening after the app starts, before the drawing screen's warm-up); warmed, after the warm-up (warmTools);
+            // again, a second opening. Two rounds: the first cold one also inflates the owner's drawings the first time.
+            for (int round = 0; round < 2; round++) {
+                settleWarm(test); forget(test);
+                toolPicker(test, report, "cold");
+                settleWarm(test); forget(test);
+                main(test, () -> ((Runnable) get(app, "warmTools")).run());
+                settleWarm(test);
+                toolPicker(test, report, "warmed");
+                settleWarm(test);
+                toolPicker(test, report, "again");
+            }
+            main(test, () -> root.getViewTreeObserver().removeOnPreDrawListener(watch));
+            polling = false;
+            app.finish();
+            return;
+        }
         // SelectionFeedback.differences: two marks apart in one patch are two boxes, each with its 2 px border.
         Bitmap a = Bitmap.createBitmap(20, 60, Bitmap.Config.ARGB_8888), b = a.copy(Bitmap.Config.ARGB_8888, true);
         a.eraseColor(android.graphics.Color.WHITE); b.eraseColor(android.graphics.Color.WHITE);
@@ -207,6 +227,67 @@ final class PickerBench {
         polling = false;
         app.finish();
     }
+
+    /**
+     * Opens the tool picker on slot 1 as its long press does and reports {@code name}: ms on the main thread (built, drawn
+     * ahead and shown), ms until every stroke tile ({@link ToolCard}) has its picture (the picker fully shown), the
+     * presents, and the panel's frames until it is quiet; then closes it.
+     */
+    private static void toolPicker(Instrumentation test, StringBuilder report, String name) throws Exception {
+        ToolButton[] tools = (ToolButton[]) get(app.inkWashBar, "tools");
+        SelectionFeedback feedback = app.selectionFeedback;
+        SystemClock.sleep(1500);
+        long frames0 = frames, start = SystemClock.uptimeMillis();
+        int submitted0 = feedback.submitted;
+        long[] built = new long[1];
+        List<View> cards = new ArrayList<>();
+        main(test, () -> {
+            long t = SystemClock.uptimeMillis();
+            app.toolPicker(0, tools[0]);
+            built[0] = SystemClock.uptimeMillis() - t;
+            cards(((android.widget.PopupWindow) get(app, "filePopup")).getContentView(), cards);
+        });
+        long filled = -1;
+        for (long until = start + 30000; SystemClock.uptimeMillis() < until; SystemClock.sleep(10)) {
+            boolean[] all = {true};
+            main(test, () -> { for (View card : cards) if (get(card, "picture") == null) all[0] = false; });
+            if (all[0]) { filled = SystemClock.uptimeMillis() - start; break; }
+        }
+        long[] quiet = settle(frames0, 400, 8000);
+        line(report, String.format(java.util.Locale.ROOT,
+                "tool picker %s: main thread %d ms, every stroke tile in %d ms (%d tiles), presents %d, panel frames %d, quiet %d ms after the press",
+                name, built[0], filled, cards.size(), feedback.submitted - submitted0, quiet[1], quiet[0] - start));
+        main(test, () -> ((android.widget.PopupWindow) get(app, "filePopup")).dismiss());
+        settle(frames, 400, 4000);
+    }
+    private static void cards(View view, List<View> into) {
+        if (view instanceof ToolCard) into.add(view);
+        else if (view instanceof ViewGroup) for (int i = 0; i < ((ViewGroup) view).getChildCount(); i++) cards(((ViewGroup) view).getChildAt(i), into);
+    }
+    /** The pictures kept (ToolCard's, WildSample's samples) let go: as the app starts. */
+    private static void forget(Instrumentation test) throws Exception {
+        main(test, () -> {
+            ((android.util.LruCache<?, ?>) statik(ToolCard.class, "PICTURES")).evictAll();
+            java.util.Map<?, ?> kept = (java.util.Map<?, ?>) statik(WildSample.class, "kept");
+            synchronized (kept) {
+                kept.clear();
+                Field pixels = WildSample.class.getDeclaredField("keptPixels"); pixels.setAccessible(true); pixels.setLong(null, 0);
+            }
+        });
+    }
+    /** No warm-up waiting (warmTools after a focus change) and the one running done: ToolCard's pictures unchanged for 2 s. */
+    private static void settleWarm(Instrumentation test) throws Exception {
+        main(test, () -> app.pad.removeCallbacks((Runnable) get(app, "warmTools")));
+        android.util.LruCache<?, ?> pictures = (android.util.LruCache<?, ?>) statik(ToolCard.class, "PICTURES");
+        int last = -1;
+        long since = SystemClock.uptimeMillis(), start = since;
+        while (SystemClock.uptimeMillis() - since < 2000 && SystemClock.uptimeMillis() - start < 120000) {
+            int now = pictures.putCount();
+            if (now != last) { last = now; since = SystemClock.uptimeMillis(); }
+            SystemClock.sleep(50);
+        }
+    }
+    private static Object statik(Class<?> owner, String name) throws Exception { Field f = owner.getDeclaredField(name); f.setAccessible(true); return f.get(null); }
 
     /** A short pen stroke across the page at {@code y} of its height. */
     private static void stroke(Instrumentation test, float y) throws Exception {

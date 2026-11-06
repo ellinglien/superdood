@@ -5,17 +5,25 @@ package io.github.mpdairy.monopaint;
  * screens"). Nothing scrolls: the shelf's covers come a page at a time, as many as fit, and the notebook's strip shows a
  * window of its pages. Pure, checked on the desktop for both tablets in both turns ({@code NotebookLayoutChecks}).
  *
- * <p>The shelf: a bar (the heading "Notebooks"), the grid of tiles (a cover with the page's proportions, then the name in
+ * <p>The shelf: a bar (the page bar of Brush Lab and the Tools page, {@link LabUi.PageBar}: "Notebooks", no job line since 2026-11-06), the grid of tiles (a cover with the page's proportions, then the name in
  * up to {@link #NAME_LINES} lines ({@link #COMPACT_NAME_LINES} on the Nomad) and "24 pages · Oct 17"), and a row of page buttons. Inside a notebook
  * (the owner, 2026-10-19: "consolidate these to one bar ... use the same page turn bar on the bottom as the drawing
- * page"): one bar, ‹ Notebooks, the name (up to {@link #TITLE_LINES} lines, a tap renames it), Open, Use on Cover and
- * Delete Page (the last two their icons alone where the bar can't hold their words, the Nomad in portrait,
- * {@link #labelled}); the page as big as fits under it; the strip of pages (the covers first and last); and the
+ * page"): one bar ({@link LabUi.PageBar}, 2026-11-03: "make it consistent across the app"), ‹ Notebooks, the name (up
+ * to {@link #TITLE_LINES} lines, a tap renames it) centred (no job line under it since 2026-11-06), Notebook Settings
+ * ({@link #SETTINGS}, its word), Open, Use on Cover and Delete Page (the last two their icons alone where the bar can't hold their
+ * words, the Nomad in portrait, {@link #labelled}); the page as big as fits under it, ‹ and › either side ({@link #CARET}
+ * wide, the owner, 2026-11-03: "the page turn carets should be bigger"); the strip (the front cover, the pages, + and
+ * the back cover, scrolling, {@link NotebookStrip}); and the
  * drawing screen's page bar along the foot ({@link PageTurner}, without its Notebook button: ‹, "3 / 24", ›).
  */
 final class NotebookLayout {
     /** A row of buttons or a bar's height; a button's least width. */
     static final int BAR = 56, BUTTON = 48;
+    /**
+     * The bar inside a notebook: the name's {@link #TITLE_LINES} lines and a line's room (its job's until 2026-11-06), so a name is never cut; the
+     * page's ‹ and › either side of it, wide, and their carets.
+     */
+    static final int PAGES_BAR = (int) Math.ceil(2 * LabText.line(TypeStyle.BODY.sp) + LabText.line(TypeStyle.CAPTION.sp)), CARET = 72, CARET_ICON = 48;
     /** The lines a tile's name may take (the Nomad's narrower tiles take one more); the notebook's name over its page. */
     static final int NAME_LINES = 3, COMPACT_NAME_LINES = 4, TITLE_LINES = 2;
     /** The lines a tile's count and date may take ("100 pages · Oct 18 2025" wraps in a narrow tile). */
@@ -23,14 +31,24 @@ final class NotebookLayout {
     /** Room between a cover and its name; the current page's tab under the strip, and its gap. */
     static final int UNDER_COVER = 8, TAB = 5, TAB_GAP = 4;
     /**
+     * Favourites' star (the owner, 2026-11-06): its target, a finger's, in a page preview's upper right corner (at most
+     * {@link #starTarget} of a narrow preview), and its icon in that corner on a paper patch.
+     */
+    static final int STAR = 44, STAR_ICON = 20;
+    /** The star's target in a preview {@code thumbWidth} dp wide: {@link #STAR}, or 3/5 of a narrower one's width. */
+    static int starTarget(int thumbWidth) { return Math.min(STAR, thumbWidth * 3 / 5); }
+    /**
      * The bar's room between its parts; an action's padding either side of its words (as {@link LabButton}'s); the least
      * room its name has with the actions' words, else they are their icons alone.
      */
     static final int BAR_GAP = 8, ACTION_PAD = 12, TITLE_LEAST = 240;
     /** The bar's labels: back to the shelf, and the three actions (docs/TEXT-STYLE.md: Title Case, two words at most). */
     static final String BACK = "Notebooks", OPEN = "Open", DELETE = "Delete Page";
+    /** Notebook Settings' word on the bar (the owner, 2026-11-06: "instead of an icon only for notebook settings we should write SETTINGS"), said Notebook Settings. */
+    static final String SETTINGS = "Settings";
     /** The drawing screen menu's row to the shelf, to open another notebook. */
-    static final String OPEN_NOTEBOOK = "Open Notebook";
+    static final String OPEN_NOTEBOOK = "Notebook Explorer";
+    /** The bars' jobs, under their titles (as the Tools page's, docs/TEXT-STYLE.md): inside a notebook, and the shelf. */
 
     final int width, height;
     final boolean compact;
@@ -42,6 +60,8 @@ final class NotebookLayout {
     final int columns, rows, tileWidth, coverHeight, tileHeight, columnGap, rowGap;
     // Inside a notebook
     final int pageWidth, pageHeight, spreadHeight, thumbWidth, thumbHeight, stripGap, visible;
+    /** The margin over the bar inside a notebook: the bar's height past {@link #BAR} taken from it, so the page and the settings keep their room. */
+    final int pagesTop;
     /** Whether the bar's actions show their words (else their icons alone, 48 dp each); the name's room between them. */
     final boolean labelled;
     final int titleRoom;
@@ -75,8 +95,9 @@ final class NotebookLayout {
         thumbWidth = Math.max(24, (int) Math.floor(thumbHeight / aspect));
         stripGap = 8;
         visible = Math.max(2, Math.min(12, (width - 2 * margin + stripGap) / (thumbWidth + stripGap)));
-        spreadHeight = height - margin - BAR - thumbHeight - TAB - TAB_GAP - 3 * gap - pageBar;
-        int h = Math.min(spreadHeight, (int) Math.floor(across * aspect));
+        pagesTop = margin - (PAGES_BAR - BAR);
+        spreadHeight = height - pagesTop - PAGES_BAR - thumbHeight - TAB - TAB_GAP - 3 * gap - pageBar;
+        int h = Math.min(spreadHeight, (int) Math.floor((across - 2 * CARET) * aspect));
         pageHeight = h; pageWidth = (int) Math.floor(h / aspect);
     }
 
@@ -86,11 +107,18 @@ final class NotebookLayout {
     static int backWidth() { return 22 + 8 + words(BACK) + 2 * ACTION_PAD; }
     /** An action's width: its words, padding and 2 dp outline; or, not {@code labelled}, its icon alone ({@link #BUTTON}). */
     static int actionWidth(String label, boolean labelled) { return labelled ? words(label) + 2 * ACTION_PAD + 2 * DrawLayout.RULE : BUTTON; }
+    /** Settings' width: its word in its own case (not the label's caps), padding and outline; or, not {@code labelled}, its icon alone. */
+    static int settingsWidth(boolean labelled) { return labelled ? (int) Math.ceil(LabLayout.labelWidth(SETTINGS)) + 2 * ACTION_PAD + 2 * DrawLayout.RULE : BUTTON; }
     /** The cover picture's action at its widest: Use on Cover, or No Picture on the front cover. */
     static int coverWidth(boolean labelled) { return Math.max(actionWidth(NotebookCovers.USE_BUTTON, labelled), actionWidth(NotebookCovers.NO_PICTURE_BUTTON, labelled)); }
-    /** The name's room in a bar {@code across} dp wide: what ‹ Notebooks and the actions leave, a gap between each. Draw always says its word. */
+    /**
+     * The name's room in a bar {@code across} dp wide: what ‹ Notebooks and the actions leave, the page bar's gap after
+     * Back and a gap before each action. Open always says its word; Notebook Settings ({@link #SETTINGS}, its icon alone
+     * until 2026-11-06) says its word where the others do.
+     */
     static int titleRoom(int across, boolean labelled) {
-        return across - backWidth() - actionWidth(OPEN, true) - coverWidth(labelled) - actionWidth(DELETE, labelled) - 4 * BAR_GAP;
+        return across - backWidth() - LabLayout.TITLE_GAP - settingsWidth(labelled) - actionWidth(OPEN, true) - coverWidth(labelled)
+                - actionWidth(DELETE, labelled) - 4 * BAR_GAP;
     }
 
     /** A tile's height {@code w} wide: its cover, the gap, the name's lines and the count's. */
@@ -109,18 +137,21 @@ final class NotebookLayout {
     /** The shelf page notebook {@code index} is on. */
     int shelfPageOf(int index) { return (index + 1) / perPage(); }
 
-    /** The first page the strip shows, for page {@code current} of {@code count}: a window round the current, the + tile after the last. */
-    int stripStart(int current, int count) { return window(current, count + 1, visible); }
-    /** The first of {@code tiles} a strip of {@code visible} shows: a window round {@code current} (the drawing screen's page bar too, {@link PageTurner}). */
+    /** The first of {@code tiles} a strip of {@code visible} shows: a window round {@code current} (the notebook's strip, {@link NotebookStrip#start}; the drawing screen's page bar too, {@link PageTurner}). */
     static int window(int current, int tiles, int visible) {
         if (tiles <= visible) return 0;
         return Math.max(0, Math.min(current - visible / 2, tiles - visible));
     }
 
+    /** The least a finger travels across the page shown inside a notebook to turn it, dp. */
+    static final float SWIPE = 48;
+    /** A finger's swipe {@code dx}, {@code dy} dp across the page shown inside a notebook: the turn it makes (1 the next page, −1 the one before), or 0 (not across enough). */
+    static int swipe(float dx, float dy) { return Math.abs(dx) < SWIPE || Math.abs(dx) < Math.abs(dy) ? 0 : dx < 0 ? 1 : -1; }
+
     /** The shelf's whole height, its parts added up: the margins, the bar, the grid, the page buttons. */
     int shelfUsed() { return 2 * margin + 2 * BAR + 2 * gap + rows * tileHeight + (rows - 1) * rowGap; }
     /** The notebook screen's whole height, its parts added up: the margin, the bar, the page, the strip, the gaps between them and over the page bar, the page bar. */
-    int notebookUsed() { return margin + BAR + spreadHeight + thumbHeight + TAB + TAB_GAP + 3 * gap + pageBar; }
+    int notebookUsed() { return pagesTop + PAGES_BAR + spreadHeight + thumbHeight + TAB + TAB_GAP + 3 * gap + pageBar; }
 
     /** A name's lines in a tile {@code width} dp wide. */
     static int nameLines(String name, int width) { return LabText.wrap(name, width, LabText.face(TypeStyle.BODY.sp, 0)).size(); }

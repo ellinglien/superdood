@@ -18,8 +18,8 @@ import java.util.regex.Pattern;
  * A notebook's PDF in the Supernote's Documents (Document/<app folder>, beside the notebooks, "<title>.pdf"), so it shows
  * in Documents and syncs, made from its PNG copies ({@link NotebookExport}): each page the size it is on the tablet (300
  * ppi, so it opens one to one), its picture as the PNG holds it, under an invisible text layer (render mode 3, Courier,
- * not embedded) of what the app knows: the title, the page's number, its days (made, changed), its template, its Daily
- * Prompt card and its fridge magnets' words where they sit, so a search lands on the word. No handwriting is read. An
+ * not embedded) of what the app knows: the title, the page's number, its days (made, changed), its template and its
+ * fridge magnets' words where they sit, so a search lands on the word. No handwriting is read. An
  * outline (the cover, then a day at a time, its pages under it), page labels (Cover, 1, 2, …) and the document's info.
  *
  * <p>Handwriting: the Supernote keeps a PDF's handwriting beside it ("<name>.pdf.mark", by file name and page number)
@@ -35,6 +35,8 @@ final class NotebookPdf {
     static final String STATE = ".pdf.txt";
     private static final String MARKER = "notebook pdf 1";
     private static final double POINTS = 72.0 / NotebookExport.DPI;
+    /** {@link #POINTS} as a PDF number (0.24). */
+    private static final String POINTS_TEXT = VectorLines.num(new StringBuilder(), POINTS).toString();
 
     /** Where the Supernote keeps {@code pdf}'s handwriting. */
     static File mark(File pdf) { return new File(pdf.getParentFile(), pdf.getName() + ".mark"); }
@@ -43,21 +45,21 @@ final class NotebookPdf {
     static final class Sheet {
         final long key, made, changed;
         final boolean cover;
-        /** The page's template's name ("" for none), its Daily Prompt card's line ("" for none), its magnets. */
-        final String template, prompt;
+        /** The page's template's name ("" for none), its magnets. */
+        final String template;
         final List<Magnets.Magnet> magnets;
-        Sheet(long key, long made, long changed, boolean cover, String template, String prompt, List<Magnets.Magnet> magnets) {
+        Sheet(long key, long made, long changed, boolean cover, String template, List<Magnets.Magnet> magnets) {
             this.key = key; this.made = made; this.changed = changed; this.cover = cover;
-            this.template = clean(template); this.prompt = clean(prompt); this.magnets = magnets;
+            this.template = clean(template); this.magnets = magnets;
         }
-        Sheet days(long made, long changed) { return new Sheet(key, made, changed, cover, template, prompt, magnets); }
+        Sheet days(long made, long changed) { return new Sheet(key, made, changed, cover, template, magnets); }
         String line() {
             StringBuilder words = new StringBuilder();
             for (Magnets.Magnet m : magnets) {
                 if (words.length() > 0) words.append('\u001e');
                 words.append(m.x).append('\u001f').append(m.y).append('\u001f').append(m.tilt).append('\u001f').append(m.turn).append('\u001f').append(clean(m.word));
             }
-            return "sheet\t" + Long.toHexString(key) + "\t" + made + "\t" + changed + "\t" + (cover ? 1 : 0) + "\t" + template + "\t" + prompt + "\t" + words;
+            return "sheet\t" + Long.toHexString(key) + "\t" + made + "\t" + changed + "\t" + (cover ? 1 : 0) + "\t" + template + "\t\t" + words;  // the empty field: a Self-Portrait Prompt card's, until 2026-11-05
         }
         static Sheet parse(String line) {
             String[] f = line.split("\t", -1);
@@ -68,7 +70,7 @@ final class NotebookPdf {
                     String[] p = m.split("\u001f", 5);
                     magnets.add(new Magnets.Magnet(p[4], Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
                 }
-                return new Sheet(Long.parseLong(f[1], 16), Long.parseLong(f[2]), Long.parseLong(f[3]), f[4].equals("1"), f[5], f[6], magnets);
+                return new Sheet(Long.parseLong(f[1], 16), Long.parseLong(f[2]), Long.parseLong(f[3]), f[4].equals("1"), f[5], magnets);
             } catch (RuntimeException bad) { return null; }
         }
     }
@@ -130,6 +132,8 @@ final class NotebookPdf {
     }
     /** The info's record of whose PDF it is: the notebook's name as stored. */
     private static String notebook(String name) { return "/Notebook " + hex(name) + " "; }
+    /** A notebook named {@code name}'s PDF title: its name without a title's hidden date ({@link DrawingNames#titled}). */
+    static String title(String name) { return DrawingNames.titled(name) ? name.substring(11) : name; }
     /** A title as a file name: what a name may hold ("Notebook" for nothing). */
     static String base(String title) {
         String b = title.replaceAll("[/\\\\\\x00-\\x1f]", " ").trim();
@@ -160,9 +164,9 @@ final class NotebookPdf {
     /**
      * Brings the notebook's PDF in {@code folder} in step: {@code sheets} with their PNGs ({@code pngs}), titled
      * {@code title}, {@code subject} its template, what was written recorded in {@code state}. Not written again when it
-     * is as it would be. Returns the PDF.
+     * is as it would be, unless {@code pictures} (a page's picture changed though its key didn't). Returns the PDF.
      */
-    static File update(File folder, File state, String name, String title, String subject, List<Sheet> sheets, NotebookExport.PngAt pngs) throws IOException {
+    static File update(File folder, File state, String name, String title, String subject, List<Sheet> sheets, NotebookExport.PngAt pngs, boolean pictures) throws IOException {
         State old = State.read(state), next = new State(null, 0, title, subject, sheets);
         if (!folder.isDirectory() && !folder.mkdirs()) throw new IOException("Could not make " + folder);
         String base = base(title);
@@ -170,7 +174,7 @@ final class NotebookPdf {
         // No record (the PNGs' folder cleared): which pages its handwriting is on isn't known, so a marked one is left.
         boolean inPlace = ours != null && named(ours.getName(), base) && (!mark(ours).exists() || old != null && keepsNumbers(keys(old.sheets), keys(sheets)));
         File target = inPlace ? ours : free(folder, base);
-        if (inPlace && old != null && old.book().equals(next.book())) return target;
+        if (inPlace && old != null && !pictures && old.book().equals(next.book())) return target;
         File temporary = new File(folder, "." + target.getName() + ".tmp");
         try (OutputStream out = new BufferedOutputStream(new FileOutputStream(temporary), 1 << 16)) { write(out, name, title, subject, sheets, pngs); }
         catch (IOException | RuntimeException | Error e) { temporary.delete(); throw e; }
@@ -222,13 +226,14 @@ final class NotebookPdf {
                 day = new Item(LibraryCard.day(LocalDate.ofEpochDay(s.made)), i, null); day.kids = new ArrayList<>();
                 items.add(day); top.add(day);
             }
-            String card = cardText(s.prompt);
-            Item page = new Item("Page " + number + (card.isEmpty() ? "" : ": " + shorten(card, 48)), i, day);
+            Item page = new Item("Page " + number, i, day);
             items.add(page); day.kids.add(page);
         }
         int outline = first + 3 * n;
         for (int k = 0; k < items.size(); k++) items.get(k).number = outline + k;
-        long[] offsets = new long[outline + items.size()];
+        // Each page's Vector Ink lines ({@link NotebookExport#vectorPng}) a form after the outline's items, numbered as they come.
+        int forms = outline + items.size();
+        long[] offsets = new long[forms + n];
         out.text("%PDF-1.4\n%âãÏÓ\n");
         long made = Long.MAX_VALUE, changed = Long.MIN_VALUE;
         for (Sheet s : sheets) { made = Math.min(made, s.made); changed = Math.max(changed, s.changed); }
@@ -255,17 +260,28 @@ final class NotebookPdf {
             if (!s.cover) number++;
             NotebookExport.Png png = pngs.get(i);
             int page = first + 3 * i, image = page + 1, content = page + 2;
-            String w = NotebookExport.points(png.width), h = NotebookExport.points(png.height);
+            // Its size in page pixels: a sharp page's picture is twice them (600 dpi), placed at the same size.
+            int pw = png.pageWidth(), ph = png.pageHeight();
+            String w = NotebookExport.points(pw), h = NotebookExport.points(ph);
+            int form = png.vectors == null ? 0 : forms++;
             offsets[page] = out.count;
             out.text(page + " 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + w + " " + h + "] /Resources << /XObject << /Page " + image
-                    + " 0 R >> /Font << /F 4 0 R >> >> /Contents " + content + " 0 R >>\nendobj\n");
+                    + " 0 R" + (form == 0 ? "" : " /Lines " + form + " 0 R") + " >> /Font << /F 4 0 R >> >> /Contents " + content + " 0 R >>\nendobj\n");
             offsets[image] = out.count;
             out.text(image + " 0 obj\n" + NotebookExport.imageDictionary(png));
             out.write(png.data, 0, png.data.length);
             out.text("\nendstream\nendobj\n");
-            String draw = "q " + w + " 0 0 " + h + " 0 0 cm /Page Do Q\n" + text(title, s, number, png.width, png.height);
+            String draw = "q " + w + " 0 0 " + h + " 0 0 cm /Page Do Q\n" + (form == 0 ? "" : "/Lines Do\n") + text(title, s, number, pw, ph);
             offsets[content] = out.count;
             out.text(content + " 0 obj\n<< /Length " + draw.length() + " >>\nstream\n" + draw + "endstream\nendobj\n");
+            if (form != 0) {
+                // Its lines in page pixels, y down: mapped onto the page at 300 ppi.
+                offsets[form] = out.count;
+                out.text(form + " 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 " + pw + " " + ph + "] /Matrix [" + POINTS_TEXT + " 0 0 -" + POINTS_TEXT + " 0 " + h
+                        + "] /Filter /FlateDecode /Length " + png.vectors.length + " >>\nstream\n");
+                out.write(png.vectors, 0, png.vectors.length);
+                out.text("\nendstream\nendobj\n");
+            }
         }
         for (int k = 0; k < items.size(); k++) {
             Item it = items.get(k);
@@ -281,9 +297,9 @@ final class NotebookPdf {
             out.text(o.toString());
         }
         long xref = out.count;
-        StringBuilder table = new StringBuilder("xref\n0 " + offsets.length + "\n0000000000 65535 f \n");
-        for (int k = 1; k < offsets.length; k++) table.append(String.format(Locale.ROOT, "%010d 00000 n \n", offsets[k]));
-        table.append("trailer\n<< /Size ").append(offsets.length).append(" /Root 1 0 R /Info 5 0 R >>\nstartxref\n").append(xref).append("\n%%EOF\n");
+        StringBuilder table = new StringBuilder("xref\n0 " + forms + "\n0000000000 65535 f \n");
+        for (int k = 1; k < forms; k++) table.append(String.format(Locale.ROOT, "%010d 00000 n \n", offsets[k]));
+        table.append("trailer\n<< /Size ").append(forms).append(" /Root 1 0 R /Info 5 0 R >>\nstartxref\n").append(xref).append("\n%%EOF\n");
         out.text(table.toString());
         out.flush();
     }
@@ -303,8 +319,6 @@ final class NotebookPdf {
         LocalDate made = LocalDate.ofEpochDay(s.made), changed = LocalDate.ofEpochDay(s.changed);
         lines.add(LibraryCard.day(made) + (s.changed != s.made ? ", changed " + LibraryCard.day(changed) : ""));
         if (!s.template.isEmpty()) lines.add(s.template);
-        String card = cardText(s.prompt);
-        if (!card.isEmpty()) lines.add(card);
         double y = h - margin;
         for (String line : lines) {
             // Courier is 0.6 em a letter: as large as fits the page's width, 8 pt at most.
@@ -325,13 +339,6 @@ final class NotebookPdf {
         }
         return c.append("ET\n").toString();
     }
-    /** A card's words without its time or Diary Page ("" for none). */
-    static String cardText(String line) {
-        if (line == null || line.isEmpty()) return "";
-        DailyPrompt.Card card = DailyPrompt.of(line);
-        return card == null ? line : card.text;
-    }
-    private static String shorten(String s, int most) { return s.length() <= most ? s : s.substring(0, most - 1).trim() + "…"; }
 
     /** A text string any reader shows in full: UTF-16 with its byte order mark, in hex. */
     static String hex(String s) {

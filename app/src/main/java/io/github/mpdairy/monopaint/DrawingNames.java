@@ -105,7 +105,8 @@ final class DrawingNames {
         return BrushNames.adjectives().contains(words[0]) && BrushNames.produce().contains(words[1]);
     }
 
-    private static String unused(String base, Predicate<String> taken) {
+    /** {@code base}, or with a number after it ("Harbour 2") where {@code taken} rejects it: a new notebook's, an imported one's. */
+    static String unused(String base, Predicate<String> taken) {
         String name = base;
         for (int n = 2; taken.test(name); n++) name = base + " " + n;
         return name;

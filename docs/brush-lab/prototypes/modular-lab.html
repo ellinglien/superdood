@@ -2634,9 +2634,11 @@ class Stroke {
       const p0 = pts[k - 1], p1 = pts[k], seg = p1.d - p0.d, sp = C.spacing;
       while (this.cd <= p1.d) {
         const t = seg > 0 ? clamp((this.cd - p0.d) / seg) : 1, x = lerp(p0.x, p1.x, t), y = lerp(p0.y, p1.y, t), pr = lerp(p0.p, p1.p, t);
-        if (C.soften < 1) grow(rect, this.carryDab(x, y, pr));
-        if (C.soften > 0) {
-          const len = Math.hypot(p1.x - p0.x, p1.y - p0.y), sr = this.stumpDab(x, y, pr, len > 0 ? (p1.x - p0.x) / len : 0, len > 0 ? (p1.y - p0.y) / len : 0);
+        // Press to Push: a firm press works less as a stump, more as the smear.
+        const sf = softenAt(C, pr);
+        if (sf < 1) grow(rect, this.carryDab(x, y, pr, sf));
+        if (sf > 0) {
+          const len = Math.hypot(p1.x - p0.x, p1.y - p0.y), sr = this.stumpDab(x, y, pr, len > 0 ? (p1.x - p0.x) / len : 0, len > 0 ? (p1.y - p0.y) / len : 0, sf);
           if (sr) grow(rect, sr);
         }
         this.cd += sp;
@@ -2651,7 +2653,7 @@ class Stroke {
   // darker and longer streaks; more Lay down, stronger right behind the line and a shorter tail. Lift takes twice as
   // readily and soaks up 1 − Lay down of what it holds (a damp brush), so the track lightens. Opaque
   // Lift has no pass (its cover hides the page): what it covers tints its paint (composeStroke). Pressure scales it.
-  carryDab(x, y, pr) {
+  carryDab(x, y, pr, soften = this.R.carry.soften) {
     const C = this.R.carry, s = this.surf, base = s.base, w = s.w, r = C.r, S = C.stride, N = C.n, side = 2 * N + 1, K0 = s.keptBase;
     this.cbuf ??= new Float32Array(side * side).fill(NaN);
     // Keeps Paint: the paint the surface's brush kept from its last stroke, as this reservoir holds it; Clear Water: the
@@ -2660,11 +2662,13 @@ class Stroke {
     if (C.kind === "water" && !this.found) { this.found = Float32Array.from(base); this.wet = new Float32Array(w * s.h); }
     const press = .45 + .55 * pr, buf = this.cbuf, edge = Math.max(1, r * .3), pass = 1 / C.hits, kept = this.held, wet = this.wet;
     const lift = C.kind === "lift" || C.kind === "water";
+    // Press to Lift: a firm press lays less back and leaves less wet, a damp tissue's blot.
+    const share = wetShareAt(C, pr), lay = share < 1 ? C.lay * share : C.lay;
     let take = 1 - Math.pow(1 - Math.min(.95, (lift ? 2 : 1) * C.pick * press), pass);
     // Lift soaks up 1 − Lay down of what it holds over a radius of travel: it stays damp, so it keeps lifting.
-    let give = 1 - Math.pow(1 - C.lay * press, pass), soak = lift ? 1 - Math.pow(C.lay * press, pass) : 0;
+    let give = 1 - Math.pow(1 - lay * press, pass), soak = lift ? 1 - Math.pow(lay * press, pass) : 0;
     // Part stump (Smear's Soften): the reservoir trades the rest.
-    if (C.soften > 0) { take *= 1 - C.soften; give *= 1 - C.soften; }
+    if (soften > 0) { take *= 1 - soften; give *= 1 - soften; }
     const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(w - 1, Math.ceil(x + r)), y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(s.h - 1, Math.ceil(y + r));
     for (let py = y0; py <= y1; py++) {
       const dy = py + .5 - y, jy = (Math.round(dy / S) + N) * side;
@@ -2677,7 +2681,7 @@ class Stroke {
         // A cell's first touch reads the page, so a stroke never smears at its very start; Lift's starts clean, so it lifts at once.
         let bj = buf[j];
         if (bj !== bj) { bj = lift ? C.paper : under; if (kept && kept[j] === kept[j]) bj += (kept[j] - bj) * C.keep; }
-        if (wet && c > wet[i]) wet[i] = c;
+        if (wet && c * share > wet[i]) wet[i] = c * share;
         // Tones: lower is darker. m > 0: the page is darker and the brush takes; m < 0: the brush gives.
         const d = bj - under, m = d * (d > 0 ? take : give) * c;
         base[i] = held ? (under + m) * k / PAPER_TONE : under + m;
@@ -2692,11 +2696,11 @@ class Stroke {
   // is the strength, pressure scales it, spread over this stroke's dabs as MonoPaint's are over its own (.24 r apart). A
   // Rake or Split nib combs: a little stump at each tine, a pixel taken by its nearest, dragging only what it meets
   // behind it, by .7 × strength × (1 − q), so its streaks run on. Returns the rectangle it changed, or null.
-  stumpDab(x, y, pr, ux, uy) {
+  stumpDab(x, y, pr, ux, uy, soften = this.R.carry.soften) {
     const C = this.R.carry, s = this.surf, base = s.base, w = s.w, h = s.h, K0 = s.keptBase, tines = C.tines;
     if (tines && ux === 0 && uy === 0) return null;
     const R = tines ? C.tineReach : C.r, press = .45 + .55 * pr;
-    const wt = clamp(.7 * C.soften * C.pick * press), f0 = 1 - Math.pow(1 - wt, C.spacing / Math.max(.5, .24 * R));
+    const wt = clamp(.7 * soften * C.pick * press), f0 = 1 - Math.pow(1 - wt, C.spacing / Math.max(.5, .24 * R));
     if (!(f0 > 0)) return null;
     const blur = C.blur, pX = Math.round(ux * C.r * .25), pY = Math.round(uy * C.r * .25), own = tines ? 0 : .2, comb = !!tines;
     // Only what the eraser could take moves (as carryDab): over kept tone k the loose paint is the page's tone over k's.
@@ -2842,7 +2846,9 @@ class Stroke {
     for (let y = Math.max(0, r[1]); y <= Math.min(h - 1, r[3]); y++) for (let x = Math.max(0, r[0]); x <= Math.min(w - 1, r[2]); x++) {
       const i = y * w + x; if (!(wet[i] > 0)) continue;
       const k = Math.floor((y - y0) / q) * cw + Math.floor((x - x0) / q), d = (base[i] - f0[i]) / PAPER_TONE;
-      wc[k] += wet[i]; if (d > 0) { lifted[k] += d * C.lay; total += d * C.lay; }
+      // Press to Lift: what a firm press lifted, leaving little wet, mostly stays in the brush.
+      const dl = d * C.lay * (C.press > 0 ? wet[i] : 1);
+      wc[k] += wet[i]; if (d > 0) { lifted[k] += dl; total += dl; }
     }
     if (!(total > 1e-3)) return null;
     const reach = Math.max(1, Math.round(.7 * sig / q)), spread = blur(blur(lifted, cw, ch, reach), cw, ch, reach), water = blur(wc, cw, ch, Math.max(1, reach >> 1));
@@ -2877,6 +2883,13 @@ class Stroke {
     }
   }
 }
+// Press (the app's ResolvedBrush.Carry.pressed): how far pressure travel pr has taken a smudge from its light touch, 0 to
+// its Press: nothing up to .25 (a light hand, .05 to .25), all of it from .85 (a hard one, .88 and up), smooth between.
+// Smear's Soften falls with it (Press to Push), Clear Water's Lay Down Paint and the wet it leaves (Press to Lift).
+const PRESS_LIGHT = .25, PRESS_FIRM = .85;
+const pressedAt = (C, pr) => C.press > 0 ? C.press * smoothstep(PRESS_LIGHT, PRESS_FIRM, pr) : 0;
+const softenAt = (C, pr) => C.press > 0 ? C.soften * (1 - pressedAt(C, pr)) : C.soften;
+const wetShareAt = (C, pr) => C.kind === "water" && C.press > 0 ? 1 - pressedAt(C, pr) : 1;
 // ===================================================================================================================
 // The eraser (the app's EraseBothStroke): each pixel it passes goes, once a stroke, to what can't be erased: the kept
 // tones, paper wherever everything was erasable. However hard it is pressed, it never takes permanent paint (the owner,
@@ -3319,7 +3332,7 @@ const DIALS = {
     headTurn: { label: "Head Follows", choices: ["Stroke", "Page"], def: 0 },
     gap: { label: "Tine Gap", min: 0, max: 1, def: .55 },
     count: { label: "Lines", min: 2, max: 5, def: 3, int: true, fmt: v => String(Math.round(v)) },
-    reach: { label: "Spacing", min: 0, max: 1, def: .6 },
+    reach: { label: "Line Spacing", min: 0, max: 1, def: .6 },
     hairs: { label: "Hairs", min: 6, max: 32, def: 26, int: true, fmt: v => String(Math.round(v)) },
     cohesion: { label: "Clump", min: 0, max: 1, def: .55 },
     splay: { label: "Splay", min: 0, max: 1, def: .45 },
@@ -3359,7 +3372,11 @@ const DIALS = {
     // paint mode): how much paint a full brush holds (off: it never runs out, as before), and the share of it every
     // stroke starts with. Written only when on; a part's roll leaves them off (Oils rolls Paint Load from the seed).
     pload: { label: "Paint Load", min: 0, max: 1, def: 0 },
-    pmin: { label: "Starting Load", min: 0, max: 1, def: .25 }
+    pmin: { label: "Starting Load", min: 0, max: 1, def: .25 },
+    // Smear's and Clear Water's Press (the owner, 2026-10-30; the app's PartDial.PRESS): how far a firm press takes the
+    // brush from what its light touch does. Smear's Press to Push takes Soften toward 0 (softens light, pushes firm);
+    // Clear Water's Press to Lift takes Lay Down Paint and the wet it leaves toward 0 (re-wets light, blots firm). Off, as before.
+    press: { label: "Press to Push", min: 0, max: 1, def: 0 }
   },
   paper: { tooth: { label: "Texture", min: 0, max: 1, def: .5 } },
   life: {
@@ -3403,9 +3420,9 @@ const CHOICES = {
     { k: "off", label: "Off", dials: [], blurb: "Lays its own paint only." },
     { k: "lift", label: "Lift", dials: ["pick", "lay"], macro: "pick", words: ["gentle", "strong"], def: { pick: .2, lay: .3 }, blurb: "Takes paint off as it goes, like a damp brush or a tissue." },
     { k: "drag", label: "Drag", dials: ["pick", "lay", "load", "keep", "pload", "pmin"], macro: "pick", words: ["clean", "smeary"], def: { pick: .6, lay: .7, load: .85 }, blurb: "Drags the paint beneath along: wet into wet." },
-    { k: "smudge", label: "Smear", dials: ["pick", "lay", "load", "soften", "keep", "pload", "pmin"], macro: "pick", words: ["clean", "smeary"], def: { pick: .7, lay: .55, load: .3 }, blurb: "Mostly smears what's there, like a finger or a stump." },
+    { k: "smudge", label: "Smear", dials: ["pick", "lay", "load", "soften", "keep", "pload", "pmin", "press"], macro: "pick", words: ["clean", "smeary"], def: { pick: .7, lay: .55, load: .3 }, blurb: "Mostly smears what's there, like a finger or a stump." },
     // Clear Water (the wet smudge spec): Smudge's fifth choice, so older codes never hold it. Lays only water.
-    { k: "water", label: "Clear Water", dials: ["pick", "lay"], macro: "pick", words: ["gentle", "strong"], def: { pick: .5, lay: .6 }, blurb: "Lays only water: lifts what it touches and lets it run through the wet." }
+    { k: "water", label: "Clear Water", dials: ["pick", "lay", "press"], macro: "pick", words: ["gentle", "strong"], def: { pick: .5, lay: .6 }, labels: { press: "Press to Lift" }, blurb: "Lays only water: lifts what it touches and lets it run through the wet." }
   ],
   paper: ["plain", "cold press", "laid", "felt", "crumpled", "canvas"].map(k => ({ k, label: { plain: "Smooth", "cold press": "Cold Press", laid: "Ribbed" }[k] || k[0].toUpperCase() + k.slice(1), dials: ["tooth"], macro: "tooth", words: ["smooth", "rough"], def: { tooth: k === "plain" ? 0 : .5 } })),
   life: [
@@ -3452,7 +3469,7 @@ function freshPart(part, k) {
 }
 // Dials added after the prototype's, last in their choices' lists (the app's ModularCode.ADDED): written only when one is
 // off its default, so a brush that doesn't use them keeps its code; never rolled, so every roll draws as before.
-const ADDED = new Set(["medium.dust", "medium.erase", "carry.soften", "carry.keep", "carry.pload", "carry.pmin"]);
+const ADDED = new Set(["medium.dust", "medium.erase", "carry.soften", "carry.keep", "carry.pload", "carry.pmin", "carry.press"]);
 // Erasable (the Erasable spec): every medium starts at 1, erases clean (the owner, 2026-10-22: "per-tool things should be
 // erasable unless the user specifies"; until then the real medium's: ink permanent, a wash .4, gouache .3, Oils' paint off).
 // A code that doesn't say reads 1. Resist's dial is wax or fluid (newmods.js).
@@ -3596,7 +3613,7 @@ function resolve(B, size, shade) {
     // Dabs 1 + .08 r apart (r / 4 below 15 px): closer than the lab's first r / 4, so a smear streaks smoothly, without combing.
     const spacing = Math.max(1.5, Math.min(r * .25, 1 + r * .08));
     R.carry = { kind: C.k, moves: !(C.k === "lift" && R.cover > 0), pick: C.d.pick ?? .4, lay: C.d.lay ?? .5, paper: PAPER_TONE, r, spacing, hits: r / spacing, stride: r > 30 ? r / 30 : 1, n: Math.ceil(r / (r > 30 ? r / 30 : 1)) + 1,
-      keep: C.k === "drag" || C.k === "smudge" ? (C.d.keep ?? 0) : 0 };
+      keep: C.k === "drag" || C.k === "smudge" ? (C.d.keep ?? 0) : 0, press: C.k === "smudge" || C.k === "water" ? (C.d.press ?? 0) : 0 };
     // Smear's Soften: part or all of it MonoPaint's blending stump (stroke.js stumpDab); a Rake or a Split nib combs, along
     // its tines (as floatParts places them, a Rake's over its lines' band).
     const soften = C.k === "smudge" ? (C.d.soften ?? 0) : 0;
@@ -3909,6 +3926,8 @@ function handWords(B, n = 2) {
 // A Smear that is mostly MonoPaint's blending stump (Soften from .5): "Softens.", tagged "stump"; with tines, "Combs.", "comb".
 const isStump = B => B.carry.k === "smudge" && (B.carry.d.soften ?? 0) >= .5;
 const combs = B => B.tip.k === "multi" || B.tip.k === "split";
+// Smudge's Press on: Press to Push (a Smear) or Press to Lift (Clear Water); the app's ModularWords.pressed.
+const pressed = B => (B.carry.d.press ?? 0) > 0;
 const isClearWater = B => B.life.k === "float" && (B.carry.k === "water" || (B.carry.k === "drag" || B.carry.k === "smudge") && (B.carry.d.load ?? 1) < .02);
 // Smudge's Clear Water off the water, and Keeps Paint on (a dirty brush; not all stump): the wet smudge spec.
 const isWater = B => B.carry.k === "water" && B.life.k !== "float";
@@ -4015,7 +4034,9 @@ function plainWords(B) {
   const strong = marks.sort((a, b) => b[0] - a[0]).slice(0, 2).map(m => m[1]);
   if (strong.length) out.push(cap1(strong.join(", ")) + ".");
   // Smudge Off says nothing (not "undefined").
-  const smudge = floats ? null : { lift: "Lifts paint.", drag: "Drags wet paint.", smudge: isStump(B) ? (combs(B) ? "Combs." : "Softens.") : "Smears.", water: "Lifts paint, lets it run." }[B.carry.k];
+  // Press to Push and Press to Lift say what a firm press does (the owner, 2026-10-30).
+  const smudge = floats ? null : { lift: "Lifts paint.", drag: "Drags wet paint.", smudge: isStump(B) ? (combs(B) ? "Combs." : pressed(B) ? "Softens, pushes when pressed." : "Softens.") : "Smears.",
+    water: pressed(B) ? "Re-wets paint, lifts it when pressed." : "Lifts paint, lets it run." }[B.carry.k];
   // Paint Load says plainly what it does, and how to load it, in the smudge's place (the oil paint spec).
   const carry = smudge ? (runsOut(B) ? "Runs out of paint, then only smudges. Rub a grey to load." : smudge) + (keepsPaint(B) ? " Keeps paint for the next stroke." : "") : null;
   if (carry) out.push(carry);
@@ -4736,7 +4757,7 @@ Object.assign(DIALS.tip, {
   dot: { label: "Dot Size", min: 0, max: 1, def: .35 },
   scatter: { label: "Scatter", min: 0, max: 1, def: .4 },
   jitter: { label: "Uneven Dots", min: 0, max: 1, def: .5 },
-  pitch: { label: "Spacing", min: 0, max: 1, def: .4 },
+  pitch: { label: "Line Spacing", min: 0, max: 1, def: .4 },
   lineW: { label: "Line Weight", min: 0, max: 1, def: .3 },
   hangle: { label: "Line Angle", min: 0, max: 180, def: 45, fmt: v => Math.round(v) + "°" },
   layers: { label: "Layers", min: 1, max: 3, def: 3, int: true, fmt: v => String(Math.round(v)) },
@@ -5076,11 +5097,11 @@ Stroke = class extends Stroke0 {
     for (let k = 0; k < held.length; k += 3) { const i = held[k]; s.base[i] = held[k + 1] + (s.base[i] - held[k + 2]) * (1 - rp[i]); }
     return out;
   }
-  carryDab(x, y, pr) { return this.shieldDab(x, y, this.R.carry.r + 1, () => super.carryDab(x, y, pr)); }
-  stumpDab(x, y, pr, ux, uy) {
+  carryDab(x, y, pr, sf) { return this.shieldDab(x, y, this.R.carry.r + 1, () => super.carryDab(x, y, pr, sf)); }
+  stumpDab(x, y, pr, ux, uy, sf) {
     const C = this.R.carry, tines = C.tines ? Math.max(...C.tines.map(Math.abs)) : 0;
     // The stump reads the page a blur and a quarter radius past where it writes, at each tine.
-    return this.shieldDab(x, y, (C.tines ? C.tineReach + tines : C.r) + (C.blur || 0) + .25 * C.r + 2, () => super.stumpDab(x, y, pr, ux, uy));
+    return this.shieldDab(x, y, (C.tines ? C.tineReach + tines : C.r) + (C.blur || 0) + .25 * C.r + 2, () => super.stumpDab(x, y, pr, ux, uy, sf));
   }
   end() {
     const R = this.R, s = this.surf;
@@ -8440,6 +8461,59 @@ if (typeof runChecks === "function") {
   };
 }
 
+// Press (the owner, 2026-10-30: the smudge tool's two, "each using pen pressure the way real media does"; the app's
+// PressSmudgeChecks): Smear's Press to Push and Clear Water's Press to Lift, written only when on, never rolled. Blend (the
+// Blend stump with Press to Push 1) softens at a light touch as the Blend stump does and pushes at a firm one as a Smear;
+// Water (the Water brush with Press to Lift 1) re-wets at a light touch, so what it lifts runs, and blots at a firm one.
+const PRESS_STUMP = "blend-stump.M50i00000000yat_3eqlj_3ssll00zz_1nl_1jz_8pthh00x9is00000000nz0.51j8ud";
+const PRESS_WATER = "water-brush.M60i000000000at_1ulat00770000_4i0ll_000_2g7ll0jsee00at_0000000000000000000nz0.20k";
+function pressChecks() {
+  const out = [], t = (what, ok) => out.push({ what, ok: !!ok }), W = 360, H = 240, P = PAPER_TONE;
+  const line = (x0, x1, p, n = 100) => Array.from({ length: n + 1 }, (_, k) => ({ x: x0 + (x1 - x0) * k / n, y: 120, p, t: k * 6, tx: NaN, ty: NaN }));
+  const mean = (s, x0, x1, y0, y1) => { let a = 0, n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { a += s.page[y * W + x]; n++; } return a / n; };
+  const seg = c => c.split("_")[2], read = c => readAnyCode(c).b;
+  const pressed = (c, v) => { const B = read(c); B.carry.d.press = v; return B; };
+  // Codes: off, as before; on, its digits after the choice's last.
+  { const blend = encodeM(pressed(PRESS_STUMP, 1)), water = encodeM(pressed(PRESS_WATER, 1)), mid = encodeM(pressed(PRESS_WATER, .37));
+    t("Press is written only when on (" + seg(blend) + ", " + seg(water) + "), round-trips, older codes as before",
+      encodeM(read(PRESS_STUMP)) === PRESS_STUMP && seg(encodeM(read(PRESS_WATER))) === seg(PRESS_WATER) && seg(blend) === "3ssll00zz000090zz" && seg(water) === "4i0llzz"
+      && encodeM(read(blend)) === blend && Math.abs(read(mid).carry.d.press - .37) < 1e-3 && dialLabel("carry", "smudge", "press") === "Press to Push" && dialLabel("carry", "water", "press") === "Press to Lift"); }
+  // Rolls never give it.
+  { const keep = Math.random; Math.random = rng(3030); let on = 0;
+    try { for (let i = 0; i < 1400; i++) if ((rollStyle(STYLE_NAMES[i % STYLE_NAMES.length]).carry.d.press ?? 0) > 0) on++; } finally { Math.random = keep; }
+    t("rolls never give Press (" + on + ")", on === 0); }
+  // Blend: light, the Blend stump's own page; firm, a Smear's (Soften 0); pushed past the hatching's end.
+  { const hatch = () => { const s = modSurface(W, H, 7); for (let y = 0; y < H; y++) for (let x = 80; x < 240; x++) if (((x % 12) + 12) % 12 < 3) s.page[y * W + x] = 60; return s; };
+    const draw = (B, p) => { const s = hatch(); layStroke(s, B, line(40, 300, p), 40, 1, null); return s; };
+    const same = (a, b) => a.page.every((v, i) => v === b.page[i]);
+    const smear = read(PRESS_STUMP); smear.carry.d.soften = 0;
+    const blend = pressed(PRESS_STUMP, 1), light = draw(blend, .12), firm = draw(blend, .95);
+    const pL = P - mean(light, 250, 290, 110, 130), pF = P - mean(firm, 250, 290, 110, 130);
+    t("Blend: light is the Blend stump's, firm a Smear's, pushing past the hatching (" + pL.toFixed(1) + " light, " + pF.toFixed(1) + " firm)",
+      same(light, draw(read(PRESS_STUMP), .12)) && same(firm, draw(smear, .95)) && pF > 4 * Math.max(1, pL)); }
+  // Water: light, what it lifts runs out past the wash; firm, the track paler and nothing laid past it.
+  { const draw = p => { const s = modSurface(W, H, 7); for (let y = 0; y < H; y++) for (let x = 0; x < 160; x++) s.page[y * W + x] = 130;
+      layStroke(s, pressed(PRESS_WATER, 1), line(60, 300, p), 40, .5, null); return s; };
+    const light = draw(.12), firm = draw(.95);
+    const tL = mean(light, 80, 150, 115, 125), tF = mean(firm, 80, 150, 115, 125), rL = P - mean(light, 164, 200, 110, 130), rF = P - mean(firm, 164, 200, 110, 130);
+    t("Water: light runs out past the wash (" + rL.toFixed(1) + "; firm " + rF.toFixed(1) + "), firm lifts the track paler (" + tF.toFixed(1) + "; light " + tL.toFixed(1) + ")",
+      rL > 1 && rF < .25 * rL && tF > tL + 10); }
+  // Words.
+  { const b = pressed(PRESS_STUMP, 1), w = pressed(PRESS_WATER, 1);
+    t("words: \"" + plainWords(b) + "\", \"" + plainWords(w) + "\"", plainWords(b).includes("Softens, pushes when pressed.") && plainWords(w).includes("Re-wets paint, lifts it when pressed.")); }
+  return out;
+}
+const selfTestPress = selfTest;
+selfTest = function () { const r = selfTestPress(); r.press = pressChecks(); r.ok = r.ok && r.press.every(c => c.ok); NM.lastPress = r.press; return r; };
+if (typeof runChecks === "function") {
+  const runChecksPress = runChecks;
+  runChecks = function () {
+    runChecksPress();
+    setTimeout(() => { const out = document.getElementById("checks"); if (!out || !NM.lastPress) return;
+      out.textContent += "\n\nPress:\n" + NM.lastPress.map(c => `  ${c.ok ? "ok  " : "FAIL"} ${c.what}`).join("\n"); }, 70);
+  };
+}
+
 
 ;
 // ===================================================================================================================
@@ -8747,7 +8821,8 @@ function handGrid(B, cellh) {
 }
 function cardOpen(B, part) {
   const m = MET, P = B[part], c = choiceOf(part, P.k);
-  const chips = CHOICES[part].filter(ch => !(part === "hand" && ch.k === "custom" && P.k !== "custom")).map(ch =>
+  // Custom (the hand) and Filled Shape show only on a brush that holds them, as in Brush Lab.
+  const chips = CHOICES[part].filter(ch => !((part === "hand" && ch.k === "custom" || ch.k === "shape") && P.k !== ch.k)).map(ch =>
     `<button class="chip" data-act="choose" data-part="${part}" data-k="${ch.k}" aria-pressed="${ch.k === P.k}" ${isLocked(part) ? "disabled" : ""}>${esc(ch.label)}</button>`).join("");
   const blurb = part === "hand" ? "Rows: pressure, tilt, speed. Columns: size, darkness, nib width and angle. Tap a cell to step it: off, some, full." : (c.blurb || ROLE[part].blurb);
   const chipRows = Math.ceil(CHOICES[part].length / Math.max(2, Math.floor((m.col - 30) / 92)));

@@ -17,8 +17,8 @@ final class ResolvedBrush {
     enum Rule { INK, CHARCOAL, GRAPHITE, CRAYON }
     enum Life { NONE, WET, DRY, FLOAT }
     enum Lines { CENTRE, SPREAD, OUTLINE, SQUIGGLE, SPLIT }
-    enum LineTip { NIB, HAKE, BRISTLES, STIPPLE, HATCH, STAMP, SPIRO, HAND_HATCH }
-    enum BodyTip { BODY, PLACED, BRISTLES, STIPPLE, HATCH, STAMP, SPIRO, HAND_HATCH }
+    enum LineTip { NIB, HAKE, BRISTLES, STIPPLE, HATCH, STAMP, SPIRO, HAND_HATCH, RULING, TWIG, FAN, ROLLER }
+    enum BodyTip { BODY, PLACED, BRISTLES, STIPPLE, HATCH, STAMP, SPIRO, HAND_HATCH, RULING, TWIG, FAN, ROLLER }
     /**
      * Medium's Blend ({@link PartDial#M_BLEND}): how the mark meets what is there. OWN, the medium's way (ink, washes and
      * sticks darken; opaque paint covers); WHITE lays white by the mark's darkness; BEHIND goes only where the page is
@@ -62,6 +62,8 @@ final class ResolvedBrush {
         boolean crayon;
         /** The hand's Tilt Shading: how far a pen laid low lays the side of its nib ({@link #shade}). */
         double side;
+        /** Wears Down: how fast the tip grows a facet on the side it leans on ({@link StrokePoints#wearAt}); 0 off. */
+        double wear;
 
         Pen copy() {
             Pen p = new Pen();
@@ -71,7 +73,7 @@ final class ResolvedBrush {
             p.chaos = chaos; p.skipStart = skipStart; p.skipEnd = skipEnd; p.fast = fast; p.thicker = thicker;
             p.tiltSize = tiltSize; p.tiltAngle = tiltAngle; p.tDark = tDark; p.pDark = pDark; p.sDark = sDark;
             p.pWidth = pWidth; p.sAngle = sAngle; p.fuzz = fuzz; p.tiltWide = tiltWide;
-            p.gSize = gSize; p.gDark = gDark; p.gWidth = gWidth; p.filbert = filbert; p.crayon = crayon; p.side = side;
+            p.gSize = gSize; p.gDark = gDark; p.gWidth = gWidth; p.filbert = filbert; p.crayon = crayon; p.side = side; p.wear = wear;
             return p;
         }
 
@@ -174,11 +176,18 @@ final class ResolvedBrush {
      * each {@code tineW} px either side.
      */
     static final class Carry {
-        final PartChoice kind; final double pick, lay, r, stride, spacing, hits, soften, tineW, keeps; final int n; final boolean moves;
+        final PartChoice kind; final double pick, lay, r, stride, spacing, hits, soften, tineW, keeps, press; final int n; final boolean moves;
         final double[] tines;
-        Carry(PartChoice kind, double pick, double lay, double r, boolean moves, double soften, double[] tines, double tineW, double keeps) {
+        /**
+         * Reprint ({@link #reprint}): the print the marks are laid again in, the Medium's Print Shading (null without one:
+         * toner's threshold), on the Paper's grain at its Texture ({@code tooth}).
+         */
+        PrintScreen print;
+        StrokePaper paper;
+        double tooth;
+        Carry(PartChoice kind, double pick, double lay, double r, boolean moves, double soften, double[] tines, double tineW, double keeps, double press) {
             this.kind = kind; this.pick = pick; this.lay = lay; this.r = r; this.moves = moves; this.soften = soften;
-            this.tines = tines; this.tineW = tineW; this.keeps = keeps;
+            this.tines = tines; this.tineW = tineW; this.keeps = keeps; this.press = press;
             stride = r > 30 ? r / 30 : 1; n = (int) Math.ceil(r / stride) + 1;
             // Dabs 1 + .08 r apart (r / 4 under 15 px), so a smear streaks smoothly, without combing.
             spacing = Math.max(1.5, Math.min(r * .25, 1 + r * .08)); hits = r / spacing;
@@ -214,8 +223,35 @@ final class ResolvedBrush {
             for (double t : tines) far = Math.max(far, Math.abs(t));
             return far + tineReach();
         }
+        /**
+         * Press ({@link PartDial#PRESS}): how far pressure travel {@code pr} has taken the brush from its light touch, 0 to
+         * Press. Nothing up to {@link #PRESS_LIGHT}, all of it from {@link #PRESS_FIRM}, smooth between: on the owner's
+         * Manta (docs/TILT_INPUT.md, 3.31.45) a light hand reads about .05 to .25 travel ({@link HoverNib#LIGHT}), a usual
+         * one .5 to .75 ({@link WildSample#TYPICAL_PRESS}: about two thirds of the way), a hard one .88 and up.
+         */
+        double pressed(double pr) { return press > 0 ? press * StrokeMath.smoothstep(PRESS_LIGHT, PRESS_FIRM, pr) : 0; }
+        static final double PRESS_LIGHT = .25, PRESS_FIRM = .85;
+        /** Smear's Soften at pressure travel {@code pr}: Press to Push takes it toward 0. */
+        double softenAt(double pr) { return press > 0 ? soften * (1 - pressed(pr)) : soften; }
+        /** Clear Water's share of its Lay Down Paint, and of the wet it leaves, at pressure travel {@code pr}: Press to Lift takes it toward 0 (1 for the rest). */
+        double wetAt(double pr) { return water() && press > 0 ? 1 - pressed(pr) : 1; }
         /** Clear Water: lifts as Lift does and lets what it lifted run out through its wet ({@link ClearWater}). */
         boolean water() { return kind == PartChoice.CLEAR_WATER; }
+        /** Scrape: a blade through the paint there, by how wet it is ({@link Carry}). */
+        boolean scrape() { return kind == PartChoice.SCRAPE; }
+        /** Scrape's blade at {@code lean} (0 upright to 1 laid over): its half-length, px, from an eighth of the radius (the knife's tip) to all of it laid over (its flat), less its ridges. */
+        double bladeHalf(double lean) { return Math.max(1, r * (.12 + .88 * lean) / 1.45); }
+        /** The ridges' width beside a blade {@code half} px either side of its middle. */
+        static double ridge(double half) { return Math.max(2, .45 * half); }
+        /** How far Scrape's blade and its ridges reach either side of the pen at {@code lean}, px: what it changes. */
+        double bladeReach(double lean) { double hw = bladeHalf(lean); return hw + ridge(hw); }
+        /** Reprint: lays the marks there again in the brush's own print ({@link Carry}). */
+        boolean reprint() { return kind == PartChoice.REPRINT; }
+        /**
+         * Reprint at pressure travel {@code pr}: how much of the way to its print a pixel goes, 0 to 1. A light hand (about
+         * .05 to .25 travel on the Manta, {@link #PRESS_LIGHT}) reprints part way; a usual one (.5 and up) all the way.
+         */
+        double reprintAt(double pr) { return StrokeMath.smoothstep(.02, .5, pr); }
         /** Lift and Clear Water start clean and lift at once (a damp brush); Drag and Smear first read the page. */
         boolean lifts() { return kind == PartChoice.LIFT || kind == PartChoice.CLEAR_WATER; }
         /** Drag's and Smear's Keeps Paint: what it picked up is kept for the next stroke ({@link HeldPaint}). */
@@ -279,6 +315,8 @@ final class ResolvedBrush {
         final SpiroStamper.Settings spiro;
         /** Hatching: its strokes' Line Length, Wobble and Taper Out, 0 to 1. */
         final double hLen, hWob, hEnds;
+        /** The nibs (explore-nibs): Ruling Pen's, Twig's and Brayer's Paint Load, Twig's Wobble, Fan's Hairs, Splay and Dry Brush, Brayer's Pick Up Paint. */
+        final double load, wobble, hairs, splay, dryness, pick;
         Pattern(ModularBrush b, double ownSize) {
             ModularBrush.Part t = b.part(BrushPart.TIP);
             kind = t.choice; seed = b.seed;
@@ -292,6 +330,8 @@ final class ResolvedBrush {
             turns = stamp && (int) t.get(HEAD_TURN) == 0;
             nib = stamp ? StampNib.orRound(b.nib) : null;
             hLen = t.get(HLEN, HLEN.def); hWob = t.get(HWOB, HWOB.def); hEnds = t.get(HENDS, HENDS.def);
+            load = t.get(INK_LOAD, INK_LOAD.def); wobble = t.get(WOBBLE, 0); hairs = t.get(HAIRS, 14); splay = t.get(SPLAY, SPLAY.def);
+            dryness = t.get(DRYNESS, DRYNESS.def); pick = t.get(PICKUP, PICKUP.def);
         }
         boolean stipple() { return kind == PartChoice.STIPPLE; }
         boolean stamp() { return kind == PartChoice.STAMP; }
@@ -302,6 +342,9 @@ final class ResolvedBrush {
         /** How dark a mark is at pressure {@code pr} and speed {@code v}: the hand's darkness cells (no tilt). */
         double dark(double pr, double v) { return StrokeMath.handDark(pDark, sDark, 0, pr, v, 0); }
     }
+
+    /** One of the nibs (explore-nibs): Ruling Pen, Twig, Fan or Brayer, a pattern tip laid by its own stamper. */
+    static boolean nib(PartChoice tk) { return tk == PartChoice.RULING || tk == PartChoice.TWIG || tk == PartChoice.FAN || tk == PartChoice.ROLLER; }
 
     /** The settle's inputs. */
     static final class Look { double feather, hollow, bloom, backrun, gran, cover, impasto; }
@@ -409,11 +452,17 @@ final class ResolvedBrush {
      * (graphite, charcoal, pastels, crayon) and an opaque Print Shading mark are pigment that sits on top, so where the page
      * under it is darker than its grey it lays that grey over it ({@link ModularCompose}); black, any other grey over lighter
      * marks, and transparent ink and washes darken only, as ever. Not with a Blend, Resist or a smudge of its own. Any other
-     * print replaces the prints under it instead ({@link #replaces}, 2026-10-29): it leaves pen and washes as they are.
+     * print darkens only, over prints too (the owner, 2026-11-06, undoing 2026-10-29's print over prints replacing them).
      * White ink (the owner, 2026-10-24: "if they select a light shade, it's treated like a light color ink"): a pen's or
      * marker's ink lighter than mid grey is opaque light ink, a gel or paint pen's, by {@link #lightOver}.
      */
     boolean laysLight() { return lightOver() > 0; }
+    /**
+     * Whether its marks lie over what is on the page whatever kind of mark that is ({@link ToneDocument#layingOver()}):
+     * Blend's White and Invert, and light over dark ({@link #laysLight}), so white chalk covers pen, washes and opaque
+     * paint as it covers charcoal. Not on water, as a resist, or fading by the clock.
+     */
+    boolean laysOver() { return (blendMode.lays() || laysLight()) && flt == null && !resist && fade == null; }
     /**
      * How opaque its light grey is over darker marks ({@link #laysLight}): 1 for a stick's or pencil's line and an opaque print;
      * for a pen's line or a Marker's flat ink (ink that dries at once: no wash, float, fade or mould), none at mid grey
@@ -421,7 +470,7 @@ final class ResolvedBrush {
      */
     double lightOver() {
         if (!(gray > 0) || blendMode != BlendMode.OWN || resist || carry != null) return 0;
-        if (screen != null) return !replaces() && (line || body != null) ? 1 : 0;
+        if (screen != null) return cover > 0 && (line || body != null) ? 1 : 0;
         if (rule != Rule.INK) return line ? 1 : 0;
         boolean pen = lineInk && line && parts.w < .5, marker = markerInk && body != null && !line;
         if (!(pen || marker) || !(life == Life.NONE || life == Life.WET && pen) || fade != null || halo != null || flt != null || !(gray > LIGHT_INK)) return 0;
@@ -501,9 +550,15 @@ final class ResolvedBrush {
             // Ink wash (the ink wash note): ink on absorbent paper, a softer rim and smaller blooms than pigment gathering at
             // a watercolour's edge, and its water feathering further into the paper by its Bleed.
             boolean ink = inkWash(b);
-            double rim = ink ? INK_WASH_RIM : 1;
-            return new WetWatercolor.Wash((float) (rim * m.get(POOL)), (float) (rim * Math.min(1, m.get(BLOOM) + .5 * m.get(BACKRUN))), (float) m.get(BACKRUN),
-                    (float) m.get(BLEED), (float) p.get(TOOTH), (float) (1 - .015 * (1.5 - stays)), ink ? INK_WASH_FEATHER : .85f,
+            // The surface's absorbency (the surface spec, 2026-11-01): on paper that drinks little the water sits, pooling
+            // to a hard dark edge; on paper that drinks, it soaks in, bleeding soft. Cold press (.9) as the washes were tuned.
+            // An Ink wash is ink made for paper that drinks: on paper that drinks less it keeps the feathering it was tuned with.
+            double drinks = p.choice.texture().absorbency / WASH_TUNED, rim = (ink ? INK_WASH_RIM : 1) * StrokeMath.clamp(1.3 - .3 * drinks, .7, 1.2);
+            if (ink) drinks = Math.max(1, drinks);
+            double bleed = Math.min(1, m.get(BLEED) * drinks + .9 * Math.max(0, drinks - 1));
+            float feather = (float) StrokeMath.clamp((ink ? INK_WASH_FEATHER : .85) + .25 * (drinks - 1), .7, .92);
+            return new WetWatercolor.Wash((float) (rim * m.get(POOL)), (float) ((ink ? INK_WASH_RIM : 1) * Math.min(1, m.get(BLOOM) + .5 * m.get(BACKRUN))), (float) m.get(BACKRUN),
+                    (float) bleed, (float) p.get(TOOTH), (float) (1 - .015 * (1.5 - stays)), feather, (float) StrokeMath.clamp(WetWatercolor.BLEEDS - .25 * (drinks - 1), .55, .8),
                     (x, y) -> .55f * paper.fine(x, y) + .45f * paper.blob(x, y),
                     (x, y) -> paper.low(x, y),
                     (x, y) -> 1 - (.6f * paper.fine(x, y) + .4f * paper.mid(x, y)));
@@ -518,6 +573,8 @@ final class ResolvedBrush {
             return (float) (inkWash(b) ? .6 + .25 * w : .45 + .4 * w);
         }
         static boolean inkWash(ModularBrush b) { return "Ink wash".equals(b.style.name); }
+        /** The absorbency the washes were tuned on: cold press's ({@link BrushTexture#absorbency}). */
+        static final double WASH_TUNED = .9;
         /** An Ink wash's Dark Edge and Bloom, a share of a watercolour's. */
         static final double INK_WASH_RIM = .4;
         /** How far an Ink wash's water feathers into the paper ({@link WetWatercolor.Wash#feather}): further than a watercolour's .85. */
@@ -546,6 +603,8 @@ final class ResolvedBrush {
      * strokes merge wet into wet with the watercolour washes and dry back as they do. Laid on the pair's wash half
      * ({@link ModularStroke#layerOf}), a pen line and all.
      */
+    /** Water-Soluble on ({@link PartDial#SOLUBLE}): the mark lies with the washes, as paint, so Clear Water dissolves it. */
+    static boolean soluble(ModularBrush b) { return b.part(BrushPart.MEDIUM).get(PartDial.SOLUBLE, 0) > 0; }
     static boolean washes(ModularBrush b) {
         if (b.choice(BrushPart.LIFE) != PartChoice.WET_PAINT || b.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER) return false;
         PartChoice m = b.choice(BrushPart.MEDIUM);
@@ -586,16 +645,12 @@ final class ResolvedBrush {
     double screenReach(double c, double d) { return clamp(Math.max(c * parts.inkShare * load, d > 0 ? screenBody(d) * load : 0)); }
     private double screenBody(double d) { return Math.min(1, parts.bodyAmt > 0 ? d / parts.bodyAmt : d) * SCREENED_BODY; }
     boolean prints() { return screen != null && !screen.tone && !blendMode.lays(); }
-    /**
-     * A print over prints (the owner, 2026-10-29: "go over that area again and make it the same pattern, but lighter"):
-     * a screened mark (Print Shading, Screentone) of its own Blend, not opaque, replaces what its plane, Paint, holds
-     * under its footprint, clear between its dots, so a lighter one over a darker one leaves the lighter. Pen, on a plane
-     * of its own over it, stays; so do washes, under it. No light over dark ({@link #laysLight}): the clear shows them.
-     */
-    boolean replaces() { return screen != null && blendMode == BlendMode.OWN && !(cover > 0) && carry == null; }
 
     /** {@code darkness} is the swatch's, 0 (paper) to 1 (black): the prototype's shade. */
     static ResolvedBrush of(ModularBrush b, double size, double darkness) {
+        // Vector Ink in pixels (a picture, a fill): its plain Ink line; its strokes are VectorInk.Pen's.
+        if (VectorInk.is(b)) return of(VectorInk.drawnAs(b), size, darkness);
+        b = laid(b);
         PartChoice m = b.choice(BrushPart.MEDIUM);
         boolean resist = m == PartChoice.RESIST, tone = m == PartChoice.TONE;
         ModularBrush.Part halo = b.choice(BrushPart.LIFE) == PartChoice.HALO ? b.part(BrushPart.LIFE) : null;
@@ -617,20 +672,32 @@ final class ResolvedBrush {
                     : m == PartChoice.COVER || water || inks ? new Wet(stays, L.get(RUNS), !"Oils".equals(b.style.name), inks) : null;
             return new ResolvedBrush(asInstant(a), size, darkness, resist, null, screen, null, wet);
         }
-        FadingInk.Spec fade = life == PartChoice.FADE || life == PartChoice.LEMON
-                ? new FadingInk.Spec(life == PartChoice.LEMON, (int) Math.round(1000 * b.part(BrushPart.LIFE).get(life == PartChoice.LEMON ? DRY_IN : FADE_IN))) : null;
-        return new ResolvedBrush(halo != null ? asSlow(a) : fade != null ? asQuick(a) : a, size, darkness, resist, halo, screen, fade, null);
+        // Fading, Lemon Juice and Later's media: laid as its Drying lays it (the Quick every one had before Later); the
+        // clock does the rest, over the choice's time (its last dial), as far as its macro dial says.
+        PartChoice later = b.choice(BrushPart.LATER);
+        ModularBrush.Part L = b.part(BrushPart.LATER);
+        FadingInk.Spec fade = later.clocked() < 0 ? null : new FadingInk.Spec(later.clocked(), (int) Math.round(1000 * L.get(later.dials.get(later.dials.size() - 1))),
+                FadingInk.media(later.clocked()) ? L.get(later.macro) : 0, b.seed, b.choice(BrushPart.PAPER).texture(), b.part(BrushPart.PAPER).get(TOOTH));
+        return new ResolvedBrush(halo != null ? asSlow(a) : a, size, darkness, resist, halo, screen, fade, null);
+    }
+    /**
+     * {@code b} as the engine reads it: a retired Drying mischief split into Later ({@link ModularBrush#split}, a brush
+     * the checks made without normalizing), then Float and Mold, which are ways of drying, back in Drying as the engine
+     * has always laid them ({@link ModularBrush#retired}): Drying's own dials do nothing under them but Mold's Drying Time.
+     */
+    static ModularBrush laid(ModularBrush b) {
+        if (b.choice(BrushPart.LIFE).later() != null) b = b.copy().split();
+        PartChoice later = b.choice(BrushPart.LATER);
+        if (later != PartChoice.LATER_FLOAT && later != PartChoice.LATER_MOLD) return b;
+        ModularBrush a = b.copy();
+        a.set(BrushPart.LIFE, b.retired());
+        a.set(BrushPart.LATER, new ModularBrush.Part(PartChoice.LATER_OFF));
+        return a;
     }
     /** A Wet brush as the engine lays it ({@link Wet}): Instant, dry the moment the nib passes. */
     static ModularBrush asInstant(ModularBrush b) {
         ModularBrush a = b.copy();
         a.set(BrushPart.LIFE, new ModularBrush.Part(PartChoice.NONE));
-        return a;
-    }
-    /** newmods.js resolve: a Fading or Lemon Juice brush as the engine lays it, Quick at its usual wet edge; the clock does the rest. */
-    static ModularBrush asQuick(ModularBrush b) {
-        ModularBrush a = b.copy();
-        a.set(BrushPart.LIFE, new ModularBrush.Part(PartChoice.FAST_WET));
         return a;
     }
     /** newmods.js resolve: a Halo brush as the engine lays it, Slow's lift at its drying time with no settling of its own. */
@@ -662,8 +729,11 @@ final class ResolvedBrush {
     }
 
     private ResolvedBrush(ModularBrush B, double size, double shade, boolean resist, ModularBrush.Part halo, PrintScreen screen, FadingInk.Spec fade, Wet wet) {
-        this.resist = resist; this.screen = screen; this.fade = fade; this.wet = wet;
         ModularBrush.Part T = B.part(BrushPart.TIP), M = B.part(BrushPart.MEDIUM), C = B.part(BrushPart.CARRY), P = B.part(BrushPart.PAPER), L = B.part(BrushPart.LIFE);
+        // Reprint lays no mark of its own to screen: its Print Shading is what it lays the marks there again in (its carry's).
+        PrintScreen reprintIn = C.choice == PartChoice.REPRINT ? screen : null;
+        if (C.choice == PartChoice.REPRINT) screen = null;
+        this.resist = resist; this.screen = screen; this.fade = fade; this.wet = wet;
         // Smudge's Own paint: what share of its own paint a smudging brush lays (Off: all of it).
         double load = ModularBrush.ownPaint(C);
         PartChoice tk = T.choice, mk = M.choice;
@@ -758,6 +828,7 @@ final class ResolvedBrush {
         pen.filbert = tk == PartChoice.FILBERT;
         pen.crayon = mk == PartChoice.CRAYON && !scratch;
         pen.side = B.part(BrushPart.HAND).get(SIDE_SHADE, 0);
+        pen.wear = T.get(WEAR, 0);
         if (tk == PartChoice.SPLIT_NIB || tk == PartChoice.MULTI_LINE) pen.pWidth = 0;   // pressure → width is their breathing, inside the placement
         body.fast = fast; body.tiltSize = pen.tiltSize; body.tDark = pen.tDark; body.pDark = pen.pDark; body.sDark = pen.sDark;
         body.pWidth = B.handCell(PW); body.sAngle = pen.sAngle; body.gSize = pen.gSize; body.gDark = pen.gDark;
@@ -812,7 +883,8 @@ final class ResolvedBrush {
         // (Stipple, Hatch, Hand Hatch, Print Shading, Screentone) is Paint whatever its medium, so Pen erases only pen lines
         // (the owner, 2026-10-29: "a way to erase one or the other"); on the Paint plane under pen, it looks as it did.
         boolean texture = screen != null || tk == PartChoice.STIPPLE || tk == PartChoice.HATCH || tk == PartChoice.HAND_HATCH;
-        this.medium = mk == PartChoice.COVER ? ToneDocument.KIND_PAINT | ToneDocument.KIND_OPAQUE : mk == PartChoice.WASH || texture ? ToneDocument.KIND_PAINT
+        // Water-Soluble: paint, with the washes, so the Water brush dissolves it.
+        this.medium = mk == PartChoice.COVER ? ToneDocument.KIND_PAINT | ToneDocument.KIND_OPAQUE : mk == PartChoice.WASH || texture || soluble(B) ? ToneDocument.KIND_PAINT
                 : mk == PartChoice.CHARCOAL || mk == PartChoice.GRAPHITE || mk == PartChoice.CRAYON ? ToneDocument.KIND_PENCIL : ToneDocument.KIND_PEN;
         this.kind = ownPaint ? medium : 0;
         this.wetMs = PartDial.wetMs(drying, life == Life.DRY && grav != null);
@@ -826,10 +898,11 @@ final class ResolvedBrush {
         // of its own, so the round's are off and its soft edge the default) and lays its dots, lines or prints there instead.
         // A Stamp prints its nib as big as its tip: the line's size for ink and the sticks, the wash's for paint; a Spiro
         // draws its curve as wide.
-        boolean pattern = tk == PartChoice.STIPPLE || tk == PartChoice.HATCH || tk == PartChoice.STAMP || tk == PartChoice.SPIRO || tk == PartChoice.HAND_HATCH;
+        boolean pattern = tk == PartChoice.STIPPLE || tk == PartChoice.HATCH || tk == PartChoice.STAMP || tk == PartChoice.SPIRO || tk == PartChoice.HAND_HATCH || nib(tk);
         this.pattern = pattern ? new Pattern(B, lineMedium ? inkSize : washSize) : null;
         this.lineTip = tk == PartChoice.HAKE ? LineTip.HAKE : swarm ? LineTip.BRISTLES : tk == PartChoice.STIPPLE ? LineTip.STIPPLE : tk == PartChoice.HATCH ? LineTip.HATCH
-                : tk == PartChoice.STAMP ? LineTip.STAMP : tk == PartChoice.SPIRO ? LineTip.SPIRO : tk == PartChoice.HAND_HATCH ? LineTip.HAND_HATCH : LineTip.NIB;
+                : tk == PartChoice.STAMP ? LineTip.STAMP : tk == PartChoice.SPIRO ? LineTip.SPIRO : tk == PartChoice.HAND_HATCH ? LineTip.HAND_HATCH
+                : tk == PartChoice.RULING ? LineTip.RULING : tk == PartChoice.TWIG ? LineTip.TWIG : tk == PartChoice.FAN ? LineTip.FAN : tk == PartChoice.ROLLER ? LineTip.ROLLER : LineTip.NIB;
         this.linePlaced = lineTip == LineTip.NIB && Pa.placed;
         this.lineStateful = lineTip != LineTip.NIB;
         this.placeBody = body;
@@ -857,7 +930,8 @@ final class ResolvedBrush {
             this.bodySwarm = bs;
         } else { this.lineSwarm = null; this.bodySwarm = null; }
         this.bodyTip = swarm ? BodyTip.BRISTLES : tk == PartChoice.STIPPLE ? BodyTip.STIPPLE : tk == PartChoice.HATCH ? BodyTip.HATCH : tk == PartChoice.STAMP ? BodyTip.STAMP
-                : tk == PartChoice.SPIRO ? BodyTip.SPIRO : tk == PartChoice.HAND_HATCH ? BodyTip.HAND_HATCH : (tk == PartChoice.SPLIT_NIB || multi) && !lineMedium ? BodyTip.PLACED : BodyTip.BODY;
+                : tk == PartChoice.SPIRO ? BodyTip.SPIRO : tk == PartChoice.HAND_HATCH ? BodyTip.HAND_HATCH
+                : tk == PartChoice.RULING ? BodyTip.RULING : tk == PartChoice.TWIG ? BodyTip.TWIG : tk == PartChoice.FAN ? BodyTip.FAN : tk == PartChoice.ROLLER ? BodyTip.ROLLER : (tk == PartChoice.SPLIT_NIB || multi) && !lineMedium ? BodyTip.PLACED : BodyTip.BODY;
         this.bodyStateful = tk == PartChoice.HAKE || swarm || pattern;
         if (bodyTip == BodyTip.PLACED) {
             boolean split = tk == PartChoice.SPLIT_NIB;
@@ -890,12 +964,13 @@ final class ResolvedBrush {
             // A stump that is a Rake or a Split nib combs: it softens along its tines (the Stump spec).
             double[] tines = soften > 0 ? tinesOf(T, count, placeSize / 2) : null;
             this.carry = new Carry(C.choice, C.get(PICK, .4), C.get(LAY, .5), r, !(C.choice == PartChoice.LIFT && this.cover > 0), soften,
-                    tines == null ? null : java.util.Arrays.copyOf(tines, tines.length - 1), tines == null ? 0 : tines[tines.length - 1], C.get(KEEPS, 0));
+                    tines == null ? null : java.util.Arrays.copyOf(tines, tines.length - 1), tines == null ? 0 : tines[tines.length - 1], C.get(KEEPS, 0), C.get(PRESS, 0));
+            if (carry.reprint()) { carry.print = reprintIn; carry.paper = new StrokePaper(P.choice.texture()); carry.tooth = P.get(TOOTH); }
         } else this.carry = null;
         this.tint = carry != null && carry.kind == PartChoice.LIFT && this.cover > 0 ? Math.min(1, 2 * carry.pick) : 0;
         // Paint Load: a Drag's or Smear's own paint runs out (only one that lays some); a Filbert's dabs are crescents then.
         boolean runsOut = carry != null && (C.choice == PartChoice.DRAG || C.choice == PartChoice.SMUDGE) && (this.line || this.body != null);
-        this.loaded = runsOut ? LoadedPaint.of(C, this.body != null ? this.bodySize : inkSize) : null;
+        this.loaded = runsOut ? LoadedPaint.of(C, this.body != null ? this.bodySize : inkSize, this.body == null) : null;
         if (loaded != null && body.filbert) body.crescent = true;
         this.flt = life == Life.FLOAT ? floatParts(T, C, L, Pa, load, count) : null;
         this.halo = halo == null || resist || mode.lays() || screen != null ? null : haloParts(halo);

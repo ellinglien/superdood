@@ -81,18 +81,36 @@ final class InkWashLayers {
      * every layer flattened bottom to top as the page shows them (MonoPaint's opacity folded in), its wash blank, as one
      * undoable step. Hidden layers are merged too, and so show: nothing is lost. False with one pair.
      */
-    static boolean merge(ToneDocument document) { return pairs(document) > 1 && merge(document, null); }
+    static boolean merge(ToneDocument document) { return pairs(document) > 1 && mergeAbove(document, null); }
     /**
      * Merge Down (the side column's layers, a layer being a page stacked on the one below): {@code document}'s layers and
      * then {@code above}'s (the layer stacked on it; null: none) flattened as {@link #merge(ToneDocument)} does, into
-     * {@code document} as one undoable step. Hidden layers merge too.
+     * {@code document} as one undoable step. Hidden layers merge too. Logged for Record and Replay ({@link StrokeLog.Merge}:
+     * the layer above kept flattened).
      */
     static boolean merge(ToneDocument document, ToneDocument.Snapshot above) {
+        boolean fits = above != null && above.width == document.width && above.height == document.height;
+        try { return mergeAbove(document, fits ? above.layers : null); }
+        finally { if (above != null) above.release(); }
+    }
+    /** As {@link #merge(ToneDocument, ToneDocument.Snapshot)}, the layers stacked above being {@code above} (null: none): a replay merges the one it kept. */
+    static boolean mergeAbove(ToneDocument document, java.util.List<ToneDocument.Layer> above) {
+        StrokeLog.Merge logged = StrokeLog.Merge.of(document, above == null ? null : flattened(above, document.width, document.height));
         ToneDocument.Snapshot was = document.layerSnapshot();
-        int n = was.width * was.height;
         java.util.List<ToneDocument.Layer> all = new ArrayList<>(was.layers);
-        if (above != null && above.width == was.width && above.height == was.height) all.addAll(above.layers);
-        ToneDocument.Layer ink = empty("Ink", was.width, was.height);
+        if (above != null) all.addAll(above);
+        ToneDocument.Layer ink = flattened(all, was.width, was.height);
+        was.release();
+        java.util.ArrayList<ToneDocument.Layer> one = new java.util.ArrayList<>();
+        one.add(empty("Wash", was.width, was.height)); one.add(ink);
+        boolean changed = document.replaceLayers(one, INK);
+        document.logMade(StrokeLog.Entry.merge(0, logged), changed);
+        return changed;
+    }
+    /** {@code all} ({@code width × height}, bottom first) flattened as the page shows them into one layer, hidden ones too. */
+    private static ToneDocument.Layer flattened(java.util.List<ToneDocument.Layer> all, int width, int height) {
+        int n = width * height;
+        ToneDocument.Layer ink = empty("Ink", width, height);
         byte kinds = 0;
         // Inkwash: every layer's base and kind planes, in the page's order (ToneDocument.stacked).
         int places = ToneDocument.stackSize(all.size());
@@ -121,15 +139,80 @@ final class InkWashLayers {
         // shortcut: what the eraser may take (share), the print tone and the kinds' plane start afresh (all erasable, every
         // kind laid); refine if Merge is used on pages whose permanent paint matters.
         ink.kinds = kinds;
-        was.release();
-        if (above != null) above.release();
-        java.util.ArrayList<ToneDocument.Layer> one = new java.util.ArrayList<>();
-        one.add(empty("Wash", was.width, was.height)); one.add(ink);
-        return document.replaceLayers(one, INK);
+        return ink;
     }
     /** Shows or hides pair {@code pair}, both halves, leaving the selection; false when it already is. */
     static boolean show(ToneDocument document, int pair, boolean visible) {
         return document.setLayersVisible(washOf(document, pair), inkOf(document, pair), visible);
+    }
+    /**
+     * The three layers (the owner's layer button, 2026-11-06: "tap on the layer area to switch to another layer"), 1 the
+     * bottom: three pairs, made on the first switch, so a page nobody switches stays one pair, its layer 2.
+     */
+    static final int LAYERS = 3;
+    /**
+     * The layer in use, 1 to 3: a one-pair page is layer 2, a two-pair page layers 2 and 3; on four pairs (old pages, left
+     * as they are) the top three, 0 the pair under them.
+     */
+    static int layer(ToneDocument document) {
+        int pairs = pairs(document);
+        return Math.max(0, current(document) + (pairs < LAYERS ? 2 : LAYERS + 1 - pairs));
+    }
+    /**
+     * Layer {@code layer}'s pair ({@link #layer}'s inverse): on a page of three pairs or more the top three's; on fewer, a
+     * pair the page has yet to make is outside 0 to {@link #pairs} - 1.
+     */
+    static int pairOfLayer(ToneDocument document, int layer) {
+        int pairs = pairs(document);
+        return layer - (pairs < LAYERS ? 2 : LAYERS + 1 - pairs);
+    }
+    /**
+     * Picks layer {@code layer} (1 to 3); false when it is in use. On a page of three pairs or more the pair is selected,
+     * no undo step; on fewer, the blank pairs come first, under it and over a one-pair page (the drawing stays layer 2),
+     * the layer picked with them as one undoable step.
+     */
+    static boolean pickLayer(ToneDocument document, int layer) {
+        if (layer < 1 || layer > LAYERS || layer(document) == layer) return false;
+        if (pairs(document) >= LAYERS) { select(document, pairOfLayer(document, layer)); return true; }
+        return make(document, layer);
+    }
+    /** A page of fewer than three pairs made three, the blank ones under it and over a one-pair page, layer {@code layer} selected: one undoable step. */
+    private static boolean make(ToneDocument document, int layer) {
+        int pairs = pairs(document);
+        Stack stack = new Stack(document);
+        for (int i = 0; i < 2; i++) stack.order.add(0, -1);
+        if (pairs == 1) { stack.order.add(-1); stack.order.add(-1); }
+        return stack.apply(2 * (layer - 1) + 1);
+    }
+    /**
+     * A layer's step (the owner, 2026-11-06, the layer button's hold: "long press should bring up the visibility options"):
+     * Show Kinds' Full, Half, Faint and Hidden ({@link NotebookOptions#GUIDE_STEPS}) as its pair's own visibility and
+     * opacity, both halves ({@link NotebookOptions#GUIDE_STRENGTH}: 100, 44, 18), kept with the page. A pair shown at
+     * another opacity (an old page's) takes the nearest step.
+     */
+    static int step(boolean visible, int opacity) {
+        if (!visible) return NotebookOptions.HIDDEN;
+        int best = NotebookOptions.FULL;
+        for (int s = NotebookOptions.FULL; s < NotebookOptions.HIDDEN; s++)
+            if (Math.abs(opacity - NotebookOptions.GUIDE_STRENGTH[s]) < Math.abs(opacity - NotebookOptions.GUIDE_STRENGTH[best])) best = s;
+        return best;
+    }
+    /** Layer {@code layer}'s step (1 to 3); Full for one the page has yet to make. */
+    static int stepOf(ToneDocument document, int layer) {
+        int pair = pairOfLayer(document, layer);
+        if (pair < 0 || pair >= pairs(document)) return NotebookOptions.FULL;
+        return step(visible(document, pair), document.layerOpacity(inkOf(document, pair)));
+    }
+    /**
+     * Layer {@code layer} (1 to 3) shown at {@code step}, both halves of its pair, one undoable step, the layer drawn on
+     * kept; false when it already is. A layer the page has yet to make is made first, as a tap makes it (its own undo step).
+     */
+    static boolean setStep(ToneDocument document, int layer, int step) {
+        if (layer < 1 || layer > LAYERS || step < NotebookOptions.FULL || step > NotebookOptions.HIDDEN || stepOf(document, layer) == step) return false;
+        int pair = pairOfLayer(document, layer);
+        if (pair < 0 || pair >= pairs(document)) { make(document, layer(document)); pair = pairOfLayer(document, layer); }
+        return document.setLayersShown(washOf(document, pair), inkOf(document, pair), step != NotebookOptions.HIDDEN,
+                step == NotebookOptions.HIDDEN ? -1 : NotebookOptions.GUIDE_STRENGTH[step]);
     }
     /** Drawing on a hidden pair shows it: true if it was hidden, wholly or in half. */
     static boolean showSelected(ToneDocument document) {

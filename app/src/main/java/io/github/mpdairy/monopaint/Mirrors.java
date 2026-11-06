@@ -46,6 +46,8 @@ final class Mirrors {
 
     /** At most this many mirrors; a fifth replaces the oldest. */
     static final int MOST = 4;
+    /** What a placing stroke too short to place a mirror says (docs/TEXT-STYLE.md: the result in about three words). */
+    static final String TOO_SHORT = "Too short";
     /** At most this many maps, the page itself counted: "copies max" past it (non-dividing angles, parallel mirrors). */
     static final int MOST_COPIES = 24;
     /** Page pixels a prototype pixel (a CSS pixel, 1/96 inch) is on the 300 ppi panel. */
@@ -240,7 +242,11 @@ final class Mirrors {
         return new double[]{v.ox[best], v.oy[best]};
     }
     /** The page's tone at a pixel. */
-    interface Tones { int tone(int x, int y); }
+    interface Tones {
+        int tone(int x, int y);
+        /** The {@code w} tones of row {@code y} from {@code x}, into {@code out}: a page reads them in one pass ({@link MirrorShow#tones}). */
+        default void tones(int x, int y, int w, int[] out) { for (int i = 0; i < w; i++) out[i] = tone(x + i, y); }
+    }
     /** A point near the page's centre on no mirror of {@code g}: its images all apart. */
     private static double[] seed(Group g, int width, int height) {
         for (int k = 1; ; k++) {

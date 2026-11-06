@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Superdood</title>
+<meta name="description" content="A free drawing app for the Supernote.">
+<!-- superdood.org's page (superdood.org's server (superdood.nginx, not in this repo) serves it at /; server.py answers a wrong
+     code with it, its note filled). The app's page view on paper: the launch drawing (splash_drawing.png, halved, still
+     1-bit), iA Writer Duo (duo-*.woff2, subset and renamed: OFL), Title Case rows with 1 px ink lines between, black on
+     white only. No script, no cookies, nothing loaded from elsewhere. -->
+<link rel="preload" href="/duo-regular.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Superdood Duo";src:url(/duo-regular.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Superdood Duo";src:url(/duo-bold.woff2) format("woff2");font-weight:700;font-display:swap}
+:root{color-scheme:light}
+*{box-sizing:border-box}
+html{background:#fff;color:#000}
+body{margin:0;background:#fff;color:#000;font:18px/1.4 "Superdood Duo",ui-monospace,Menlo,Consolas,monospace}
+main{max-width:26rem;margin:0 auto;padding:32px 16px 40px}
+h1{margin:0}
+h1 img{display:block;width:min(100%,358px);height:auto;margin:0 auto}
+.job{font-size:15px;text-align:center;margin:14px 0 36px}
+form{border-top:1px solid #000;padding:20px 0 24px}
+h2{font-size:17px;font-weight:700;margin:0 0 12px;text-align:center}
+label{display:block;font-size:15px;margin-bottom:14px}
+.row{display:flex;gap:10px;justify-content:center;align-items:center}
+input{font:700 32px "Superdood Duo",ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.2em;width:6.4em;min-width:0;padding:6px 0 6px 14px;border:1px solid #000;border-radius:0;background:#fff;color:#000}
+button{font:700 15px "Superdood Duo",ui-monospace,monospace;padding:0 16px;border:1px solid #000;border-radius:0;background:#000;color:#fff;min-height:44px;align-self:stretch;cursor:pointer}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #000;outline-offset:3px}
+#note{font-size:15px;margin:14px 0 0;text-align:center}
+#note:empty{display:none}
+nav a{display:flex;align-items:center;justify-content:space-between;min-height:56px;border-top:1px solid #000;color:#000;text-decoration:none;font-size:18px}
+nav a:last-child{border-bottom:1px solid #000}
+nav svg{width:22px;height:22px;flex:none}
+small{display:block;font-size:13px;line-height:1.5;margin-top:28px}
+</style>
+</head>
+<body>
+<main>
+<h1><img src="/superdood.webp" width="716" height="844" alt="Superdood"></h1>
+<p class="job">A free drawing app for the Supernote.</p>
+
+<form method="post" action="/go">
+  <h2>Draw Together</h2>
+  <div class="row">
+    <input id="c" name="c" aria-label="Code" required minlength="4" maxlength="4" pattern="[A-Za-z2-9]{4}" title="Four letters" autocomplete="off" autocapitalize="characters" spellcheck="false" autofocus>
+    <button>Join</button>
+  </div>
+  <p id="note" role="status"></p>
+</form>
+
+<nav>
+  <a href="/studio/">Brush Studio<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>
+  <a href="https://github.com/ellinglien/superdood">GitHub<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>
+</nav>
+
+<small>An independent open-source project. Not affiliated with Supernote or Ratta.</small>
+</main>
+</body>
+</html>

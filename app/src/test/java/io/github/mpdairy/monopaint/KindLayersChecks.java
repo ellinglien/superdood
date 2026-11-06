@@ -235,8 +235,7 @@ public final class KindLayersChecks {
 
     /** A stump (no paint of its own) blends dry media on its plane and leaves the pen crisp. */
     static void smudge() {
-        ModularBrush stump = null;
-        for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals("Blend stump")) stump = p.brush().parts;
+        ModularBrush stump = FloatChecks.preset("Blend stump");
         ToneDocument d = InkWashLayers.blank(W, H);
         for (int k = 0; k < 6; k++) block(d, InkWashLayers.INK, ToneDocument.KIND_PENCIL, 100 + 30 * k, 150, 8, 60, 60);
         block(d, InkWashLayers.INK, ToneDocument.KIND_PEN, 90, 175, 220, 6, 0);

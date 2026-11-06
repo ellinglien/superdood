@@ -6,22 +6,23 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * The bar's ten tool slots (six until 2026-10-19, eight until 2026-10-27). Any slot holds any library brush (a six-part brush, see {@link Brush}), whose medium, not
+ * The bar's nine tool slots (six until 2026-10-19, eight until 2026-10-27, ten until 2026-11-06). Any slot holds any library brush (a six-part brush, see {@link Brush}), whose medium, not
  * the slot, decides where it draws. Each slot's dice rolls a new six-part brush in its brush's style; a pick puts a
  * library brush in it. Undo takes back rolls and picks made since the page last changed, latest first, before it undoes
  * the page. Kept between launches. A first launch starts on {@link #FIRST}; slots stored before the six-part engine (a
  * built-in, an old Wild brush) are converted once, keeping what they drew ({@link LegacyBrushes}); a toolbar kept with
  * fewer slots (six before 2026-10-19, eight before 2026-10-27) keeps them as they are and gains the rest as a first launch has them ({@link
- * #grow}). Pure, checked on the desktop.
+ * #grow}); one kept with ten (before 2026-11-06) loses one ({@link #shrink}). Pure, checked on the desktop.
  */
 final class ToolSlots {
-    static final int COUNT = 10;
+    static final int COUNT = 9;
     /**
      * The bar's tools after the slots: the eraser, then the smudge tool (a smudge brush of its own, sizes only:
-     * {@link #smudge}), then the stamp tool (a Stamp brush of its own: {@link #stamp}); how many tools the bar has in all.
-     * A tool's index is its place in the bar.
+     * {@link #smudge}), then the stamp tool (a Stamp brush of its own: {@link #stamp}), then Fill in (the Basic tool
+     * {@link #FILL_TOOL}, always: {@link #fill}; a slot until 2026-11-06, the owner: "the fill in pen should be grouped
+     * with the stump and eraser"); how many tools the bar has in all. A tool's index is its place in the bar.
      */
-    static final int ERASER = COUNT, SMUDGE = COUNT + 1, STAMP = COUNT + 2, TOOLS = COUNT + 3;
+    static final int ERASER = COUNT, SMUDGE = COUNT + 1, STAMP = COUNT + 2, FILL = COUNT + 3, TOOLS = COUNT + 4;
     /** How many rolls and picks Undo can take back. */
     static final int UNDOS = 32;
     /**
@@ -37,18 +38,17 @@ final class ToolSlots {
      * The keys are only labels; stored built-ins convert through {@link LegacyBrushes#BUILTINS}, not these.
      */
     static final String[][] FIRST = {
-            {"PENCIL", "Another pencil", "another-pencil.M40i000000000at_4ip2c_0_di0_1jz_800000000zzzz000000zz000000000530000005000c099zz.inw", "4.5", "1.0"},
+            {"PENCIL", "Another pencil", "another-pencil.M40i000000000at_4ip2c_0_di0_1jz_800000000zzzz000000zz000000000530000005000c099zz.inw", "6", "1.0"},
             {"STEADY", "Steady line", "steady-line.M00il00000000at_000zz0000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud", "3", "1.0"},
             {"FELT", "Verve felt", "verve-felt.M30i0776o0q00u1_000zz0000920000000_0_d00_0_8i00000zz0000400000nz0.jjds6x", "4", "1.0"},
-            {"FUDE", "Fude fountain", "fude-fountain.M20ss007700003m_000zzat00000000000_0_000_0_8at0000i000ll000000nz01.1s13pn4", "2.5", "1.0"},
-            {"WASH", "Ink wash", "ink-wash.M60i0000000007q_1wva200000000_0_0fk_7_8zz0000000000000000nz0.t4mf73", "130", "0.176"},
-            {"WATERCOLOUR", "Watercolour washy", "watercolour-washy.M60i04o4b0000ji_1zz8t00ag9600_1zzex_000_7js_8zz0000000000000000zz0.1s13pn4", "169", "0.082"},
-            {"OIL", "Rob boss", "rob-boss.M99vleei0000000005e_2zg00_2llydzzn7_000_7ne_1ss0000000000000000nz0.2fu", "96", "1.0"},
-            {"SHAPE", "Filled shape", "filled-shape.M30wd00000000at_1atat00000000_6_000_0_0000000000000000000nz0.2fi", "2.5", "1.0"},
-            {"BENDAY", "Ben-Day brush", "ben-day-brush.Me1zzeezz00000000ll_0i0000000000000000zz065ji000at_0_000_0_25ess00000000000000nz0.2ef", "12", "1.0"},
-            {"HIGHLIGHTER", "High lighter", "high-lighter.M31e1zzp60000000000_1007700000000zz2_0_000_0_0000000000000000000nz0.2f2", "63", "0.075"}};
-    /** The stamp tool's size at first, px, and its grey, darkness 0 white to 1 black; the eraser's size, px. */
-    static final double FIRST_STAMP_PX = 44, FIRST_STAMP_GREY = .216, FIRST_ERASER_PX = 31;
+            {"FUDE", "Fude fountain", "fude-fountain.M20ss007700003m_000zzat00000000000_0_000_0_8at0000i000ll000000nz01.1s13pn4", "11", "1.0"},
+            {"WASH", "Ink wash", "ink-wash.M60i0000000007q_1wva200000000_0_0fk_7_8zz0000000000000000nz0.t4mf73", "85", "0.541"},
+            {"WATERCOLOUR", "Watercolour wash", "watercolour-washy.M60i04o4b0000ji_1zz8t00ag9600_1zzex_000_7js_8zz0000000000000000zz0.1s13pn4", "275", "0.227"},
+            {"OIL", "Rob boss", "rob-boss.M99vleei0000000005e_2zg00_2llydzzn7_000_7ne_1ss0000000000000000nz0.2fu", "114", "0.424"},
+            {"BENDAY", "Ben-Day brush", "ben-day-brush.Me1zzeezz00000000ll_0i0000000000000000zz065ji000at_0_000_0_25ess00000000000000nz0.2ef", "17", "1.0"},
+            {"HIGHLIGHTER", "High lighter", "high-lighter.M31e1zzp60000000000_1007700000000zz2_0_000_0_0000000000000000000nz0.2f2", "34", "0.102"}};
+    /** The stamp tool's size at first, px, and its grey, darkness 0 white to 1 black; the eraser's size, px; Fill in's size and grey (its slot's in FIRST until 2026-11-06). */
+    static final double FIRST_STAMP_PX = 44, FIRST_STAMP_GREY = .216, FIRST_ERASER_PX = 31, FIRST_FILL_PX = 2.5, FIRST_FILL_GREY = 1;
     /** Slot {@code slot}'s size on a first launch, px ({@link #FIRST}). */
     static double firstPx(int slot) { return Double.parseDouble(FIRST[slot][3]); }
     /** Slot {@code slot}'s grey on a first launch, darkness ({@link #FIRST}). */
@@ -60,8 +60,10 @@ final class ToolSlots {
      * ("tool_slots_erasable", 2026-10-16, Basic tools in slots to their real Erasable) is passed by, done or not.
      */
     static final String ERASABLE = "tool_slots_erasable_1";
-    /** Kept once a toolbar holding {@link #FIRST}'s ten in another order has taken FIRST's ({@link #reorder}, 2026-10-28). */
+    /** Kept once a toolbar holding {@link #FIRST}'s brushes in another order has taken FIRST's ({@link #reorder}, 2026-10-28). */
     static final String REORDERED = "tool_slots_first_order";
+    /** Kept once slots holding the HB pencil as it was before 2026-11-05 hold today's ({@link #hbDark}). */
+    static final String HB_DARK = "tool_slots_hb_dark";
     /**
      * The brushes put in slots, and the unsaved ones a slot let go ({@link #keep}), latest first, one a line ({@link
      * #recent}); how many are kept (the owner's 30, 2026-10-23; was 48).
@@ -69,12 +71,23 @@ final class ToolSlots {
     static final String RECENT = "tool_recent";
     static final int RECENT_MOST = 30;
     /**
-     * The smudge tool's brush, as a line; the key its size is kept under; the Basic tool it starts with (Charcoal's paper
-     * stump; a better blending stump may take its place here).
+     * The smudge tool's brush, as a line; the key its size is kept under; the Basic tool it starts with (Blend, the
+     * paper stump that pushes when pressed; the Blend stump until 2026-10-30).
      */
-    static final String SMUDGE_BRUSH = "tool_smudge", SMUDGE_KEY = "SMUDGE", SMUDGE_FIRST = "Blend stump";
+    static final String SMUDGE_BRUSH = "tool_smudge", SMUDGE_KEY = "SMUDGE", SMUDGE_FIRST = "Blend";
+    /**
+     * The smudge tool's Basic tools, its chooser's (the owner, 2026-10-30: "just TWO tools, each using pen pressure the
+     * way real media does"; and Blur, 2026-11-01: "a simple blur might be good as a third option?"); and the older ones
+     * Blend and Water each take the place of, once ({@link #smudgeTwo}).
+     */
+    static final String[] SMUDGE_TOOLS = {SMUDGE_FIRST, "Water", "Blur"};
+    static final String[][] SMUDGE_MOVES = {{"Blend stump", "Blend"}, {"Stump", "Blend"}, {"Water brush", "Water"}, {"Damp tissue", "Water"}};
+    /** Kept once the smudge tool's brush has been moved to one of {@link #SMUDGE_TOOLS} ({@link #smudgeTwo}), done or not. */
+    static final String SMUDGE_TWO = "tool_smudge_two";
     /** The stamp tool's brush, as a line, and the key its size, grey and selection are kept under. */
     static final String STAMP_BRUSH = "tool_stamp", STAMP_KEY = "STAMP";
+    /** Fill in's Basic tool ({@link #FILL}) and the key its size, grey and selection are kept under. */
+    static final String FILL_TOOL = "Fill in", FILL_KEY = "FILL";
 
     final BrushLibrary library;
     /** The shared size and grey swatches, and each tool's own size and grey. */
@@ -96,14 +109,34 @@ final class ToolSlots {
         // A library that starts here holds only the first brushes: the owner's cleanup is for one saved before.
         if (store.get(BrushLibrary.LIBRARY) == null) store.put(LibraryCleanup.DONE, "1");
         library.start(firsts());
-        if (store.get(SLOTS) == null) { start(); store.put(ERASABLE, "1"); store.put(REORDERED, "1"); } else { grow(); convert(); erasable(); reorder(); }
+        if (store.get(SLOTS) == null) { start(); store.put(ERASABLE, "1"); store.put(REORDERED, "1"); store.put(HB_DARK, "1"); } else { grow(); shrink(); convert(); erasable(); reorder(); hbDark(); }
+        if (store.get(ToolSwatches.PX + FILL_KEY) == null) { swatches.useSize(FILL_KEY, FIRST_FILL_PX); swatches.useGrey(FILL_KEY, FIRST_FILL_GREY); }
         LibraryCleanup.run(library, swatches, store);
         LibraryCleanup.sameNames(library, store);
+        smudgeTwo();
         swatches.spreadCurrent(brushKeys());
     }
 
     /** The key a slot's (or the stamp tool's) selection, size and grey are kept under. */
-    static String key(int slot) { return slot == STAMP ? STAMP_KEY : "slot" + slot; }
+    static String key(int slot) { return slot == STAMP ? STAMP_KEY : slot == FILL ? FILL_KEY : "slot" + slot; }
+    /** What tool {@code tool}'s size, grey and selection are kept under: a slot's ({@link #key}), the eraser's as before slots, the smudge tool's. */
+    static String toolKey(int tool) { return tool == ERASER ? ToolSwatches.ERASER_KEY : tool == SMUDGE ? SMUDGE_KEY : key(tool); }
+    /** Whose brush a stroke of tool {@code tool} is, its paint kept apart ({@link HeldPaint}): the tool's, or the finger's with it. */
+    static String holder(int tool, boolean finger) { return toolKey(tool) + (finger ? "/finger" : ""); }
+    /**
+     * Whether tool {@code tool}'s {@code brush} (a slot's or the smudge tool's) keeps paint ({@link #keepsPaint}) and holds
+     * some now in {@code held}: its own, or the finger's when one finger draws with it ({@code fingerTool}). The bar shows
+     * it in that paint's grey, and the tool's long press offers Clean Brush ({@link DrawLayout#CLEAN}).
+     */
+    static boolean dirty(HeldPaint held, Brush brush, int tool, int fingerTool) {
+        if (brush == null || !keepsPaint(brush)) return false;
+        return held.dirty(holder(tool, false)) || fingerTool == tool && held.dirty(holder(tool, true));
+    }
+    /** Clean Brush: tool {@code tool}'s brush, and the finger's with it, start their next strokes clean. Whether either held paint. */
+    static boolean clean(HeldPaint held, int tool) {
+        boolean pen = held.clean(holder(tool, false)), finger = held.clean(holder(tool, true));
+        return pen || finger;
+    }
     /** The slots' keys and the stamp tool's: the tools that drew at the one size and grey of 2026-10-24 to 27. */
     static List<String> brushKeys() {
         List<String> keys = new ArrayList<>();
@@ -113,8 +146,9 @@ final class ToolSlots {
     }
     /** What slot {@code slot} holds on a first launch, and when what it holds doesn't read. */
     static Brush first(int slot) { return Brush.of(LegacyBrushes.named(FIRST[slot])); }
-    /** Slot {@code slot}'s brush (or the stamp tool's, {@link #STAMP}); one that doesn't read is what the slot starts with. */
+    /** Slot {@code slot}'s brush (or the stamp tool's, {@link #STAMP}, or Fill in's, {@link #FILL}); one that doesn't read is what the slot starts with. */
     Brush brush(int slot) {
+        if (slot == FILL) return fill();
         Brush brush = Brush.read(slot == STAMP ? store.get(STAMP_BRUSH) : stored()[slot]);
         return brush != null ? brush : slot == STAMP ? firstStamp() : first(slot);
     }
@@ -142,6 +176,25 @@ final class ToolSlots {
         library.used(brush);
         remember(brush);
         return true;
+    }
+    /**
+     * A pick from the tool picker: {@code brush} in slot {@code slot} ({@link #use}), the unsaved brush it lets go kept in
+     * Recent first ({@link #keep}). Whether the slot changed.
+     */
+    boolean pick(int slot, Brush brush) {
+        Brush was = brush(slot);
+        if (was != null && !was.sameAs(brush)) keep(was);
+        return use(slot, brush);
+    }
+    /**
+     * The Tools page's or Brush Lab's slots coming back ({@code brushes}, null: unchanged): each put in its slot, an Undo
+     * step each ({@link #use}), or every change one step, {@code together} (a kit's, {@link #useAll}). Whether each changed.
+     */
+    boolean[] take(Brush[] brushes, boolean together) {
+        if (together) return useAll(brushes);
+        boolean[] used = new boolean[COUNT];
+        for (int i = 0; i < COUNT && i < brushes.length; i++) used[i] = brushes[i] != null && use(i, brushes[i]);
+        return used;
     }
     /**
      * Puts each of {@code brushes} (null: unchanged) in its slot, as {@link #use} does, but as one Undo step (a tool kit's
@@ -212,6 +265,7 @@ final class ToolSlots {
      * BLUR softens marks in place, MonoPaint's blending stump (a Smear that is mostly stump, {@link ModularWords#stump},
      * without tines); PUSH pushes paint along (a Smear under that, or Drag); STUMP the rest (Lift, a comb). The wet smudge
      * spec's two: WATER lays clear water (Clear Water), DIRTY keeps paint between strokes (a Drag or Smear with Keeps Paint).
+     * The smudge tool's two (2026-10-30) show their light touch: Blend the blending stump (BLUR), Water the water brush.
      */
     enum SmudgeKind { STUMP, BLUR, PUSH, WATER, DIRTY }
     /** What {@code brush} does as the smudge tool's ({@link SmudgeKind}). */
@@ -243,18 +297,30 @@ final class ToolSlots {
         return first;
     }
     /**
-     * What the smudge tool's chooser offers: the Basic tools that are smudge brushes, in their order, then the saved
-     * ones (the library's that aren't Basic tools), newest first; the tool's own brush first when it is neither.
+     * What the smudge tool's chooser offers: its Basic tools ({@link #SMUDGE_TOOLS}, Blend, Water and Blur); the tool's own
+     * brush first when it is none of them (an older Basic tool, a saved brush: the library keeps them all).
      */
     List<Brush> smudgeChoices() {
         List<Brush> choices = new ArrayList<>();
-        for (ToolPresets.Preset p : ToolPresets.all()) if (smudges(p.brush())) choices.add(p.brush());
-        for (BrushLibrary.Entry e : library.entries()) if (ToolPresets.find(e.brush) == null && smudges(e.brush)) choices.add(e.brush);
+        for (String name : SMUDGE_TOOLS) choices.add(ToolKits.preset(name).brush());
         Brush now = smudge();
         boolean held = false;
         for (Brush b : choices) held |= b.sameAs(now);
         if (!held) choices.add(0, now);
         return choices;
+    }
+    /**
+     * Once (2026-10-30, {@link #SMUDGE_TWO}): a smudge tool holding the Blend stump or the Stump (Basic tools until
+     * 2026-10-31) holds Blend, one holding the Water brush or the Damp tissue holds Water ({@link #SMUDGE_MOVES}); any
+     * other brush stays.
+     */
+    private void smudgeTwo() {
+        if (store.get(SMUDGE_TWO) != null) return;
+        store.put(SMUDGE_TWO, "1");
+        Brush held = Brush.read(store.get(SMUDGE_BRUSH));
+        // The four older ones are retired (2026-10-31), no longer Basic tools.
+        ToolPresets.Preset was = held == null ? null : ToolPresets.retired(held);
+        if (was != null) for (String[] move : SMUDGE_MOVES) if (was.name.equals(move[0])) store.put(SMUDGE_BRUSH, ToolKits.preset(move[1]).brush().write());
     }
     /** The smudge tool takes {@code brush}: a library brush becomes the most recently used. The brush it holds already changes nothing: false. */
     boolean useSmudge(Brush brush) {
@@ -265,6 +331,13 @@ final class ToolSlots {
         return true;
     }
 
+    // Fill in
+
+    /** Fill in's brush ({@link #FILL}): the Basic tool {@link #FILL_TOOL}, never changed. */
+    static Brush fill() { return ToolKits.preset(FILL_TOOL).brush(); }
+    /** Whether {@code brush} is Fill in, by its settings alone (a copy under another name too). */
+    static boolean fills(Brush brush) { return brush != null && brush.parts.key().equals(fill().parts.key()); }
+
     // The stamp tool
 
     /**
@@ -273,6 +346,40 @@ final class ToolSlots {
      * so a frozen toolbar doesn't hold it.
      */
     Brush stamp() { return brush(STAMP); }
+    /**
+     * Cut Stamp's lasso lifted ({@code xs, ys}, its first {@code n} points, page px): the ink inside it on {@code page},
+     * trimmed ({@link StampNib#cut}), is slot {@code slot}'s Stamp's nib from now on, kept in the nib store, an Undo step
+     * as any change of the slot's brush ({@link #use}). Its words: {@link StampNib#DONE}, or {@link StampNib#NOTHING}
+     * when the slot holds no Stamp or the lasso no ink. The Manta's and the browser's.
+     */
+    String cutStamp(int slot, ToneDocument page, float[] xs, float[] ys, int n) {
+        Brush brush = brush(slot);
+        if (page == null || brush == null || !brush.parts.stamps()) return StampNib.NOTHING;
+        return cutStamp(slot, brush, StampNib.cut(page::compositeTone, page.paperTone(), xs, ys, n, page.width, page.height)) ? StampNib.DONE : StampNib.NOTHING;
+    }
+    /**
+     * Make Stamp on the Lasso's bar (2026-11-02): the floating {@code piece}'s ink ({@link LassoPieces#nib}) is a Stamp's
+     * nib, as Cut Stamp's lasso's is: the Stamp in use (tool {@code selected}), else the first of the {@code shown} slots
+     * holding one, else the slot in use (the first, for the eraser or the smudge tool) becomes the Basic tool Stamp, an
+     * Undo step. The slot, or −1 for no ink. The Manta's and the browser's.
+     */
+    int makeStamp(FloatingSelection piece, int selected, int shown) {
+        int slot = selected < COUNT ? selected : 0;
+        if (!brush(slot).parts.stamps()) for (int i = 0; i < Math.min(shown, COUNT); i++) if (brush(i).parts.stamps()) { slot = i; break; }
+        Brush brush = brush(slot);
+        return cutStamp(slot, brush.parts.stamps() ? brush : basicStamp(), LassoPieces.nib(piece)) ? slot : -1;
+    }
+    /** The Basic tool Stamp as the tool picker gives it, so its slot shows the owner's drawing of it ({@link DrawLayout#drawing}). */
+    private static Brush basicStamp() {
+        for (ToolPresets.Preset p : ToolPresets.all()) if (p.brush().parts.stamps()) return p.brush();
+        return firstStamp();
+    }
+    /** Slot {@code slot} takes {@code stamp} printing {@code nib}, kept in the nib store; false for no nib. */
+    private boolean cutStamp(int slot, Brush stamp, StampNib nib) {
+        if (nib == null) return false;
+        use(slot, Brush.of(stamp.parts.withNib(StampNib.keep(nib))));
+        return true;
+    }
     /** What the stamp tool holds at first: the built-in Fineliner with a Stamp tip (a round stamp until a nib is cut). */
     static Brush firstStamp() {
         ModularBrush b = LegacyBrushes.builtin("INK");
@@ -298,11 +405,13 @@ final class ToolSlots {
         }
         /**
          * The toolbar {@code lines} keep; null when there are fewer than {@link NotebookOptions#FEWEST_SLOTS} or more than
-         * {@link #COUNT}, or one doesn't read. One kept with eight (before 2026-10-27) keeps them, the slots after them as
-         * a first launch has them.
+         * {@link NotebookOptions#MOST_SLOTS}, or one doesn't read. One kept with eight (before 2026-10-27) keeps them, the
+         * slots after them as a first launch has them; one kept with ten (before 2026-11-06) gives one up ({@link #dropAt}).
          */
         static Toolbar parse(List<String> lines) {
-            if (lines == null || lines.size() < NotebookOptions.FEWEST_SLOTS || lines.size() > COUNT) return null;
+            if (lines == null || lines.size() < NotebookOptions.FEWEST_SLOTS || lines.size() > NotebookOptions.MOST_SLOTS) return null;
+            lines = new ArrayList<>(lines);
+            while (lines.size() > COUNT) lines.remove(dropAt(lineBrushes(lines)));
             Toolbar t = new Toolbar();
             for (int i = lines.size(); i < COUNT; i++) { t.brushes[i] = first(i); t.px[i] = firstPx(i); t.darkness[i] = firstGrey(i); }
             for (int i = 0; i < lines.size(); i++) {
@@ -395,6 +504,24 @@ final class ToolSlots {
         java.util.List<Brush> brushes = new java.util.ArrayList<>();
         for (BrushLibrary.Entry e : library.entries()) brushes.add(e.brush);
         return SurpriseTools.toolbar(SurpriseTools.roll(brushes, swatches, new java.util.Random(String.join("\n", options.toolbar).hashCode() * 31L + page)));
+    }
+    /**
+     * A notebook's options {@code o} with its Tools made {@code tools} (the settings' Tools screen): My Toolbar the app's;
+     * Surprise Me or Each Page a roll of the library (between them the roll kept); Library the notebook's own toolbar,
+     * else the app's to start it, which the Tools page then fills.
+     */
+    NotebookOptions withTools(NotebookOptions o, NotebookOptions.Tools tools, Random random) {
+        boolean rolled = tools == NotebookOptions.Tools.SURPRISE || tools == NotebookOptions.Tools.EACH_PAGE;
+        boolean wasRolled = o.tools == NotebookOptions.Tools.SURPRISE || o.tools == NotebookOptions.Tools.EACH_PAGE;
+        if (tools == NotebookOptions.Tools.MINE) return o.withTools(tools, null);
+        if (rolled && wasRolled && tools != o.tools) return o.withTools(tools, o.toolbar);
+        if (rolled) {
+            List<Brush> brushes = new ArrayList<>();
+            for (BrushLibrary.Entry e : library.entries()) brushes.add(e.brush);
+            return o.withTools(tools, SurpriseTools.toolbar(SurpriseTools.roll(brushes, swatches, random)).lines());
+        }
+        Toolbar own = of(o);
+        return o.withTools(tools, (own != null ? own : appWide()).lines());
     }
     /**
      * The slots can't be changed while drawing (a notebook's Each Page, or its own toolbar Locked or Sealed,
@@ -497,6 +624,67 @@ final class ToolSlots {
         for (int i = from; i < COUNT; i++) lines[i] = first(i).write();
         store.put(SLOTS, String.join("\n", lines));
     }
+    /** The brush each of {@code lines} starts with (a slot's line, or a {@link Toolbar}'s), null where none reads. */
+    private static List<Brush> lineBrushes(List<String> lines) {
+        List<Brush> brushes = new ArrayList<>();
+        for (String line : lines) {
+            String[] f = line.split("\t", -1);
+            brushes.add(Brush.read(f.length > 2 ? f[0] + "\t" + f[1] : line));
+        }
+        return brushes;
+    }
+    /**
+     * Which of a toolbar kept with ten slots (before 2026-11-06) gives way for nine: the first holding Fill in, which has
+     * its own place now ({@link #FILL}); with none, the last.
+     */
+    static int dropAt(List<Brush> brushes) {
+        for (int i = 0; i < brushes.size(); i++) if (fills(brushes.get(i))) return i;
+        return brushes.size() - 1;
+    }
+    /**
+     * Once a toolbar kept with ten slots (before 2026-11-06) is read: one gives way ({@link #dropAt}), the slots after it
+     * moving up, each with its own size, grey and held wet ink, the selection and the finger staying on the same brush. A
+     * Fill in that goes leaves its size, grey and selection to Fill in's own place; any other brush (the tenth) is kept
+     * in Recent ({@link #keep}), so it isn't lost. The app's own toolbar waiting while a notebook's is in the slots too. No
+     * Undo step. Done before {@link #convert} and the rest, which read {@link #COUNT} slots. An older build reads the nine
+     * as eight before 2026-10-27, gaining a tenth.
+     */
+    private void shrink() {
+        String waiting = store.get(APPWIDE);
+        if (waiting != null) {
+            List<String> lines = new ArrayList<>(java.util.Arrays.asList(waiting.split("\n", -1)));
+            while (lines.size() > COUNT) {
+                List<Brush> brushes = lineBrushes(lines);
+                int drop = dropAt(brushes);
+                if (!fills(brushes.get(drop))) keep(brushes.get(drop));
+                lines.remove(drop);
+            }
+            store.put(APPWIDE, String.join("\n", lines));
+        }
+        List<String> lines = new ArrayList<>(java.util.Arrays.asList(store.get(SLOTS).split("\n", -1)));
+        while (lines.size() > COUNT) {
+            List<Brush> brushes = lineBrushes(lines);
+            int drop = dropAt(brushes), last = lines.size() - 1;
+            boolean fill = fills(brushes.get(drop));
+            String[] owns = {SIZE, SHADE, ToolSwatches.PX, ToolSwatches.GREY, ToolSwatches.DARK, HeldPaint.WET_INK};
+            for (String own : owns) {
+                for (String finger : new String[]{"", "/finger"}) {
+                    if (fill) store.put(own + FILL_KEY + finger, store.get(own + key(drop) + finger));
+                    for (int i = drop; i < last; i++) store.put(own + key(i) + finger, store.get(own + key(i + 1) + finger));
+                    store.put(own + key(last) + finger, null);
+                }
+            }
+            String selected = store.get(SELECTED), finger = store.get(FingerTool.KEY);
+            for (int i = drop; i <= last; i++) {
+                if (key(i).equals(selected)) store.put(SELECTED, i > drop ? key(i - 1) : fill ? FILL_KEY : key(0));
+                // FingerTool's keys count slots from 1; an unread one is the eraser.
+                if (("slot" + (i + 1)).equals(finger)) store.put(FingerTool.KEY, i > drop ? "slot" + i : fill ? FingerTool.Choice.FILL.key : null);
+            }
+            if (!fill) keep(brushes.get(drop));
+            lines.remove(drop);
+            store.put(SLOTS, String.join("\n", lines));
+        }
+    }
     /**
      * A toolbar kept with fewer slots than {@link #COUNT} (six before 2026-10-19, eight before 2026-10-27): its slots stay
      * exactly as they are, line for line, the new ones take what a first launch has there, at their style's size. Done
@@ -580,6 +768,32 @@ final class ToolSlots {
             store.put(SLOTS, String.join("\n", moved));
         }
         store.put(REORDERED, "1");
+    }
+    /**
+     * Once (2026-11-05, {@link #HB_DARK}; the owner: "HB pencil is not usable... need to remove the pressure - dark
+     * adjustment"): a slot holding the HB pencil as it was (Pressure Dark .8, now RETIRED), the app's own toolbar's
+     * while a notebook's is open too, holds today's, at its own size and grey. Any other brush, the recent brushes and a
+     * notebook's own toolbar stay as they are; a share code pasted later reads as written.
+     */
+    private void hbDark() {
+        if (store.get(HB_DARK) != null) return;
+        for (String key : new String[]{SLOTS, APPWIDE}) {
+            String text = store.get(key);
+            if (text != null) store.put(key, hbDarkLines(text));
+        }
+        store.put(HB_DARK, "1");
+    }
+    /** {@code text}'s lines (slots', or a {@link Toolbar}'s), each that starts with the HB pencil as it was starting with today's. */
+    static String hbDarkLines(String text) {
+        Brush was = null;
+        for (ToolPresets.Preset p : ToolPresets.retired()) if (p.name.equals("HB pencil")) was = p.brush();
+        String now = ToolKits.preset("HB pencil").brush().write();
+        String[] lines = text.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String[] f = lines[i].split("\t", -1);
+            if (f.length >= 2 && was.sameAs(Brush.read(f[0] + "\t" + f[1]))) lines[i] = now + lines[i].substring(f[0].length() + 1 + f[1].length());
+        }
+        return String.join("\n", lines);
     }
     /**
      * Slots stored before the six-part engine become six-part brushes ({@link LegacyBrushes}), each at the size and grey

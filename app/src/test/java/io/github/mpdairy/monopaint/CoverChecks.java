@@ -299,7 +299,7 @@ public final class CoverChecks {
         File front = new File(folder, NotebookExport.FRONT_PNG), back = new File(folder, NotebookExport.BACK_PNG);
         check(front.isFile() && back.isFile() && new File(folder, "001.png").isFile(), "The covers' PNGs beside the pages'");
         String[] names = folder.list(); Arrays.sort(names);
-        check(names[1].equals(NotebookExport.FRONT_PNG) && names[0].equals(NotebookPdf.STATE) && names[names.length - 1].equals(NotebookExport.BACK_PNG), "00-cover.png sorts first and zz-back.png last: " + Arrays.toString(names));
+        check(names[2].equals(NotebookExport.FRONT_PNG) && names[1].equals(NotebookPdf.STATE) && names[0].equals(NotebookExport.LINES_STATE) && names[names.length - 1].equals(NotebookExport.BACK_PNG), "00-cover.png sorts first and zz-back.png last: " + Arrays.toString(names));
         String pdf = new String(Files.readAllBytes(NotebookExport.pdf(export, "Loose pages").toPath()), java.nio.charset.StandardCharsets.ISO_8859_1);
         check(pdf.contains("/Type /Pages /Count 4 "), "The PDF has the front cover and the three pages (the back cover's PNG only: pages keep their numbers)");
         // The front cover first: the PDF's first image is the cover's PNG's image data.

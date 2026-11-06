@@ -68,7 +68,7 @@ public final class HoverNibChecks {
     /** The owner (2026-10-29): the dots were "like a little bug on the screen demanding my attention". */
     static void onArrival() throws java.io.IOException {
         String pad = DrawLayoutChecks.source("DrawingPad");
-        check(pad.contains("static final long NIB_SHOWN_MS = 1000;") && pad.contains("if (event.getEventTime() >= nibShownUntil) return;"), "The ring shows a second as the pen arrives, then goes");
+        check(HoverNib.SHOWN_MS == 1000 && pad.contains("static final long NIB_SHOWN_MS = HoverNib.SHOWN_MS;") && pad.contains("if (event.getEventTime() >= nibShownUntil) return;"), "The ring shows a second as the pen arrives, then goes");
         check(pad.contains("if (stroke == null) hideOutline();\n        penArrives = true;"), "The pen arrives again once away PEN_AWAY_MS, not at a stroke's lift");
         check(pad.contains("if (hoverNib != null && !hoverNib.about(was, 0)) penArrives = true;"), "A new tool or size shows the ring again");
         check(pad.contains("nibShownUntil = SystemClock.uptimeMillis() + NIB_SHOWN_MS;") && pad.contains("if (SystemClock.uptimeMillis() >= nibShownUntil) { hideOutline(); return; }"),

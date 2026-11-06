@@ -1,0 +1,256 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live probe</title>
+<style>
+  body { margin: 0; font: 14px system-ui, sans-serif; background: #ddd; }
+  header { padding: 8px 12px; display: flex; gap: 12px; align-items: center; }
+  nav { padding: 8px 12px 0; display: flex; gap: 6px; overflow-x: auto; }
+  nav button { flex: none; padding: 6px 10px; font: inherit; border: 1px solid #888; border-radius: 6px; background: #f4f4f4; }
+  nav button[aria-pressed="true"] { background: #222; color: #fff; }
+  #wrap { position: relative; margin: 0 auto; height: min(calc(100vh - 88px), calc(100vw * 4 / 3)); aspect-ratio: 3 / 4; }
+  canvas { display: block; height: 100%; width: 100%; }
+  #page { background: #fff; }
+  #ink { position: absolute; inset: 0; touch-action: none; }
+  #delay { position: fixed; right: 8px; bottom: 6px; font-size: 12px; color: #555; }
+  #tip { padding: 0 12px 4px; font-size: 12px; color: #555; }
+</style>
+<nav id="brushes"></nav>
+<header><button id="undo">Undo</button><span id="status">Loading the brushes…</span></header>
+<div id="tip" hidden>Apple Pencil: turn off Scribble in Settings.</div>
+<span id="delay"></span>
+<div id="wrap"><canvas id="page"></canvas><canvas id="ink"></canvas></div>
+<script src="textures.js"></script><script src="engine.js"></script>
+<!-- The app's own engine, compiled to WebAssembly (web/engine; bash web/engine/build.sh), where the browser runs WebAssembly GC. -->
+<script src="mbd-engine.wasm-runtime.js"></script><script src="mbd-engine.js"></script><script src="live.js"></script>
+<!-- A module, so the page's names don't meet the engine's globals (grow, lay, …). -->
+<script type="module">
+// Live pages' probe (docs/superpowers/specs/2026-10-31-live-pages-design.md, step 1): each stroke's changed
+// rectangle as LiveChange bytes (x, y, w, h big-endian, a grey a pixel, 255 clear), deflated, POSTed to /send.
+// Strokes are drawn by the app's own engine compiled to WebAssembly (web/engine: P, a page of the app's, its Wash and Ink
+// layers and wet paint) where the browser has WebAssembly GC (Chrome 119+, Firefox 120+, Safari 18.2+); elsewhere, or
+// with ?js, by Brush Studio's JS copy (the lab's, docs/brush-lab/engine-files.cjs; step 2b). Either way on S, the page's
+// twin: with the app's engine only the greys it shows, pulled from P where it changes (pull).
+const q = new URLSearchParams(location.search), W = +q.get("w") || 1920, H = +q.get("h") || 2560;
+const me = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, "0")).join("");  // LivePresence.ID
+const pageCanvas = document.getElementById("page"), canvas = document.getElementById("ink"), status = document.getElementById("status");
+const pageCtx = pageCanvas.getContext("2d", { willReadFrequently: true }), ctx = canvas.getContext("2d", { willReadFrequently: true });
+pageCanvas.width = canvas.width = W; pageCanvas.height = canvas.height = H; ctx.lineCap = ctx.lineJoin = "round";
+pageCtx.fillStyle = "#fff"; pageCtx.fillRect(0, 0, W, H);
+// The first-launch toolbar, as ToolSlots.FIRST (name, code, size px, grey as darkness); test_relay checks they agree.
+const BRUSHES = [
+  ["Another pencil", "another-pencil.M40i000000000at_4ip2c_0_di0_1jz_800000000zzzz000000zz000000000530000005000c099zz.inw", 4.5, 1.0],
+  ["Steady line", "steady-line.M00il00000000at_000zz0000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud", 3, 1.0],
+  ["Verve felt", "verve-felt.M30i0776o0q00u1_000zz0000920000000_0_d00_0_8i00000zz0000400000nz0.jjds6x", 4, 1.0],
+  ["Fude fountain", "fude-fountain.M20ss007700003m_000zzat00000000000_0_000_0_8at0000i000ll000000nz01.1s13pn4", 2.5, 1.0],
+  ["Ink wash", "ink-wash.M60i0000000007q_1wva200000000_0_0fk_7_8zz0000000000000000nz0.t4mf73", 130, 0.176],
+  ["Watercolour washy", "watercolour-washy.M60i04o4b0000ji_1zz8t00ag9600_1zzex_000_7js_8zz0000000000000000zz0.1s13pn4", 169, 0.082],
+  ["Rob boss", "rob-boss.M99vleei0000000005e_2zg00_2llydzzn7_000_7ne_1ss0000000000000000nz0.2fu", 96, 1.0],
+  ["Fill in", "fill-in.M30wd00000000at_1atat00000000_5zz_000_0_0000000000000000000nz0.2fh", 2.5, 1.0],
+  ["Ben-Day brush", "ben-day-brush.Me1zzeezz00000000ll_0i0000000000000000zz065ji000at_0_000_0_25ess00000000000000nz0.2ef", 12, 1.0],
+  ["High lighter", "high-lighter.M31e1zzp60000000000_1007700000000zz2_0_000_0_0000000000000000000nz0.2f2", 34, 0.102]];
+window.BRUSHES = BRUSHES;  // autotest.cjs sets the Manta's sizes and greys
+// Wet paint (Ink wash, Watercolour washy, Rob boss) stays wet across strokes, as on the Manta (wet.js, the app's wet
+// canvas): it moves while no pen is down, and what it changes goes out as it settles (wetTick). Nothing dries it here.
+let E = null;
+if (q.has("js")) console.info("Live probe: ?js, drawing with Brush Studio's JS copy.");
+else if (!window.MBDEngine || !MBDEngine.supported()) console.info("Live probe: no WebAssembly GC in this browser (Safari before 18.2); drawing with Brush Studio's JS copy.");
+else try { E = await MBDEngine.load("mbd-engine.wasm", "mbd-assets.bin"); }
+catch (err) { console.info("Live probe: the app's engine didn't load (" + err + "; bash web/engine/build.sh builds it); drawing with Brush Studio's JS copy."); }
+window.probeEngine = E ? "wasm" : "js";  // for the checks
+// Sealed with the link's key after its # (none: none) by the app's engine, as live.html: with the JS copy too, where it loads.
+const crypt = (E || await MBDEngine.load("mbd-engine.wasm", "mbd-assets.bin").catch(() => null))?.crypt(decodeURIComponent(location.hash.slice(1)));
+const sealed = b => { if (!crypt) throw new Error("no engine to seal with"); return crypt.seal(b); }, opened = b => { if (!crypt) throw new Error("no engine to open with"); return crypt.open(b); };
+const P = E && E.page(W, H);
+// shortcut: a whole-page engine surface (about 200 MB at 1920×2560 for the JS copy), so smudges read the page; a smaller one if phones balk.
+const S = P ? { w: W, h: H, page: new Uint8Array(W * H).fill(255) } : modSurface(W, H, 7), HOST = { wet: null, getWet() { return this.wet ??= new WetCanvas(S); } };
+// What the app's engine changed over rect r (inclusive), into S; r back.
+function pull(r) {
+  if (!P || !r) return r;
+  const w = r[2] - r[0] + 1, h = r[3] - r[1] + 1, t = P.tones(r[0], r[1], w, h);
+  for (let y = 0; y < h; y++) S.page.set(t.subarray(y * w, (y + 1) * w), (r[1] + y) * W + r[0]);
+  return r;
+}
+// A stroke with the brush code: the app's engine's (its changes pulled as they are drawn) or the JS copy's.
+function newStroke(code, size, grey) {
+  if (!P) return new Stroke(S, readAnyCode(code).b, size, grey, HOST);
+  const st = P.stroke(code, size, grey);
+  return { add: samples => pull(st.add(samples)), end: () => pull(st.end()) };
+}
+// The page as it shows: the engine keeps the Manta's layers and kind planes (planes.js); S.shown stacks them, kept up to
+// date wherever they change (showPage, planesLay); while there is one plane it is that plane's page.
+const shown = () => S.shown || S.page;
+await loadTextures();
+let brush = 0;
+const nav = document.getElementById("brushes");
+BRUSHES.forEach(([name], i) => { const b = nav.appendChild(document.createElement("button")); b.textContent = name; b.onclick = () => { brush = i; pick(); }; });
+const pick = () => [...nav.children].forEach((b, i) => b.setAttribute("aria-pressed", String(i === brush)));
+pick(); status.textContent = "Draw. Each stroke goes to the Manta when you lift; the Manta's changes show here." + (P ? "" : " (JS copy of the engine)");
+// An iPad: Scribble takes the Pencil's strokes for handwriting unless it is off.
+if (/iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)) document.getElementById("tip").hidden = false;
+// The parts every live page shares (live.js): the change's bytes, Undo of your own, what a stroke changed, drawing a change on.
+const { MOST_OWN, encode, parse, takeBack } = Live;
+let live = null, sent = 0;
+const own = []; // this browser's strokes, oldest first: {x, y, w, h, before, after}
+const pageGreys = (x, y, w, h) => { const d = pageCtx.getImageData(x, y, w, h).data, g = new Uint8Array(w * h); for (let i = 0; i < g.length; i++) g[i] = d[4 * i]; return g; };
+// Into S what the page canvas shows over a rect (this browser's Undo), so the next stroke draws over it: a plain
+// picture there, every plane clear under it (planes.js planesSet). The wet paint takes it up when next used (surf.rev).
+function toEngine(x, y, w, h) {
+  if (P) pull(P.picture(x, y, w, h, pageGreys(x, y, w, h)));
+  else planesSet(S, x, y, w, h, pageGreys(x, y, w, h));
+  if (wetSeen) for (let yy = y; yy < y + h; yy++) wetSeen.set(shown().subarray(yy * W + x, yy * W + x + w), yy * W + x);
+}
+const union = (a, b) => !b ? a : !a ? b.slice() : [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+// A sample [x, y, travel, ms, tiltX, tiltY] as the Manta's pen gives one (engine.js pointerSample): an Apple Pencil's or
+// any pen's pressure through the Manta's curve, and its tilt; a finger, mouse or capacitive stylus, pressure from its pace.
+function sample(e) {
+  const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+  live.path.push(x, y, e.timeStamp - live.t0);
+  return pointerSample(e, live, x, y);
+}
+// The stroke shows on the ink canvas as the engine lays it; at lift it goes onto the page and out.
+const show = r => { if (r) { showPage(ctx, S, r); live.box = union(live.box, r); } };
+// The time each input event's samples took to draw and show (for the checks: the stroke draws as the pen moves).
+const drawMs = window.drawMs = [];
+canvas.addEventListener("pointerdown", e => {
+  if (live) return;
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events can't capture */ }
+  const [, code, size, grey] = BRUSHES[brush];
+  // found: the engine's page as the stroke found it, so only what the stroke changed goes out (send).
+  // Wet paint moving waits while the pen is down (the Manta's holds still); what it changed so far goes out first.
+  wetFlush();
+  const found = shown().slice();
+  live = { st: newStroke(code, size, grey), id: e.pointerId, box: null, path: [], t0: e.timeStamp, found };
+  show(live.st.add([sample(e)]));
+});
+canvas.addEventListener("pointermove", e => {
+  if (!live || e.pointerId !== live.id) return;
+  const t = performance.now(), evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+  show(live.st.add((evs.length ? evs : [e]).map(sample)));
+  drawMs.push(performance.now() - t);
+});
+// The stroke ends at the first of pointerup, pointercancel or pointerleave (an iPad's Pencil can miss its pointerup), once.
+const end = e => { if (!live || e && e.pointerId !== live.id) return; const t = performance.now(); show(live.st.end()); window.liftMs = performance.now() - t; const { box, path, found } = live; live = null; if (box) send(box, path, found); wetStart(); };
+// Wet paint after lift: a slice of about 8 ms a frame (WetCanvas.step), shown at once; what it changed goes out every
+// WET_SEND ms and when it rests, as the Manta sends a settling stroke's changes as they are written (no path: laid at once).
+const WET_SEND = 400;
+let wetSeen = null, wetBox = null, wetSent = 0, wetTicking = false;
+// The app's engine: a tick at a time, ten a second as on the Manta (DryingTicker.TICK_MS), while no pen is down.
+const TICK_MS = 100;
+function wetStart() {
+  if (P) {
+    if (!P.settling || wetTicking) return;
+    wetTicking = true; wetSeen ??= shown().slice();
+    setTimeout(wetTick, TICK_MS); return;
+  }
+  if (!HOST.wet || !HOST.wet.moving() || wetTicking) return;
+  wetTicking = true; wetSeen ??= shown().slice(); HOST.wet.takeDirty();
+  requestAnimationFrame(wetTick);
+}
+function wetTick() {
+  const C = HOST.wet;
+  if (live) { wetTicking = false; return; }
+  if (P) {
+    const d = pull(P.tick()), more = P.settling;
+    if (d) { showPage(ctx, S, d); wetBox = union(wetBox, d); }
+    if (!more || performance.now() - wetSent > WET_SEND) wetFlush();
+    if (more) setTimeout(wetTick, TICK_MS); else wetTicking = false;
+    return;
+  }
+  const next = C.step(8), d = C.takeDirty();
+  if (d) { showPage(ctx, S, d); wetBox = union(wetBox, d); }
+  if (next < 0 || performance.now() - wetSent > WET_SEND) wetFlush();
+  if (next < 0) { wetTicking = false; return; }
+  if (next > 16) setTimeout(() => requestAnimationFrame(wetTick), next); else requestAnimationFrame(wetTick);
+}
+// What wet paint changed since the last send goes out (lighter too: wet paint lifts and evens out), then is seen.
+function wetFlush() {
+  if (!wetBox) return;
+  const b = wetBox; wetBox = null; wetSent = performance.now();
+  send(b, [], wetSeen);   // shown on the ink canvas as it moved; onto the page now, and out
+  const x = Math.max(0, Math.floor(b[0])), y = Math.max(0, Math.floor(b[1])), w = Math.min(W - 1, Math.ceil(b[2])) - x + 1;
+  for (let yy = Math.max(0, Math.floor(b[1])); yy <= Math.min(H - 1, Math.ceil(b[3])); yy++) wetSeen.set(shown().subarray(yy * W + x, yy * W + x + w), yy * W + x);
+}
+for (const k of ["pointerup", "pointercancel", "pointerleave"]) canvas.addEventListener(k, end);
+// No scrolling, zooming or Scribble while drawing (touch-action: none on the canvas too).
+canvas.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+function send(b, path, found) {
+  const x = Math.max(0, Math.floor(b[0])), y = Math.max(0, Math.floor(b[1])), w = Math.min(W - 1, Math.ceil(b[2])) - x + 1, h = Math.min(H - 1, Math.ceil(b[3])) - y + 1;
+  ctx.clearRect(0, 0, W, H);
+  if (w <= 0 || h <= 0) return;
+  // Onto the page at once, before any await: a stroke begun while this one sends must not be cleared with it. Only the
+  // pixels the stroke changed (Live.changed).
+  const img = pageCtx.getImageData(x, y, w, h), d = img.data, before = pageGreys(x, y, w, h);
+  const { greys, lighter, any } = Live.changed(x, y, w, h, W, shown(), found, before);
+  if (!any) return;
+  for (let i = 0; i < greys.length; i++) if (greys[i] !== 255) d[4 * i] = d[4 * i + 1] = d[4 * i + 2] = greys[i];
+  pageCtx.putImageData(img, x, y);
+  own.push({ x, y, w, h, before, after: pageGreys(x, y, w, h) }); if (own.length > MOST_OWN) own.shift();
+  // A change is laid as ink, only darkening; one that lightens (a smudge, a lift) goes as set, as an Undo's.
+  post(encode(x, y, w, h, greys, path, lighter), w, h);
+}
+async function post(raw, w, h) {
+  const deflated = await Live.deflate(raw);
+  const started = performance.now(), answer = await fetch("/send?from=" + me, { method: "POST", body: sealed(deflated) });
+  const number = await answer.text();
+  sent++; status.textContent = `Sent ${sent} (number ${number}): ${w}×${h}, ${deflated.length} bytes, ${Math.round(performance.now() - started)} ms to the relay`;
+  liveLog.push({ sent: +number, at: Date.now(), w, h, bytes: deflated.length });
+}
+// Undo takes back only this browser's own strokes, newest first, where nothing was drawn over them since; sent as set.
+function undo() {
+  if (live) return;
+  while (own.length) {
+    const o = own.pop(), img = pageCtx.getImageData(o.x, o.y, o.w, o.h), now = pageGreys(o.x, o.y, o.w, o.h), greys = takeBack(o, now);
+    if (greys.every(g => g === 255)) continue;
+    for (let i = 0; i < now.length; i++) img.data[4 * i] = img.data[4 * i + 1] = img.data[4 * i + 2] = now[i];
+    pageCtx.putImageData(img, o.x, o.y); toEngine(o.x, o.y, o.w, o.h);
+    return post(encode(o.x, o.y, o.w, o.h, greys, [], true), o.w, o.h);
+  }
+}
+document.getElementById("undo").onclick = undo;
+addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); } });
+let incoming = Promise.resolve(), received = 0, queued = 0;  // queued: arrived, not yet being laid
+const events = new EventSource("/listen?history=1"), delay = document.getElementById("delay");
+// The relay stamps each change with its ms as the event's id: the delay shown is relay → laid here (two clocks: roughly).
+// What came and when, for autotest.cjs: relay's ms, arrived here, shown.
+const liveLog = window.liveLog = [];
+events.onmessage = e => {
+  const at = +e.lastEventId, got = Date.now(), [number, from] = e.data.split(" ", 2);
+  if (from !== me) queued++;
+  incoming = incoming.then(() => lay(e.data)).then(laid => { if (laid && at) { delay.textContent = `last: ${Date.now() - at} ms relay → shown`; liveLog.push({ number: +number, from, relay: at, got, shown: Date.now() }); } }).catch(err => status.textContent = "Couldn't lay a change: " + err);
+};
+async function lay(data) {
+  const [number, from, b64] = data.split(" ");
+  if (from === me) return false;
+  queued--;
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const raw = await Live.inflate(opened(bytes));
+  if (Live.isTools(raw)) return false;  // a host's tools: the guest's drawing screen's (live.html), not the probe's
+  const c = parse(raw), { x, y, w, h, greys } = c;
+  if (x + w > W || y + h > H) throw new Error("not a change on this page");
+  // Drawn on as the Manta does (LiveReveal): the changed pixels in SLICES by their nearest sample's time, shown evenly
+  // over the stroke's time made SHORTEST to LONGEST ms; the rest at once when another change waits (strokes in a row).
+  const { count, n, ends, order, over } = Live.reveal(c);
+  // Into the engine as the Manta lays a change (planes.js planesLay: LiveProbe.onLayer, PictureImport.lay): on the base of
+  // the layer last drawn on, as ink, scaled so the page shows the sender's greys; an Undo's set as they are.
+  const put = (from, to) => { // fresh read each time: the user's own strokes may have landed in this rect meanwhile
+    const img = pageCtx.getImageData(x, y, w, h), part = new Uint8Array(w * h).fill(255);
+    for (let k = from; k < to; k++) {
+      const i = order[k], g = greys[i];
+      img.data[4 * i] = img.data[4 * i + 1] = img.data[4 * i + 2] = g; img.data[4 * i + 3] = 255; part[i] = g;
+    }
+    if (P) pull(P.lay(x, y, w, h, part, c.set)); else planesLay(S, x, y, w, h, part, c.set);
+    if (wetSeen) for (let k = from; k < to; k++) { const i = order[k], j = (y + (i / w | 0)) * W + x + i % w; wetSeen[j] = shown()[j]; }
+    pageCtx.putImageData(img, x, y);
+  };
+  const start = performance.now();
+  for (let k = 0; k < n; k++) {
+    const wait = start + k * over / Math.max(1, n - 1) - performance.now();
+    if (k > 0 && wait > 0 && !queued) await new Promise(r => setTimeout(r, wait));
+    if (queued) { put(ends[k], count); break; }
+    put(ends[k], ends[k + 1]);
+  }
+  received++; status.textContent = `Received ${received} (number ${number}, from ${from}): ${w}×${h}${c.set ? " (an Undo)" : ""}`;
+  return true;
+}
+events.onerror = () => status.textContent = "Lost the relay; trying again…";
+</script>

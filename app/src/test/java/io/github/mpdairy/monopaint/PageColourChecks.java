@@ -21,7 +21,7 @@ public final class PageColourChecks {
     public static void main(String[] args) throws Exception {
         Assets.install(Assets.folder(Assets.FOLDER));
         words(); oldGrey(); records(); pages(); fresh(); layers(); eraser();
-        System.out.println("PASS: Page Colour: six swatches, the six greys, in the settings list (no slider on Template's screen), White by default, an older slider grey kept exactly with no swatch chosen and written byte for byte; a PCOL record only when not white, "
+        System.out.println("PASS: Page Colour: six swatches, the six greys, in Page Settings (no slider on Template's screen), White by default, an older slider grey kept exactly with no swatch chosen and written byte for byte; a PCOL record only when not white, "
                 + "read back from the file and the recovery, an old notebook white and byte for byte as before; added pages and the page bar's + start on it "
                 + "and count as blank; pages with marks keep their paper, blank ones (a new notebook's first page too) take the new one; a layer is on its stack's paper; the eraser rubs back to it; "
                 + "pictures show it and the copies leave out a blank coloured page at the end");
@@ -39,8 +39,9 @@ public final class PageColourChecks {
         NotebookOptions old = o.withPaper(179);
         check(old.paper == 179 && old.paperSwatch() == -1 && NotebookOptions.paperWord(179).equals("30% grey"), "An old slider grey kept, no swatch chosen: " + NotebookOptions.paperWord(179));
         check(NotebookOptions.paperWord(255).equals("White") && NotebookOptions.paperWord(0).equals("Black") && NotebookOptions.paperWord(0x88).equals("47% grey"), "Its words");
-        check(LibraryCard.rows().contains(LibraryCard.Part.PAGE_COLOUR) && !CardSheet.slides(CardSheet.Screen.TEMPLATE) && CardSheet.sliderHead(CardSheet.Screen.TEMPLATE) == null,
-                "A row of the settings list, no slider on the Template screen");
+        check(!LibraryCard.rows().contains(LibraryCard.Part.PAGE_COLOUR) && LibraryCard.pageRows(TracingPaper.NONE, true).contains(LibraryCard.Part.PAGE_COLOUR)
+                        && !CardSheet.slides(CardSheet.Screen.TEMPLATE) && CardSheet.sliderHead(CardSheet.Screen.TEMPLATE) == null,
+                "A row of Page Settings (not Notebook Settings' since 2026-11-05), no slider on the Template screen");
         check(!CardSheet.about(CardSheet.Screen.TEMPLATE, 0).contains("colour"), "The Template screen is the guides alone: " + CardSheet.about(CardSheet.Screen.TEMPLATE, 0));
     }
 

@@ -1,7 +1,7 @@
 # Code structure
 
 All app code is in `app/src/main/java/io/github/mpdairy/monopaint` (MonoPaint's package, kept; see
-[INTEGRATION.md](INTEGRATION.md) for which classes are upstream's and which are My Bad Drawings').
+[INTEGRATION.md](INTEGRATION.md) for which classes are upstream's and which are Superdood's).
 
 ## The painting screen
 
@@ -27,7 +27,7 @@ app's upright coordinates and mapped back to the portrait window (`Popups`).
 | `PaintPreferences` | Typed access to saved settings |
 
 MonoPaint's own controls (`Toolbar`, `ToolSettingsPanel`, `LayersPanel`, `WetnessBar` and the rest) are still built
-but hidden; My Bad Drawings' column replaces them, and a page's layers are in Page Settings (`NotebookScreens`).
+but hidden; Superdood's column replaces them, and a page's layers are in Page Settings (`NotebookScreens`).
 
 ## Tablets
 

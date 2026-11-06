@@ -123,7 +123,8 @@ final class ToneDocument {
         byte[] print;
         /**
          * Inkwash: the kinds of mark each pixel holds (a bit each: {@link #KIND_PEN}, {@link #KIND_PAINT}, {@link #KIND_PENCIL}), for an
-         * eraser that takes one kind. Null while the layer holds one kind or none ({@link #kinds}): then every pixel is that.
+         * eraser that takes one kind. Null while every pixel holds the same kinds ({@link #kinds}): one kind or none, or more
+         * where a piece of them all was laid at once (the Lasso's {@link ToneDocument#layKinds}, a merge).
          * A pixel's 0 means {@link #kindBase}, what the layer held before it had a plane. Under no coverage it means nothing.
          * Bits 3 to 5 ({@link #PERMANENT}): which of its kinds laid paint below Erasable 1 there ({@link #permanentAt}).
          */
@@ -136,6 +137,11 @@ final class ToneDocument {
          * null: none). The layer's own pixels are its base, under them: old paint and paint of no kind.
          */
         Layer[] planes;
+        /**
+         * Inkwash: Vector Ink's lines on this layer ({@link VectorLines}), its pixels their drawing at 100%; null on a layer
+         * that holds none (any but a top pair's ink drawn with Vector Ink). Immutable, shared by copies and Undo steps.
+         */
+        VectorLines lines;
         volatile boolean shared;
         /**
          * Inkwash: how many snapshots ({@link Snapshot#release releasable}) still hold these arrays; guarded by the layer.
@@ -180,7 +186,7 @@ final class ToneDocument {
         // Saves own immutable array references. Only a subsequently edited layer is copied.
         Layer copy() {
             Layer copy;
-            synchronized(this) { shared=true; holds++; copy=new Layer(name,visible,tones,alpha); copy.opacity=opacity; copy.share=share; copy.print=print; copy.kind=kind; copy.kinds=kinds; copy.kindBase=kindBase; }
+            synchronized(this) { shared=true; holds++; copy=new Layer(name,visible,tones,alpha); copy.opacity=opacity; copy.share=share; copy.print=print; copy.kind=kind; copy.kinds=kinds; copy.kindBase=kindBase; copy.lines=lines; }
             Layer[] own=planes;
             if(own!=null) { copy.planes=new Layer[PLANES]; for(int p=0;p<PLANES;p++) if(own[p]!=null) copy.planes[p]=own[p].copy(); }
             copy.source=this; return copy;
@@ -226,17 +232,19 @@ final class ToneDocument {
         final Magnets magnets;
         /** Inkwash: the page's mirrors (immutable, shared). */
         final Mirrors mirrors;
+        /** Inkwash: the page's text boxes (immutable, shared). */
+        final TextBoxes texts;
         /** Inkwash: the page's {@linkplain #paperTone paper}, and a cover's {@linkplain #paperPixels paper pixels} (else null). */
         final int paper;
         final byte[] paperPixels;
+        /** Inkwash: the surface the page is on ({@link ToneDocument#surface}). */
+        final BrushTexture surface;
         /** Inkwash: where a cover's design is rubbed off ({@link CoverWear}), or null. */
         final CoverWear wear;
         /** Inkwash: a notebook template's guides ({@link ToneDocument#guides}), or null. */
         final byte[] guides;
         /** Inkwash: a timed page's clock ({@link PageClock}). */
         final PageClock clock;
-        /** Inkwash: the page's Daily Prompt card ({@link DailyPrompt#line}), or null. */
-        final String prompt;
         /** Inkwash: Show Kinds' steps on the page ({@link ToneDocument#kindsShown}). */
         final int kindsShown;
         /** Inkwash: the page's Timed Sections ({@link TimedSections}). */
@@ -249,12 +257,14 @@ final class ToneDocument {
          */
         final java.util.List<FadingInk.Mark> fades;
         Snapshot(ToneDocument document) {
-            width=document.width; height=document.height; active=document.active; paper=document.paper; paperPixels=document.paperPixels; wear=document.wear; guides=document.guides; clock=document.clock; prompt=document.prompt; kindsShown=document.kindsShown; sections=document.sections; log=document.log.saved(document.top());
+            width=document.width; height=document.height; active=document.active; paper=document.paper; surface=document.surface; paperPixels=document.paperPixels; wear=document.wear; guides=document.guides; clock=document.clock; kindsShown=document.kindsShown; sections=document.sections; log=document.log.saved(document.top());
             for(Layer layer:document.layers) layers.add(layer.copy());
             mask=document.hasMask()?document.mask.copy():null;
-            magnets=document.magnets; mirrors=document.mirrors;
-            java.util.List<FadingInk.Mark> on=new ArrayList<>();
-            for(FadingInk.Mark m:document.fades) {
+            magnets=document.magnets; mirrors=document.mirrors; texts=document.texts;
+            java.util.List<FadingInk.Mark> on=new ArrayList<>(), all=new ArrayList<>(document.fades);
+            // Later's media still being worked out: waited for (done here if not begun), so a save keeps them.
+            for(java.util.concurrent.FutureTask<FadingInk.Mark> task:new ArrayList<>(document.pending)) { FadingInk.Mark m=joined(task); if(m!=null) all.add(m); }
+            for(FadingInk.Mark m:all) {
                 Layer copy=at(layers,address(document.layers,m.layer));
                 if(copy!=null&&m.width==width&&m.height==height) on.add(m.on(copy));
             }
@@ -273,7 +283,7 @@ final class ToneDocument {
         byte[] shownPaper() { return paperPixels!=null?paperPixels:guided(guides,paper); }
         /** Inkwash: whether nothing is on the page, as {@link ToneDocument#unmarked}. */
         boolean unmarked() {
-            if(wear!=null||clock.locked||prompt!=null||sections.started()||!magnets.isEmpty()||!mirrors.isEmpty()||mask!=null&&mask.covers()) return false;
+            if(wear!=null||clock.locked||sections.started()||!magnets.isEmpty()||!texts.isEmpty()||!mirrors.isEmpty()||mask!=null&&mask.covers()) return false;
             for(Layer layer:layers) if(layer.marked()) return false;
             return true;
         }
@@ -297,7 +307,7 @@ final class ToneDocument {
     /** Inkwash: the index of the layer {@code layer} is or is a plane of; -1 for none (the masking fluid). */
     private int ownerOf(Layer layer) { int a=address(layers,layer); return a<0?-1:a&15; }
     /** A page holding what {@code snapshot} holds, its magnets and paper too, with no history. */
-    ToneDocument(Snapshot snapshot) { this(snapshot.width,snapshot.height,snapshot.layers,snapshot.active,snapshot.mask); magnets=snapshot.magnets; mirrors=snapshot.mirrors; paper=snapshot.paper; paperPixels=madePaper=snapshot.paperPixels; wear=snapshot.wear; guides=snapshot.guides; clock=snapshot.clock; prompt=snapshot.prompt; kindsShown=snapshot.kindsShown; sections=snapshot.sections; log=snapshot.log; fades.addAll(snapshot.fades); }
+    ToneDocument(Snapshot snapshot) { this(snapshot.width,snapshot.height,snapshot.layers,snapshot.active,snapshot.mask); magnets=snapshot.magnets; mirrors=snapshot.mirrors; texts=snapshot.texts; paper=snapshot.paper; surface=snapshot.surface; paperPixels=madePaper=snapshot.paperPixels; wear=snapshot.wear; guides=snapshot.guides; clock=snapshot.clock; kindsShown=snapshot.kindsShown; sections=snapshot.sections; log=snapshot.log; fades.addAll(snapshot.fades); }
 
     /**
      * Inkwash: the page's paper (PageShade), the tone every composite of the page starts from: 255, white, as every page
@@ -306,6 +316,13 @@ final class ToneDocument {
      */
     private int paper=255;
     int paperTone() { return paper; }
+    /**
+     * Inkwash: the surface the page is on (the surface spec, 2026-11-01), which every brush drawing on it meets
+     * ({@link ModularBrush#onSurface}): its notebook's, or the page's own ({@code DrawingBook#surface}), placed when the
+     * page is opened; not in the page's bytes. Null: each brush on its own paper, as the engine drew before surfaces
+     * (the desktop checks, the web lab).
+     */
+    volatile BrushTexture surface;
     /** The page's paper as read from a file: no Undo step. */
     void placePaper(int tone) { if(tone<0||tone>255) throw new IllegalArgumentException("Invalid tone"); paper=tone; }
     /** Inkwash: the paper made {@code tone} as a change to save, not an Undo step (a blank page's, when its notebook's Page Colour changes). */
@@ -323,12 +340,19 @@ final class ToneDocument {
      */
     private PageClock clock=PageClock.NONE;
     PageClock clock() { return clock; }
-    /** Inkwash: Record and Replay ({@link StrokeLog}): the pen's strokes on this page, each tied to its Undo step. */
+    /** Inkwash: Record and Replay ({@link StrokeLog}): the strokes and Lasso edits on this page, each tied to its Undo step. */
     private StrokeLog log=StrokeLog.NONE;
     /** The serial of the newest Undo step still done: 0 when none is (strokes read from a file are 0 too). */
     long top() { return undo.isEmpty()?0:undo.peekLast().serial; }
-    /** The strokes a replay plays: those whose steps are done, since the last Clear page. */
+    /** The entries a replay plays: those whose steps are done, since the last Clear page. */
     java.util.List<StrokeLog.Entry> replay() { return log.upTo(top()).strokes(); }
+    /** Live pages' probe ({@link LiveProbe}): the pen stroke the newest Undo step made, or null when it made none (a smudge, the eraser, a finger, the Lasso's). */
+    StrokeLog.Entry newestStroke() {
+        java.util.List<StrokeLog.Entry> strokes=replay();
+        StrokeLog.Entry newest=null;
+        for(int i=strokes.size()-1;i>=0&&newest==null;i--) if(strokes.get(i).kind==StrokeLog.PEN&&strokes.get(i).stepped) newest=strokes.get(i);
+        return newest!=null&&top()!=0&&newest.serial==top()?newest:null;
+    }
     /** The log as read from a file: no revision. */
     void placeLog(StrokeLog read) { log=read; }
     /**
@@ -336,9 +360,37 @@ final class ToneDocument {
      * stroke's own step made one, and what its lift left wet (a Slow wash settling, a halo, a floating bath) holds that
      * one, so a revision here would drop it as if the page had changed.
      */
-    void logStroke(StrokeLog.Recorder recorder) { log=log.added(recorder.done(top()),Long.MAX_VALUE); }
+    void logStroke(StrokeLog.Recorder recorder) { logStroke(recorder,true); }
+    /** As {@link #logStroke(StrokeLog.Recorder)}; {@code changed}: whether it changed the page (else it is tied to the step before, {@link StrokeLog.Entry#stepped}). */
+    void logStroke(StrokeLog.Recorder recorder,boolean changed) { log=log.added(ticked(recorder.done(top()),changed),Long.MAX_VALUE); }
+    /** Eraser strokes begun on this page object ({@link EraseBothStroke}'s scrape salt); a replay's copy starts where the log's first began ({@code ReplayRun}). */
+    int erasePasses;
+    /** Drying ticks ({@link WatercolorSession#tickDrying}) the page took since its newest entry, for the next ({@link StrokeLog.Entry#ticks}). */
+    private int ticks;
+    /** One drying tick on this page, while something settled. */
+    void ticked() { ticks=Math.min(ticks+1,StrokeLog.MOST_TICKS); }
+    /** What settled on this page ran to its end (not laid where it was): the next entry follows it all ({@link StrokeLog#MOST_TICKS}). */
+    void settled() { ticks=StrokeLog.MOST_TICKS; }
+    /** {@code entry} (null: none) stamped with the ticks since the entry before, which it now follows. */
+    private StrokeLog.Entry ticked(StrokeLog.Entry entry) { return ticked(entry,true); }
+    private StrokeLog.Entry ticked(StrokeLog.Entry entry,boolean stepped) {
+        if(entry==null) return null;
+        int n=Math.min(ticks,StrokeLog.MOST_TICKS); ticks=0; return entry.after(n,stepped);
+    }
+    /** The Lasso's loop through {@code count} points ({@code x, y} pairs, on half pixels) just lifted a piece ({@link LassoPlanes#lift}): its entry, for the piece's placing to name. No revision. */
+    StrokeLog.Entry logLift(float[] points,int count) { StrokeLog.Entry lift=ticked(StrokeLog.Entry.lift(top(),points,count)); log=log.added(lift,Long.MAX_VALUE); return lift; }
+    /** The piece lifted by {@code lift} just put down ({@code drop}, where {@code piece} lies) or taken from where it was ({@code cut}) as the newest step ({@link LassoPlanes#place}). */
+    void logPlace(StrokeLog.Entry lift,boolean drop,boolean cut,FloatingSelection piece) {
+        StrokeLog next=log.placed(lift,top(),Math.min(ticks,StrokeLog.MOST_TICKS),drop,cut,piece);
+        if(next!=log) { ticks=0; log=next; }
+    }
+    /**
+     * A shape, a picture or a merge ({@link StrokeLog#SHAPE} and on: {@code entry}) just made the newest step, or, not
+     * {@code changed}, made none (tied to the step before, as a stroke that changed nothing). No revision.
+     */
+    void logMade(StrokeLog.Entry entry,boolean changed) { log=log.added(ticked(entry.at(top()),changed),Long.MAX_VALUE); }
     /** A Clear page just made its step: strokes before it are not replayed (until Undo takes it back). */
-    private void logClear() { log=log.added(StrokeLog.Entry.marker(top()),Long.MAX_VALUE); }
+    private void logClear() { log=log.added(ticked(StrokeLog.Entry.marker(top())),Long.MAX_VALUE); }
     /** Whether the page is locked ({@link PageClock#locks}): no marks, no Undo, no Redo. */
     boolean locked() { return clock.locks(timerLocks); }
     /** The notebook's Lock Pages ({@link NotebookOptions#lockPages}), set by the notebook on the page drawn on ({@link DrawingBook#current}); off on its own. */
@@ -351,12 +403,6 @@ final class ToneDocument {
         if(next.equals(clock)) return false;
         clock=next; revision++; return true;
     }
-    /**
-     * Inkwash: the Daily Prompt card the page was given ({@link DailyPrompt#line}), or null: page state, not in Undo, kept in
-     * the page's file. A page with one is never {@link #unmarked}, so it is never taken for a blank page.
-     */
-    private String prompt;
-    String prompt() { return prompt; }
     /**
      * Inkwash: Show Kinds (the owner, 2026-10-28: "same method as the template view levels"; "just per page"): each kind's
      * step on this page's screen ({@link EraseKind#step}: two bits a kind, 0 all Full). A view only: never in a composite of
@@ -371,24 +417,6 @@ final class ToneDocument {
         shown&=EraseKind.STEPS;
         if(shown==kindsShown) return false;
         kindsShown=shown; revision++; return true;
-    }
-    /** The page's prompt as read from a file: no revision. */
-    void placePrompt(String read) { prompt=read; }
-    /** Gives the page {@code card} (a card's line) as a change to save; false when it is that already. */
-    boolean setPrompt(String card) {
-        if(java.util.Objects.equals(card,prompt)) return false;
-        prompt=card; revision++; promptTop=card==null?-1:top(); return true;
-    }
-    /** The Undo step done when the card was given ({@link #top}), kept in memory only; -1: not known (read from a file). */
-    private long promptTop=-1;
-    /**
-     * Inkwash: the card goes when nothing was done with it (the owner, 2026-10-29: "if it's closed without doing it, remove it
-     * from the page"): nothing on the page but the card, or, on a page drawn on before, no step made (or all undone) since it
-     * was given. A change to save, not Undo; false when it stays.
-     */
-    boolean dropUnusedPrompt() {
-        if(prompt==null||top()!=promptTop&&!unmarkedButPrompt()) return false;
-        return setPrompt(null);
     }
     /**
      * Inkwash: the page's Timed Sections ({@link TimedSections}): page state, not in Undo, kept in the page's file once
@@ -419,11 +447,9 @@ final class ToneDocument {
         for(Layer layer:layers) if(layer.marked()) return false;
         return true;
     }
-    /** Whether nothing is on the page: no layer holds any coverage, no masking fluid, no magnets, no mirrors, no cover design rubbed off (the paper's shade is none), no prompt, no sections started, and it isn't locked. */
-    boolean unmarked() { return prompt==null&&unmarkedButPrompt(); }
-    /** As {@link #unmarked}, a Daily Prompt card aside. */
-    boolean unmarkedButPrompt() {
-        if(wear!=null||clock.locked||sections.started()||!magnets.isEmpty()||!mirrors.isEmpty()||hasMask()) return false;
+    /** Whether nothing is on the page: no layer holds any coverage, no masking fluid, no magnets, no mirrors, no cover design rubbed off (the paper's shade is none), no sections started, and it isn't locked. */
+    boolean unmarked() {
+        if(wear!=null||clock.locked||sections.started()||!magnets.isEmpty()||!texts.isEmpty()||!mirrors.isEmpty()||hasMask()) return false;
         return inkless();
     }
     /**
@@ -530,14 +556,33 @@ final class ToneDocument {
     /** Where Undo, Redo or {@link #setMagnets} changed the magnets, for the canvas to draw again ({@link #takeMagnetAreas}); apart from {@link #dirty}, so a magnet moved far redraws two small places, not the page between. */
     private final ArrayList<int[]> magnetAreas=new ArrayList<>();
     Magnets magnets() { return magnets; }
+    /** {@code areas} drawn again, the magnets changed there; to Live pages' probe too ({@link #takeLive}). */
+    private void magnetsChanged(java.util.List<int[]> areas) { magnetAreas.addAll(areas); for(int[] a:areas) liveBlocks(a[0],a[1],a[2],a[3]); }
     /** The page's magnets as read from a file: no Undo step. */
     void placeMagnets(Magnets read) { magnets=read; }
     /** Changes the magnets as one undoable step; false, changing nothing, when they are the same. */
     boolean setMagnets(Magnets next) {
         idle(); if(next.equals(magnets)) return false;
         Edit edit=new Edit(magnets,next);
-        magnetAreas.addAll(Magnets.changed(magnets,next)); magnets=next; revision++;
+        magnetsChanged(Magnets.changed(magnets,next)); magnets=next; revision++;
         addEdit(edit); return true;
+    }
+    /**
+     * Inkwash: the page's text boxes ({@link TextBoxes}), typed words over the artwork, never in it: no layer, gesture or
+     * stroke reads them; the canvas, the files and the copies ({@code PagePicture.Composite}, the PNG copy) show them.
+     */
+    private TextBoxes texts=TextBoxes.NONE;
+    TextBoxes texts() { return texts; }
+    /** The page's text boxes as read from a file: no Undo step. */
+    void placeTexts(TextBoxes read) { texts=read; }
+    /**
+     * Changes the text boxes as one undoable step, holding the layers by reference as {@link #setMirrors} does; false,
+     * changing nothing, when they are the same. shortcut: a structural step redraws the whole page, not the boxes'
+     * patches as {@link #setMagnets} does; give them an {@link Edit} of their own if a change ever feels slow on the panel.
+     */
+    boolean setTexts(TextBoxes next) {
+        idle(); if(next.equals(texts)) return false;
+        StackState old=new StackState(this); texts=next; stackEdit(old); return true;
     }
     /**
      * Inkwash: the page's mirrors ({@link Mirrors}), lines over the artwork, never in it: no layer or gesture reads them.
@@ -614,6 +659,95 @@ final class ToneDocument {
     }
     /** The last Undo step, or null: a mark for {@link #linkSince}. */
     Object lastStep() { return undo.peekLast(); }
+    /** Live pages (step 4): the Undo steps still done made after the one of serial {@code since} ({@link #top}), oldest first. */
+    java.util.List<Object> stepsAfter(long since) {
+        ArrayList<Object> after=new ArrayList<>();
+        for(Edit e:undo) if(e.serial>since) after.add(e);
+        return after;
+    }
+    /**
+     * Live pages (step 4): {@code steps} ({@link #stepsAfter}) taken back, newest first, as one new Undo step: each pixel as
+     * the step found it, only where its layer still holds what the step left there (tone and coverage), so what was laid
+     * over it since stays. A Clear page's ({@link Edit#cleared}) puts back every layer's marks where its layer is still
+     * blank. Each page pixel whose tone or coverage it changed is set in {@code changed}; whether it changed any.
+     */
+    boolean takeBack(java.util.List<Object> steps,java.util.BitSet changed) {
+        idle();
+        if(locked()) return false;
+        boolean any=false;
+        for(int s=steps.size()-1;s>=0;s--) {
+            Edit e=(Edit)steps.get(s);
+            if(e.cleared) { any|=takeBackClear(e,changed,any); continue; }
+            // shortcut: the masking fluid, the layer stack, magnets and a layer gone are passed by; upgrade if live pages use them.
+            int index=e.tiles==null?-1:ownerOf(e.layer);
+            if(index<0) continue;
+            any|=takeBack(index,e.layer,e.tiles,changed,any);
+        }
+        return any;
+    }
+    /** {@code tiles} of {@code target} (layer {@code index} or a plane of it) taken back as {@link #takeBack} says, as one gesture, joined to the one before when {@code joined}; whether it changed any. */
+    private boolean takeBack(int index,Layer target,java.util.List<TileEdit> tiles,java.util.BitSet changed,boolean joined) {
+        int columns=columns();
+        selectLayer(index); begin(target,0,1);
+        for(TileEdit tile:tiles) {
+            int left=tile.key%columns*TILE, top=tile.key/columns*TILE, tileWidth=Math.min(TILE,width-left), rows=Math.min(TILE,height-top), half=tile.before.length/2;
+            if(top>=height||half!=tileWidth*rows) continue;
+            byte[] was=tile.before, now=tile.after;
+            boolean wrote=false;
+            for(int row=0;row<rows;row++) for(int col=0,t=row*tileWidth;col<tileWidth;col++,t++) {
+                int i=(top+row)*width+left+col;
+                if(tones[i]!=now[t]||alpha[i]!=now[half+t]) continue;
+                byte kept=tile.shareBefore==null?(byte)255:tile.shareBefore[t], printed=tile.printBefore==null?(byte)255:tile.printBefore[t], kinded=tile.kindBefore==null?0:tile.kindBefore[t];
+                boolean tone=was[t]!=now[t]||was[half+t]!=now[half+t];
+                if(!tone&&(share==null||share[i]==kept)&&(print==null||print[i]==printed)&&(kind==null||kind[i]==kinded)) continue;
+                if(!wrote) { wrote=true; capture(tile.key); writable(); }
+                tones[i]=was[t]; alpha[i]=was[half+t];
+                if(share!=null) share[i]=kept;
+                if(print!=null) print[i]=printed;
+                if(kind!=null) kind[i]=kinded;
+                if(tone) changed.set(i);
+            }
+            if(wrote) markDirty(left,top,left+tileWidth,top+rows);
+        }
+        return joined?finishWithPrevious():finish();
+    }
+    /**
+     * Live pages: a Clear page's step taken back as {@link #takeBack} says, each layer's old base and kind planes into the
+     * blank ones it left, a pixel only where that is still blank (a mark laid since stays), as tile steps a live Redo takes
+     * back the same way. The layer selected stays. shortcut: the masking fluid, magnets, text boxes and a rubbed cover the
+     * clear took stay off, and a layer drawn on with kinds since keeps its own kind base; upgrade if live pages use them.
+     */
+    private boolean takeBackClear(Edit e,java.util.BitSet changed,boolean joined) {
+        if(e.previous.width!=width||e.previous.height!=height) return false;
+        boolean any=false; int at=active, keys=columns()*((height+TILE-1)/TILE);
+        for(int n=0;n<e.next.layers.size();n++) {
+            Layer old=e.previous.layers.get(n), blank=e.next.layers.get(n);
+            int index=ownerOf(blank);
+            if(index<0) continue;
+            for(int p=-1;p<PLANES;p++) {
+                Layer from=p<0?old:old.plane(p);
+                if(from==null||!from.covers()) continue;
+                Layer into=p<0?blank:plane(blank,p);
+                into.kinds|=from.kinds;
+                if(from.share!=null&&into.share==null) into.share=paper(width,height);
+                if(from.print!=null&&into.print==null) into.print=paper(width,height);
+                if(from.kind!=null&&into.kind==null&&!into.covers()) { into.kindBase=from.kindBase; into.kind=new byte[width*height]; }
+                ArrayList<TileEdit> tiles=new ArrayList<>();
+                for(int key=0;key<keys;key++) {
+                    byte[] was=copyTile(from.tones,from.alpha,key);
+                    boolean marked=false;
+                    for(int t=was.length/2;t<was.length&&!marked;t++) marked=was[t]!=0;
+                    if(!marked) continue;
+                    byte[] none=new byte[was.length]; Arrays.fill(none,0,none.length/2,(byte)255);
+                    tiles.add(new TileEdit(key,was,shared(none,true),from.share==null?null:copyPlane(from.share,key),null,
+                            from.print==null?null:copyPlane(from.print,key),null,from.kind==null?null:copyPlane(from.kind,key),null));
+                }
+                any|=takeBack(index,into,tiles,changed,joined||any);
+            }
+        }
+        selectLayer(at);
+        return any;
+    }
     /**
      * Inkwash: every Undo step after {@code mark} ({@link #lastStep} before them; null: from the first) undone and redone
      * together as one, as {@link #finishWithPrevious} links two: a stroke and its mirrored copies ({@code MirrorStroke}).
@@ -623,6 +757,15 @@ final class ToneDocument {
         for(java.util.Iterator<Edit> i=undo.descendingIterator();i.hasNext();) { Edit e=i.next(); if(e==mark) break; after.add(e); }
         for(int k=0;k<after.size()-1;k++) after.get(k).linked=true;
     }
+    /** The step {@link #linkToNext} named; null for none. */
+    private Edit joinNext;
+    /**
+     * Inkwash: the last Undo step (a layer put in for a stroke, {@code VectorInk.under}) undone and redone with the next
+     * step made while it is still the last, whenever that comes (a stroke's finish, a shape's, Make Ink's).
+     */
+    void linkToNext() { joinNext=undo.peekLast(); }
+    /** Whether a step about to be made goes with the one before it ({@link #linkToNext}); asked once a step. */
+    private boolean joins() { boolean joins=joinNext!=null&&joinNext==undo.peekLast(); joinNext=null; return joins; }
     /**
      * Inkwash: a stroke's change to its layer as each pixel's darkening ({@link #darkeningSince}), to lay again elsewhere
      * ({@link #layAgain}): the factor its tone over white was multiplied by, 1 where it is as it was, NaN where it found
@@ -824,7 +967,9 @@ final class ToneDocument {
      * As above ({@code tones} and the rest {@link #STACK} + 3 long) with the layers above this page in its stack
      * flattened ({@code overTones}, {@code overAlpha}; null: none) over its own: they cover it, as layers do.
      */
-    int visibleLayers(byte[][] tones,byte[][] alpha,int[] opacity,byte[] ghost,int layerSteps,byte[] overTones,byte[] overAlpha) {
+    int visibleLayers(byte[][] tones,byte[][] alpha,int[] opacity,byte[] ghost,int layerSteps,byte[] overTones,byte[] overAlpha) { return visibleLayers(tones,alpha,opacity,ghost,layerSteps,overTones,overAlpha,0); }
+    /** As above without the layers whose bits {@code without} sets (0: none): the zoomed view's page under Vector Ink's sharp lines ({@link VectorInk#sharpLayers}). */
+    int visibleLayers(byte[][] tones,byte[][] alpha,int[] opacity,byte[] ghost,int layerSteps,byte[] overTones,byte[] overAlpha,int without) {
         int count=0, drawing=active/2;
         byte[] under=pixels();
         if(under!=null) { tones[count]=under; alpha[count]=opaque(under.length); opacity[count++]=100; }
@@ -834,6 +979,7 @@ final class ToneDocument {
             Layer entry=stacked(layers,k);
             if(entry==null) continue;
             int n=stackOwner(k), pair=n/2, shown=stackOpacity(layers.get(n),entry);
+            if((without>>n&1)!=0) continue;
             if(entry!=layers.get(n)) shown=shown*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(layerSteps>>>KIND_STEPS,PLANE_KINDS[k%(2*(1+PLANES))/2-1])]/100;
             if(layers.get(n).visible) { tones[count]=entry.tones; alpha[count]=entry.alpha; opacity[count++]=pair==drawing?shown:shown*TracingPaper.layerStrength(layerSteps,pair)/100; }
         }
@@ -858,10 +1004,28 @@ final class ToneDocument {
     /** Whether the page has a masking-fluid layer, even an empty one: unlike {@link #hasMask}, without reading its pixels. */
     boolean hasMaskLayer() { return mask!=null; }
     int layerCount() { return layers.size(); }
+    /** Inkwash: layer {@code index}'s Vector Ink lines ({@link Layer#lines}), or null. */
+    VectorLines lines(int index) { return layers.get(index).lines; }
+    /**
+     * Inkwash: layer {@code index}'s Vector Ink lines made {@code next} (null: none, an ordinary layer), with the Undo step
+     * the stroke that changed them just made (its serial after {@code since}, {@link #top}), or as a step of their own
+     * when it made none: Undo and Redo take the pixels and the lines back together.
+     */
+    void changeLines(int index,VectorLines next,long since) {
+        idle();
+        Layer layer=layers.get(index);
+        if(layer.lines==next) return;
+        Edit edit=!undo.isEmpty()&&top()!=since&&undo.peekLast().linesLayer==null?undo.peekLast():null;
+        if(edit==null) { if(!redo.isEmpty()) log=log.upTo(top()); for(Edit e:redo) historyBytes-=e.bytes; redo.clear(); edit=new Edit(new ArrayList<>(),layer); edit.linked=joins(); undo.addLast(edit); }
+        edit.linesLayer=layer; edit.linesBefore=layer.lines; edit.linesAfter=next;
+        layer.lines=next; revision++;
+    }
     int activeLayer() { return active; }
     String layerName(int index) { return layers.get(index).name; }
     boolean layerVisible(int index) { return layers.get(index).visible; }
     int layerOpacity(int index) { return layers.get(index).opacity; }
+    /** Inkwash: whether layer {@code index} holds any mark, on its base or a plane. */
+    boolean layerMarked(int index) { return layers.get(index).marked(); }
     void setLayerOpacity(int index,int value) {
         idle(); if(value<0||value>100) throw new IllegalArgumentException("Invalid layer opacity");
         if(layers.get(index).opacity==value)return;
@@ -904,6 +1068,10 @@ final class ToneDocument {
     }
     /** Inkwash: the kinds of what reads between gestures read ({@link #selectKind}); 0 for the base. */
     int selectedKinds() { int a=address(layers,selected); return a<0?0:kindsOf((a>>4)-1); }
+    /** Inkwash: where what reads between gestures is ({@link #address}): after a stroke, the plane (or base) it drew on. */
+    int selectedAddress() { return address(layers,selected!=null?selected:layers.get(active)); }
+    /** Inkwash: the layer or plane at {@link #address} {@code address}, or null (sharp dry brushes' strokes name theirs so, {@link SharpView}). */
+    Layer addressed(int address) { return at(layers,address); }
     /** Gestures from now on lay or, erasing, rub off masking fluid instead of painting the active layer. */
     void paintMaskingFluid(boolean value) { idle(); maskTarget=value; }
     /** Whether any masking fluid is on the page. */
@@ -1093,18 +1261,21 @@ final class ToneDocument {
         selectLayer(active); stackEdit(old); return true;
     }
     /** Shows or hides layers {@code from} to {@code to} (inclusive) as one undoable step; false when all already are. */
-    boolean setLayersVisible(int from,int to,boolean visible) {
+    boolean setLayersVisible(int from,int to,boolean visible) { return setLayersShown(from,to,visible,-1); }
+    /** Inkwash: layers {@code from} to {@code to} shown or hidden and, unless {@code opacity} is -1, at that opacity, as one undoable step (a layer's step, {@code InkWashLayers.setStep}); false when they already are. */
+    boolean setLayersShown(int from,int to,boolean visible,int opacity) {
         idle(); if(from<0||to>=layers.size()||from>to) throw new IllegalArgumentException("Invalid layer");
+        if(opacity<-1||opacity>100) throw new IllegalArgumentException("Invalid layer opacity");
         boolean change=false;
-        for(int i=from;i<=to;i++) change|=layers.get(i).visible!=visible;
+        for(int i=from;i<=to;i++) change|=layers.get(i).visible!=visible||opacity>=0&&layers.get(i).opacity!=opacity;
         if(!change) return false;
         StackState old=new StackState(this);
-        for(int i=from;i<=to;i++) layers.get(i).visible=visible;
+        for(int i=from;i<=to;i++) { layers.get(i).visible=visible; if(opacity>=0) layers.get(i).opacity=opacity; }
         stackEdit(old); return true;
     }
-    private void stackEdit(StackState old) {
+    private Edit stackEdit(StackState old) {
         revision++;
-        addEdit(new Edit(old,new StackState(this))); markAllDirty();
+        Edit edit=new Edit(old,new StackState(this)); addEdit(edit); markAllDirty(); return edit;
     }
     /** Add transparent paper around every layer without resampling existing pixels. */
     void expand(int left, int top, int right, int bottom) {
@@ -1135,24 +1306,81 @@ final class ToneDocument {
         }
         Layer next=new Layer(layer.name,layer.visible,ink,coverage); next.opacity=layer.opacity; next.share=kept; next.print=printed; next.kind=kinded; next.kinds=layer.kinds; next.kindBase=layer.kindBase; return next;
     }
-    private void markAllDirty() { left=0; top=0; right=width; bottom=height; }
+    private void markAllDirty() { grow(0,0,width,height); }
     private void addEdit(Edit edit) {
         for(Edit discarded:redo) historyBytes-=discarded.bytes;
         if(!redo.isEmpty()) log=log.upTo(top());
-        redo.clear(); undo.addLast(edit); historyBytes+=edit.bytes; trimHistory();
+        redo.clear(); edit.linked|=joins(); undo.addLast(edit); historyBytes+=edit.bytes; trimHistory();
     }
     /** Bottom-to-top source-over composition on the page's {@linkplain #paperTone paper}. Brushes read only the active layer. */
     int compositeTone(int x,int y) { return compositeToneWithout(x,y,0,-1); }
+    /**
+     * {@link #compositeTone} of the {@code w} by {@code h} block at {@code x, y}, row by row into {@code out} from
+     * {@code offset}, {@code stride} apart: the stack looked up once, not a pixel at a time (Live pages: a mirrored
+     * stroke's 3 M pixels took seconds on the Manta so).
+     */
+    void compositeTones(int x,int y,int w,int h,int[] out,int offset,int stride) { compositeTones(x,y,w,h,out,offset,stride,0); }
+    /**
+     * Inkwash: as above as the screen shows it with Show Kinds at {@code kindsShown} ({@link #kindsShown}; 0 all Full,
+     * the page's composite): each kind plane at its kind's step's strength, as {@link #visibleLayers} gives the screen.
+     */
+    void compositeTones(int x,int y,int w,int h,int[] out,int offset,int stride,int kindsShown) {
+        byte[] under=pixels();
+        for(int row=0;row<h;row++) {
+            int o=offset+row*stride, i=(y+row)*width+x;
+            if(under==null) Arrays.fill(out,o,o+w,paper); else for(int c=0;c<w;c++) out[o+c]=under[i+c]&255;
+        }
+        for(int k=0,end=stackSize(layers.size());k<end;k++) {
+            Layer layer=stacked(layers,k); int n=stackOwner(k);
+            if(layer==null||!layers.get(n).visible) continue;
+            byte[] t=layer.tones,al=layer.alpha; int opacity=stackOpacity(layers.get(n),layer);
+            if(kindsShown!=0&&layer!=layers.get(n)) opacity=opacity*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(kindsShown,PLANE_KINDS[k%(2*(1+PLANES))/2-1])]/100;
+            for(int row=0;row<h;row++) for(int c=0,o=offset+row*stride,i=(y+row)*width+x;c<w;c++,o++,i++) {
+                int a=al[i]&255;
+                if(a==0) continue;  // leaves it as it is, as compositeTone's sum does
+                a=(a*opacity+50)/100;
+                out[o]=((t[i]&255)*a+out[o]*(255-a)+127)/255;
+            }
+        }
+    }
     /** {@link #compositeTone} without layers {@code from} to {@code to} (inclusive): the page were they clear. */
-    int compositeToneWithout(int x,int y,int from,int to) {
+    int compositeToneWithout(int x,int y,int from,int to) { return compositeToneWithout(x,y,from,to,0); }
+    /** As above without the layers whose bits {@code also} sets too (0: none): the Lasso's hole, Vector Ink's lines lifted with the pair's ({@link LassoPlanes}). */
+    int compositeToneWithout(int x,int y,int from,int to,int also) {
         int i=y*width+x, result=paperAt(i);
         for(int k=0,end=stackSize(layers.size());k<end;k++) {
             Layer layer=stacked(layers,k); int n=stackOwner(k);
-            if(layer==null||!layers.get(n).visible||n>=from&&n<=to) continue;
+            if(layer==null||!layers.get(n).visible||n>=from&&n<=to||(also>>n&1)!=0) continue;
             int a=((layer.alpha[i]&255)*stackOpacity(layers.get(n),layer)+50)/100;
             result=((layer.tones[i]&255)*a+result*(255-a)+127)/255;
         }
         return result;
+    }
+    /**
+     * Inkwash: {@link #compositeTone} over the {@code w} by {@code h} block at {@code x, y} into {@code out} (row by row),
+     * with plane {@code kinds[j]} ({@link #planeOf}; 0: the base) of layer {@code layers[j]} holding {@code v[j]} there
+     * (each pixel's tone over white {@code << 8 |} its coverage; −1: what it holds): the screen while a stump's other half
+     * is smudged and not yet written ({@code ModularStroke.unwritten}). −1 at a pixel no plane stands in at.
+     */
+    void compositeTonesShown(int x,int y,int w,int h,int[] out,int[] layers,int[] kinds,int[][] v) {
+        int count=w*h;
+        Arrays.fill(out,0,count,-1);
+        for(int o=0;o<count;o++) for(int[] s:v) if(s[o]>=0) { out[o]=paperAt((y+o/w)*width+x+o%w); break; }
+        for(int k=0,end=stackSize(this.layers.size());k<end;k++) {
+            Layer layer=stacked(this.layers,k); int n=stackOwner(k);
+            if(layer==null||!this.layers.get(n).visible) continue;
+            int[] stand=null;
+            for(int j=0;j<v.length&&stand==null;j++) if(layers[j]==n) { int p=planeOf(kinds[j]); if(layer==(p<0?this.layers.get(n):this.layers.get(n).plane(p))) stand=v[j]; }
+            byte[] t=layer.tones,al=layer.alpha; int opacity=stackOpacity(this.layers.get(n),layer);
+            for(int row=0,o=0;row<h;row++) for(int col=0,i=(y+row)*width+x;col<w;col++,o++,i++) {
+                if(out[o]<0) continue;
+                int raw=t[i]&255, c=al[i]&255;
+                if(stand!=null&&stand[o]>=0) { c=stand[o]&255; raw=rawTone(stand[o]>>8,c); }
+                if(c==0) continue;
+                int a=(c*opacity+50)/100;
+                out[o]=(raw*a+out[o]*(255-a)+127)/255;
+            }
+        }
     }
     /**
      * {@link #compositeTone} with layers {@code from} to {@code to} (inclusive) at the coverage the eraser leaves them
@@ -1164,20 +1392,43 @@ final class ToneDocument {
      * As {@link #compositeToneKept(int, int, int, int)}, for an eraser limited to {@code kinds} ({@link #eraseKinds}): a pixel it
      * doesn't take is kept whole. {@link #KIND_ALL} is the Everything eraser, which takes every pixel whole (the owner, 2026-10-22).
      */
-    int compositeToneKept(int x,int y,int from,int to,int kinds) {
+    int compositeToneKept(int x,int y,int from,int to,int kinds) { return compositeToneKept(x,y,from,to,kinds,0); }
+    /** As above, the layers whose bits {@code also} sets (0: none) gone too: Vector Ink's, whose pixels an eraser of another pair takes at its lift ({@link VectorInk.Cut}). */
+    int compositeToneKept(int x,int y,int from,int to,int kinds,int also) {
+        int[] out=new int[1];
+        compositeTonesKept(x,y,1,from,to,kinds,also,new byte[]{1},out,0);
+        return out[0];
+    }
+    /**
+     * {@link #compositeToneKept(int, int, int, int, int, int)} of the {@code w} pixels of row {@code y} from {@code x} where
+     * {@code at} is non-zero, into {@code out} from {@code offset}; the rest left as they are. The eraser's preview, a
+     * frame's area at a time: the shown layers gathered once, a pixel passing by what holds nothing there.
+     */
+    void compositeTonesKept(int x,int y,int w,int from,int to,int kinds,int also,byte[] at,int[] out,int offset) {
         // Inkwash: the Everything eraser rubs a cover's design off too (rubDesign).
         byte[] bare=kinds==0||kinds==KIND_ALL?bare():null;
-        int i=y*width+x, result=bare!=null?bare[i]&255:paperAt(i);
-        // Inkwash: a plane is a layer of its one kind, so a limited eraser takes it whole or leaves it.
-        for(int k=0,end=stackSize(layers.size());k<end;k++) {
+        int end=stackSize(layers.size()), m=0;
+        Layer[] shown=new Layer[end]; int[] owner=new int[end], opacity=new int[end];
+        for(int k=0;k<end;k++) {
             Layer layer=stacked(layers,k); int n=stackOwner(k);
-            if(layer==null||!layers.get(n).visible) continue;
-            int c=layer.alpha[i]&255;
-            if(n>=from&&n<=to&&(kinds==0||c==0||(layer.kindsAt(i)&kinds)!=0)) c=layer.share==null||kinds!=0&&(layer.permanentAt(i)&~kinds)==0?0:kept(c,layer.share[i]&255);
-            int a=(c*stackOpacity(layers.get(n),layer)+50)/100;
-            result=((layer.tones[i]&255)*a+result*(255-a)+127)/255;
+            if(layer==null||!layers.get(n).visible||(also>>n&1)!=0) continue;
+            shown[m]=layer; owner[m]=n; opacity[m++]=stackOpacity(layers.get(n),layer);
         }
-        return result;
+        int row=y*width+x;
+        for(int col=0;col<w;col++) if(at[col]!=0) out[offset+col]=bare!=null?bare[row+col]&255:paperAt(row+col);
+        // Layer by layer along the row, as the page's compose: a pixel a layer holds nothing at is left as it is.
+        // Inkwash: a plane is a layer of its one kind, so a limited eraser takes it whole or leaves it.
+        for(int k=0;k<m;k++) {
+            Layer layer=shown[k]; byte[] alpha=layer.alpha, tones=layer.tones, share=layer.share;
+            int n=owner[k], op=opacity[k]; boolean taken=n>=from&&n<=to;
+            for(int col=0;col<w;col++) {
+                int i=row+col, c=alpha[i]&255;
+                if(c==0||at[col]==0) continue;
+                if(taken&&(kinds==0||(layer.kindsAt(i)&kinds)!=0)) c=share==null||kinds!=0&&(layer.permanentAt(i)&~kinds)==0?0:kept(c,share[i]&255);
+                int a=(c*op+50)/100, o=offset+col;
+                out[o]=((tones[i]&255)*a+out[o]*(255-a)+127)/255;
+            }
+        }
     }
     /** The coverage a pixel of coverage {@code a} keeps when erased, its {@link Layer#share} {@code s}: rounded. */
     static int kept(int a,int s) { return (a*(255-s)+127)/255; }
@@ -1310,12 +1561,28 @@ final class ToneDocument {
      * cache is passed over. The owner thread opens them, does nothing else with the document meanwhile, and closes them.
      */
     private boolean bands;
+    /** How many tiles {@link #before} held when the bands opened. */
+    private int bandsFrom;
     /** Opens {@linkplain #bands bands} for the gesture in progress. */
     void openBands() {
         if (!editing) throw new IllegalStateException("No active gesture");
-        writable(); bands = true;
+        writable(); bands = true; bandsFrom = before.size();
     }
-    void closeBands() { bands = false; }
+    /**
+     * Closes them. The tiles the bands captured go into {@link #before} by tile row, each row's as its band met them:
+     * the order one thread running the bands in turn gives, so Undo's steps and a fading mark's file section are the
+     * same bytes however the cores shared the work (each band is one tile row).
+     */
+    void closeBands() {
+        bands = false;
+        if (before.size() - bandsFrom < 2) return;
+        ArrayList<Map.Entry<Integer, byte[]>> met = new ArrayList<>();
+        int i = 0;
+        for (Map.Entry<Integer, byte[]> e : before.entrySet()) if (i++ >= bandsFrom) met.add(new java.util.AbstractMap.SimpleEntry<>(e));
+        int cols = columns();
+        met.sort(java.util.Comparator.comparingInt(e -> e.getKey() / cols));
+        synchronized (before) { for (Map.Entry<Integer, byte[]> e : met) { before.remove(e.getKey()); before.put(e.getKey(), e.getValue()); } }
+    }
     /**
      * While on, another thread may read what the gesture's layer held when the gesture began ({@link #baseTones}): the
      * owner's Undo captures and its gestures' beginning and cancelling are kept under a lock. A quick stroke's true
@@ -1443,6 +1710,15 @@ final class ToneDocument {
     int tone(int x, int y) { int i=y*width+x; return onWhite(tones[i]&255,alpha[i]&255); }
     /** The active layer's tone, even while a gesture lays masking fluid, so fills can mask a painted region. */
     int layerTone(int x, int y) { return look(layers.get(active),y*width+x); }
+    /**
+     * Inkwash: what a mark of {@code kinds} darkens ({@link PictureImport#inked}): the active layer's plane for them
+     * ({@link #planeOf}; white where it has none yet), or its base alone for none, under its planes: as one, a received
+     * change of no kind over a received pen mark came out darker than sent.
+     */
+    int layerTone(int x, int y, int kinds) {
+        int p=planeOf(kinds), i=y*width+x; Layer layer=layers.get(active), on=p<0?layer:layer.plane(p);
+        return on==null?255:onWhite(on.tones[i]&255,on.alpha[i]&255);
+    }
     /** Inkwash: pixel {@code i} of {@code layer} over white, its base and kind planes as one ({@link #sheets}), opacity left out. */
     private static int look(Layer layer,int i) { int s=sheets(layer,i); return onWhite(s>>>8,s&255); }
     private static int onWhite(int tone,int alpha) { return (tone*alpha+255*(255-alpha)+127)/255; }
@@ -1765,7 +2041,7 @@ final class ToneDocument {
         // kind (its base) leaves them on the last (a Clear Water drop on floating ink, then the float reads the ink's plane).
         if(!fluid&&target!=layers.get(active)) selected=target;
         permanent=!(erasable<1)?0:(int)Math.round(255*(1-Math.max(0,erasable)));
-        waxTakes=false;
+        waxTakes=false; layingOver=false;
         writable();
         if(permanent>0&&share==null) { bound.share=paper(width,height); share=bound.share; }
         laying=fluid?0:kinds&KIND_ALL;
@@ -1903,7 +2179,8 @@ final class ToneDocument {
         }
         if(minX<=maxX) markDirty(minX,minY,maxX+1,maxY+1);
     }
-    private static int rawTone(int onWhite,int coverage) {
+    /** The raw tone a pixel keeps to show {@code onWhite} over white at {@code coverage} (sharp dry brushes compare a kept shape's, {@code SharpStrokes.GridPage#raw}). */
+    static int rawTone(int onWhite,int coverage) {
         return coverage==0?255:Math.max(0,Math.min(255,(onWhite*255-255*(255-coverage)+coverage/2)/coverage));
     }
     void glazeTone(int x,int y,int gray) { glazeTone(x,y,gray,255); }
@@ -2059,7 +2336,7 @@ final class ToneDocument {
         }
         Arrays.fill(tones,y*width+x,y*width+end,(byte)(gray==ERASE?255:gray));
         Arrays.fill(alpha,y*width+x,y*width+end,(byte)(gray==ERASE?0:255));
-        left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,end);bottom=Math.max(bottom,y+1);
+        grow(x,y,end,y+1);
     }
     /** Restores a span to how this gesture found it, keeping the undo capture: a resizing preview's removed pixels, or a wild ink tail the taper took away. */
     void restoreSpan(int x,int end,int y) {
@@ -2130,7 +2407,44 @@ final class ToneDocument {
     private void markDirty(int l,int t,int r,int b) {
         if(bands) synchronized(before) { grow(l,t,r,b); } else grow(l,t,r,b);
     }
-    private void grow(int l,int t,int r,int b) { left=Math.min(left,l); top=Math.min(top,t); right=Math.max(right,r); bottom=Math.max(bottom,b); }
+    private void grow(int l,int t,int r,int b) {
+        left=Math.min(left,l); top=Math.min(top,t); right=Math.max(right,r); bottom=Math.max(bottom,b);
+        liveBlocks(l,t,r,b);
+    }
+    private void liveBlocks(int l,int t,int r,int b) {
+        if(live==null) return;
+        l=Math.max(0,l); t=Math.max(0,t); r=Math.min(width,r); b=Math.min(height,b);
+        if(r>l&&b>t) { int across=(width+LIVE_BLOCK-1)/LIVE_BLOCK; for(int y=t/LIVE_BLOCK;y<=(b-1)/LIVE_BLOCK;y++) live.set(y*across+l/LIVE_BLOCK,y*across+(r-1)/LIVE_BLOCK+1); }
+    }
+    /** Live pages' probe ({@link LiveProbe}): the side of the blocks {@link #takeLive} gives, page px. */
+    static final int LIVE_BLOCK=16;
+    /** Live pages' probe: the {@link #LIVE_BLOCK} blocks written since {@link #takeLive} last looked; null: not kept. */
+    private java.util.BitSet live;
+    /**
+     * Live pages' probe: the page's areas written since the last call ({left, top, right, bottom}, exclusive, page px,
+     * a run of {@link #LIVE_BLOCK} blocks across a row of them each, runs alike in rows one under another joined), kept
+     * from the first call on: exactly where the page changed, whatever changed it, a mirror's copies apart, never what
+     * only the screen shows (guides, a reflection).
+     */
+    java.util.List<int[]> takeLive() {
+        java.util.List<int[]> areas=new ArrayList<>();
+        java.util.BitSet blocks;
+        synchronized(before) { blocks=live; live=new java.util.BitSet(); }
+        if(blocks==null) return areas;
+        int across=(width+LIVE_BLOCK-1)/LIVE_BLOCK, at=-2;
+        java.util.Map<Long,int[]> above=new HashMap<>(), here=new HashMap<>();
+        for(int i=blocks.nextSetBit(0);i>=0;) {
+            int row=i/across, end=Math.min(blocks.nextClearBit(i),(row+1)*across);
+            if(row!=at) { above=row==at+1?here:new HashMap<>(); here=new HashMap<>(); at=row; }
+            int l=i%across*LIVE_BLOCK, r=Math.min(width,(end-row*across)*LIVE_BLOCK), b=Math.min(height,(row+1)*LIVE_BLOCK);
+            long key=(long)l<<32|r;
+            int[] area=above.remove(key);
+            if(area!=null) area[3]=b; else areas.add(area=new int[]{l,row*LIVE_BLOCK,r,b});
+            here.put(key,area);
+            i=blocks.nextSetBit(end);
+        }
+        return areas;
+    }
     /** Apply opaque logical raster pixels, generated by the accepted Android circle rasterizer; anti-aliased edges cover partly. */
     void paintMask(int[] mask, int stride, int x, int y, int w, int h, int gray) {
         for (int row = 0; row < h; row++) for (int col = 0; col < w; col++) {
@@ -2202,6 +2516,7 @@ final class ToneDocument {
             if (x0 < x1) for (int y = Math.max(b[1], ty); y < y1; y++) restoreSpan(x0, x1, y);
         }
         editing = false;lastBaseTile=null;lastBaseKey=-1;glazed.clear();
+        boolean sink = layingOver; layingOver = false;
         ArrayList<TileEdit> tiles = new ArrayList<>();
         for (Map.Entry<Integer, byte[]> entry : before.entrySet()) {
             captured[entry.getKey()] = false; foundTiles[entry.getKey()] = null; foundShares[entry.getKey()] = null; foundPrints[entry.getKey()] = null; foundKinds[entry.getKey()] = null;
@@ -2218,8 +2533,9 @@ final class ToneDocument {
         Layer edited=bound; bind(selected);
         if (tiles.isEmpty()) return false;
         boolean linked = false;
+        Edit previous = null;
         if (continuation && !undo.isEmpty() && redo.isEmpty() && undo.peekLast().layer==edited) {
-            Edit previous = undo.removeLast(); historyBytes -= previous.bytes; linked = previous.linked;
+            previous = undo.removeLast(); historyBytes -= previous.bytes; linked = previous.linked;
             LinkedHashMap<Integer, TileEdit> merged = new LinkedHashMap<>();
             for (TileEdit tile : previous.tiles) merged.put(tile.key, tile);
             for (TileEdit tile : tiles) {
@@ -2233,10 +2549,117 @@ final class ToneDocument {
         for (Edit edit : redo) historyBytes -= edit.bytes;
         if (!redo.isEmpty()) log = log.upTo(top());
         redo.clear();
-        if (!tiles.isEmpty()) { Edit edit = new Edit(tiles,edited); edit.linked = linked; undo.addLast(edit); historyBytes += edit.bytes; }
+        if (!tiles.isEmpty()) {
+            Edit edit = new Edit(tiles,edited); edit.linked = linked;
+            // Inkwash: a continuation stays the step it continues (its serial too), so what holds that step (Live pages'
+            // own changes, a fading mark's steps, a stroke's mark) holds its later tiles: live Undo left wet oils' ridge.
+            if (previous != null) { previous.tiles.clear(); previous.tiles.addAll(tiles); previous.bytes = edit.bytes; edit = previous; }
+            edit.linked |= joins();
+            undo.addLast(edit); historyBytes += edit.bytes;
+        }
         trimHistory();
+        if (sink && !tiles.isEmpty()) sinkUnder(edited, tiles);
         return true;
     }
+    /** Inkwash: the gesture in progress lies over what is on the page, whatever its kind ({@link #layingOver()}). */
+    private boolean layingOver;
+    /**
+     * Inkwash: the gesture in progress lays its marks over what is on the page (Blend's White and Invert, light opaque media:
+     * {@code ResolvedBrush.laysOver}). Light over dark whatever the kind (the owner, 2026-11-01: "white chalk i tried to draw
+     * on black paint but it didnt"): kind planes stack by kind, so on its own plane it would lie under pen, washes and
+     * opaque paint; at its finish, where it changed its plane, those sink under it ({@link #sinkUnder}). Call it after
+     * {@link #begin(double, int)}.
+     */
+    void layingOver() {
+        if(!editing) throw new IllegalStateException("No active gesture");
+        layingOver=bound!=mask;
+    }
+    /**
+     * Inkwash: where the gesture just finished on {@code plane} changed it ({@code tiles}), what lies above that plane in its
+     * pair (the planes {@link #stacked} walks after it) moves into the pair's top base, under every plane, composed in the
+     * page's order, so the page shows as before with the new marks now over it; a time order where kinds stack by kind.
+     * The base keeps each pixel's kinds ({@link Layer#kind}), shares and print tone, so a kind's eraser still takes what sank
+     * (by the base's rules) and erasing the new marks shows it again. A plane of a hidden layer, at another opacity, or with
+     * marks fading by the clock stays where it is, and so does the ink half's for a mark on the wash half (the pair's ink
+     * is never covered by its own wash). One Undo step with the gesture ({@link #finishWithPrevious}).
+     */
+    private void sinkUnder(Layer plane,ArrayList<TileEdit> tiles) {
+        int address=address(layers,plane), n=address&15, slot=address>>4;
+        if(address<0||slot==0) return;
+        int start=n/2*2*(1+PLANES), end=start+2*(1+PLANES), from=start+2*slot+n%2;
+        Layer target=null; int opacity=0;
+        for(int k=start+1;k>=start&&target==null;k--) { Layer l=stacked(layers,k); if(l!=null&&l.visible) { target=l; opacity=l.opacity; } }
+        if(target==null) return;
+        ArrayList<Layer> above=new ArrayList<>();
+        for(int k=from+1;k<end;k++) {
+            Layer q=stacked(layers,k), owner=q==null?null:layers.get(stackOwner(k));
+            // The pair's ink is never covered by its own wash (InkWashLayers): a mark on the wash half sinks only that half's.
+            if(q==null||stackOwner(k)>n||!owner.visible||stackOpacity(owner,q)!=opacity||fadesOn(q)) continue;
+            above.add(q);
+        }
+        if(above.isEmpty()) return;
+        // The pixels the gesture changed that something above it covers.
+        int[] at=new int[64]; int count=0, kinds=0; boolean shares=false, prints=false;
+        for(TileEdit tile:tiles) {
+            int tx=tile.key%columns()*TILE, ty=tile.key/columns()*TILE, w=Math.min(TILE,width-tx), h=Math.min(TILE,height-ty), half=w*h;
+            for(int j=0;j<half;j++) {
+                if(tile.before[j]==tile.after[j]&&tile.before[half+j]==tile.after[half+j]) continue;
+                int i=(ty+j/w)*width+tx+j%w; boolean covered=false;
+                for(Layer q:above) if(q.alpha[i]!=0) { covered=true; kinds|=q.kindsAt(i); shares|=q.share!=null&&q.share[i]!=(byte)255; prints|=q.print!=null&&q.print[i]!=(byte)255; }
+                if(!covered) continue;
+                if(count==at.length) at=Arrays.copyOf(at,count*2);
+                at[count++]=i;
+            }
+        }
+        if(count==0) return;
+        Layer keep=selected;
+        try {
+            begin(target,0,1);
+            if(shares&&share==null) { bound.share=paper(width,height); share=bound.share; }
+            if(prints&&print==null) { bound.print=paper(width,height); print=bound.print; }
+            int was=bound.kinds; if(was==0&&bound.covers()) was=KIND_ALL;
+            // A bare base taking two kinds at once: every pixel with coverage gets its own byte, but the file wants a base (1 to 7).
+            if(Integer.bitCount(was|kinds)>1&&kind==null) { bound.kindBase=(byte)(was!=0?was:kinds); bound.kind=new byte[width*height]; kind=bound.kind; }
+            bound.kinds=(byte)(was|kinds);
+            for(int c=0;c<count;c++) {
+                int i=at[c], a=alpha[i]&255, own=a==0?0:bound.kindsAt(i), perm=0;
+                // Composed as the page composes them: coverage, tone times coverage, the coverage the eraser leaves.
+                double cover=a/255.0, ink=(tones[i]&255)*cover, kept=share==null||a==0?0:kept(a,share[i]&255)/255.0;
+                if(kept>0) perm=bound.permanentAt(i);
+                int printed=print==null?255:print[i]&255;
+                for(Layer q:above) {
+                    int qa=q.alpha[i]&255;
+                    if(qa==0) continue;
+                    double f=qa/255.0, qk=q.share==null?0:kept(qa,q.share[i]&255)/255.0;
+                    ink=(q.tones[i]&255)*f+ink*(1-f); cover=f+cover*(1-f); kept=qk+kept*(1-qk);
+                    own|=q.kindsAt(i); if(qk>0) perm|=q.kindsAt(i);
+                    if(q.print!=null) printed=Math.min(printed,q.print[i]&255);
+                }
+                int na=(int)Math.round(cover*255), nk=Math.min(na,(int)Math.round(kept*255));
+                put(i,na==0?255:Math.min(255,(int)Math.round(ink/cover)),na,shareOf(nk,na),printed,own|perm<<PERMANENT);
+            }
+            finishWithPrevious();
+            // Each plane above lets go of what sank.
+            for(Layer q:above) {
+                begin(q,0,1);
+                for(int c=0;c<count;c++) if(alpha[at[c]]!=0) put(at[c],tones[at[c]]&255,0,255,255,0);
+                finishWithPrevious();
+            }
+        } finally { selected=keep; bind(selected); }
+    }
+    /** Inkwash: writes pixel {@code i} of the bound layer whole (tone, coverage, and its share, print tone and kinds where it keeps them), capturing its tile first. */
+    private void put(int i,int gray,int coverage,int kept,int printed,int kinds) {
+        int x=i%width, y=i/width;
+        capture((y/TILE)*columns()+x/TILE);
+        writable();
+        tones[i]=(byte)gray; alpha[i]=(byte)coverage;
+        if(share!=null) share[i]=(byte)kept;
+        if(print!=null) print[i]=(byte)printed;
+        if(kind!=null) kind[i]=(byte)kinds;
+        markDirty(x,y,x+1,y+1);
+    }
+    /** Inkwash: whether a mark on {@code layer} still changes by the clock ({@link FadingInk}). */
+    private boolean fadesOn(Layer layer) { for(FadingInk.Mark m:fades) if(m.layer==layer) return true; return false; }
     boolean canUndo() { return !locked() && !undo.isEmpty(); }
     /** The bytes Undo and Redo hold (shared uniform tiles count none: {@link #stepBytes}). */
     int historyBytes() { return historyBytes; }
@@ -2275,7 +2698,7 @@ final class ToneDocument {
         idle(); boolean marked=hasMask();
         for(Layer layer:layers) marked|=layer.marked();
         if(!marked)return false;
-        StackState old=new StackState(this); blankLayers(); stackEdit(old); logClear(); return true;
+        StackState old=new StackState(this); blankLayers(); stackEdit(old).cleared=true; logClear(); return true;
     }
     /**
      * Inkwash: Clear page ({@link PageClear}): every layer's marks, hidden ones too, the masking fluid, the magnets and
@@ -2285,7 +2708,7 @@ final class ToneDocument {
      */
     boolean clearPage() {
         idle(); if(unmarked()) return false;
-        StackState old=new StackState(this); blankLayers(); magnets=Magnets.NONE; wear=null; repaper(); stackEdit(old); logClear(); return true;
+        StackState old=new StackState(this); blankLayers(); magnets=Magnets.NONE; texts=TextBoxes.NONE; wear=null; repaper(); stackEdit(old).cleared=true; logClear(); return true;
     }
     /** Every layer swapped for a blank one like it, and no masking fluid. */
     private void blankLayers() {
@@ -2317,7 +2740,7 @@ final class ToneDocument {
         // Locked means locked (Timed Pages): a page whose time ran out has no Undo and no Redo.
         if (locked() || source.isEmpty()) return false;
         Edit edit = source.removeLast();
-        if(edit.magnetsAfter!=null) { Magnets to=forward?edit.magnetsAfter:edit.magnetsBefore; magnetAreas.addAll(Magnets.changed(magnets,to)); magnets=to; revision++; }
+        if(edit.magnetsAfter!=null) { Magnets to=forward?edit.magnetsAfter:edit.magnetsBefore; magnetsChanged(Magnets.changed(magnets,to)); magnets=to; revision++; }
         else if(edit.layer==null) { (forward?edit.next:edit.previous).restore(this); revision++; markAllDirty(); }
         else {
             int index=ownerOf(edit.layer);
@@ -2326,6 +2749,8 @@ final class ToneDocument {
             for (TileEdit tile : edit.tiles) restoreTile(tile.key, forward ? tile.after : tile.before, forward ? tile.shareAfter : tile.shareBefore, forward ? tile.printAfter : tile.printBefore, forward ? tile.kindAfter : tile.kindBefore);
             if(index<0) bind(selected);
         }
+        if(edit.linesLayer!=null) { edit.linesLayer.lines=forward?edit.linesAfter:edit.linesBefore; revision++; }
+        edit.undone = !forward;
         target.addLast(edit);
         // Linked edits move together: undo continues past a linked edit; redo takes those linked after it.
         if (!forward && edit.linked && !source.isEmpty()) travel(source, target, false);
@@ -2341,19 +2766,27 @@ final class ToneDocument {
     /** Beside a pixel's tone and coverage in {@link #stepFade}: it is back to one never painted. */
     private static final int BLANK = 1 << 16;
     /** Whether some mark on the page still changes by the clock. */
-    boolean fading() { return !fades.isEmpty(); }
-    /** The marks changing by the clock, oldest first (for the checks and the file). */
+    boolean fading() { return !fades.isEmpty() || !pending.isEmpty(); }
+    /** The marks changing by the clock, oldest first (for the checks and the file); Later's media's still being worked out not yet. */
     java.util.List<FadingInk.Mark> fades() { return java.util.Collections.unmodifiableList(fades); }
     /** The marks read from a file ({@link DocumentCodec}): no Undo step. */
     void placeFades(java.util.List<FadingInk.Mark> read) { fades.clear(); fades.addAll(read); }
-    /** The clock time the next mark should step, or {@link Long#MAX_VALUE} when none changes. */
-    long nextFade() { long t = Long.MAX_VALUE; for (FadingInk.Mark m : fades) t = Math.min(t, m.next()); return t; }
+    /** How often the ticker looks whether Later's media's work is in, ms. */
+    static final int ADOPT_MS = 100;
+    /** The clock time the next mark should step, or {@link Long#MAX_VALUE} when none changes (soon, while Later's media's work is out). */
+    long nextFade() {
+        long t = Long.MAX_VALUE;
+        for (FadingInk.Mark m : fades) t = Math.min(t, m.next());
+        for (java.util.concurrent.FutureTask<FadingInk.Mark> task : pending) t = Math.min(t, FadingInk.now() + (task.isDone() ? 0 : ADOPT_MS));
+        return t;
+    }
     /**
      * The tiles every Undo step since {@code mark} ({@link #lastStep} before them; null: from the first) changed on a
      * layer of the page become a mark changing by the clock from {@code now} ({@code spec}: Fading or Lemon Juice), one a
      * layer, as they were before the first and as the last left them; Lemon Juice shows its faint trace at once. Where a
      * mark of the same kind still changing lay under it, the new one changes from what lay under that (fresh fading ink
-     * wets the old again). The page keeps at most {@link #MOST_FADING} bytes a pixel of them: past it the oldest ends now.
+     * wets the old again). Later's media change it from as laid to what the technique leaves instead ({@link #finished}).
+     * The page keeps at most {@link #MOST_FADING} bytes a pixel of them: past it the oldest ends now.
      */
     void fadeSince(Object mark, FadingInk.Spec spec, long now) {
         idle();
@@ -2371,18 +2804,22 @@ final class ToneDocument {
             int[] keys = new int[n];
             byte[][] before = new byte[n][], after = new byte[n][];
             for (Map.Entry<Integer, byte[][]> t : on.getValue().entrySet()) { keys[j] = t.getKey(); before[j] = t.getValue()[0]; after[j] = t.getValue()[1]; j++; }
-            fades.add(rewet(new FadingInk.Mark(on.getKey(), width, height, spec.lemon, spec.ms, now, -1, keys, before, after)));
+            if (FadingInk.media(spec.kind)) {
+                java.util.concurrent.FutureTask<FadingInk.Mark> task = finished(on.getKey(), keys, before, after, since, spec, now);
+                if (task != null) { pending.add(task); laterWork.execute(task); }
+                continue;
+            }
+            fades.add(rewet(new FadingInk.Mark(on.getKey(), width, height, spec.kind, spec.ms, now, -1, keys, before, after, null)));
             stepFade(fades.size() - 1, now, false);
         }
-        long held = 0;
-        for (FadingInk.Mark m : fades) held += m.bytes();
-        while (held > MOST_FADING * (long) width * height && fades.size() > 1) { held -= fades.get(0).bytes(); stepFade(0, fades.get(0).end(), false); }
+        trimFades();
+        adopt();
     }
     /** {@code m} changing from what lay under a mark of its kind still changing, where it lays over that one's pixels as they show. */
     private FadingInk.Mark rewet(FadingInk.Mark m) {
         byte[][] before = m.before;
         for (FadingInk.Mark old : fades) {
-            if (old.layer != m.layer || old.lemon != m.lemon || old.width != m.width || old.height != m.height) continue;
+            if (old.layer != m.layer || old.kind != m.kind || old.width != m.width || old.height != m.height) continue;
             HashMap<Integer, Integer> at = new HashMap<>();
             for (int j = 0; j < old.keys.length; j++) at.put(old.keys[j], j);
             for (int j = 0; j < m.keys.length; j++) {
@@ -2400,7 +2837,113 @@ final class ToneDocument {
                 }
             }
         }
-        return before == m.before ? m : new FadingInk.Mark(m.layer, m.width, m.height, m.lemon, m.ms, m.born, m.shown, m.keys, before, m.after);
+        return before == m.before ? m : new FadingInk.Mark(m.layer, m.width, m.height, m.kind, m.ms, m.born, m.shown, m.keys, before, m.after, null);
+    }
+    /**
+     * Later's media ({@link LaterMedia}): the stroke's mark on {@code layer} ({@code keys}, its tiles {@code before} it and
+     * as laid, {@code after}; {@code since}, the Undo steps it made) changing from as laid to what the technique leaves,
+     * worked out now over its tiles and as far past them as the technique reaches. A tile past them joins the stroke's
+     * last step on the layer, as it was, so Undo takes back what grows there too. Null when the technique changes nothing.
+     */
+    private java.util.concurrent.FutureTask<FadingInk.Mark> finished(Layer layer, int[] keys, byte[][] before, byte[][] after, ArrayList<Edit> since, FadingInk.Spec spec, long now) {
+        int cols = columns(), margin = LaterMedia.margin(spec);
+        // The pixels the stroke changed, and the box round them, out to whole tiles.
+        int l = width, t = height, r = -1, b = -1;
+        for (int j = 0; j < keys.length; j++) {
+            int x0 = keys[j] % cols * TILE, y0 = keys[j] / cols * TILE, w = Math.min(TILE, width - x0), half = after[j].length / 2;
+            for (int p = 0; p < half; p++) if (before[j][p] != after[j][p] || before[j][half + p] != after[j][half + p]) {
+                int x = x0 + p % w, y = y0 + p / w;
+                l = Math.min(l, x); r = Math.max(r, x); t = Math.min(t, y); b = Math.max(b, y);
+            }
+        }
+        if (r < 0) return null;
+        l = Math.max(0, l - margin) / TILE * TILE; t = Math.max(0, t - margin) / TILE * TILE;
+        r = Math.min(width - 1, ((r + margin) / TILE + 1) * TILE - 1); b = Math.min(height - 1, ((b + margin) / TILE + 1) * TILE - 1);
+        final int L = l, T = t, w = r - l + 1, h = b - t + 1;
+        byte[] tones = new byte[w * h], alpha = new byte[w * h];
+        boolean[] mark = new boolean[w * h];
+        for (int y = 0; y < h; y++) { System.arraycopy(layer.tones, (t + y) * width + l, tones, y * w, w); System.arraycopy(layer.alpha, (t + y) * width + l, alpha, y * w, w); }
+        for (int j = 0; j < keys.length; j++) {
+            int x0 = keys[j] % cols * TILE, y0 = keys[j] / cols * TILE, tw = Math.min(TILE, width - x0), half = after[j].length / 2;
+            for (int p = 0; p < half; p++) {
+                int x = x0 + p % tw - l, y = y0 + p / tw - t;
+                if (x >= 0 && y >= 0 && x < w && y < h && (before[j][p] != after[j][p] || before[j][half + p] != after[j][half + p])) mark[y * w + x] = true;
+            }
+        }
+        ArrayList<Edit> steps = new ArrayList<>();
+        java.util.HashSet<Integer> stepped = new java.util.HashSet<>();
+        for (Edit e : since) if (e.layer == layer && e.tiles != null) { steps.add(e); for (TileEdit tile : e.tiles) stepped.add(tile.key); }
+        // A tile the technique may grow into joins the stroke's last step now, as it is, so the stroke's Undo puts it
+        // back whenever the work is done; the clock carries the step's after side on.
+        Edit last = steps.get(steps.size() - 1);
+        if (margin > 0) for (int ty = t / TILE; ty <= b / TILE; ty++) for (int tx = l / TILE; tx <= r / TILE; tx++) {
+            int key = ty * cols + tx;
+            if (stepped.contains(key)) continue;
+            byte[] as = shared(tile(tones, alpha, w, tx * TILE - l, ty * TILE - t, Math.min(TILE, width - tx * TILE), Math.min(TILE, height - ty * TILE)), true);
+            byte[] shares = layer.share == null ? null : shared(copyPlane(layer.share, key), false), prints = layer.print == null ? null : shared(copyPlane(layer.print, key), false), kinds = layer.kind == null ? null : shared(copyPlane(layer.kind, key), false);
+            last.tiles.add(new TileEdit(key, as, as, shares, shares, prints, prints, kinds, kinds));
+            int more = 64 + stepBytes(as) + stepBytes(shares) + stepBytes(prints) + stepBytes(kinds);
+            last.bytes += more; historyBytes += more;
+        }
+        // The work itself, on copies only, so it may run off the drawing thread ({@link #laterWork}).
+        final int pageW = width, pageH = height;
+        return new java.util.concurrent.FutureTask<>(() -> {
+            byte[] laidTones = tones.clone(), laidAlpha = alpha.clone();
+            LaterMedia.finish(spec, L, T, w, h, tones, alpha, mark);
+            // Each tile the technique changes: as laid, and finished.
+            ArrayList<Integer> changed = new ArrayList<>();
+            ArrayList<byte[]> laid = new ArrayList<>(), done = new ArrayList<>();
+            for (int ty = T / TILE; ty <= (T + h - 1) / TILE; ty++) for (int tx = L / TILE; tx <= (L + w - 1) / TILE; tx++) {
+                int tw = Math.min(TILE, pageW - tx * TILE), th = Math.min(TILE, pageH - ty * TILE);
+                byte[] as = tile(laidTones, laidAlpha, w, tx * TILE - L, ty * TILE - T, tw, th), to = tile(tones, alpha, w, tx * TILE - L, ty * TILE - T, tw, th);
+                if (Arrays.equals(as, to)) continue;
+                changed.add(ty * cols + tx); laid.add(as); done.add(to);
+            }
+            if (changed.isEmpty()) return null;
+            int[] k = new int[changed.size()];
+            for (int j = 0; j < k.length; j++) k[j] = changed.get(j);
+            return new FadingInk.Mark(layer, pageW, pageH, spec.kind, spec.ms, now, -1, k, laid.toArray(new byte[0][]), done.toArray(new byte[0][]), steps);
+        });
+    }
+    /** The {@code tw × th} tile at {@code x, y} of a region {@code w} wide, as a tile's bytes: tones then coverages. */
+    private static byte[] tile(byte[] tones, byte[] alpha, int w, int x, int y, int tw, int th) {
+        byte[] out = new byte[2 * tw * th];
+        for (int row = 0; row < th; row++) { System.arraycopy(tones, (y + row) * w + x, out, row * tw, tw); System.arraycopy(alpha, (y + row) * w + x, out, tw * th + row * tw, tw); }
+        return out;
+    }
+    /**
+     * Where Later's media work out a mark ({@link #finished}): at once on the caller's thread unless the app gives it a
+     * worker (the drawing screen does, so a lift never waits on it: the stroke shows as laid, and the change starts once
+     * the work is in). Static: one worker for every page.
+     */
+    static java.util.concurrent.Executor laterWork = Runnable::run;
+    /** Later's media's marks being worked out ({@link #laterWork}), oldest first; {@link #adopt} takes them in. */
+    private final ArrayList<java.util.concurrent.FutureTask<FadingInk.Mark>> pending = new ArrayList<>();
+    /** The marks worked out since take their place among the page's (a save waits for the rest: {@link Snapshot}). Not during a gesture. */
+    private void adopt() {
+        if (pending.isEmpty()) return;
+        boolean any = false;
+        for (java.util.Iterator<java.util.concurrent.FutureTask<FadingInk.Mark>> i = pending.iterator(); i.hasNext(); ) {
+            java.util.concurrent.FutureTask<FadingInk.Mark> task = i.next();
+            if (!task.isDone()) continue;
+            i.remove();
+            FadingInk.Mark m = joined(task);
+            if (m != null && m.width == width && m.height == height) { fades.add(m); any = true; }
+        }
+        if (any) trimFades();
+    }
+    /** {@code task}'s mark, worked out here if no worker has begun it, else waited for; null for none. */
+    private static FadingInk.Mark joined(java.util.concurrent.FutureTask<FadingInk.Mark> task) {
+        task.run();
+        try { return task.get(); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); return null; }
+        catch (java.util.concurrent.ExecutionException e) { throw new IllegalStateException("Later's media", e.getCause()); }
+    }
+    /** The page keeps at most {@link #MOST_FADING} bytes a pixel of marks: past it the oldest end now. */
+    private void trimFades() {
+        long held = 0;
+        for (FadingInk.Mark m : fades) held += m.bytes();
+        while (held > MOST_FADING * (long) width * height && fades.size() > 1) { held -= fades.get(0).bytes(); stepFade(0, fades.get(0).end(), false); }
     }
     /**
      * Every mark due by clock time {@code now} steps there ({@link FadingInk}): each pixel still showing what the mark
@@ -2412,6 +2955,7 @@ final class ToneDocument {
      */
     int fade(long now, Runnable shown) {
         idle();
+        adopt();
         int out = 0;
         for (int i = 0; i < fades.size(); ) {
             FadingInk.Mark m = fades.get(i);
@@ -2438,6 +2982,13 @@ final class ToneDocument {
         int cols = m.columns();
         int[] at = new int[TILE * TILE], from = new int[TILE * TILE], to = new int[TILE * TILE];
         boolean onPage = m.width == width && m.height == height && ownerOf(layer) >= 0;
+        // Later's media: its stroke's own steps hold it as laid on their after side only (their before side is the page
+        // before the stroke, and a pixel the stroke left alone may look like the mark); older steps never held it. While
+        // the stroke is undone the page shows none of it: only the step's copy goes on by the clock, for Redo.
+        java.util.List<?> own = m.steps;
+        Edit last = own == null || own.isEmpty() ? null : (Edit) own.get(own.size() - 1);
+        long first = last == null ? Long.MIN_VALUE : ((Edit) own.get(0)).serial;
+        boolean off = last != null && last.undone;
         for (int j = 0; j < m.keys.length && t != m.shown; j++) {
             int key = m.keys[j], x0 = key % cols * TILE, y0 = key / cols * TILE, w = Math.min(TILE, m.width - x0), half = m.before[j].length / 2, count = 0;
             byte[] b = m.before[j], a = m.after[j];
@@ -2450,7 +3001,7 @@ final class ToneDocument {
                 if (was == next && !(done && share == 0 && a0 == 0)) continue;
                 at[count] = p; from[count] = was; to[count] = next | (a0 == 0 && share == 0 ? BLANK : 0); count++;
                 int x = x0 + p % w, y = y0 + p / w, k = y * m.width + x;
-                if ((layer.tones[k] & 255) != was >>> 8 || (layer.alpha[k] & 255) != (was & 255)) continue;
+                if (off || (layer.tones[k] & 255) != was >>> 8 || (layer.alpha[k] & 255) != (was & 255)) continue;
                 if (!changed) { own(layer); revision++; changed = true; }
                 layer.tones[k] = (byte) (next >>> 8); layer.alpha[k] = (byte) next;
                 // Back to a pixel never painted: no share or print tone (255) either.
@@ -2461,8 +3012,9 @@ final class ToneDocument {
             if (count == 0) continue;
             for (Edit e : steps) for (int k = 0; k < e.tiles.size(); k++) {
                 TileEdit tile = e.tiles.get(k);
-                if (tile.key != key || tile.before.length != 2 * half) continue;
-                byte[][] before = patch(tile.before, tile.shareBefore, tile.printBefore, half, at, from, to, count), after = patch(tile.after, tile.shareAfter, tile.printAfter, half, at, from, to, count);
+                if (tile.key != key || tile.before.length != 2 * half || e.serial < first) continue;
+                boolean mine = own != null && own.contains(e);
+                byte[][] before = mine ? null : patch(tile.before, tile.shareBefore, tile.printBefore, half, at, from, to, count), after = patch(tile.after, tile.shareAfter, tile.printAfter, half, at, from, to, count);
                 if (before == null && after == null) continue;
                 if (before == null) before = new byte[][]{tile.before, tile.shareBefore, tile.printBefore};
                 if (after == null) after = new byte[][]{tile.after, tile.shareAfter, tile.printAfter};
@@ -2523,7 +3075,9 @@ final class ToneDocument {
         }
     }
     private int columns() { return (width + TILE - 1) / TILE; }
-    private byte[] copyTile(int key) {
+    private byte[] copyTile(int key) { return copyTile(tones, alpha, key); }
+    /** Tile {@code key} of a layer's {@code tones} and {@code alpha}: its tones, then its coverages, row by row. */
+    private byte[] copyTile(byte[] tones, byte[] alpha, int key) {
         int x = key % columns() * TILE, y = key / columns() * TILE;
         int w = Math.min(TILE, width - x), h = Math.min(TILE, height - y);
         byte[] copy = new byte[w * h * 2];
@@ -2594,8 +3148,7 @@ final class ToneDocument {
             if (print != null) { if (printed != null) System.arraycopy(printed, row * w, print, (y + row) * width + x, w); else Arrays.fill(print, (y + row) * width + x, (y + row) * width + x + w, (byte)255); }
             if (kind != null) { if (kinded != null) System.arraycopy(kinded, row * w, kind, (y + row) * width + x, w); else Arrays.fill(kind, (y + row) * width + x, (y + row) * width + x + w, (byte)0); }
         }
-        left = Math.min(left, x); top = Math.min(top, y);
-        right = Math.max(right, x + w); bottom = Math.max(bottom, y + h);
+        grow(x, y, x + w, y + h);
     }
     private static final class TileEdit {
         final int key; final byte[] before, after;
@@ -2621,18 +3174,20 @@ final class ToneDocument {
         final Magnets magnets;
         /** Inkwash: the page's mirrors (immutable, shared): placed, cleared and kept in structural steps. */
         final Mirrors mirrors;
+        /** Inkwash: the page's text boxes (immutable, shared): every change to them is a structural step ({@link #setTexts}). */
+        final TextBoxes texts;
         /** Inkwash: where a cover's design is rubbed off (immutable, shared). */
         final CoverWear wear;
         StackState(ToneDocument doc) {
             wear=doc.wear;
-            layers=new ArrayList<>(doc.layers); mask=doc.mask; active=doc.active; width=doc.width; height=doc.height; paper=doc.paper; magnets=doc.magnets; mirrors=doc.mirrors;
+            layers=new ArrayList<>(doc.layers); mask=doc.mask; active=doc.active; width=doc.width; height=doc.height; paper=doc.paper; magnets=doc.magnets; mirrors=doc.mirrors; texts=doc.texts;
             names=new String[layers.size()]; visible=new boolean[layers.size()]; opacity=new int[layers.size()];
             for(int i=0;i<layers.size();i++) { names[i]=layers.get(i).name; visible[i]=layers.get(i).visible; opacity[i]=layers.get(i).opacity; }
         }
         void restore(ToneDocument doc) {
             // The magnets as they were (the history runs in order: only Clear page changes them in a structural step);
             // the whole page is drawn again after one, the magnets with it.
-            doc.width=width; doc.height=height; doc.paper=paper; doc.magnets=magnets;
+            doc.width=width; doc.height=height; doc.paper=paper; doc.magnets=magnets; doc.texts=texts;
             if(doc.wear!=wear) { doc.wear=wear; doc.repaper(); }
             // The mirrors as they were, on or off and their guides shown or not as they are now (the Mirrors and Show
             // Guides rows are no Undo step).
@@ -2644,7 +3199,11 @@ final class ToneDocument {
         }
     }
     private static final class Edit {
-        final ArrayList<TileEdit> tiles; final int bytes;
+        final ArrayList<TileEdit> tiles;
+        /** Inkwash: not final, as Later's media add the tiles they grow into to their stroke's step ({@link #finished}). */
+        int bytes;
+        /** Inkwash: undone (on the Redo side), or undone and thrown away; Later's media keep off the page meanwhile. */
+        boolean undone;
         /** Inkwash: counts the steps made, so a stroke's log entry knows its step ({@link StrokeLog}). */
         private static long made;
         final long serial=++made;
@@ -2652,6 +3211,11 @@ final class ToneDocument {
         final StackState previous,next;
         /** Undone and redone together with the edit before it; see {@link #finishWithPrevious}. */
         boolean linked;
+        /** Inkwash: the Vector Ink lines this step changed on {@link #linesLayer} ({@link #changeLines}), before and after; null layer: none. */
+        Layer linesLayer;
+        VectorLines linesBefore, linesAfter;
+        /** Inkwash: a Clear page's step, its layers swapped for blank ones ({@link #blankLayers}), which a live Undo takes back ({@link #takeBack}). */
+        boolean cleared;
         /** Inkwash: a magnets step's magnets before and after ({@link #setMagnets}); null for any other edit. */
         final Magnets magnetsBefore, magnetsAfter;
         Edit(Magnets before,Magnets after) {

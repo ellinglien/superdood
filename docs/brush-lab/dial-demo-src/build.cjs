@@ -20,9 +20,9 @@ const face = (file, weight) => "@font-face { font-family: \"iA Writer Duo\"; fon
 const esc = t => t.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const studioRender = read(path.join(STUDIO, "render.js")), render = read(path.join(HERE, "render.js")), tiles = read(path.join(HERE, "tiles.js"));
 
-const parts = { FONTS: face("ia_writer_duo_regular.ttf", 400) + "\n" + face("ia_writer_duo_bold.ttf", 700), CSS: read(path.join(HERE, "demo.css")),
+const parts = { FONTS: face("ia_writer_duo_regular.ttf", 400) + "\n" + face("ia_writer_duo_bold.ttf", 700), CSS: read(path.join(HERE, "view.css")) + "\n" + read(path.join(HERE, "demo.css")),
   TEXTURES: tm[0], ENGINE: "\"use strict\";\n" + engine, RENDER: "\"use strict\";\n" + studioRender + "\n;\n" + render,
-  TILES: "\"use strict\";\n" + tiles, PAGE: "\"use strict\";\n" + read(path.join(HERE, "page.js")),
+  TILES: "\"use strict\";\n" + tiles, PAGE: "\"use strict\";\n" + read(path.join(HERE, "view.js")) + "\n;\n" + read(path.join(HERE, "page.js")),
   OFL: esc(read(path.join(REPO, "app", "src", "main", "assets", "fonts", "OFL.txt"))), ENGINE_FILES: files.join(", ") };
 for (const [k, v] of Object.entries(parts)) if (/<\/script/i.test(v) || ((k === "CSS" || k === "FONTS") && /<\/style/i.test(v))) throw new Error("closing tag inside " + k);
 let page = read(path.join(HERE, "page.html"));

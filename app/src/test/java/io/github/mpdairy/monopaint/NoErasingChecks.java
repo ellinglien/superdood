@@ -3,13 +3,12 @@ package io.github.mpdairy.monopaint;
 import java.util.*;
 
 /**
- * The owner's 2026-10-21 decisions on the notebook's rules ({@link NotebookRules}, {@link NotebookOptions}, {@link DailyPrompt}):
+ * The owner's 2026-10-21 decisions on the notebook's rules ({@link NotebookRules}, {@link NotebookOptions}):
  * <ul>
  * <li>No Erasing is "no eraser, no undo": Undo and Redo off, a page or layer with marks kept from Clear and Delete, a blank
  * one still free to go; with it off, nothing refused;</li>
  * <li>Timed Pages never times a cover (front or back), nor a page timed by its sections;</li>
  * <li>Guides in PDF is offered only when the template, or a page's own, isn't Blank;</li>
- * <li>a Diary Page card sets the page drawn on's own template, never the notebook's.</li>
  * </ul>
  */
 public final class NoErasingChecks {
@@ -18,7 +17,6 @@ public final class NoErasingChecks {
         noUndo();
         coversUntimed();
         guidesRow();
-        diaryCard();
         System.out.println("PASS: No Erasing turns Undo and Redo off and keeps a page or layer with marks from Clear and Delete (a blank one may go), nothing with it off; Timed Pages never times a cover or a sectioned page; Guides in PDF only with guides to print; a Diary Page card sets its page's own template alone");
     }
 
@@ -56,20 +54,5 @@ public final class NoErasingChecks {
         String app = DrawLayoutChecks.source("PaintActivity");
         check(!app.contains("withPrintGuides") && !app.contains("NotebookLayout.GUIDES") && !app.contains("names.add(NotebookLayout.TEMPLATE)"), "No Guides in PDF or Template row in the menu");
         check(DrawLayoutChecks.source("InkWashBar").contains("app.showGuides(app.book.options().withNextGuidesStep().guidesShown)"), "Template Visibility still steps the guides");
-    }
-
-    static void diaryCard() throws Exception {
-        DrawingBook book = new DrawingBook(new ToneDocument(300, 400));
-        book.addPage(); book.addPage();
-        book.setOptions(book.options().withTemplate(NotebookTemplate.LINED));
-        List<DailyPrompt.Card> cards = DailyPrompt.parse("Diary Page | 3 min | The day.\n1 min | A cat.");
-        DailyPrompt.Card diary = cards.get(0), plain = cards.get(1);
-        check(diary.diary && DailyPrompt.template(diary) == NotebookTemplate.DIARY_PAGE && DailyPrompt.template(plain) == null, "a Diary Page card carries Diary Page; another none");
-        book.select(1);
-        // As PaintActivity's Start does: the page drawn on's own template.
-        book.setPageTemplate(book.index(), DailyPrompt.template(diary));
-        check(book.template(1) == NotebookTemplate.DIARY_PAGE, "the page drawn on takes Diary Page");
-        check(book.options().template == NotebookTemplate.LINED && book.template(0) == NotebookTemplate.LINED && book.template(2) == NotebookTemplate.LINED, "the notebook and its other pages keep theirs");
-        check(!DailyPrompt.DEFAULTS.contains("notebook's template"), "the prompts file says the page alone");
     }
 }

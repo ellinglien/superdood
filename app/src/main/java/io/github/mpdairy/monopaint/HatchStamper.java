@@ -41,6 +41,9 @@ final class HatchStamper {
         int w = into.width, h = into.height;
         int[] rect = StrokeMath.emptyRect(w, h);
         if (meta.hatch == null) meta.hatch = new State(w, h);
+        // On a fine grid (sharp dry brushes): each dab's lines worked out at the grid's points (page px through gridX), their edges a point wide.
+        FineGrid fine = into.grid;
+        int k = fine == null ? 1 : fine.k;
         State M = meta.hatch;
         FloatTiles best = M.best;
         double pitch = pitch(P, size), lw = lineWidth(P, size);
@@ -58,32 +61,38 @@ final class HatchStamper {
                 double r = P.band(r0, pr), dk = P.dark(pr, v) * pts.own(j, q, t);
                 int layers = 1;
                 while (layers < P.layers && pr >= AT[layers]) layers++;
-                int x0 = Math.max(0, (int)Math.floor(x - r - 1)), x1 = Math.min(w - 1, (int)Math.ceil(x + r + 1));
-                int y0 = Math.max(0, (int)Math.floor(y - r - 1)), y1 = Math.min(h - 1, (int)Math.ceil(y + r + 1));
-                double R2 = (r + .5) * (r + .5);
+                int x0, x1, y0, y1;
+                if (fine == null) {
+                    x0 = Math.max(0, (int)Math.floor(x - r - 1)); x1 = Math.min(w - 1, (int)Math.ceil(x + r + 1));
+                    y0 = Math.max(0, (int)Math.floor(y - r - 1)); y1 = Math.min(h - 1, (int)Math.ceil(y + r + 1));
+                } else {
+                    x0 = Math.max(0, (int)Math.floor(fine.gridX(x - r - 1))); x1 = Math.min(w - 1, (int)Math.ceil(fine.gridX(x + r + 1)));
+                    y0 = Math.max(0, (int)Math.floor(fine.gridY(y - r - 1))); y1 = Math.min(h - 1, (int)Math.ceil(fine.gridY(y + r + 1)));
+                }
+                double R2 = fine == null ? (r + .5) * (r + .5) : (r + .5 / k) * (r + .5 / k);
                 for (int py = y0; py <= y1; py++) {
-                    double dy = py + .5 - y, room = R2 - dy * dy;
+                    double cyp = fine == null ? py + .5 : (py + .5 + fine.oy) / k, dy = cyp - y, room = R2 - dy * dy;
                     if (room < 0) continue;
                     // The row's pixels inside the disc (each still tested, as the lab's), a tile's run at a time.
                     double half = Math.sqrt(room);
-                    int a = Math.max(x0, (int)Math.floor(x - half - .5)), b = Math.min(x1, (int)Math.ceil(x + half - .5));
+                    int a = fine == null ? Math.max(x0, (int)Math.floor(x - half - .5)) : x0, b = fine == null ? Math.min(x1, (int)Math.ceil(x + half - .5)) : x1;
                     int ty = best.tileOf(py), row = best.rowAt(py);
                     for (int px = a; px <= b; ) {
                         int tx = best.tileOf(px), end = Math.min(b, best.tileEnd(tx));
                         float[] near = best.tile(tx, ty, true), cover = null;
                         for (; px <= end; px++) {
-                            double dx = px + .5 - x, d2 = dx * dx + dy * dy;
+                            double cxp = fine == null ? px + .5 : (px + .5 + fine.ox) / k, dx = cxp - x, d2 = dx * dx + dy * dy;
                             int i = row | best.at(px);
                             if (d2 > R2 || d2 >= near[i]) continue;
                             near[i] = (float)d2;
-                            double X = P.fixed ? px + .5 : d + dx * ux + dy * uy, Y = P.fixed ? py + .5 : -dx * uy + dy * ux;
+                            double X = P.fixed ? cxp : d + dx * ux + dy * uy, Y = P.fixed ? cyp : -dx * uy + dy * ux;
                             double cov = 0;
                             for (int L = 0; L < layers; L++) {
                                 double m = (P.fixed ? X * sn[L] + Y * cs[L] : -X * sn[L] + Y * cs[L]) / pitch + L * .37, f = Math.abs(m - Math.round(m)) * pitch;
-                                double c = clamp(lw / 2 + .5 - f);
+                                double c = fine == null ? clamp(lw / 2 + .5 - f) : clamp((lw / 2 - f) * k + .5);
                                 if (c > cov) cov = c;
                             }
-                            float out = (float)(cov * clamp(r + .5 - Math.sqrt(d2)) * dk);
+                            float out = (float)(cov * (fine == null ? clamp(r + .5 - Math.sqrt(d2)) : clamp((r - Math.sqrt(d2)) * k + .5)) * dk);
                             if (cover == null) cover = into.tile(tx, ty, out != into.fill);
                             if (cover != null) cover[i] = out;
                             if (wetD != null && out > 0) wetD.set(px, py, (float)d);

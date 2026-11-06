@@ -1,4 +1,4 @@
-<!-- Drawn for My Bad Drawings in Iconoir's style: an open hand holding a pen, its thumb across it. -->
+<!-- Drawn for Superdood in Iconoir's style: an open hand holding a pen, its thumb across it. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
     <group android:scaleX="0.88" android:scaleY="0.88" android:translateX="1.2" android:pivotX="12" android:pivotY="22">
         <path android:pathData="M7.5 12.5V5C7.5 3.2 10.5 3.2 10.5 5V11" android:strokeColor="#000000" android:strokeWidth="1.705" android:strokeLineCap="round" android:strokeLineJoin="round" />

@@ -112,7 +112,7 @@ const ok = (cond, what) => { n++; if (!cond) fail++; console.log((cond ? "ok   "
     mk("hake-wash", "hake", "wash", "cold press"), mk("spiro-ink", "spiro", "ink", "plain"), mk("white-ink", "round", "ink", "plain", B => { B.medium.d.blend = 1; }),
     mk("Café crème", "round", "graphite", "laid")];
   const t0 = Date.now();
-  const bytes = await E.procreateSet(brushes, "Scribulor");
+  const bytes = await E.procreateSet(brushes, "Superdood");
   fs.mkdirSync(path.join(__dirname, "out"), { recursive: true });
   fs.writeFileSync(path.join(__dirname, "out", "check.brushset"), bytes);
   ok(bytes.length > 1000, "made a set of " + brushes.length + " brushes: " + (bytes.length / 1024 / 1024).toFixed(2) + " MB in " + ((Date.now() - t0) / 1000).toFixed(1) + " s");
@@ -123,7 +123,7 @@ const ok = (cond, what) => { n++; if (!cond) fail++; console.log((cond ? "ok   "
   catch (e) { ok(e.code === "ENOENT", e.code === "ENOENT" ? "unzip not found: its test skipped" : "zip: unzip -t: " + String(e.stdout || e.message).trim()); }
   const plist = files.get("brushset.plist").data.toString("utf8");
   const ids = [...plist.matchAll(/<string>([^<]*)<\/string>/g)].map(m => m[1]), setName = ids.pop();
-  ok(setName === "Scribulor" && /<key>name<\/key>/.test(plist) && /<key>brushes<\/key>/.test(plist), "brushset.plist: the set's name and its brushes");
+  ok(setName === "Superdood" && /<key>name<\/key>/.test(plist) && /<key>brushes<\/key>/.test(plist), "brushset.plist: the set's name and its brushes");
   ok(ids.length === brushes.length && new Set(ids).size === ids.length && ids.every(u => /^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/.test(u)), "one upper-case UUID a brush, all different");
   const tops = new Set(names.filter(x => x !== "brushset.plist").map(x => x.split("/")[0]));
   ok(tops.size === ids.length && ids.every(u => tops.has(u)), "a folder for each listed brush, and nothing else");

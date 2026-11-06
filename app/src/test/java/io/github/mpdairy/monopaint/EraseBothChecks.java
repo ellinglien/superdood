@@ -83,7 +83,7 @@ public final class EraseBothChecks {
         check(stroke.finish(), "The erase changes the page");
         for (int y = 0; y < 150; y++) for (int x = 0; x < 200; x++)
             check(doc.compositeTone(x, y) == predicted[y * 200 + x], "The page after the lift is what the preview showed, at " + x + "," + y);
-        // Over other pairs, the preview shows what they hold where the selected pair's paint went.
+        // Over other pairs: every pair is erased under it (the owner, 2026-11-05), and the preview shows the page so.
         ToneDocument pairs = InkWashLayers.blank(200, 150);
         InkWashLayers.add(pairs, true); InkWashLayers.add(pairs, true);
         for (int layer = 0; layer < 6; layer++) {
@@ -97,15 +97,16 @@ public final class EraseBothChecks {
         for (int y = 0; y < 150; y += 6) middle.sample(100, y, 0, Float.NaN, Float.NaN);
         int[] shown = new int[200 * 150];
         middle.erasedTones(0, 0, 200, 150, shown);
-        check(middle.finish(), "Erasing the middle pair changes the page");
+        check(middle.finish(), "Erasing over the middle pair changes the page");
         int previewed = 0;
         for (int y = 0; y < 150; y++) for (int x = 0; x < 200; x++) {
             int tone = shown[y * 200 + x];
             if (tone < 0) continue;
             previewed++;
-            check(pairs.compositeTone(x, y) == tone, "The page after the lift is what the preview showed over the other pairs, at " + x + "," + y);
+            check(pairs.compositeTone(x, y) == tone, "The page after the lift is what the preview showed over every pair, at " + x + "," + y);
         }
-        check(previewed > 1000 && pairs.compositeTone(100, 95) < 255 && pairs.compositeTone(100, 45) < 255, "It previewed, and the pairs above and below stay");
+        check(previewed > 1000 && pairs.compositeTone(100, 95) == 255 && pairs.compositeTone(100, 45) == 255 && pairs.compositeTone(10, 95) < 255 && pairs.compositeTone(10, 45) < 255,
+                "It previewed, the pairs above and below erased under it and kept beside it");
     }
     private static void check(boolean valid, String message) { if (!valid) throw new AssertionError(message); }
     /**

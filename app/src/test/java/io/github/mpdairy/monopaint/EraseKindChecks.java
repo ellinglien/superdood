@@ -24,13 +24,13 @@ public final class EraseKindChecks {
             System.out.println(pixelAt(mixed()));
             return;
         }
-        media(); tagging(); targeted(); paint(); everything(); oldPages(); ghost(); wet(); undo(); file();
+        media(); tagging(); targeted(); paint(); everything(); oldPages(); ghost(); wet(); undo(); file(); planeless();
         System.out.println("PASS: Erase kind (" + checks + " checks): each Medium lays Pen, Paint or Pencil on its kind's plane, opaque paint on a plane of its own; "
                 + "Pen, Paint and Dry Media each erase their planes whole (permanent paint too) and leave the others byte for byte, pencil under ink coming off exactly; "
                 + "charcoal's ghost goes with Dry Media and stays under Pen; "
                 + "Everything takes every mark whole, permanent ink too, and its preview agrees; paint from before has no kind and erases as ever; a Slow wash and a Float print are on their planes; "
                 + "Undo and Redo bring strokes and erasing back with their kinds; the file keeps the planes, a drawing never drawn on with them is written as before, "
-                + "an older reader skips the sections, a corrupt one is refused");
+                + "an older reader skips the sections, a corrupt one is refused; a layer of several kinds and no plane (a Lasso's picture, a merge) reopens as it was");
     }
 
     static void check(boolean ok, String what) { checks++; if (!ok) throw new AssertionError(what); }
@@ -353,11 +353,54 @@ public final class EraseKindChecks {
         old.begin(); for (int x = 20; x < 90; x++) old.setTone(x, 40, 30); old.finish();
         byte[] oldBytes = write(old);
         check(Arrays.equals(oldBytes, write(DocumentCodec.read(new ByteArrayInputStream(oldBytes)))) && raw(old, 1).kinds == 0, "A page of no kinds round-trips byte for byte");
-        // A corrupt section.
-        byte[] bad = tamper(bytes);
-        boolean refused = false;
-        try { DocumentCodec.read(new ByteArrayInputStream(bad)); } catch (IOException e) { refused = true; }
-        check(refused, "A section whose plane has no base kind is refused");
+        // A plane with no base kind (2026-11-02: such a notebook was written and then wouldn't open, "Invalid kind section"):
+        // written and read as paint of no known kind, which counts as all.
+        ToneDocument.Layer based = raw(DocumentCodec.read(new ByteArrayInputStream(tamper(bytes))), 0);
+        check(based.kindBase == ToneDocument.KIND_ALL && based.kinds == 7, "A plane with no base kind reads as all kinds, not refused: " + based.kindBase);
+    }
+    /**
+     * A layer of more than one kind without its plane (every pixel holds them all) is written with them as its base kind.
+     * 2026-11-02, a notebook that wouldn't open ("Invalid kind section"), pages 14 and 15: a placed picture (paint of no
+     * kind) moved by the Lasso is laid back as one piece of every kind (LassoPlanes, ToneDocument.layKinds), so its layer
+     * held three kinds, no plane and no base kind (made only with a plane), and the file wrote that base: 0. Merge leaves
+     * pen and wash so too, which then read back as all three kinds.
+     */
+    static void planeless() throws IOException {
+        ToneDocument d = new ToneDocument(W, H);
+        int[] picture = new int[40 * 30];
+        Arrays.fill(picture, 90);
+        PictureImport.lay(d, 20, 20, 40, 30, picture);
+        d.begin(1, ToneDocument.KIND_PEN); for (int x = 25; x < 55; x++) d.setTone(x, 35, 0); d.finish(); // a smile
+        FloatingSelection piece = LassoPlanes.lift(d, new float[]{10, 10, 70, 10, 70, 60, 10, 60}, 4);
+        piece.grab(FloatingSelection.MOVE); piece.drag(FloatingSelection.MOVE, 0, 0, 30, 20); piece.release();
+        check(piece.place(d), "The Lasso moves the picture and its smile");
+        ToneDocument.Layer moved = raw(d, 0);
+        check(moved.kinds == ToneDocument.KIND_ALL && moved.kind == null && moved.kindBase == 0 && moved.plane(ToneDocument.PLANE_PEN) != null,
+                "The picture moved: its layer of every kind, no plane, no base kind (the notebook's pages 14 and 15)");
+        byte[] bytes = write(d);
+        check(kindBase(bytes) == ToneDocument.KIND_ALL, "written with its kinds as its base: " + kindBase(bytes));
+        ToneDocument back = DocumentCodec.read(new ByteArrayInputStream(bytes));
+        check(same(layer(d, 0), layer(back, 0)) && Arrays.equals(write(back), bytes), "and reopened as it was, writing the same bytes");
+        // Merge: a wash and a pen line become one layer of Pen and Paint, no plane.
+        ToneDocument m = InkWashLayers.blank(W, H);
+        m.selectLayer(InkWashLayers.WASH);
+        m.begin(1, ToneDocument.KIND_PAINT); for (int x = 20; x < 60; x++) m.setTone(x, 30, 120); m.finish();
+        m.selectLayer(InkWashLayers.INK);
+        m.begin(1, ToneDocument.KIND_PEN); for (int x = 20; x < 60; x++) m.setTone(x, 50, 0); m.finish();
+        check(InkWashLayers.merge(m, null), "Merged");
+        int both = ToneDocument.KIND_PEN | ToneDocument.KIND_PAINT, at = 50 * W + 30;
+        check(raw(m, InkWashLayers.INK).kinds == both && raw(m, InkWashLayers.INK).kind == null, "Merge: Pen and Paint, no plane");
+        ToneDocument merged = DocumentCodec.read(new ByteArrayInputStream(write(m)));
+        check(raw(merged, InkWashLayers.INK).kindsAt(at) == both, "and reopened Pen and Paint, not all: " + raw(merged, InkWashLayers.INK).kindsAt(at));
+    }
+    /** The base kind {@code bytes} (a one-layer page's file) writes in its kind section, or -1 without one. */
+    static int kindBase(byte[] file) throws IOException {
+        // After the header's magic, width and height, the body deflated.
+        byte[] bytes = new java.util.zip.InflaterInputStream(new ByteArrayInputStream(file, 12, file.length - 12)).readAllBytes();
+        for (int i = 0; i + 9 < bytes.length; i++)
+            if (bytes[i] == 'K' && bytes[i + 1] == 'I' && bytes[i + 2] == 'N' && bytes[i + 3] == 'D' && java.nio.ByteBuffer.wrap(bytes, i + 4, 4).getInt() == 2 + W * H)
+                return bytes[i + 9] & 255;
+        return -1;
     }
     /** The drawing's file without its kinds (the snapshot's copies of the layers flattened, losing them), to size the sections. */
     static int withoutKinds(ToneDocument d) throws IOException {

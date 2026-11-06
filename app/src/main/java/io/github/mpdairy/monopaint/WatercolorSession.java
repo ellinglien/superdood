@@ -120,8 +120,34 @@ final class WatercolorSession {
     private void layWet(ToneDocument document) {
         int[] box = drying.box();
         int layer = drying.layer();
+        double left = drying.wetLeft();
+        long ms = drying.wetMs();
         layNow(document);
-        wetBox = box; wetLayer = layer; wetRevision = document.revision();
+        wetBox = box; wetLayer = layer; wetRevision = document.revision(); wetLeft = left; wetMs = ms;
+    }
+    /** Scrape: how much of its wet time the wash {@link #stillWet} remembers still had to come, and how long it was wet, ms. */
+    private double wetLeft;
+    private long wetMs = 1;
+    /**
+     * Scrape ({@link Carry#scrape}): how wet each pixel of {@code document}'s active layer is now, 0 to 1, or null where
+     * nothing is: wet paint by its water's freshness ({@link WetWatercolor#wetAt}), and a Slow wash still wet a moment
+     * ago ({@link #stillWet}) by how much of its drying was still to come. Read as the stroke's plane fills.
+     */
+    CarryPlane.Wet wetness(ToneDocument document) {
+        WetWatercolor paint = canvas != null && canvas.valid(document) && canvas.layer == document.activeLayer() ? canvas.wet : null;
+        int[] box = stillWet(document);
+        if (paint == null && box == null) return null;
+        float left = (float) wetLeft;
+        return (x, y) -> Math.max(paint == null ? 0 : paint.wetAt(x, y), box != null && x >= box[0] && x <= box[2] && y >= box[1] && y <= box[3] ? left : 0);
+    }
+    /**
+     * Scrape: a stroke that worked the wash {@link #stillWet} leaves it wet for the next, less the stroke's own {@code ms}.
+     * shortcut: the time between strokes isn't counted (a pen's clock, not the wall's, so it replays); count it if knives linger.
+     */
+    void keepWet(ToneDocument document, long ms) {
+        if (wetBox == null) return;
+        wetRevision = document.revision();
+        wetLeft = Math.max(0, wetLeft - ms / (double) wetMs);
     }
     /**
      * The brush a stroke of {@code b} draws with on {@code document}: itself, but Clear Water while a bath floats on
@@ -130,7 +156,7 @@ final class WatercolorSession {
      */
     ModularBrush onWater(ToneDocument document, ModularBrush b) {
         if (b == null || floating == null || document == null || b.choice(BrushPart.CARRY) != PartChoice.CLEAR_WATER
-                || b.choice(BrushPart.LIFE) == PartChoice.FLOAT || !floating.valid(document)) return b;
+                || b.floats() || !floating.valid(document)) return b;
         int pair = InkWashLayers.current(document);
         boolean ink = floating.layer == InkWashLayers.inkOf(document, pair);
         if (!ink && floating.layer != InkWashLayers.washOf(document, pair)) return b;
@@ -185,7 +211,7 @@ final class WatercolorSession {
     static boolean joins(ModularBrush brush) {
         String style = brush.style.name;
         PartChoice life = brush.choice(BrushPart.LIFE), m = brush.choice(BrushPart.MEDIUM);
-        return ("Pastels".equals(style) || "Dry brush".equals(style)) && life != PartChoice.FLOAT && life != PartChoice.WET_PAINT && m != PartChoice.RESIST && m != PartChoice.TONE;
+        return ("Pastels".equals(style) || "Dry brush".equals(style)) && !brush.floats() && life != PartChoice.WET_PAINT && m != PartChoice.RESIST && m != PartChoice.TONE;
     }
     /** The brush of the stroke joining the wet paint now ({@link #joinsWet}), or null. */
     private ModularBrush joining;
@@ -255,6 +281,15 @@ final class WatercolorSession {
      * time has passed); false when neither is left. A page changed by anything else drops them where they are.
      */
     boolean tickDrying(ToneDocument document) {
+        // Record and Replay: the page's log keeps how many ticks settled it between its entries, or that all of it settled
+        // (StrokeLog.Entry#ticks).
+        boolean was = settling();
+        if (document != null && was) document.ticked();
+        boolean more = dryingTick(document);
+        if (was && document != null && !more) document.settled();
+        return more;
+    }
+    private boolean dryingTick(ToneDocument document) {
         idle(document);
         ahead = null;
         if (drying != null) {
@@ -376,7 +411,7 @@ final class WatercolorSession {
             return;
         }
         // A resist on Float lays as Quick (it never floats): the bath prints first.
-        boolean joins = floating != null && brush != null && brush.choice(BrushPart.LIFE) == PartChoice.FLOAT && brush.choice(BrushPart.MEDIUM) != PartChoice.RESIST && document != null
+        boolean joins = floating != null && brush != null && brush.floats() && brush.choice(BrushPart.MEDIUM) != PartChoice.RESIST && document != null
                 && floating.valid(document) && floating.layer == ModularStroke.layerOf(document, brush);
         if (!joins) { settleOthers(document); return; }
         if (drying != null) {
@@ -443,6 +478,18 @@ final class WatercolorSession {
         if (undone) letGo(drying);
         return undone;
     }
+    /**
+     * Hold to Snap ({@link HoldSnap}): the stroke just finished taken back, as {@link #undo}, and forgotten by the wet
+     * paint ({@link WetCanvas#forget}), which moves on elsewhere rather than resting. Whether anything was taken back.
+     */
+    boolean takeBack(ToneDocument document) {
+        if (canvas == null || !canvas.valid(document) || floating != null && floating.valid(document)) return undo(document);
+        hurrying = false;
+        setHalos("undo");
+        boolean undone = document.undo();
+        if (undone) { letGo(drying); canvas.forget(); }
+        return undone;
+    }
     private void floating(FloatWater water) {
         boolean was = floating != null, moved = wantsTilt();
         if (water != floating) { letGo(floating); ahead = null; }
@@ -496,7 +543,7 @@ final class WatercolorSession {
     }
     /** Whether a stroke of {@code brush} joins the halos growing: a Halo brush (not a resist) on their layer. */
     private boolean joinsHalos(ToneDocument document, ModularBrush brush) {
-        if (document == null || brush.choice(BrushPart.LIFE) != PartChoice.HALO || brush.choice(BrushPart.MEDIUM) == PartChoice.RESIST) return false;
+        if (document == null || brush.mischief() != PartChoice.LATER_MOLD || brush.choice(BrushPart.MEDIUM) == PartChoice.RESIST) return false;
         int layer = halos.isEmpty() ? lifts.get(0).layer : halos.get(0).layer;
         return ModularStroke.layerOf(document, brush) == layer;
     }
@@ -543,7 +590,10 @@ final class WatercolorSession {
      * here, its next tick {@link SettlePacer#TICK_MS} after, less what the work ahead done with it there took.
      */
     long tick(ToneDocument document, Runnable show) {
+        // Record and Replay: what settled here (on the worker, or the wet paint in slices) ran to its end (StrokeLog.Entry#ticks).
+        boolean was = settling();
         long next = canvasTurn() ? tickCanvas(document, show) : worker != null ? tickThere(document, show) : tickHere(document, show);
+        if (was && document != null && !settling()) document.settled();
         // The others done, wet paint still moving moves next.
         if (next < 0 && canvas != null && canvas.moving()) next = SettlePacer.TICK_MS;
         if (!hurrying) return next;

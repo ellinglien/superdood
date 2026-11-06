@@ -152,7 +152,7 @@ public final class HandHatchChecks {
         for (PartDial d : new PartDial[]{PartDial.HLEN, PartDial.HWOB, PartDial.HENDS, PartDial.LINE_W, PartDial.PITCH, PartDial.HANGLE})
             check(!StippleChecks.same(base, stamp(with(b, d, d == PartDial.HANGLE ? 100 : d.def < .5 ? .9 : .1), 60, s, 3)), d.label + " changes the strokes");
         check(PartChoice.HAND_HATCH.labelOf(PartDial.HEAD_TURN).equals("Lines Follow") && (int) b.part(BrushPart.TIP).get(PartDial.HEAD_TURN) == 1
-                && String.join(",", labels(PartChoice.HAND_HATCH)).equals("Spacing,Line Weight,Line Angle,Lines Follow,Line Length,Wobble,Taper Out,Size,Flick"), "Its dials: " + labels(PartChoice.HAND_HATCH));
+                && String.join(",", labels(PartChoice.HAND_HATCH)).equals("Line Spacing,Line Weight,Line Angle,Lines Follow,Line Length,Wobble,Taper Out,Size,Flick"), "Its dials: " + labels(PartChoice.HAND_HATCH));
     }
     /**
      * Hand Hatch is cut (the refocus, 2026-10-24): a code that holds it (a slot's, the library's, a share code, the Hand

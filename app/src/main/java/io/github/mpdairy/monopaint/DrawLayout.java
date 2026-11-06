@@ -8,7 +8,7 @@ package io.github.mpdairy.monopaint;
  * #lineStart}); the page the rest
  * (docs/archive/superpowers/specs/2026-10-15-tools-page-design.md, "One side toolbar"). The column, top to bottom ({@link
  * #COLUMN}; the owner's mockup, 2026-10-26, "layout v3"): Menu alone, level with the page bar's previews ({@link
- * #menuRow}); the tray (the owner's "B Pen tray", 2026-10-19): the ten slots (eight until 2026-10-27, six until the owner's "two more brush
+ * #menuRow}); the tray (the owner's "B Pen tray", 2026-10-19): the nine slots (ten until 2026-11-06, eight until 2026-10-27, six until the owner's "two more brush
  * slots", 2026-10-19), each a short row showing its brush as a stroke lying across it, no number; a gap, then the
  * smudge tool and the eraser, each a tray row showing the owner's drawing of it (the spudger, the block eraser),
  * centred; the size and the grey in use in one dot, the size slider beside the grey strip under it ({@link SwatchBar};
@@ -53,13 +53,14 @@ final class DrawLayout {
     static final int ROOMY_EDGE = 4, COMPACT_EDGE = 2;
     /**
      * The tray's rows: the slots, {@link ToolSlots#COUNT}, the one number to change for more (the owner, 2026-10-24: "the
-     * toolbar may become 10 slots"; ten since 2026-10-27, "we're at 8 now might as well have 10"; the layout fits ten on
-     * every screen, {@code DrawLayoutChecks.tenSlots}, the Nomad in landscape with its tray rows at their least).
+     * toolbar may become 10 slots"; ten from 2026-10-27, "we're at 8 now might as well have 10"; nine since 2026-11-06,
+     * Fill in a tool row of its own; the layout fits them on every screen, {@code DrawLayoutChecks.allSlots}, the Nomad
+     * in landscape with its tray rows at their least).
      */
     static final int TRAY_ROWS = ToolSlots.COUNT;
     /**
      * The Nomad's tray rows: the first eight slots (the owner, 2026-10-28: "eight slots for the nomad it's fine. Just cut
-     * off the bottom two"). The other two stay stored and come back on the Manta; the room goes to the rows.
+     * off the bottom two"). The ninth stays stored and comes back on the Manta; the room goes to the rows.
      */
     static final int COMPACT_TRAYS = 8;
     /** The slots the column shows on the Nomad ({@code compact}) or the Manta; the Tools page's Toolbar shows as many. */
@@ -77,23 +78,26 @@ final class DrawLayout {
      */
     static final int FACE_ROWS = ToolSwatches.COUNT, BOX_ROWS = FACE_ROWS * 3 / 2, READOUT_ROWS = 2;
     /**
-     * The rows past the tray (the owner's mockup, 2026-10-26): the smudge tool's and the eraser's, each a tray row tall
+     * The rows past the tray (the owner's mockup, 2026-10-26): Fill in's (since 2026-11-06, a slot before), the smudge tool's and the eraser's, each a tray row tall
      * ({@link Part#TOOLS}; the owner's drawings, res/drawable/tool_smudge and tool_eraser (traced, sized in the Manta's
      * pixels), trimmed); the icon block's, an icon button tall, two cells to a row, half the
-     * column each: the Dropper and the Lasso, Refresh alone, the row its target ({@link Part#BLOCK}); the small icon rows under it: Show
-     * Shapes and the sand timer, Show Kinds and Play (2026-10-30), the wet indicator ({@link Part#PLAY}; the owner, 2026-10-28).
+     * column each: the Dropper and the Lasso, Refresh alone, the row its target ({@link Part#BLOCK}); the small icon row under it: the
+     * wet indicator alone (the owner, 2026-10-28; the sand timer, Show Kinds and Play over it, three rows, until they went
+     * to the menu, 2026-11-06).
      */
-    static final int TOOL_ROWS = 2, BLOCK_ROWS = 2, PLAY_ROWS = 3, GRID_COLUMNS = 2;
+    static final int TOOL_ROWS = 3, BLOCK_ROWS = 2, PLAY_ROWS = 1, GRID_COLUMNS = 2;
     /**
      * The column's parts, top to bottom ({@link #COLUMN}, which {@link InkWashBar} adds in its order). MENU Menu alone,
      * no rule under it (the owner, 2026-10-22: "the menu on top should be phosphor list and not have a line
-     * underneath"); TRAY the ten slots' rows; TOOLS the smudge tool's and the eraser's rows, their drawings; BLOCK the
-     * Dropper and the Lasso, Refresh; FACES the readout ({@link #READOUT_ROWS}) over the grey strip and the size slider
-     * ({@link #BOX_ROWS}); PLAY Shapes and the sand timer, Show Kinds and Play, the wet indicator, small rows;
+     * underneath"); TRAY the nine slots' rows; TOOLS Fill in's, the smudge tool's and the eraser's rows, their drawings; BLOCK the
+     * Dropper and the Lasso, the wet indicator; FACES the readout ({@link #READOUT_ROWS}) over the grey strip and the size slider
+     * ({@link #BOX_ROWS}); LAYERS the layer button ({@link #LAYERS_ROW}); PLAY Refresh's row at the foot;
      * TIMER the countdown; STRETCH the empty stretch.
      * The page turner is not in it: it is the page bar over the page ({@link #pageBar}).
      */
-    enum Part { TIMER, MENU, GAP, TRAY, TOOLS, BLOCK, FACES, PLAY, STRETCH }
+    enum Part { TIMER, MENU, GAP, TRAY, TOOLS, BLOCK, FACES, PLAY, STRETCH, LAYERS }
+    /** The tools' rows past the tray ({@link Part#TOOLS}), top to bottom, {@link #TOOL_ROWS} of them; Zen Mode's fan's order after the slots too. */
+    static final int[] AFTER_TRAY = {ToolSlots.FILL, ToolSlots.SMUDGE, ToolSlots.ERASER};
     /**
      * The column, top to bottom, the one list of everything in it. The owner (2026-10-19): the smudge tool and the
      * eraser under the swatches and sizes, then Fill beside the smudge tool, four tools stacked two by two, with Words
@@ -112,10 +116,38 @@ final class DrawLayout {
      * in the main menu, a row, not in the column. The owner (2026-10-28): undo, redo, Shapes, Play and Refresh out, the sand
      * timer beside the wet indicator, Show Kinds beside Template Visibility; later that day the Trash out (the Lasso's bar
      * deletes) and Refresh in its row. The owner (2026-10-29): Refresh at the foot, "just above the zen mode button, with
-     * about 1cm space" ({@link #ghostMargin}). The owner (2026-10-30): Shapes and Play back, a small row under Show Kinds and the sand timer; later that day Shapes and Show Kinds swapped ("the fun button looks a bit like the shapes button").
+     * about 1cm space" ({@link #ghostMargin}). The owner (2026-10-30): Shapes and Play back, a small row under Show Kinds and the sand timer; later that day Shapes and Show Kinds swapped ("the fun button looks a bit like the shapes button"). The owner
+     * (2026-11-06): the sand timer, Show Kinds and Play to the menu ({@link #columnRows}), the wet indicator the icon
+     * block's one small row; the layer button straight under the picker box ("move it right below the picker").
      */
-    static final Part[] COLUMN = {Part.MENU, Part.GAP, Part.TRAY, Part.GAP, Part.TOOLS, Part.GAP, Part.FACES, Part.GAP,
-            Part.BLOCK, Part.GAP, Part.TIMER, Part.STRETCH, Part.PLAY};
+    static final Part[] COLUMN = {Part.MENU, Part.GAP, Part.TRAY, Part.GAP, Part.TOOLS, Part.GAP, Part.FACES, Part.LAYERS,
+            Part.GAP, Part.BLOCK, Part.GAP, Part.TIMER, Part.STRETCH, Part.PLAY};
+    /**
+     * The layer button (the owner, 2026-11-06: "i've got an icon set for a minimal button... tap on the layer area to switch
+     * to another layer"; a first trial), straight under the picker box (the owner, 2026-11-06: "shrink it slightly and move
+     * it right below the picker"; over Refresh until then): the owner's three stacked diamonds, outlined in the picker
+     * box's 1.5 dp lines, the layer in use filled ({@link InkWashLayers#layer}); a tap's third of it picks the layer, the
+     * top third layer 3 ({@link #layerAt}). Its row ({@link #layers}) {@link #LAYERS_ROW} dp tall where the column's items
+     * keep their least, so each third is about 36 px on the Manta and the Nomad (66 dp, 40 px, until 2026-11-06); else what
+     * they leave, none (the button gone) under an icon row's least. Its icon {@link #LAYERS_ICON} dp tall at most, the
+     * drawables' own size (res/drawable/layer_*.xml), so their lines are the picker's.
+     */
+    static final int LAYERS_ROW = 58, LAYERS_ICON = 42;
+    /** The layer a tap {@code y} down a picture {@code top} to {@code top + height} picks: its top third 3, its middle 2, its foot 1; above or below it, the nearest. */
+    static int layerAt(float y, float top, float height) {
+        return InkWashLayers.LAYERS - (int) StrokeMath.clamp(Math.floor((y - top) * InkWashLayers.LAYERS / height), 0, InkWashLayers.LAYERS - 1);
+    }
+    /** What the layer button says: "Layer 2 of 3", and ", hidden" while its pair is hidden; a switch's note, "Layer 3". */
+    static String layerSaid(int layer, boolean hidden) { return layerNote(layer) + " of " + InkWashLayers.LAYERS + (hidden ? ", hidden" : ""); }
+    static String layerNote(int layer) { return "Layer " + layer; }
+    /**
+     * The layer button's hold (the owner, 2026-11-06: "long press should bring up the visibility options"): its popup's
+     * name, said as its screen-reader action; each layer's eye says its step as Show Kinds' do, and a pick says it too,
+     * "Layer 1 half" ({@link InkWashLayers#step}); a stroke on a hidden layer is refused, "Layer 1 is hidden".
+     */
+    static final String LAYER_VISIBILITY = "Layer Visibility";
+    static String layerStepNote(int layer, int step) { return layerNote(layer) + " " + NotebookOptions.GUIDE_STEPS[step].toLowerCase(java.util.Locale.ROOT); }
+    static String layerHiddenNote(int layer) { return layerNote(layer) + " is hidden"; }
     /** About a centimetre, dp (160 a inch): Refresh's icon to Zen Mode's. */
     static final int ZEN_ROOM = 63;
     /**
@@ -167,6 +199,19 @@ final class DrawLayout {
     /** What Template Visibility says to a screen reader at {@code step}: "Template Visibility: Faint". */
     static String templateSaid(int step) { return TEMPLATE + ": " + NotebookOptions.GUIDE_STEPS[step]; }
     /**
+     * Show Kinds' popup ({@code InkWashBar.kindsPopup}): its columns, Template's (0) first while the page has guides
+     * ({@code guides} their step, −1: none), then Pen, Paint and Dry Media ({@link EraseKind#LABELS}); each its name over
+     * its step's eye, {@link #kindsEye}. A tap on an eye steps it on: Full, Half, Faint, Hidden, Full again.
+     */
+    static int kindsFirst(int guides) { return guides < 0 ? 1 : 0; }
+    static String kindsName(int column) { return column == 0 ? NotebookLayout.TEMPLATE : EraseKind.LABELS[column]; }
+    /** Column {@code column}'s step with Show Kinds at {@code shown} ({@link EraseKind#step}) and the guides at {@code guides}. */
+    static int kindsStep(int column, int shown, int guides) { return column == 0 ? Math.max(guides, 0) : EraseKind.step(shown, column); }
+    /** What column {@code column}'s eye says at {@code step}: "Template Visibility: Faint", "Pen half". */
+    static String kindsSaid(int column, int step) { return column == 0 ? templateSaid(step) : EraseKind.stepNote(column, step); }
+    /** Each step's eye ({@link NotebookOptions#GUIDE_STEPS}; Phosphor's, as {@link PageTurner#STEP_ICONS} after its blank). */
+    static final String[] KINDS_EYES = {"ic_ph_eye_fill", "ic_ph_eye_duotone", "ic_ph_eye_light", "ic_ph_eye_closed"};
+    /**
      * The grey a dirty brush's held paint shows in on the bar (its slot's dot, the smudge tool's brush head), a tone
      * from its paint's {@code darkness} (0 to 1): the nearest of the six greys ({@link NotebookOptions#PAPERS}), never
      * paper, which would read as clean.
@@ -186,48 +231,111 @@ final class DrawLayout {
      * slot by its long press ({@code PaintActivity.toolPicker}): "just whatever i drew", each Basic tool's drawing over its
      * name. Grouped by kind, no headers (the owner, 2026-10-27: "sort by category instead of alphabetical (but dont show
      * category headers or anything) just to group similar tools"): pens and nibs, markers, brushes, water and washes, dry
-     * media, oils, then the odd ones. The owner's pens and Cover hake joined it, Sumi and Comb left it (2026-10-28).
-     * Each row: the Basic tool's name ({@link ToolPresets}), then its drawing in res/drawable (traced vectors; Springy brush
-     * a PNG in res/drawable-nodpi for its grey), or null for one not drawn yet, shown by its stroke; change either here.
+     * media, oils, then the odd ones. The owner's pens and Cover hake joined it, Sumi and Comb left it (2026-10-28); Water
+     * took the Water brush's place, with its drawing (2026-10-31).
+     * Since the release pare-down (2026-11-05) the picker shows {@link ToolPresets#shown} ({@link #pickerGroups} since
+     * 2026-11-06), and this table is the drawings: the owner matched them to the shown tools (2026-11-06), one drawing on
+     * several tools where it fits ("each drawing appears only on the tool it was drawn for", 2026-11-01, until then). Each
+     * row a shown tool's name ({@link ToolPresets#SHOWN}, every one once), then its drawing, a traced vector in res/drawable
+     * or a black and white PNG in res/drawable-nodpi (the owner's texture tools drawn on the Manta, 2026-11-06, Ben-Day
+     * brush's among them, 453 x 116 with their tips at the right), or null for its stroke; change either here. Then the
+     * bar's own tools out of the picker since 2026-11-06 (Fill in, the smudge tool's Water), keeping theirs. The other
+     * tip_ drawings stay in res for later.
      */
     static final String[][] PICKER = {
-            {"Steady line", "tip_steady_line"}, {"Ballpoint", "tip_ballpoint"}, {"Cheap ballpoint", null}, {"Gel pen", null},
-            {"Fountain pen", "tip_fountain_pen"}, {"Smooth fountain", null},
-            {"Split nib", "tip_split_nib"}, {"Fude pen", "tip_broad_nib"}, {"Stipple pen", "tip_stipple_pen"},
-            {"Engraving pen", "tip_engraving_pen"},
-            {"Felt marker", "tip_felt_marker"}, {"Chisel marker", "tip_chisel_marker"}, {"Permanent marker", null},
-            {"Acrylic paint marker", null}, {"Ms. Sketch", null}, {"Highlighter", "tip_highlighter"},
-            {"Springy brush", "tip_springy_brush"}, {"Swell brush", "tip_swell_brush"}, {"Ink wash brush", null},
-            {"Flat hake", "tip_flat_hake"}, {"Cover hake", null},
-            // The owner, 2026-10-26: "wet blooms, pooling wash bring to the quicker menu"; the wash brush drawn until they have their own.
-            {"Water brush", "tip_water_brush"}, {"Soft wash", "tip_soft_wash"}, {"Wet blooms", "tip_soft_wash"},
-            {"Pooling wash", "tip_soft_wash"}, {"Masking fluid", "tip_masking_fluid"}, {"Wax resist", "tip_wax_resist"},
-            {"HB pencil", "tip_hb_pencil"}, {"Soft charcoal", "tip_soft_charcoal"}, {"Soft pastel", "tip_soft_pastel"},
+            {"Another pencil", "tip_hb_pencil"}, {"Steady line", "tip_steady_line"}, {"Verve felt", "tip_felt_marker"},
+            {"Fude fountain", "tip_broad_nib"}, {"Ink wash", "tip_soft_wash"}, {"Watercolour wash", "tip_soft_wash"},
+            {"Rob boss", "tip_loaded_oils"}, {"Ben-Day brush", "tip_ben_day"},
+            {"High lighter", "tip_highlighter"},
+            {"Cheap ballpoint", "tip_ballpoint"}, {"Hatch pen", "tip_hatch"}, {"Stipple pen", "tip_stipple_pen"},
+            {"Fountain pen", "tip_fountain_pen"}, {"Split nib", "tip_split_nib"}, {"Ink wash brush", "tip_soft_wash"},
+            {"Ms. Sketch", "tip_chisel_marker"},
+            {"Soft pencil", "tip_hb_pencil"}, {"Soft charcoal", "tip_soft_charcoal"}, {"Soft pastel", "tip_soft_pastel"},
             {"Wax crayon", "tip_wax_crayon"},
-            {"Loaded oils", "tip_loaded_oils"},
-            {"Spirograph", "tip_spirograph"}, {"Stamp", "tip_stamp"}, {"Fill in", "tip_fill_in"}, {"Filled shape", "tip_filled_shape"},
-            {"Dot tone", "tip_dot_tone"}, {"Ben-Day brush", "tip_ben_day"}, {"Lemon juice", "tip_lemon_juice"},
-            {"Vanishing ink", "tip_vanishing_ink"}};
-    /** The owner's drawings of Basic tools off the picker (2026-10-28), still shown on their slots and the Tools page: as {@link #PICKER}'s rows. */
-    static final String[][] DRAWN = {{"Sumi", "tip_sumi"}, {"Comb", "tip_comb"}};
+            {"Soft wash", "tip_soft_wash"}, {"Slow bloom", "tip_soft_wash"}, {"Watercolour backrun", "tip_soft_wash"},
+            {"Granulating", "tip_soft_wash"}, {"Watercolour splatter", null},
+            {"Flat wash", "tip_soft_wash"}, {"Wet gouache", "tip_loaded_oils"}, {"Opaque flat", "tip_loaded_oils"},
+            {"Cracking paint", "tip_loaded_oils"}, {"Wet oils", "tip_loaded_oils"}, {"Loaded oils", "tip_loaded_oils"}, {"Dry round", "tip_loaded_oils"}, {"Flat brush", "tip_comb"},
+            {"Gradient tone", "tip_gradient"}, {"Rosette ink", "tip_rosette"}, {"Halftone brush", "tip_halftone"}, {"Newsprint", null},
+            {"Riso", "tip_riso"},
+            {"Photocopier", null},
+            {"Engraving pen", "tip_engraving_pen"}, {"Wavy-line pen", "tip_wavy_line_pen"}, {"Pixel pen", null}, {"Stitch pen", null},
+            {"Fill in", "tip_fill_in"}, {"Water", "tip_water_brush"}};
     /**
-     * The picker's drawing of {@code brush} ({@link #PICKER}, its file's name), or null, its tray row keeping its stroke. The
-     * owner, 2026-10-26: "you can add the brush drawings now". The drawing of the Basic tool it came from ({@link
-     * ToolPresets#origin}: "Wax crayon 3" Wax crayon's); else, for a tool not drawn, its style's one drawing (Sketch pencil
-     * HB pencil's); none for a brush of its own (Brush Lab's), nor a tool whose style has none or
-     * several (Mold ink; Print's Halftone brush since Ben-Day brush and Engraving pen were drawn, 2026-10-26).
+     * A long press, as the Manta's Android counts one (ViewConfiguration on Android 11: 500 ms held, the touch slop 8 dp):
+     * the bar's long presses are Android's there; the browser's drawing screen times its own by these (ToolPickerChecks
+     * checks the tablet's own agree).
+     */
+    static final long LONG_PRESS_MS = 500;
+    static final int LONG_PRESS_SLOP = 8;
+    /**
+     * The tool picker on a slot holding {@code held} ({@code PaintActivity.toolPicker} and the browser's draw it):
+     * Reset to Default's Basic tool at its top, or null ({@link #edited}); the shown tools ({@link ToolPresets#shown}, the
+     * release pare-down, 2026-11-05), each with its drawing ({@link #drawing}; null: its stroke), the one the slot holds marked ({@code shapes}: Shapes is up on the slot, so none);
+     * whether it holds a Stamp ({@link #STAMP_MENU}). Brush Lab, {@link #ADVANCED} and {@link #TOOLS_FIRST} follow.
+     * The tools in {@link #pickerGroups}' order, {@code divided} true on the first of each kind but the first's.
+     */
+    static final class Picker {
+        final ToolPresets.Preset reset;
+        final java.util.List<ToolPresets.Preset> tools = new java.util.ArrayList<>();
+        final java.util.List<String> drawings = new java.util.ArrayList<>();
+        final java.util.List<Boolean> marked = new java.util.ArrayList<>(), divided = new java.util.ArrayList<>();
+        final boolean stamp;
+        Picker(Brush held, boolean shapes) {
+            reset = edited(held);
+            for (java.util.List<ToolPresets.Preset> group : pickerGroups())
+                for (ToolPresets.Preset preset : group) {
+                    divided.add(!tools.isEmpty() && preset == group.get(0));
+                    tools.add(preset); drawings.add(drawing(preset.brush()));
+                    marked.add(!shapes && held != null && held.sameAs(preset.brush()));
+                }
+            stamp = held != null && held.parts.stamps();
+        }
+    }
+    private static java.util.List<java.util.List<ToolPresets.Preset>> pickerGroups;
+    /**
+     * The picker's tools (the owner, 2026-11-06: "in the tray, group alphabetically but divide by type"): the shown tools
+     * ({@link ToolPresets#shown}) kind by kind, as the Tools page's chips sort them ({@link ToolsPage.Chip#of(ModularBrush)},
+     * in the chips' order), each kind by its name as shown; a grey line between kinds ({@link #GROUP_LINE}), no headers.
+     */
+    /** The tray's order for any two tools: by kind (the chips' order), then A to Z by name as shown; kits sort by it too ({@link ToolKits}). */
+    static int compareInTray(ToolPresets.Preset a, ToolPresets.Preset b) {
+        int kinds = ToolsPage.Chip.of(a).compareTo(ToolsPage.Chip.of(b));
+        return kinds != 0 ? kinds : a.shownName().compareToIgnoreCase(b.shownName());
+    }
+    static synchronized java.util.List<java.util.List<ToolPresets.Preset>> pickerGroups() {
+        if (pickerGroups == null) {
+            java.util.List<java.util.List<ToolPresets.Preset>> groups = new java.util.ArrayList<>();
+            for (ToolsPage.Chip kind : ToolsPage.Chip.values()) {
+                java.util.List<ToolPresets.Preset> group = new java.util.ArrayList<>();
+                for (ToolPresets.Preset p : ToolPresets.shown()) if (ToolsPage.Chip.of(p) == kind) group.add(p);
+                group.sort(DrawLayout::compareInTray);
+                if (!group.isEmpty()) groups.add(java.util.Collections.unmodifiableList(group));
+            }
+            pickerGroups = java.util.Collections.unmodifiableList(groups);
+        }
+        return pickerGroups;
+    }
+    /**
+     * The drawing of {@code brush}, its file's name, or null, its tray row keeping its stroke. The owner, 2026-10-26: "you can
+     * add the brush drawings now"; 2026-11-01: "only limited in house designed tools should have art"; 2026-11-06, the
+     * owner's list ({@link #PICKER}). So: one of the default bar's brushes as it is (any case of its name), or a shown
+     * Basic tool as it is, by its row of {@link #PICKER}; nothing for a copy, a rename, a Brush Lab brush, a retired tool
+     * or a tool on the shelf.
      */
     static String drawing(Brush brush) {
-        ToolPresets.Preset preset = brush == null ? null : ToolPresets.origin(brush);
-        if (preset == null) return null;
-        String kin = null;
-        int drawn = 0;
-        for (String[][] tools : new String[][][]{PICKER, DRAWN}) for (String[] tool : tools) {
-            ToolPresets.Preset p = ToolKits.preset(tool[0]);
-            if (p == preset) return tool[1];
-            if (p != null && tool[1] != null && p.style == preset.style) { kin = tool[1]; drawn++; }
-        }
-        return drawn == 1 ? kin : null;
+        if (brush == null) return null;
+        // Its name, or the one its code keeps from before a rename (Watercolour washy, 2026-11-06), in any case.
+        for (String[] first : ToolSlots.FIRST)
+            if ((brush.name().equalsIgnoreCase(first[1]) || first[2].startsWith(brush.name().toLowerCase(java.util.Locale.ROOT).replace(' ', '-') + ".M"))
+                    && Brush.read(brush.name() + "\t" + first[2]).sameAs(brush)) return drawn(first[1]);
+        ToolPresets.Preset preset = ToolPresets.find(brush);
+        return preset == null ? null : drawn(preset.name);
+    }
+    /** The drawing {@link #PICKER} gives the shown tool named {@code name}, or null. */
+    static String drawn(String name) {
+        for (String[] tool : PICKER) if (tool[0].equals(name)) return tool[1];
+        return null;
     }
     /** The share of a drawing's width, at its handle's end, a tray row's edge cuts off: the tip comes out of the edge (the owner's mockup, 2026-10-26). */
     static final float TIP_TRIM = .1f;
@@ -254,18 +362,29 @@ final class DrawLayout {
     /** {@code shapes} with its outline a slot's size, {@code px}, in the whole pixels it takes (1 to 128). */
     static ToolSettings shapeOutline(ToolSettings shapes, double px) { return shapes.outlineWidth((int) Math.round(StrokeMath.clamp(px, 1, 128))); }
     /**
-     * The picker's last row: Brush Lab on the slot's brush ("brush studio could be opened directly from the tiny popup"), and
-     * the Tools page on the slot, said Library (the owner, 2026-10-28: "instead of advanced say library, which is more like
-     * what it actually is"; Advanced until then).
+     * The picker's last row: Brush Lab on the slot's brush ("brush studio could be opened directly from the tiny popup"),
+     * said Edit Brush (the release pare-down, 2026-11-05: Brush Lab's one way in; Brush Lab until then), and the Tools page
+     * on the slot, said Full Library (Library from the owner's 2026-10-28, "instead of advanced say library, which is more
+     * like what it actually is", until 2026-11-06; Advanced before). With Hold Opens Full Library, one row of menu words
+     * since 2026-11-06 (the owner: "put edit brush, full library, and hold opens full library on the same line, and same
+     * size font..."), each {@link #FOOT_PAD} dp in. Brush Studio, the web page ({@link #STUDIO_LINK}), is a link at the
+     * browser's foot only: the app's went the same day (the owner: "it shouldn't be a browser, it should be the local app
+     * version"), Edit Brush being the app's own; Brush Lab's Open sheet shares a brush to it ({@link LabLayout#TO_STUDIO};
+     * with no browser, {@link #NO_BROWSER}). The browser's four fit the picker's width on every tablet, so no second line.
      */
-    static final String BRUSH_LAB = "Brush Lab", ADVANCED = "Library";
+    static final String BRUSH_LAB = "Edit Brush", ADVANCED = "Full Library", STUDIO = "Brush Studio",
+            STUDIO_LINK = "https://superdood.org/studio/", NO_BROWSER = "No browser";
+    static final int FOOT_PAD = 6;
     /**
      * The picker's foot row, a switch, and the Tools page's beside its Toolbar label (the owner, 2026-10-28: "an advanced
      * 'switch' on the pop-up menu ... so that the advanced menu comes up immediately when you long press a tool"; "a way
      * to disable that on the tool page"): while on, a slot's long press opens the Tools page, not the picker
-     * ({@link PaintPreferences#toolsFirst}).
+     * ({@link PaintPreferences#toolsFirst}). A checkbox saying what it does since 2026-11-06 (the owner: "make 'tools
+     * first' a checkbox and ... find a better way to phrase that? even i don't understand what that means"; Tools First,
+     * a switch, until then): the picker's Full Library is the page a hold then opens (Hold Opens Library until Library
+     * became Full Library, 2026-11-06).
      */
-    static final String TOOLS_FIRST = "Tools First";
+    static final String TOOLS_FIRST = "Hold Opens Full Library";
     /**
      * The picker's top row (the owner, 2026-10-27: "if brush has been edited in brush lab from one of the base saved
      * brushes, add a 'reset to default'"; 2026-10-28: "put reset to default at the top of the menu"): shown only for a
@@ -277,6 +396,37 @@ final class DrawLayout {
      * stamp"): the stamp menu beside the slot ({@code InkWashBar.stampMenu}: its card, Cut Stamp, Turns, Spacing, Ink Fade).
      */
     static final String STAMP_MENU = "Stamp ▾";
+    /** The stamp menu's presets: Turns (on, off), Spacing (a share of the stamp's size) and Ink Fade, as Brush Lab's dials show them. */
+    static final PartDial[] STAMP_DIALS = {PartDial.HEAD_TURN, PartDial.STAMP_SPACING, PartDial.INK_FADE};
+    static final double[][] STAMP_VALUES = {{0, 1}, {PartDial.STAMP_SPACING.def, .5, 1}, {0, PartDial.INK_FADE.def, PartDial.INK_FADE.max}};
+    /** A row of the stamp menu, after its card and Cut Stamp: the dial's label, a chip's words for each preset, the one nearest the brush's own marked. */
+    static final class StampRow {
+        final PartDial dial; final String label; final String[] words; final double[] values; final int marked;
+        private StampRow(PartDial dial, double[] values, double now) {
+            this.dial = dial; this.values = values; label = PartChoice.STAMP.labelOf(dial);
+            String[] options = PartChoice.STAMP.optionsOf(dial);
+            words = new String[values.length];
+            int nearest = 0;
+            for (int i = 0; i < values.length; i++) {
+                words[i] = options != null ? options[(int) values[i]] : dial.shown(values[i]);
+                if (Math.abs(values[i] - now) < Math.abs(values[nearest] - now)) nearest = i;
+            }
+            marked = nearest;
+        }
+    }
+    /** The stamp menu's rows for a Stamp {@code brush} ({@code InkWashBar.stampMenu}, the browser's alike). */
+    static java.util.List<StampRow> stampRows(Brush brush) {
+        ModularBrush.Part tip = brush.parts.part(BrushPart.TIP);
+        java.util.List<StampRow> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < STAMP_DIALS.length; i++) rows.add(new StampRow(STAMP_DIALS[i], STAMP_VALUES[i], tip.get(STAMP_DIALS[i])));
+        return rows;
+    }
+    /** {@code brush} with its Stamp's {@code dial} at {@code value}: a chip of the stamp menu tapped. */
+    static Brush stamped(Brush brush, PartDial dial, double value) {
+        ModularBrush b = brush.parts.copy();
+        b.part(BrushPart.TIP).set(dial, value);
+        return Brush.of(b);
+    }
     /**
      * The Basic tool {@code brush} came from ({@link ToolPresets#origin}) when its settings no longer are that tool's; else
      * null. One of {@link ToolSlots#FIRST}'s brushes (by its name's slug: any case, a copy's number) came from FIRST's own
@@ -285,7 +435,7 @@ final class DrawLayout {
     static ToolPresets.Preset edited(Brush brush) {
         ToolPresets.Preset preset = brush == null ? null : ToolPresets.origin(brush);
         if (brush != null) for (String[] row : ToolSlots.FIRST)
-            if (row[2].startsWith(BrushCode.slug(brush.name()) + ".M")) preset = new ToolPresets.Preset(LegacyBrushes.named(row).style, row[1], row[2], "");
+            if (row[2].startsWith(BrushCode.slug(brush.name()) + ".M") || BrushCode.slug(row[1]).equals(BrushCode.slug(brush.name()))) preset = new ToolPresets.Preset(LegacyBrushes.named(row).style, row[1], row[2], "");
         return preset != null && !preset.brush().parts.key().equals(brush.parts.key()) ? preset : null;
     }
     /** A picker cell's drawing's height, the room round it and its name, and its side bar's room (a menu row's: Theme.HEAVY, Theme.BASE in), dp. */
@@ -303,29 +453,48 @@ final class DrawLayout {
      */
     static int pickerCellWidth() {
         float longest = 0;
-        for (String[] tool : PICKER) longest = Math.max(longest, LabText.width(tool[0], TypeStyle.CAPTION.sp, PICKER_SPACING));
+        for (ToolPresets.Preset tool : ToolPresets.shown()) longest = Math.max(longest, LabText.width(tool.shownName(), TypeStyle.CAPTION.sp, PICKER_SPACING));
         longest = Math.min(longest, LabText.width(PICKER_NAME_MOST, TypeStyle.CAPTION.sp, PICKER_SPACING));
         return (int) Math.ceil(longest) + 2 * PICKER_PAD + PICKER_MARK;
     }
-    /** A picker cell's height, dp: the drawing over its name's line, the room round them. */
-    static int pickerCellHeight() { return PICKER_TIP + (int) Math.ceil(LabText.line(TypeStyle.CAPTION.sp)) + 3 * PICKER_PAD; }
-    /** The picker's height in {@code columns} columns, dp: its cells' rows, Reset to Default's room, the Stamp row's, Brush Lab's row, Tools First's and its fine edge. */
-    static int pickerHeight(int columns) { return (PICKER.length + columns - 1) / columns * pickerCellHeight() + 4 * MENU_ROW + 2; }
-    /** The picker's columns on a screen {@code height} dp tall: three, more where three would run off its foot (the Nomad turned). */
-    static int pickerColumns(int height) {
-        int columns = 3;
-        while (columns < PICKER.length && pickerHeight(columns) > height - 2 * PAD) columns++;
-        return columns;
+    /** A picker cell's room over its drawing, between it and its name and under that, dp, for a drawing {@code tip} dp tall: {@link #PICKER_PAD}, shrinking with the drawing. */
+    static int pickerRoom(int tip) { return Math.round(PICKER_PAD * tip / (float) PICKER_TIP); }
+    /** A picker cell's height, dp: the drawing, {@code tip} dp tall, over its name's line, the room round them. */
+    static int pickerCellHeight(int tip) { return tip + (int) Math.ceil(LabText.line(TypeStyle.CAPTION.sp)) + 3 * pickerRoom(tip); }
+    /** A menu's grey line between groups (the picker's between kinds too) and the room over and under it, dp. */
+    static final int GROUP_LINE = 1, GROUP_LINE_ROOM = 4;
+    /** The picker's height in {@code columns} columns of cells with {@code tip} dp drawings, dp: each kind's rows of cells and the lines between, Reset to Default's room, the Stamp row's, the foot's one row (Edit Brush to Brush Studio) and its fine edge. */
+    static int pickerHeight(int columns, int tip) {
+        int rows = 0;
+        for (java.util.List<ToolPresets.Preset> group : pickerGroups()) rows += (group.size() + columns - 1) / columns;
+        return rows * pickerCellHeight(tip) + (pickerGroups().size() - 1) * (GROUP_LINE + 2 * GROUP_LINE_ROOM) + 3 * MENU_ROW + 2;
+    }
+    /**
+     * The picker's columns (the owner, 2026-11-06: "make it four wide"; three, more on a short screen, until then), and its
+     * drawings' least height, dp, shrinking to fit (18 since Soft pencil made Dry Media two rows, 2026-11-06; 20 until then).
+     */
+    static final int PICKER_COLUMNS = 4, PICKER_TIP_LEAST = 18;
+    /** The picker's columns beside the column on a screen {@code width} dp across: {@link #PICKER_COLUMNS}, fewer where they would not fit (a phone's browser). */
+    static int pickerColumns(int width) { return Math.max(1, Math.min(PICKER_COLUMNS, (width - 2) / pickerCellWidth())); }
+    /**
+     * The height of the picker's drawings, dp, in {@code columns} columns on a screen {@code height} dp tall: {@link
+     * #PICKER_TIP}, or smaller (their room with them, {@link #pickerRoom}) down to {@link #PICKER_TIP_LEAST} so the picker
+     * fits without scrolling (the Manta turned, the Nomad upright); {@link #PICKER_TIP} where even that would not fit
+     * (the Nomad turned, a phone), the picker scrolling.
+     */
+    static int pickerTip(int columns, int height) {
+        for (int tip = PICKER_TIP; tip >= PICKER_TIP_LEAST; tip--) if (pickerHeight(columns, tip) <= height - 2 * PAD) return tip;
+        return PICKER_TIP;
     }
     /**
      * Play (the refocus, 2026-10-24; Phosphor confetti; the column's button again since 2026-10-30, beside Shapes, a row
-     * of the menu from 2026-10-28): the toys' menu beside it ({@code PaintActivity.playMenu}): Magnetic Poetry (the fridge
-     * magnets' bin, {@link WordsMode}), Mirrors (the page's mirrors' list, {@link MirrorsMenu}), then Replay Page. No
-     * Shapes (its own button since 2026-10-30), Self-Portrait Prompt (a notebook setting since 2026-10-30, {@link
-     * NotebookOptions#selfPortrait}), Stamp (a Basic tool since 2026-10-28, {@link #STAMP_MENU}), Surprise Me (Notebook
+     * of the menu from 2026-10-28): the toys' menu beside it ({@code PaintActivity.playMenu}): Text ({@link TextMode}, 2026-11-01), Magnetic Poetry (the fridge
+     * magnets' bin, {@link WordsMode}), Shapes (its menu, {@link #shapeRows}; its own button from 2026-10-30 until the
+     * release pare-down, 2026-11-05), Spirograph (the Basic tool taken up on the slot), Mirrors (the page's mirrors' list,
+     * {@link MirrorsMenu}), then Replay Page. No Self-Portrait Prompt (cut 2026-11-05), Stamp (a Basic tool since 2026-10-28, {@link #STAMP_MENU}), Surprise Me (Notebook
      * Settings' Tools) or Fling (the owner, 2026-10-28: "remove fling and surprise me"). Its side bar while a toy is on ({@link #playOn}).
      */
-    static final String PLAY = "Play", POETRY = "Magnetic Poetry", MIRRORS = "Mirrors", LASSO = "Lasso";
+    static final String PLAY = "Play", POETRY = "Magnetic Poetry", SPIROGRAPH = "Spirograph", MIRRORS = "Mirrors", LASSO = "Lasso";
     /**
      * The shade strip's long press (the owner, 2026-10-27: "add the long press for transparency to the shade picker"):
      * Opacity, the Opaque medium's own dial, thin at the strip's top to opaque at its foot; on any other brush a note, as
@@ -348,8 +517,101 @@ final class DrawLayout {
     static String opacitySaid(double value) {
         return OPACITY + ", " + PartChoice.COVER.words[0] + " to " + PartChoice.COVER.words[1] + ": " + Math.round(100 * StrokeMath.clamp(value)) + "%";
     }
-    /** Whether Play has its side bar: a toy is on (the magnets' bin open, mirrors on the page). */
+    /** Whether Play has its side bar: a toy is on (the magnets' bin open, Text or Shapes taken up, {@code words}; mirrors on the page). */
     static boolean playOn(boolean words, boolean mirrors) { return words || mirrors; }
+    /**
+     * The menu's row that hides the page bar or shows it again (the owner, 2026-11-06: "top bar hide is great, but we can
+     * move that to the dropdown"; the column's book that morning; Iconoir open-book): marked while the bar shows, a
+     * session's as Zen Mode ({@code PaintActivity.togglePageBar}).
+     */
+    static final String PAGE_BAR = "Page Bar";
+    /** Play's Text row ({@link TextBoxes}). */
+    static final String TEXT = "Text", REPLAY_PAGE = "Replay Page";
+
+    /**
+     * A row of a drawing screen menu ({@code PaintActivity.menu}, and the browser's, live.html): what a tap on it does
+     * ({@code key}), its words, its icon (res/drawable's name; null for none), marked by the side bar; {@link #LINE}, the
+     * grey-400 line between groups. The Manta's menus and the browser's read their rows here, so they agree.
+     */
+    static final class Row {
+        final String key, words, icon;
+        final boolean marked;
+        Row(String key, String words, String icon, boolean marked) { this.key = key; this.words = words; this.icon = icon; this.marked = marked; }
+        static final Row LINE = new Row(null, null, null, false);
+    }
+    /**
+     * The menu's rows ({@code PaintActivity.fileMenu}), in four groups (the owner, 2026-11-06), a line between each: the
+     * notebook's, Notebook Explorer and Notebook Settings; then the page's, Export Page (the page shown's PDF, PNG or Layers,
+     * as Page Settings' button, 2026-11-02), Import, a guest's too (a picture placed reaches the host as any mark, in
+     * pixels; the browser's takes pictures only), Show Kinds and Page Bar ({@link #PAGE_BAR}, marked while the bar shows,
+     * {@code pageBar}); then Draw Together ({@code share}'s words, null for
+     * none, marked while on, {@code sharing}), the Sand Timer while it can be set ({@code sand}: the countdown's row is its
+     * and idle) and Play, marked while a toy is on ({@code playing}, {@link #playOn}); then the app's, Finger Action
+     * ({@code fingerRow}; null for none: the Manta's is System Settings' row since 2026-11-06), the drawing hand, the row
+     * naming the other hand ({@code right}: the column is on the right), and System Settings (2026-11-04, {@link
+     * SystemSettings}) last. The notebook's rows are left out for a live page's guest ({@code notebook} false: the page is
+     * the host's); Show Kinds, Page Bar, the Sand Timer and Play are the Manta's alone ({@code column}: its column's buttons until
+     * 2026-11-06, the owner: "move the timer, visibility, and mischief tools to the dropdown").
+     */
+    static java.util.List<Row> fileRows(boolean notebook, String fingerRow, boolean right, String share, boolean sharing, boolean column, boolean sand, boolean playing, boolean pageBar) {
+        java.util.List<Row> rows = new java.util.ArrayList<>();
+        if (notebook) {
+            rows.add(new Row("open", NotebookLayout.OPEN_NOTEBOOK, "ic_ph_book", false));
+            rows.add(new Row("settings", NOTEBOOK_SETTINGS, "ic_ph_page_star", false));
+            rows.add(Row.LINE);
+            rows.add(new Row("exportPage", LibraryCard.EXPORT_PAGE, "ic_ph_upload_square", false));
+        }
+        rows.add(new Row("import", PictureImport.IMPORT, "ic_ph_download", false));
+        if (column) rows.add(new Row("kinds", EraseKind.SHOW_KINDS, "ic_ph_eye_fill", false));
+        if (column) rows.add(new Row("pageBar", PAGE_BAR, "ic_ph_open_book", pageBar));
+        rows.add(Row.LINE);
+        if (share != null) rows.add(new Row("share", share, "ic_ph_internet", sharing));
+        if (column && sand) rows.add(new Row("sand", SandTimer.NAME, "ic_sand_timer", false));
+        if (column) rows.add(new Row("play", PLAY, "ic_ph_confetti", playing));
+        if (rows.get(rows.size() - 1) != Row.LINE) rows.add(Row.LINE);
+        if (fingerRow != null) rows.add(new Row("finger", fingerRow, "ic_finger", false));
+        rows.add(new Row("hand", right ? RIGHT_HANDED : LEFT_HANDED, right ? "ic_ph_hand_pointing_mirrored" : "ic_ph_hand_pointing", false));
+        rows.add(new Row("system", SystemSettings.TITLE, "ic_ph_gear", false));
+        return rows;
+    }
+    /**
+     * Play's rows ({@code PaintActivity.playMenu}): Text, Magnetic Poetry, Shapes ({@code shapes}: taken up), Spirograph
+     * and Mirrors, each marked while on; then Replay Page, under a line, on a page it can replay. A live page's guest
+     * ({@code guest}) has no Magnetic Poetry: magnets are the page's own, never its pixels, so the host would never see
+     * them (live pages carry pixels); and no Spirograph (a guest's slots are the host's).
+     */
+    static java.util.List<Row> playRows(boolean text, boolean words, boolean shapes, boolean mirrors, boolean replay, boolean guest) {
+        java.util.List<Row> rows = new java.util.ArrayList<>();
+        rows.add(new Row("text", TEXT, "ic_ph_text", text));
+        if (!guest) rows.add(new Row("poetry", POETRY, "ic_ph_magnet", words));
+        rows.add(new Row("shapes", SHAPES, "ic_ph_shapes", shapes));
+        if (!guest) rows.add(new Row("spiro", SPIROGRAPH, "ic_ph_snowflake", false));
+        rows.add(new Row("mirrors", MIRRORS, "ic_ph_flip_horizontal", mirrors));
+        if (replay) { rows.add(Row.LINE); rows.add(new Row("replay", REPLAY_PAGE, "ic_ph_play", false)); }
+        return rows;
+    }
+    /** Shapes' rows ({@code PaintActivity.shapesMenu}): each shape, marked while Shapes draws it ({@code on}), then Filled, marked while shapes are filled. */
+    static java.util.List<Row> shapeRows(ToolSettings shapes, boolean on) {
+        java.util.List<Row> rows = new java.util.ArrayList<>();
+        for (ToolSettings.Shape kind : ToolSettings.Shape.values())
+            rows.add(new Row(kind.name(), kind.label, shapeIcon(kind), on && shapes.shape == kind));
+        rows.add(new Row("filled", FILLED, "ic_ph_circle_fill", shapes.filled));
+        return rows;
+    }
+    /** {@code shapes} after a tap on Shapes' row {@code key} ({@link #shapeRows}): that shape, or Filled turned over. */
+    static ToolSettings shapePicked(ToolSettings shapes, String key) {
+        return "filled".equals(key) ? shapes.filled(!shapes.filled) : shapes.shape(ToolSettings.Shape.valueOf(key));
+    }
+    /** A shape's icon (res/drawable's name). */
+    static String shapeIcon(ToolSettings.Shape shape) {
+        switch (shape) {
+            case LINE: return "ic_ph_line_segment";
+            case RECTANGLE: return "ic_ph_rectangle";
+            case SQUARE: return "ic_ph_square";
+            case OVAL: return "ic_shape_oval";
+            default: return "ic_ph_circle";
+        }
+    }
     /**
      * The Dropper (the owner, 2026-10-24: "add a dropper tool so people can quickly match color"; Phosphor eyedropper),
      * in the icon block's left cell, the Lasso beside it (the owner, 2026-10-24: "lasso can move beside picker";
@@ -410,7 +672,7 @@ final class DrawLayout {
      * #half}) and {@link #zenHeight} (the column's {@code side}) tall. A tap turns it on or off; the menu has no row for it. A session's: a new launch
      * has the bars.
      */
-    static final String ZEN = "Zen Mode", ZEN_LEAVE = "Leave Zen Mode";
+    static final String ZEN = "Zen Mode", ZEN_LEAVE = "Leave Zen Mode", ZEN_TOOLS = "Zen Tools", ZEN_HOLD = "Hold for Zen Mode";
     /**
      * The menu's row for the drawing hand ({@code PaintPreferences.toolboxRight}, MonoPaint's setting, its Settings window
      * unreachable here), naming the other hand (the owner, 2026-10-27: "it should be relative"): Left-Handed puts the column
@@ -470,6 +732,62 @@ final class DrawLayout {
         KEEP("Keep Reflection"), CLEAR("Remove Mirrors");
         final String label;
         MirrorRow(String label) { this.label = label; }
+        /**
+         * The list's rows for a page's mirrors {@code m} ({@code placing}: a mirror is being placed), the ones on marked;
+         * Flip Side and Keep Reflection only while Real Mirror reflects. A live page's guest ({@code guest}) has no Real
+         * Mirror: its reflection is the screen's alone, never the page's pixels, so the host would never see it.
+         */
+        static java.util.List<Row> rows(Mirrors m, boolean placing, boolean guest) {
+            java.util.List<Row> rows = new java.util.ArrayList<>();
+            for (MirrorRow row : values()) {
+                if ((row == FLIP || row == KEEP) && !m.reflects() || guest && (row == REAL || row == FLIP || row == KEEP)) continue;
+                boolean on = row == MIRRORS ? m.acts() : row == GUIDES ? m.guides : row == COPY ? m.style == Mirrors.Style.COPY
+                        : row == REAL ? m.style == Mirrors.Style.REAL : row == PLACE && placing;
+                rows.add(new Row(row.name(), row.label, row.icon(), on));
+            }
+            return rows;
+        }
+        /** The row's icon (res/drawable's name; the owner, 2026-10-21, Phosphor Bold): Mirrors (on or off) the Mirrors button's own, so it reads as that switch and not a heading. */
+        String icon() {
+            switch (this) {
+                case MIRRORS: return "ic_ph_flip_horizontal";
+                case GUIDES: return "ic_ph_eye";
+                case COPY: return "ic_ph_copy";
+                case REAL: return "ic_ph_circle_half";
+                case PLACE: return "ic_ph_line_segment";
+                case KALEIDOSCOPE: return "ic_ph_snowflake";
+                case FLIP: return "ic_ph_arrows_left_right";
+                case KEEP: return "ic_ph_check";
+                default: return "ic_ph_broom";
+            }
+        }
+        /**
+         * The row's change to {@code page}'s mirrors (one Undo step, but Mirrors and Show Guides, which save as the page
+         * does): every row's but Place Mirror's, which the next stroke does. Real Mirror keeps, at first, the side with
+         * the most marks ({@link #kept}); Flip Side keeps another.
+         */
+        void change(ToneDocument page) {
+            Mirrors m = page.mirrors();
+            switch (this) {
+                case MIRRORS: page.showMirrors(!m.on); break;
+                case GUIDES: page.showGuides(!m.guides); break;
+                case COPY: page.setMirrors(m.styled(Mirrors.Style.COPY)); break;
+                case REAL: page.setMirrors(kept(m.styled(Mirrors.Style.REAL), page)); break;
+                case KALEIDOSCOPE: page.setMirrors(kept(m.kaleidoscope(page.width, page.height), page)); break;
+                case FLIP: page.setMirrors(m.flipped(page.width, page.height)); break;
+                case KEEP: page.keepReflection(); break;
+                case CLEAR: page.setMirrors(m.cleared()); break;
+                default: break;
+            }
+        }
+        /** Whether a mirror being placed stops after the row's change, the page's mirrors now {@code after}. */
+        boolean stopsPlacing(Mirrors after) { return this == REAL || this == KALEIDOSCOPE || this == CLEAR || this == MIRRORS && !after.on; }
+        /** {@code next}, Real Mirror's keeping at first the side of {@code page} with the most marks. */
+        static Mirrors kept(Mirrors next, ToneDocument page) {
+            if (next.style != Mirrors.Style.REAL || next.isEmpty()) return next;
+            double[] side = Mirrors.mostInk(next, page::compositeTone, page.width, page.height);
+            return next.keeping(side[0], side[1]);
+        }
     }
     /** A list's row on the drawing screen (the menu's, {@code PaintActivity.menu}), dp, and its caption under the rows. */
     static final int MENU_ROW = 52, MENU_NOTE = 40;
@@ -550,8 +868,17 @@ final class DrawLayout {
      */
     static final String LASSO_CUT = "Cut", LASSO_DUPLICATE = "Duplicate", LASSO_DELETE = "Delete", LASSO_PASTE = "Paste",
             LASSO_NOTHING = "Nothing to move", LASSO_NOTHING_DELETED = "Nothing to delete", LASSO_OTHER_SIZE = "Page size differs";
-    /** The Lasso's bar's words over a floating piece, in its order. */
-    static final String[] LASSO_BAR = {LASSO_CUT, LASSO_DUPLICATE, LASSO_DELETE};
+    /** The Lasso's bar's words over a floating piece, in its order: Make Stamp (2026-11-02) before Delete, which stays last. */
+    static final String[] LASSO_BAR = {LASSO_CUT, LASSO_DUPLICATE, StampNib.CUT, LASSO_DELETE};
+    /**
+     * The hint in the foot's corner ({@code InkWashBar.statusCorner}) while {@code brush}, in use, is a Stamp and no stamp
+     * has been printed yet ({@code placed}, kept in the preferences): Make Stamp's way while it has no nib of its own,
+     * then how to print it ({@link StampNib#MAKE}, {@link StampNib#PRINT}); null, none.
+     */
+    static String stampHint(Brush brush, boolean placed) {
+        if (placed || brush == null || !brush.parts.stamps()) return null;
+        return brush.parts.nib == 0 ? StampNib.MAKE : StampNib.PRINT;
+    }
     /** How far down and right Duplicate's copy floats from the piece, page px: clear of it, to be seen and dragged. */
     static final int DUPLICATE_OFFSET = 40;
     /**
@@ -560,8 +887,10 @@ final class DrawLayout {
      * Only the pen's eraser end still erases.
      */
     static boolean lassoLoop(boolean on, boolean eraserEnd) { return on && !eraserEnd; }
-    /** Whether the column shows greys (the strip; the Dropper shows always) for {@code tool}: every slot and the stamp tool do; the eraser and the smudge tool have a size only. */
-    static boolean greys(int tool) { return tool < ToolSlots.COUNT || tool == ToolSlots.STAMP; }
+    /** What a tool without a brush of its own is called (its row's screen-reader name, the brush line's words): the eraser, the smudge tool, the stamp tool; "Brush" for a slot. */
+    static String toolName(int tool) { return tool == ToolSlots.ERASER ? "Eraser" : tool == ToolSlots.SMUDGE ? "Smudge" : tool == ToolSlots.STAMP ? "Stamp" : "Brush"; }
+    /** Whether the column shows greys (the strip; the Dropper shows always) for {@code tool}: every slot, the stamp tool and Fill in do; the eraser and the smudge tool have a size only. */
+    static boolean greys(int tool) { return tool < ToolSlots.COUNT || tool == ToolSlots.STAMP || tool == ToolSlots.FILL; }
 
     final int width, height;
     /** The tray's rows ({@link #TRAY_ROWS}). */
@@ -573,6 +902,8 @@ final class DrawLayout {
     final int side, inner;
     /** The items' heights, fitted (tray rows in whole halves); what is left over for the stretch at the foot (negative: it overflows). */
     final int icon, gap, slot, face, wet, box, spare;
+    /** The layer button's row ({@link #LAYERS_ROW}), dp. */
+    final int layers;
     /** How far the items are from their least (0) to their preferred heights (1); under 0 only on a screen shorter than any of the four. */
     final double fit;
 
@@ -592,13 +923,17 @@ final class DrawLayout {
         int[] preferred = preferred(), fewest = LEAST;
         int room = room();
         int least = total(fewest, TRAY_ROWS), most = total(preferred, TRAY_ROWS);
+        // The layer button's row first, but never below the items' least; none where that leaves it under an icon row's least.
+        int free = Math.min(LAYERS_ROW, room - least);
+        layers = free >= fewest[Item.ICON.ordinal()] ? free : 0;
+        room -= layers;
         // Shorter than any of the four screens: everything shrinks below its least alike, rather than off the end.
         double shrink = least > room ? room / (double) least : 1;
         fit = most == least ? 1 : least > room ? room / (double) least - 1 : StrokeMath.clamp((room - least) / (double) (most - least));
         int[] h = new int[preferred.length];
         for (int i = 0; i < h.length; i++)
             h[i] = (int) Math.floor(shrink < 1 ? fewest[i] * shrink : fewest[i] + fit * (preferred[i] - fewest[i]));
-        // Fewer slots shown: the rows (the smudge tool's and the eraser's too) share the ten's room. A tray row is drawn in whole halves.
+        // Fewer slots shown: the rows (Fill in's, the smudge tool's and the eraser's too) share the nine's room. A tray row is drawn in whole halves.
         h[Item.SLOT.ordinal()] = h[Item.SLOT.ordinal()] * (TRAY_ROWS + TOOL_ROWS) / (trays + TOOL_ROWS) / 2 * 2;
         // Room to spare: the picker box first, up to BOX_ROWS rows of faces; then the gaps between groups share the rest,
         // up to GAP_MOST times their preferred height.
@@ -610,13 +945,60 @@ final class DrawLayout {
         spare = room - total(h, trays);
     }
 
+    /** Where the {@code g}th gap is in {@link #COLUMN}. */
+    static int gapIndex(int g) {
+        for (int i = 0, seen = 0; i < COLUMN.length; i++) if (COLUMN[i] == Part.GAP && seen++ == g) return i;
+        throw new IllegalArgumentException("gap " + g);
+    }
+    /**
+     * The {@code g}th gap's height, dp: {@link #gap}, but half beside the picker box (over it, from the eraser, and under
+     * it, to the icon block; the owner, 2026-10-29: "a little more snug ... tighten that up by 50%"); the room it gives goes to the foot.
+     */
+    int gapHeight(int g) {
+        int at = gapIndex(g);
+        return COLUMN[at + 1] == Part.FACES || COLUMN[at - 1] == Part.FACES || COLUMN[at - 1] == Part.LAYERS ? gap / 2 : gap;
+    }
+    /**
+     * Part {@code i} of {@link #COLUMN}'s height, dp, as {@link InkWashBar} stacks it, the stretch's 0: Menu's row; a gap
+     * ({@link #gapHeight}); the tray's rows shown ({@link #trays}) and the smudge tool's and the eraser's, a slot's each;
+     * the readout over the picker box; the icon block, the Dropper's and the Lasso's row and the three small rows under
+     * it; the countdown's; Refresh's row and its margin under it ({@link #ghostMargin}).
+     */
+    int partHeight(int i) {
+        switch (COLUMN[i]) {
+            case MENU: return menuRow();
+            case GAP: { int g = 0; for (int k = 0; k < i; k++) if (COLUMN[k] == Part.GAP) g++; return gapHeight(g); }
+            case TRAY: return trays * slot;
+            case TOOLS: return TOOL_ROWS * slot;
+            case FACES: return READOUT_ROWS * face + box;
+            case BLOCK: return icon + PLAY_ROWS * wet;
+            case TIMER: return TIMER;
+            case PLAY: return icon + ghostMargin();
+            case LAYERS: return layers;
+            default: return 0;
+        }
+    }
+    /**
+     * Where each part of {@link #COLUMN} starts, dp from the screen's top, then where the last ends: from {@link #PAD} under
+     * the top, the stretch taking what the rest leave of {@link #columnHeight} less {@link #PAD} at the foot. The browser
+     * lays its column by these; {@code DrawLayoutChecks.tops} holds them to the column's sums.
+     */
+    int[] tops() {
+        int[] top = new int[COLUMN.length + 1];
+        int used = 0, stretch = -1;
+        for (int i = 0; i < COLUMN.length; i++) { used += partHeight(i); if (COLUMN[i] == Part.STRETCH) stretch = i; }
+        top[0] = PAD;
+        for (int i = 0; i < COLUMN.length; i++) top[i + 1] = top[i] + (i == stretch ? Math.max(0, columnHeight() - 2 * PAD - used) : partHeight(i));
+        return top;
+    }
+
     /** The preferred heights on this screen. */
     int[] preferred() { return compact ? COMPACT : ROOMY; }
     /** The least heights on every screen. */
     int[] least() { return LEAST; }
     /** The picker box's most, dp: {@link #BOX_ROWS} preferred rows of faces. */
     int boxMost() { return BOX_ROWS * preferred()[Item.FACE.ordinal()]; }
-    /** The room for items: the column's height less the padding, Menu's row and the countdown. */
+    /** The room for items and the layer button: the column's height less the padding, Menu's row and the countdown. */
     private int room() { return columnHeight() - 2 * PAD - menuRow() - TIMER; }
     /**
      * Menu's row, dp: as tall as centres its icon on the page bar's previews (the owner, 2026-10-23: "make the menu icon
@@ -650,7 +1032,9 @@ final class DrawLayout {
      * the {@link #FACE_GAP}, its cell ({@link #half}) less half the {@link #FACE_GAP} and its side bar's room ({@link
      * #faceMarkRoom}), at most {@link #FACE_SQUARE}.
      */
-    int faceSide() { return Math.min(FACE_SQUARE, Math.min(box / FACE_ROWS - FACE_GAP, half() - FACE_GAP / 2 - faceMarkRoom())); }
+    int faceSide() { return boxSide(2 * half(), box); }
+    /** A size's square in a picker box {@code width} dp across (two cells) and {@code tall} dp up ({@link #faceSide}; Brush Lab's, upright, {@code LabLayout.pickerThick} × {@code picker}), dp. */
+    static int boxSide(int width, int tall) { return Math.min(FACE_SQUARE, Math.min(tall / FACE_ROWS - FACE_GAP, width / 2 - FACE_GAP / 2 - faceMarkRoom())); }
     /** A face's room for its side bar beside its square (right of the grey strip, for its tab there), dp. */
     static int faceMarkRoom() { return FACE_MARK_GAP + FACE_MARK; }
     /** How tall a tray row's stroke may be, dp: the row less the room over and under it. */
@@ -762,6 +1146,8 @@ final class DrawLayout {
     int previewAt(float x, int visible) {
         return Math.max(0, Math.min(visible - 1, (int) Math.floor((x + previewGap() / 2f) / (previewWidth() + previewGap()))));
     }
+    /** The + tile's words, said to a screen reader (docs/TEXT-STYLE.md, "The page bar"). */
+    static final String NEW_PAGE = "New page";
     /** What the page bar shows of page {@code index} of {@code count}: "3 / 24", or a cover's word ({@link DrawingBook#FRONT}, {@link DrawingBook#BACK}). */
     static String pageWords(int index, int count) {
         return index == DrawingBook.FRONT ? NotebookCovers.FRONT_WORD : index == DrawingBook.BACK ? NotebookCovers.BACK_WORD : (index + 1) + " / " + count;
@@ -798,7 +1184,7 @@ final class DrawLayout {
      * dp, cut with … past it: what the brush line leaves past its least ({@link #lineLeast}). In captions, not a target;
      * hidden in Zen Mode with the foot row.
      */
-    int bookName() { return width - lineStart() - lineLeast(); }
+    int statusCorner() { return width - lineStart() - lineLeast(); }
     /** The brush line's least width, dp: its words' fixed room ({@link #LINE_NAME}), the note's gap and the line's ends. */
     static int lineLeast() { return LINE_PAD + LINE_NAME + NOTE_GAP + LINE_END; }
     /**
@@ -824,6 +1210,11 @@ final class DrawLayout {
         for (String item : items) if (!item.isEmpty() && !item.equalsIgnoreCase(name)) words.append(words.length() == 0 ? "" : ", ").append(item);
         return words.length() == 0 ? name : name + " · " + words;
     }
+    /** {@code brush}'s brush line: {its words ({@link #brushWords}), what a screen reader hears ({@link BrushVoice#about})}. */
+    static String[] lineWords(Brush brush) {
+        ToolPresets.Preset preset = ToolPresets.find(brush);
+        return new String[]{brushWords(brush.shownName(), preset == null ? null : preset.line, ModularWords.caption(brush.parts)), brush.shownName() + ". " + BrushVoice.about(brush.parts)};
+    }
     /**
      * The app's notes ({@code PaintActivity.message}: "Inkwash hasn't been tested on this firmware yet.", an eraser's
      * kind, a guide's step) at the brush line's right, in captions as the name (the owner, 2026-10-22: "the system update
@@ -832,6 +1223,8 @@ final class DrawLayout {
      * a note takes at most {@link #noteWidth} of the line, cut with … past that. In Zen Mode (no line) a note is a toast.
      */
     static final long NOTE_MS = 4000;
+    /** A note a gesture may give again and again (a refused stroke; a finger drag asks at every touch) is given again only after this long, ms. */
+    static final long NOTE_AGAIN_MS = 3000;
     static final int NOTE_GAP = 12;
     /** The most of a {@code line} wide brush line a note takes, px or dp: two thirds, the name keeping the rest at least. */
     static int noteWidth(int line) { return Math.max(0, line * 2 / 3); }

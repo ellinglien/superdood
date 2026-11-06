@@ -62,14 +62,14 @@ public final class FadingChecks {
                 && PartChoice.FADE.key.equals("fade") && PartChoice.LEMON.key.equals("lemon") && PartChoice.FADE.label.equals("Fading") && PartChoice.LEMON.label.equals("Lemon Juice"), "Fading and Lemon Juice are Drying's sixth and seventh, keyed fade and lemon");
         check(PartChoice.FADE.dials.equals(Arrays.asList(PartDial.FADE_IN)) && PartChoice.LEMON.dials.equals(Arrays.asList(PartDial.DRY_IN))
                 && PartDial.FADE_IN.key.equals("fadeIn") && PartDial.DRY_IN.key.equals("dryIn") && PartDial.FADE_IN.label.equals("Fades In") && PartDial.DRY_IN.label.equals("Dries In")
-                && PartDial.FADE_IN.min == 10 && PartDial.FADE_IN.max == 120 && PartDial.FADE_IN.def == 20 && PartDial.DRY_IN.min == 10 && PartDial.DRY_IN.max == 600 && PartDial.DRY_IN.def == 300
-                && PartDial.FADE_IN.shown(20).equals("20 s") && PartDial.DRY_IN.shown(300).equals("5:00") && PartDial.DRY_IN.shown(45).equals("45 s") && PartDial.DRY_IN.shown(195).equals("3:15"), "their dials: Fades In 10 s to 2 min (20 s), Dries In 10 s to 10 min (5:00)");
+                && PartDial.FADE_IN.min == 1 && PartDial.FADE_IN.max == 120 && PartDial.FADE_IN.def == 1 && PartDial.DRY_IN.min == 1 && PartDial.DRY_IN.max == 600 && PartDial.DRY_IN.def == 1
+                && PartDial.FADE_IN.shown(20).equals("20 s") && PartDial.DRY_IN.shown(300).equals("5:00") && PartDial.DRY_IN.shown(45).equals("45 s") && PartDial.DRY_IN.shown(195).equals("3:15"), "their dials: Fades In 1 s to 2 min, Dries In 1 s to 10 min, fresh at 1 s (2026-11-06)");
         for (ToolPresets.Preset p : ToolPresets.all()) check((ModularCode.encode(ModularCode.decode(p.code)).equals(p.code) || HandHatchChecks.handHatch(p.code)), p.name + "'s code reads and writes byte for byte");
         for (PartChoice life : new PartChoice[]{PartChoice.FADE, PartChoice.LEMON}) {
             ModularBrush b = brush(life, life == PartChoice.FADE ? 45 : 150);
             String code = ModularCode.encode(b);
             ModularBrush back = ModularCode.decode(code);
-            check(back != null && ModularCode.encode(back).equals(code) && back.choice(BrushPart.LIFE) == life && Math.abs(back.part(BrushPart.LIFE).get(life.dials.get(0)) - (life == PartChoice.FADE ? 45 : 150)) < .5,
+            check(back != null && ModularCode.encode(back).equals(code) && back.mischief() == life.later() && Math.abs(back.part(BrushPart.LATER).get(life.dials.get(0)) - (life == PartChoice.FADE ? 45 : 150)) < .5,
                     life + " reads back from its code: " + code);
             check(code.split("_")[4].charAt(0) == (life == PartChoice.FADE ? '5' : '6'), life + " is written as its choice index: " + code);
         }
@@ -81,6 +81,8 @@ public final class FadingChecks {
             ModularBrush on = s.roll(new Random(52000L + 977L * s.index + i)), off;
             ModularStyle.fadeRolls = false; ModularStyle.lemonRolls = false;
             try { off = s.roll(new Random(52000L + 977L * s.index + i)); } finally { ModularStyle.fadeRolls = true; ModularStyle.lemonRolls = true; }
+            // As a version before Later holds it (LaterChecks): the mischief in Drying.
+            on = on.joined();
             PartChoice life = on.choice(BrushPart.LIFE);
             if (life != PartChoice.FADE && life != PartChoice.LEMON) {
                 check(ModularCode.encode(on).equals(ModularCode.encode(off)), s.name + ": a roll that neither fades nor darkens in is as before");
@@ -105,8 +107,8 @@ public final class FadingChecks {
         String pf = ModularWords.plainWords(f), pl = ModularWords.plainWords(l);
         check(pf.contains("Fades away in 20 s.") && pl.contains("Darkens in as it dries."), "This brush: \"" + pf + "\", \"" + pl + "\"");
         check(ModularWords.caption(f).contains("fading") && ModularWords.caption(l).contains("lemon juice"), "captions: " + ModularWords.caption(f) + ", " + ModularWords.caption(l));
-        check(ModularWords.choiceWords(f, BrushPart.LIFE).equals("Fading 20 s") && ModularWords.choiceWords(l, BrushPart.LIFE).equals("Lemon juice")
-                && ModularWords.swapNote(f, BrushPart.LIFE).equals("fades 20 s") && ModularWords.swapNote(l, BrushPart.LIFE).equals("darkens 5:00"), "the Drying card and its swap notes");
+        check(ModularWords.choiceWords(f, BrushPart.LATER).equals("Fading 20 s") && ModularWords.choiceWords(l, BrushPart.LATER).equals("Lemon juice")
+                && ModularWords.swapNote(f, BrushPart.LATER).equals("fades 20 s") && ModularWords.swapNote(l, BrushPart.LATER).equals("darkens 5:00"), "the Later card and its swap notes");
         check(java.util.Arrays.asList("fading", "ghostly").contains(BrushNames.plainWords(f).get(1)) && java.util.Arrays.asList("secret", "sour").contains(BrushNames.plainWords(l).get(1)),
                 "a rolled one is named for it: sly-fading-pen, sneaky-sour-pen (" + BrushNames.plainWords(f) + ", " + BrushNames.plainWords(l) + ")");
     }
@@ -244,7 +246,7 @@ public final class FadingChecks {
     }
     /** Coarse steps for e-ink: Lemon Juice a twentieth of its time, 1 to 15 s, Fading a tenth of its time, 2 to 5 s; the next due when it says. */
     static void steps() {
-        check(FadingInk.stepMs(true, 4000) == 1000 && FadingInk.stepMs(true, 300_000) == 15_000 && FadingInk.stepMs(false, 10_000) == 2000 && FadingInk.stepMs(false, 30_000) == 3000 && FadingInk.stepMs(false, 120_000) == 5000, "lemon juice's steps of 1 to 15 s, fading's 2 to 5 s");
+        check(FadingInk.stepMs(FadingInk.LEMON, 4000) == 1000 && FadingInk.stepMs(FadingInk.LEMON, 300_000) == 15_000 && FadingInk.stepMs(FadingInk.FADE, 10_000) == 2000 && FadingInk.stepMs(FadingInk.FADE, 30_000) == 3000 && FadingInk.stepMs(FadingInk.FADE, 120_000) == 5000, "lemon juice's steps of 1 to 15 s, fading's 2 to 5 s");
         clock = 8_000_000;
         ToneDocument d = drawn(brush(PartChoice.FADE, 20));
         check(d.nextFade() == clock + 2000, "the next step is due 2 s after the lift: " + (d.nextFade() - clock));

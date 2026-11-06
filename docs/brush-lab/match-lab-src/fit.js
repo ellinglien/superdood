@@ -204,10 +204,10 @@ const CATEGORIES = [
   { label: "Pens", tools: ["Steady line", "Ballpoint", "Fountain pen", "Split nib", "Fude pen", "Stipple pen", "Engraving pen"], tips: ["round", "flat", "split"], media: ["ink"] },
   { label: "Markers", tools: ["Felt marker", "Chisel marker", "Highlighter"], tips: ["chisel", "round"], media: ["ink", "wash"] },
   { label: "Brushes", tools: ["Springy brush", "Swell brush", "Sumi", "Comb", "Flat hake"], tips: ["round", "bristles", "multi", "hake"], media: ["ink", "wash"] },
-  { label: "Washes", tools: ["Water brush", "Soft wash", "Wet blooms", "Pooling wash", "Masking fluid", "Wax resist"], tips: ["round", "hake", "bristles"], media: ["wash"] },
+  { label: "Washes", tools: ["Water", "Soft wash", "Wet blooms", "Pooling wash", "Masking fluid", "Wax resist"], tips: ["round", "hake", "bristles"], media: ["wash"] },
   { label: "Dry Media", tools: ["HB pencil", "Soft charcoal", "Soft pastel", "Wax crayon"], tips: ["round", "chisel"], media: ["graphite", "charcoal", "crayon"] },
   { label: "Oils", tools: ["Loaded oils"], tips: ["bristles", "round"], media: ["cover"] },
-  { label: "Odd Ones", tools: ["Spirograph", "Fill in", "Filled shape", "Dot tone", "Ben-Day brush", "Lemon juice", "Vanishing ink"], tips: ["round"], media: ["ink", "wash"] }
+  { label: "Odd Ones", tools: ["Spirograph", "Fill in", "Dot tone", "Ben-Day brush", "Lemon juice", "Vanishing ink"], tips: ["round"], media: ["ink", "wash"] }
 ];
 const CATEGORY_PRIOR = 3, CHOSEN_BUDGET = .6;
 const categoryOf = label => CATEGORIES.find(c => c.label === label) || null;

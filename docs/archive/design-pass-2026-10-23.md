@@ -1,6 +1,6 @@
 # Design pass, 2026-10-23: the owner's decisions
 
-The owner approved the proposal (https://claude.ai/artifact/1J5ggh6Xs6SSw8qyahdyCv) with the changes below. The
+The owner approved the proposal (a private page) with the changes below. The
 findings, screen inventory and component rules are in `docs/archive/design-audit-2026-10-23.md` (section "Component rules");
 the style is `docs/DESIGN.md` (Scribbler Style, "Shade before line"). (The mocks were removed before the public release.)
 

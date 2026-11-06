@@ -66,6 +66,12 @@ public final class NotebookRulesChecks {
         check(!NotebookRules.refuses(on, ToolSlots.SMUDGE, smear()), "one that only moves paint isn't");
         check(NotebookRules.refuses(on, 0, lift()), "and a slot holding a lifting brush is refused as well");
         check(!NotebookRules.refuses(off, ToolSlots.SMUDGE, lift()), "Nothing is refused with the rule off");
+        check(NotebookRules.ERASING_OFF.equals(NotebookRules.refusal(on, false, ToolSlots.ERASER, null)) && NotebookRules.refusal(off, false, ToolSlots.ERASER, null) == null
+                && NotebookRules.PAGE_LOCKED.equals(NotebookRules.refusal(off, true, 0, ToolSlotsChecks.old(0))), "A stroke's refusal: the page locked first, then No Erasing");
+        check(NotebookRules.shownCountdown(300, false, false, 299_000).equals(NotebookRules.countdown(299_000)) && NotebookRules.shownCountdown(300, true, false, 1000) == null
+                && NotebookRules.shownCountdown(300, false, false, 0) == null && "0:00".equals(NotebookRules.shownCountdown(300, false, true, 0)) && NotebookRules.shownCountdown(0, false, false, 1000) == null,
+                "The column's countdown: none on a cover, untimed, or out of time unless locked (0:00)");
+        check(NotebookLayout.swipe(-60, 10) == 1 && NotebookLayout.swipe(60, 0) == -1 && NotebookLayout.swipe(40, 0) == 0 && NotebookLayout.swipe(50, 80) == 0, "A swipe across the page inside a notebook turns it: 48 dp, more across than down");
         check(NotebookRules.eraserOff(on) && !NotebookRules.eraserOff(off) && NotebookRules.smudgeOff(on, water()) && !NotebookRules.smudgeOff(on, smear()), "The eraser tile (and a lifting smudge tool's) shows disabled");
         // Undo is not erasing: a page undoes.
         ToneDocument page = marked(1);
@@ -485,7 +491,7 @@ public final class NotebookRulesChecks {
                 && CardSheet.slides(CardSheet.Screen.TIMED) && CardSheet.slides(CardSheet.Screen.TOOLS) && !CardSheet.slides(CardSheet.Screen.TEMPLATE) && !CardSheet.slides(CardSheet.Screen.PAGE_TEMPLATE), "Timed Pages' screen is a slider, Brushes one under Tools', none on Template's (Page Colour is the settings list's row)");
         String[] brushes = new String[CardSheet.BRUSH_STOPS];
         for (int i = 0; i < brushes.length; i++) brushes[i] = CardSheet.sliderWord(CardSheet.Screen.TOOLS, i);
-        check(Arrays.equals(brushes, new String[]{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "All"}) && CardSheet.brushesAt(CardSheet.brushesStop(0)) == 0 && CardSheet.brushesAt(CardSheet.brushesStop(3)) == 3, "Brushes: 1 to 10, then All");
+        check(Arrays.equals(brushes, new String[]{"1", "2", "3", "4", "5", "6", "7", "8", "9", "All"}) && CardSheet.brushesAt(CardSheet.brushesStop(0)) == 0 && CardSheet.brushesAt(CardSheet.brushesStop(3)) == 3, "Brushes: 1 to 9, then All");
         check(NotebookOptions.DEFAULT.readMinutes(new byte[]{30}).seconds == 1800 && NotebookOptions.DEFAULT.withSeconds(1800).minutesBytes()[0] == 30 && NotebookRules.blinks(30_000, 1800) && !NotebookRules.blinks(31_000, 1800), "30 min is saved and read, and blinks the last 30 s");
     }
 

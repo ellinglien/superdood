@@ -144,15 +144,15 @@ public final class NotebookOptionsChecks {
             DrawingBook book = book();
             byte[] before = bytes(book);
             List<String> lines = toolbarLines(5);
-            NotebookOptions full = NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.DIARY).withTools(NotebookOptions.Tools.SURPRISE, lines).withNibPreview(false).withSelfPortrait(true);
+            NotebookOptions full = NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.DIARY).withTools(NotebookOptions.Tools.SURPRISE, lines).withNibPreview(false);
             check(full.ownsTools() && !full.isDefault() && full.toolbar.equals(lines), "Options with a template and a toolbar of its own");
             book.setOptions(full);
             check(book.unsaved(), "Options are a change to save");
             byte[] after = bytes(book);
             check(!Arrays.equals(before, after), "and change the file");
             // Each option alone makes its own record, none for the default.
-            NotebookOptions[] alone = {NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.COMICS), NotebookOptions.DEFAULT.withTools(NotebookOptions.Tools.LIBRARY, lines), NotebookOptions.DEFAULT.withNibPreview(false), NotebookOptions.DEFAULT.withSelfPortrait(true)};
-            int[] tags = {BookOptions.TEMPLATE, BookOptions.TOOLS, BookOptions.NIB_PREVIEW, BookOptions.SELF_PORTRAIT};
+            NotebookOptions[] alone = {NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.COMICS), NotebookOptions.DEFAULT.withTools(NotebookOptions.Tools.LIBRARY, lines), NotebookOptions.DEFAULT.withNibPreview(false)};
+            int[] tags = {BookOptions.TEMPLATE, BookOptions.TOOLS, BookOptions.NIB_PREVIEW};
             for (int i = 0; i < alone.length; i++) {
                 BookOptions.Covers covers = new BookOptions.Covers(); covers.options = alone[i];
                 byte[] block = BookOptions.bytes(covers);
@@ -189,9 +189,6 @@ public final class NotebookOptionsChecks {
             // Nib Preview (2026-10-29) is on by default: a notebook without its record, any older one, shows the hover ring.
             check(plainBook.options().nibPreview && NotebookOptions.DEFAULT.readNibPreview(null).nibPreview && !NotebookOptions.DEFAULT.readNibPreview(new byte[]{0}).nibPreview
                     && !NotebookOptions.DEFAULT.withNibPreview(false).equals(NotebookOptions.DEFAULT), "Nib Preview: absent is On, its record Off, a change");
-            // Self-Portrait Prompt (2026-10-30) is off by default: a notebook without its record, any older one, deals no cards.
-            check(!plainBook.options().selfPortrait && !NotebookOptions.DEFAULT.readSelfPortrait(null).selfPortrait && NotebookOptions.DEFAULT.readSelfPortrait(new byte[]{1}).selfPortrait
-                    && !NotebookOptions.DEFAULT.withSelfPortrait(true).equals(NotebookOptions.DEFAULT), "Self-Portrait Prompt: absent is Off, its record On, a change");
             // Back to the defaults: the file as it was, byte for byte.
             book.setOptions(NotebookOptions.DEFAULT);
             check(Arrays.equals(bytes(book), before), "Options put back to the default: the file is byte for byte as before them");

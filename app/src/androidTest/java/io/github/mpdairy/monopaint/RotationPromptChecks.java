@@ -16,7 +16,7 @@ final class RotationPromptChecks {
     static void run(Instrumentation test,PaintActivity app,StringBuilder report)throws Exception {
         OrientationEventListener sensor=(OrientationEventListener)get(get(app,"rotationPrompt"),"orientationSensor");
         SharedPreferences prefs=(SharedPreferences)get(app,"preferences");
-        View hint=(View)get(app,"rotateButton"),frame=(View)get(app,"orientationFrame"),shade=(View)get(app,"shadePicker");
+        View hint=(View)get(app,"rotateButton"),frame=(View)get(app,"orientationFrame");
         RotationSuggestion suggestion=(RotationSuggestion)get(get(app,"rotationPrompt"),"rotationSuggestion");
         int size=Math.round(72*app.getResources().getDisplayMetrics().density);
         for(boolean nomad:new boolean[]{false,true})for(int target=0;target<4;target++)for(boolean right:new boolean[]{false,true}) {
@@ -26,7 +26,7 @@ final class RotationPromptChecks {
                 prefs.edit().putBoolean("toolbox_right",right).apply();
                 call(app,"requestQuarter",new Class<?>[]{int.class},current);
                 call(get(app,"rotationPrompt"),"hide");
-            });idle(test);int shadeWidth=shade.getWidth();
+            });idle(test);
             main(test,() -> {
                 suggestion.update(quarter*90,current,SystemClock.uptimeMillis()-RotationSuggestion.HOLD_MS);
                 sensor.onOrientationChanged(quarter*90);
@@ -34,11 +34,8 @@ final class RotationPromptChecks {
                 check((Integer)get(app,"appRotation")==((4-current)%4),"Prompt does not turn app itself");
             });idle(test);
             RectF bounds=bounds(hint),area=bounds(frame);
-            RectF menu=bounds((View)get(app,"menuButton"));
             check(Math.abs(bounds.centerX()-area.centerX())<1&&Math.abs(bounds.centerY()-area.centerY())<1,"Prompt sits in the middle of the screen: "+target+" "+bounds);
-            check(!RectF.intersects(bounds,menu),"Rotation prompt stays clear of the hamburger");
             check(Math.abs(bounds.width()-size)<1&&Math.abs(bounds.height()-size)<1,"Rotate is 72 dp square: "+bounds);
-            check(shade.getWidth()==shadeWidth,"Prompt never steals color bar space");
             if(nomad&&target==1&&!right) {
                 screenshot(test,app,"rotation-new-landscape.png");
                 SystemClock.sleep(RotationSuggestion.SHOW_MS+100);idle(test);

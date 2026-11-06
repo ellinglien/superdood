@@ -35,6 +35,13 @@ final class ModularStroke implements LiftingStroke {
     /** Where {@code brush}'s strokes start the lattice ({@link #latticePx}): a pen's no sooner than {@link #INK_LATTICE_PX}. */
     static double latticeFrom(ModularBrush brush) { return ModularSizes.inks(brush) ? Math.max(latticePx, INK_LATTICE_PX) : latticePx; }
     private final ToneDocument document;
+    /**
+     * Sharp dry brushes ({@link #onGrid}): the fine grid the stroke is laid on, its buffers and every rectangle in its
+     * points, composed onto a page of its own; null for a stroke on the page. {@link #bw} × {@link #bh}: the buffers'
+     * size (the page's, or the grid's).
+     */
+    private final FineGrid grid;
+    private final int bw, bh;
     private final ResolvedBrush r;
     private final StrokePaper paper;
     private final ModularCompose compose;
@@ -85,7 +92,7 @@ final class ModularStroke implements LiftingStroke {
     /** Stipple's Build-up: its ticks of pen time while the pen rests or lingers; null without it. */
     private final StippleStamper.Holds holds;
     /** Stamp: the ink its holder's last stroke left ({@link HeldPaint#stampInk}), and whose it is (null: a sample's, fresh, kept by none). */
-    private final StampStamper.Ink stampInk;
+    private StampStamper.Ink stampInk;
     private final String inkedBy;
     /** Spiro: the pen has lifted ({@link #lastSamples}), its stamper's lift's work to do. */
     private boolean spiroLift;
@@ -151,20 +158,23 @@ final class ModularStroke implements LiftingStroke {
     private CarryPlane plane;
     private Carry carry;
     /**
-     * A stump's other half ({@link #alsoBlends}): the selected pair's wash layer, which it blends too, its plane and
-     * reservoir there and what its dabs reached; −1 and null for any other stroke. Its dabs are the stroke's, sample by
-     * sample; what they moved there is laid at {@link #finish}, a gesture of its own linked to the stroke's (a gesture
-     * binds one layer), as the eraser lays its wash.
+     * The other places the smudge works besides its own ({@link #alsoWorks}): a stump's other half, the selected pair's
+     * wash, and Reprint's every other plane of the pair; empty for any other stroke. Its dabs there are the stroke's,
+     * sample by sample; what they changed is laid at {@link #finish}, a gesture each linked to the stroke's (a gesture
+     * binds one layer's one plane), as the eraser lays its wash.
      */
-    private final int washLayer;
-    /** Inkwash: the kinds of the wash layer's paint it blends: its wash plane's when it has one ({@link ToneDocument#PLANE_WASH}), else its base (0). */
-    private final int washKind;
-    private CarryPlane washPlane;
-    private Carry washCarry;
-    private int[] washRect;
+    private Other[] others;
+    /** One of {@link #others}: its layer and the kinds of its plane ({@link ToneDocument#kindsOf}), its plane and reservoir there, and what its dabs reached. */
+    private static final class Other {
+        final int layer, kind;
+        final CarryPlane plane;
+        final Carry carry;
+        int[] rect;
+        Other(int layer, int kind, CarryPlane plane, Carry carry, int[] rect) { this.layer = layer; this.kind = kind; this.plane = plane; this.carry = carry; this.rect = rect; }
+    }
     /** Keeps Paint: whose brush's paint the smudge starts with and keeps at finish ({@link WatercolorSession#holder}); null for none. */
     private final String heldBy;
-    /** Clear Water: the box of a wash still wet when the stroke began ({@link WatercolorSession#stillWet}), or null. */
+    /** Clear Water and Scrape: the box of a wash still wet when the stroke began ({@link WatercolorSession#stillWet}), or null. */
     private final int[] stillWet;
     /**
      * Paint Load ({@link LoadedPaint}): the stroke's paint, spent sample by sample, and whose brush it is (it starts with
@@ -198,6 +208,8 @@ final class ModularStroke implements LiftingStroke {
     private FillRegion.Room room;
     /** A fill's stroke ({@link #fill}): its line and body laid once over its room, never along samples. */
     private boolean filled;
+    /** What a fill lays over ({@link #lay}): its {@link #room}, or Make Ink's letters ({@link #print}), which its marks aren't kept to. */
+    private FillRegion.Room laid;
     /**
      * Stay in Lines ({@link ResolvedBrush#staysIn}): the shape the stroke started in and its flood ({@link StayIn}),
      * found at its first sample; its {@link #room} too, so its marks are kept to it as a fill's are. Null without one
@@ -227,34 +239,58 @@ final class ModularStroke implements LiftingStroke {
      * does the rest there; {@link #finish} writes it to the page.
      */
     static ModularStroke render(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session, PageTilt.Source tilt) {
-        return new ModularStroke(document, brush, size, darkness, session, null, tilt);
+        return new ModularStroke(document, brush, size, darkness, session, null, tilt, null, null);
     }
+    /**
+     * Sharp dry brushes ({@link SharpStrokes}): a stroke of {@code brush} (on its surface already, laid as its stroke lays
+     * it: {@link QuickStroke#laidAs}) laid on {@code grid}'s points and composed onto {@code page}, the paper read there
+     * ({@code paper}: the page's paper or already {@link StrokePaper#on} the grid); no page, session or gesture. Its
+     * samples as the page's stroke took them, then {@link #laid}. Only a brush {@link SharpStrokes#drawn} draws.
+     */
+    static ModularStroke onGrid(FineGrid grid, ModularCompose.Page page, StrokePaper paper, ModularBrush brush, double size, double darkness) {
+        return new ModularStroke(null, brush, size, darkness, null, paper, null, grid, page);
+    }
+    /** Whose ink a stroke of {@code r} carries on with ({@link HeldPaint#stampInk}): a Stamp's holder's; null for none. */
+    static String inkedBy(ResolvedBrush r, WatercolorSession session) { return r.pattern != null && r.pattern.stamp() && session != null ? session.holder() : null; }
+    /** On a grid: a Stamp starts with {@code load} of its ink, as its stroke on the page did ({@link StrokeLog.Entry#ink}). */
+    void stampInk(double load) { stampInk = StampStamper.Ink.kept(load); }
+    /** On a grid: how far from the grid a step's marks can land, page px ({@link LineStamper.Meta#cull}; NaN: unknown), and its widest reach once laid. */
+    void cull(double c) { mL.cull = c; mW.cull = c; }
+    int widest() { return Math.max(mL.widest, mW.widest); }
     /** The stroke, its gesture begun by the caller; {@code tilt} null: live (the session's tilt, paced), else a {@link #render}. */
     private ModularStroke(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session, StrokePaper paper, PageTilt.Source tilt) {
-        this.document = document; this.session = session;
+        this(document, brush, size, darkness, session, paper, tilt, null, null);
+    }
+    private ModularStroke(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session, StrokePaper paper, PageTilt.Source tilt, FineGrid grid, ModularCompose.Page onto) {
+        // The surface: the page's, whatever paper the brush names (ModularBrush#onSurface).
+        if (document != null) brush = brush.onSurface(document.surface);
+        this.document = document; this.session = session; this.grid = grid;
+        bw = grid != null ? grid.width : document.width; bh = grid != null ? grid.height : document.height;
         renders = tilt != null;
         pace = session == null || tilt != null ? null : session.pace;
         gradient = GreyGradient.of(brush, darkness, session == null ? null : session.swatches);
         r = ResolvedBrush.of(brush, size, gradient != null ? gradient.ref : darkness);
+        // Wears Down: the tip wears along the stroke's own samples.
+        pts.wear = r.pen.wear;
         // Pastels or a dry brush joining wet paint lays on its plane, to sink into it (WatercolorSession#joinsWet).
         int joins = session == null ? -1 : session.joiningKinds();
-        kind = joins >= 0 ? joins : kinds(document, r);
-        this.paper = paper != null ? paper : new StrokePaper(r.paper);
+        kind = joins >= 0 ? joins : document == null ? r.kind : kinds(document, r);
+        this.paper = grid != null ? (paper.page() == paper ? paper.on(grid) : paper).ready(r.pen.fuzz > 0 || r.rule == ResolvedBrush.Rule.CHARCOAL ? StickGrain.of(r.pen.seed) : null)
+                : paper != null ? paper : new StrokePaper(r.paper);
         // A smudge's render composes its plane off the page as any render does, its writes kept as smears (each pixel with
         // its coverage floor); what composes after them at finish (a Drying lift, Clear Water's run-out) composes on the page.
         // A resist's composes on the page at finish: wax lays its sheen and then the resist, on two layers. And a crayon's, its wax.
-        // A print over prints (ResolvedBrush.replaces) clears its plane between its dots: kept as smears are.
-        boolean smears = r.carry != null && r.carry.moves || r.replaces();
-        tones = tilt != null && r.flt == null && !r.resist && !r.waxes() ? smears ? StrokeTones.smeared(document) : new StrokeTones(document) : null;
-        compose = new ModularCompose(tones != null ? tones : ModularCompose.of(document), r, this.paper);
+        boolean smudges = r.carry != null && r.carry.moves;
+        tones = tilt != null && r.flt == null && !r.resist && !r.waxes() ? smudges ? StrokeTones.smeared(document) : new StrokeTones(document) : null;
+        compose = new ModularCompose(onto != null ? onto : tones != null ? tones : ModularCompose.of(document), r, this.paper);
         // Wax: the stroke lays its sheen on the ink layer, then the resist on the masking fluid ({@link #finish}).
         if (r.resist && !fluid(r)) compose.sheen(true);
-        int w = document.width, h = document.height;
+        int w = bw, h = bh;
         // Stipple's dots and Hatch's lines are a pixel or two across: worked out on every pixel at any size.
         shift = reach(r) > latticeFrom(brush) && r.pattern == null ? 1 : 0;
         holds = r.pattern != null && (r.pattern.stipple() && r.pattern.hold > 0 || r.pattern.handHatch()) ? new StippleStamper.Holds() : null;
         // A stamp carries on with the ink its holder's last stroke left, unless the pen has rested since.
-        inkedBy = r.pattern != null && r.pattern.stamp() && session != null ? session.holder() : null;
+        inkedBy = inkedBy(r, session);
         stampInk = inkedBy != null ? session.held.stampInk(inkedBy) : StampStamper.Ink.FRESH;
         L = buffer(0); W = buffer(0); D = buffer(0);
         rect = StrokeMath.emptyRect(w, h);
@@ -272,9 +308,9 @@ final class ModularStroke implements LiftingStroke {
             water.bath.begin();
             floatPen = new FloatPen(r, water.bath, r.pen.seed);
         } else { water = null; floatPen = null; }
-        under = under(document, r);
+        under = document == null ? null : under(document, r);
         compose.under(under);
-        if (r.waxes() && !renders && !drying && !r.prints()) {
+        if (r.waxes() && !renders && !drying && !r.prints() && document != null) {
             waxTones = StrokeTones.onMask(document);
             waxCompose = new ModularCompose(waxTones, r, this.paper);
             waxCompose.under(under);
@@ -285,18 +321,20 @@ final class ModularStroke implements LiftingStroke {
             plane = new CarryPlane(document, tilt == null);
             // A dirty brush starts with the paint its holder's last stroke kept; Clear Water reads where a wash was still wet.
             heldBy = session != null && r.carry.keepsPaint() ? session.holder() : null;
-            stillWet = session != null && r.carry.water() ? session.stillWet(document) : null;
+            stillWet = session != null && (r.carry.water() || r.carry.scrape()) ? session.stillWet(document) : null;
+            // Scrape: how wet the paint is decides what the blade does, read as each tile of the plane fills.
+            if (r.carry.scrape()) plane.wetFrom(session == null ? null : session.wetness(document));
             carry = new Carry(r.carry, plane, heldBy == null ? null : session.held.of(heldBy), stillWet);
             compose.carry(plane);
         } else { carry = null; heldBy = null; stillWet = null; }
-        washLayer = carry != null ? alsoBlends(document, r) : -1;
-        washKind = washLayer >= 0 && document.hasPlane(washLayer, ToneDocument.PLANE_WASH) ? ToneDocument.KIND_PAINT : 0;
-        if (washLayer >= 0) {
+        int[][] also = carry != null ? alsoWorks(document, r, kind) : new int[0][];
+        others = new Other[also.length];
+        for (int i = 0; i < also.length; i++) {
             // A clean reservoir of its own: what it softens there is the wash's (a dirty brush's paint is its own layer's).
-            washPlane = new CarryPlane(document, tilt == null, washLayer, washKind);
-            washCarry = new Carry(r.carry, washPlane);
-            washRect = StrokeMath.emptyRect(w, h);
+            CarryPlane there = new CarryPlane(document, tilt == null, also[i][0], also[i][1]);
+            others[i] = new Other(also[i][0], also[i][1], there, new Carry(r.carry, there), StrokeMath.emptyRect(w, h));
         }
+        shown = others.length > 0 ? new Shown() : null;
         defersRetaper = deferRetapers && renders && retapers(r) && r.body == null && !(r.pen.splatter > 0) && !(r.pen.fuzz > 0) && flickFling == null && carry == null && r.loaded == null && !handTilt && r.flt == null;
         loadedBy = r.loaded != null && session != null ? session.holder() : null;
         paint = r.loaded != null ? new LoadedPaint.Run(r, r.loaded.startShare(loadedBy == null ? 0 : session.held.load(loadedBy))) : null;
@@ -311,7 +349,7 @@ final class ModularStroke implements LiftingStroke {
         if (plane == null) return;
         double pad = r.carry.r + r.carry.stride + 2 + r.carry.softenReach();
         plane.fill((int)Math.floor(x0 - pad), (int)Math.floor(y0 - pad), (int)Math.ceil(x1 + pad), (int)Math.ceil(y1 + pad));
-        if (washPlane != null) washPlane.fill((int)Math.floor(x0 - pad), (int)Math.floor(y0 - pad), (int)Math.ceil(x1 + pad), (int)Math.ceil(y1 + pad));
+        for (Other o : others) o.plane.fill((int)Math.floor(x0 - pad), (int)Math.floor(y0 - pad), (int)Math.ceil(x1 + pad), (int)Math.ceil(y1 + pad));
     }
     /**
      * A quick stroke's render at lift, the pen last at {@code x, y}: a smudging brush's Flick carries it past every sample
@@ -323,18 +361,24 @@ final class ModularStroke implements LiftingStroke {
         reachCarry(x - far, y - far, x + far, y + far);
     }
     /** Pixels the smudge passed over because its plane wasn't filled there (a render reaching past {@link #reachCarry}): 0. */
-    int carryMissed() { return (plane == null ? 0 : plane.missed) + (washPlane == null ? 0 : washPlane.missed); }
+    int carryMissed() {
+        int n = plane == null ? 0 : plane.missed;
+        for (Other o : others) n += o.plane.missed;
+        return n;
+    }
     /**
      * Begins the stroke's gesture on the page, as erasable as its brush ({@link ResolvedBrush#erase}). Before it, samples lay only into the stroke's own buffers ({@link
      * #sample} touches no page): nothing may be presented or finished.
      */
     void begin() {
         // Inkwash: a stroke on water lays on its bath's plane, as the bath's shows and print do.
-        if (fluid(r)) document.beginFluid(1); else document.begin(r.erase, water != null ? water.kinds() : kind);
+        if (fluid(r)) document.beginFluid(1); else document.begin(r.erase, kind());
         // Crayon: wax takes wax, so layers build up and Scratch scrapes them; masking fluid still keeps it out.
         if (r.rule == ResolvedBrush.Rule.CRAYON) document.takesOnWax();
         // Screen: it builds on its layer's print tone, which the layer gets now if it has none.
         if (r.prints()) document.printing();
+        // Light over dark: what it lays lies over pen, washes and opaque paint too, not only its own kind.
+        if (r.laysOver() && water == null) document.layingOver();
     }
     /**
      * Whether {@code r}'s stroke is laid on the page's masking fluid as it goes: a resist that lifts in full (masking
@@ -350,6 +394,7 @@ final class ModularStroke implements LiftingStroke {
     }
     /** As {@link #start(ToneDocument, ModularBrush, InkWashSizes.Preset, InkWashShades.Shade, WatercolorSession)}, at {@code size} page pixels and {@code darkness} 0–1: for samples, which size to their tile. */
     static ModularStroke start(ToneDocument document, ModularBrush brush, double size, double darkness, WatercolorSession session) {
+        brush = brush.onSurface(document.surface);
         selectLayer(document, brush);
         prepare(document, ResolvedBrush.of(brush, size, darkness));
         return new ModularStroke(document, brush, size, darkness, session);
@@ -376,18 +421,18 @@ final class ModularStroke implements LiftingStroke {
         int p = ToneDocument.planeOf(r.medium);
         return p >= 0 && document.hasPlane(document.activeLayer(), p) ? r.medium : 0;
     }
-    /** Inkwash: the kinds its gestures begin with ({@link #kinds}). */
-    int kind() { return kind; }
+    /** Inkwash: the kinds its gestures begin with ({@link #kinds}); on water its bath's, so a quick preview's frames show on the bath's plane. */
+    int kind() { return water != null ? water.kinds() : kind; }
     /** Selects {@code brush}'s half of the selected pair: the ink layer for ink, charcoal and graphite, the wash layer for wash and cover. */
     static void selectLayer(ToneDocument document, ModularBrush brush) { document.selectLayer(layerOf(document, brush)); }
     /**
      * The layer {@code brush} draws on: the selected pair's ink layer for ink, charcoal and graphite, its wash layer for
      * wash and cover, and for a wet wash ({@link ResolvedBrush#washes}), an Ink wash Ink too, so its washes merge with the
-     * others there.
+     * others there; and a Water-Soluble one ({@link ResolvedBrush#soluble}), so the Water brush there dissolves it.
      */
     static int layerOf(ToneDocument document, ModularBrush brush) {
         int pair = InkWashLayers.current(document);
-        return ModularSizes.inks(brush) && !ResolvedBrush.washes(brush) ? InkWashLayers.inkOf(document, pair) : InkWashLayers.washOf(document, pair);
+        return ModularSizes.inks(brush) && !ResolvedBrush.washes(brush) && !ResolvedBrush.soluble(brush) ? InkWashLayers.inkOf(document, pair) : InkWashLayers.washOf(document, pair);
     }
     /**
      * The top layer of the page a Blend reads under the stroke ({@link ModularCompose.Under}): Behind, the selected
@@ -430,10 +475,47 @@ final class ModularStroke implements LiftingStroke {
      * A paint's smudge still moves only its own layer: pen lines stay crisp (the Smudge spec, decision A).
      */
     static int alsoBlends(ToneDocument document, ResolvedBrush r) {
-        if (r.carry == null || !r.carry.moves || !(r.carry.soften > 0) || r.carry.water() || r.flt != null || r.resist || r.screen != null
-                || r.blendMode != ResolvedBrush.BlendMode.OWN) return -1;
+        if (!stump(r)) return -1;
         int pair = InkWashLayers.current(document), ink = InkWashLayers.inkOf(document, pair), wash = InkWashLayers.washOf(document, pair);
         return document.activeLayer() == ink && wash != ink && document.layerVisible(wash) ? wash : -1;
+    }
+    /** Whether {@code r} is a stump: a Smear with Soften, on paper, in its medium's own Blend Mode ({@link #alsoBlends}). */
+    static boolean stump(ResolvedBrush r) {
+        return r.carry != null && r.carry.moves && r.carry.soften > 0 && !r.carry.water() && r.flt == null && !r.resist && r.screen == null
+                && r.blendMode == ResolvedBrush.BlendMode.OWN;
+    }
+    /**
+     * Whether {@code r} is a stump of Ink, the smudge tool's Blur (the owner, 2026-11-01: "a simple blur"): where a stump
+     * of a dry medium blends dry media and leaves pen lines crisp, one of Ink blurs every mark on the pair, pen lines too.
+     */
+    static boolean blursAll(ResolvedBrush r) { return stump(r) && r.medium == ToneDocument.KIND_PEN; }
+    /**
+     * Where a smudging stroke of {@code r} on {@code document}'s active layer, laying on its plane for {@code kind}, works
+     * besides that plane: {layer, kinds} each ({@link #others}). A stump's other half ({@link #alsoBlends}): the pair's wash,
+     * each of its paint planes it has (washes and opaque paint: gouache, oils), as its one base held them all before planes;
+     * else its base. Reprint and a stump of Ink ({@link #blursAll}): every other plane of the selected pair's two layers
+     * that are shown, bases too, so it reprints or blurs the pen, the pencil and the wash under it alike. None for any
+     * other stroke.
+     */
+    static int[][] alsoWorks(ToneDocument document, ResolvedBrush r, int kind) {
+        if (r.carry != null && r.carry.reprint() || blursAll(r)) {
+            int pair = InkWashLayers.current(document), own = document.activeLayer(), ownPlane = ToneDocument.planeOf(kind);
+            int wash = InkWashLayers.washOf(document, pair), ink = InkWashLayers.inkOf(document, pair);
+            java.util.List<int[]> out = new java.util.ArrayList<>();
+            for (int layer : wash == ink ? new int[]{ink} : new int[]{wash, ink}) {
+                if (!document.layerVisible(layer)) continue;
+                for (int p = -1; p < ToneDocument.PLANES; p++)
+                    if ((p < 0 || document.hasPlane(layer, p)) && !(layer == own && p == ownPlane)) out.add(new int[]{layer, ToneDocument.kindsOf(p)});
+            }
+            return out.toArray(new int[0][]);
+        }
+        int wash = alsoBlends(document, r);
+        if (wash < 0) return new int[0][];
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int p : new int[]{ToneDocument.PLANE_WASH, ToneDocument.PLANE_OPAQUE})
+            if (document.hasPlane(wash, p)) out.add(new int[]{wash, ToneDocument.kindsOf(p)});
+        if (out.isEmpty()) out.add(new int[]{wash, 0});
+        return out.toArray(new int[0][]);
     }
     static boolean laysAgain(ResolvedBrush r) {
         return ModularCompose.darkensBy(r) && !r.settlesAfterLift && r.halo == null && r.flt == null && r.fade == null && !readsTilt(r);
@@ -454,6 +536,10 @@ final class ModularStroke implements LiftingStroke {
             case STAMP: return StampStamper.reach(r.pattern, r.pattern.size);
             case SPIRO: return SpiroStamper.reach(r.pattern, r.pattern.size);
             case HAND_HATCH: return HandHatchStamper.reach(r.pattern, r.bodySize);
+            case RULING: return RulingPen.reach(r.bodySize);
+            case TWIG: return TwigStick.reach(r.bodySize);
+            case FAN: return FanBrush.reach(r.pattern, r.bodySize);
+            case ROLLER: return Brayer.reach(r.bodySize);
             default: return r.bodySize;
         }
     }
@@ -467,12 +553,22 @@ final class ModularStroke implements LiftingStroke {
         if (r.line && r.lineTip == ResolvedBrush.LineTip.STAMP) line = StampStamper.reach(r.pattern, r.pattern.size);
         if (r.line && r.lineTip == ResolvedBrush.LineTip.SPIRO) line = SpiroStamper.reach(r.pattern, r.pattern.size);
         if (r.line && r.lineTip == ResolvedBrush.LineTip.HAND_HATCH) line = HandHatchStamper.reach(r.pattern, r.inkSize);
+        if (r.line && r.lineTip == ResolvedBrush.LineTip.RULING) line = RulingPen.reach(r.inkSize);
+        if (r.line && r.lineTip == ResolvedBrush.LineTip.TWIG) line = TwigStick.reach(r.inkSize);
+        if (r.line && r.lineTip == ResolvedBrush.LineTip.FAN) line = FanBrush.reach(r.pattern, r.inkSize);
+        if (r.line && r.lineTip == ResolvedBrush.LineTip.ROLLER) line = Brayer.reach(r.inkSize);
         return line;
     }
+    /** A Brayer's page as its gesture found it, over white (what it picks up), made on its first roll; null for other tips. */
+    private ModularCompose.Under rolledOver() {
+        if (rolled == null) rolled = new ModularCompose.Under(document, document.activeLayer(), 255);
+        return rolled;
+    }
+    private ModularCompose.Under rolled;
     /** Whether the stroke is worked out on the lattice ({@link #latticeFrom}). */
     boolean onLattice() { return shift > 0; }
     /** A page-sized buffer on the stroke's lattice, filled with {@code fill}. */
-    private FloatTiles buffer(float fill) { return new FloatTiles(document.width, document.height, fill, shift); }
+    private FloatTiles buffer(float fill) { return grid != null ? new FloatTiles(grid, fill) : new FloatTiles(document.width, document.height, fill, shift); }
 
     @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY) { sample(x, y, pressure, tiltX, tiltY, PenSpeed.UNTIMED); }
     @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY, long time) {
@@ -573,7 +669,7 @@ final class ModularStroke implements LiftingStroke {
     }
     /** Stamps what is new since {@link #done} (at the lift, a Spiro's lift too: {@link #spiroLift}), to compose at {@link #present}. */
     private void stampNew() {
-        int[] changed = StrokeMath.emptyRect(document.width, document.height), line = null;
+        int[] changed = StrokeMath.emptyRect(bw, bh), line = null;
         long t0 = Prof.now();
         if (wet) {
             if (r.line) { line = wetLine(); changed = union(changed, line); }
@@ -590,8 +686,12 @@ final class ModularStroke implements LiftingStroke {
         // Smudge: after the marks, before the compose (stroke.js add).
         if (carry != null) {
             long c0 = Prof.now();
-            changed = union(changed, carry.pass(pts, done, document.width, document.height));
-            if (washCarry != null) washRect = union(washRect, washCarry.pass(pts, done, document.width, document.height));
+            changed = union(changed, carry.pass(pts, done, bw, bh));
+            for (Other o : others) {
+                int[] moved = o.carry.pass(pts, done, bw, bh);
+                o.rect = union(o.rect, moved);
+                shown.grow(moved);
+            }
             Prof.add(Prof.CARRY, c0);
         }
         // Float: the pen pushes aside and combs what floats; its marks wait in its buffers for the lift.
@@ -683,18 +783,27 @@ final class ModularStroke implements LiftingStroke {
      * stipple's dots) are a stroke's and aren't laid; the medium, paper, Print Shading, grey and drying are. Before any
      * sample, once; no samples after.
      */
-    void fill(FillRegion.Room room) { fill(room, false); }
+    void fill(FillRegion.Room room) { fill(room, false, true); }
     /**
      * Filled Shape's fill ({@link FilledShape}): {@link #fill}, its line as dark as the outline's where it lays most (a
      * stick's or a crayon's press, {@link LineStamper#press}), and never darker than the darker of the outline and the
      * fill ({@link ModularCompose#keepDarker}), so outline and inside read as one shape at its grey.
      */
-    void fillShape(FillRegion.Room room) { compose.keepDarker(); fill(room, true); }
-    private void fill(FillRegion.Room room, boolean shape) {
-        if (pts.count > 0 || this.room != null) throw new IllegalStateException("A fill is laid once, before any sample");
+    void fillShape(FillRegion.Room room) { compose.keepDarker(); fill(room, true, true); }
+    /**
+     * Make Ink ({@link TextBoxes#ink}): {@link #fill} over {@code letters}, each pixel's press its coverage ({@link
+     * FillRegion.Room#share}), so the letters' antialiased edges are the brush's too; its marks are not kept to them, so
+     * what a medium does past a stroke's line (a wash's bleed and backruns, Mold, a Later's ageing) it does past the
+     * letters, as after a stroke.
+     */
+    void print(FillRegion.Room letters) { fill(letters, false, false); }
+    /** {@code kept}: the marks kept to {@code room}, a fill's; else free of it, Make Ink's. */
+    private void fill(FillRegion.Room room, boolean shape, boolean kept) {
+        if (pts.count > 0 || filled || this.room != null) throw new IllegalStateException("A fill is laid once, before any sample");
         // A fill composes as it lays and lets its buffers go: a crayon's wax composes at the lift, as laid.
         waxTones = null; waxCompose = null;
-        this.room = room;
+        this.room = kept ? room : null;
+        laid = room;
         filled = true;
         int[] box = {room.x0, room.y0, room.x1, room.y1};
         double pr = FILL_PRESSURE, v = FILL_SPEED;
@@ -764,6 +873,9 @@ final class ModularStroke implements LiftingStroke {
         int[] all = sh > 0 ? grownByStretch(out) : out;
         FloatTiles shown = wet ? D : W, rel = wet ? relief : null;
         int ahead = blend != null ? blend.reach() << sh : 0, loosens = blend != null ? blend.loosens() << sh : 0;
+        // Pixels and Stitches compose rows round their own and read cells' centres past them (ModularCompose.cellReach):
+        // a strip is composed that far short of what is laid, and the rows above kept that long.
+        int cells = compose.cellReach();
         // Page rows before which each step is done.
         int laid = 0, mixed = 0, wetted = 0, kept = 0, composed = all[1], freed = 0;
         for (int k = 0, end = 0; end < h; ) {
@@ -792,7 +904,7 @@ final class ModularStroke implements LiftingStroke {
             if (settles) { keepToRoom(new int[]{out[0], Math.max(out[1], kept), out[2], Math.min(out[3], end - 1)}); kept = end; }
             Prof.add(Prof.F_SETTLE, t0); t0 = Prof.now();
             // A row reads its lattice row and, between two, the next.
-            int last = end < h ? Math.min(all[3], end - 1 - sh) : all[3];
+            int last = end < h ? Math.min(all[3], end - 1 - sh - cells) : all[3];
             if (last >= composed) {
                 int[] at = {all[0], composed, all[2], last};
                 if (sh > 0) compose.composeLattice(L, shown, rel, at, ModularCompose.Phase.FINAL);
@@ -801,7 +913,7 @@ final class ModularStroke implements LiftingStroke {
             }
             Prof.add(Prof.F_COMPOSE, t0);
             // Above what any step still reads, the buffers let go, a tile row at a time.
-            int low = composed >> sh;
+            int low = (composed - cells) >> sh;
             if (bands != null) low = Math.min(low, bands.from(k) - 4);
             // The loosening reads the saved line and body that far above the rows it has still to finish.
             if (blend != null) low = Math.min(low, (mixed - 2 * loosens) >> sh);
@@ -816,20 +928,22 @@ final class ModularStroke implements LiftingStroke {
         if (blend != null) blend.done();
         grow(rect, out);
     }
-    /** {@code v} at every lattice point of {@code into} in the {@link #room}, at page rows {@code y0..y1}. */
+    /** {@code v} at every lattice point of {@code into} in what the fill lays over ({@link #laid}), times its share there, at page rows {@code y0..y1}. */
     private void lay(FloatTiles into, float v, int y0, int y1) {
         if (!(v > 0)) return;
+        FillRegion.Room room = laid;
         int step = into.step(), x0 = into.up(room.x0), n = room.x1 < x0 ? 0 : (room.x1 - x0) / step + 1;
         float[] row = new float[Math.max(1, n)];
         for (int y = into.up(Math.max(room.y0, y0)); y <= Math.min(room.y1, y1); y += step) {
             boolean any = false;
             // The room's own row: every lattice point here is in its box.
-            for (int k = 0, o = (y - room.y0) * room.width + x0 - room.x0; k < n; k++, o += step) { boolean in = room.at[o] != FillRegion.OUT; row[k] = in ? v : 0; any |= in; }
+            for (int k = 0, o = (y - room.y0) * room.width + x0 - room.x0; k < n; k++, o += step) { boolean in = room.at[o] != FillRegion.OUT; row[k] = in ? v * room.share(o) : 0; any |= in; }
             if (any) into.setRow(x0 >> into.shift, y >> into.shift, n, row, 0);
         }
     }
     /** A fill's line, settled body and relief kept to its {@link #room} over {@code at} (page px): nothing outside it. */
     private void keepToRoom(int[] at) {
+        if (room == null) return;
         keepToRoom(L, at); keepToRoom(D, at); keepToRoom(relief, at);
     }
     private void keepToRoom(FloatTiles t, int[] at) {
@@ -853,6 +967,7 @@ final class ModularStroke implements LiftingStroke {
     boolean fills() { return filled; }
     /** Whether this stroke stays in a shape of the ink lines ({@link #stay}), its shape found. */
     boolean staysIn() { return room != null && !filled; }
+    @Override public boolean inShape() { stayReady(true); return staysIn(); }
 
     /** Ends section {@code k} begun at {@code since} and starts the next. */
     private static long lap(int k, long since) { Prof.add(k, since); return Prof.now(); }
@@ -864,6 +979,10 @@ final class ModularStroke implements LiftingStroke {
         if (r.lineTip == ResolvedBrush.LineTip.STIPPLE) return StippleStamper.stamp(into, null, r.pattern, pts, r.inkSize, from, mL, holds);
         if (r.lineTip == ResolvedBrush.LineTip.HATCH) return HatchStamper.stamp(into, null, r.pattern, pts, r.inkSize, from, mL);
         if (r.lineTip == ResolvedBrush.LineTip.HAND_HATCH) return HandHatchStamper.stamp(into, null, r.pattern, pts, r.inkSize, from, mL, holds);
+        if (r.lineTip == ResolvedBrush.LineTip.RULING) return RulingPen.stamp(into, null, paper, r.pattern, pts, r.inkSize, from, mL);
+        if (r.lineTip == ResolvedBrush.LineTip.TWIG) return TwigStick.stamp(into, null, paper, r.pattern, pts, r.inkSize, from, mL);
+        if (r.lineTip == ResolvedBrush.LineTip.FAN) return FanBrush.stamp(into, null, paper, r.pattern, pts, r.inkSize, from, mL);
+        if (r.lineTip == ResolvedBrush.LineTip.ROLLER) return Brayer.stamp(into, null, paper, rolledOver(), r.pattern, pts, r.inkSize, from, mL);
         if (r.lineTip == ResolvedBrush.LineTip.HAKE) return HakeRibbon.stamp(into, null, paper, r.lineHake, pts, r.inkSize, mL, r.lineHake.softK, last || hakeLift);
         if (r.lineTip == ResolvedBrush.LineTip.BRISTLES) return BristleSwarm.stamp(into, null, paper, r.lineSwarm, pts, r.inkSize / 2, mL);
         if (r.linePlaced) {
@@ -885,6 +1004,10 @@ final class ModularStroke implements LiftingStroke {
         if (r.bodyTip == ResolvedBrush.BodyTip.HAND_HATCH) return HandHatchStamper.stamp(into, wetD, r.pattern, pts, r.bodySize, from, mW, holds);
         if (r.bodyTip == ResolvedBrush.BodyTip.STAMP) return StampStamper.stamp(into, wetD, r.pattern, pts, r.pattern.size, from, mW, stampInk);
         if (r.bodyTip == ResolvedBrush.BodyTip.SPIRO) return SpiroStamper.stamp(into, wetD, r.pattern, pts, mW, spiroLift);
+        if (r.bodyTip == ResolvedBrush.BodyTip.RULING) return RulingPen.stamp(into, wetD, paper, r.pattern, pts, r.bodySize, from, mW);
+        if (r.bodyTip == ResolvedBrush.BodyTip.TWIG) return TwigStick.stamp(into, wetD, paper, r.pattern, pts, r.bodySize, from, mW);
+        if (r.bodyTip == ResolvedBrush.BodyTip.FAN) return FanBrush.stamp(into, wetD, paper, r.pattern, pts, r.bodySize, from, mW);
+        if (r.bodyTip == ResolvedBrush.BodyTip.ROLLER) return Brayer.stamp(into, wetD, paper, rolledOver(), r.pattern, pts, r.bodySize, from, mW);
         return BodyStamper.stamp(into, wetD, paper, r.body, pts, r.bodySize, from, mW, last || hakeLift && r.body.flatHead, clip);
     }
 
@@ -893,8 +1016,8 @@ final class ModularStroke implements LiftingStroke {
         double k = r.parts.lineWet * StrokeMath.LINE_WET_K;
         if (!(k > 0) || empty(at)) return;
         double along = .3 * r.parts.bodyAmt;
-        int x0 = Math.max(0, at[0]), x1 = Math.min(document.width - 1, at[2]), step = L.step();
-        for (int y = L.up(Math.max(0, at[1])); y <= Math.min(document.height - 1, at[3]); y += step) {
+        int x0 = Math.max(0, at[0]), x1 = Math.min(bw - 1, at[2]), step = L.step();
+        for (int y = L.up(Math.max(0, at[1])); y <= Math.min(bh - 1, at[3]); y += step) {
             int ty = L.tileOf(y), row = L.rowAt(y);
             for (int x = L.up(x0); x <= x1; ) {
                 int end = Math.min(x1, L.tileEnd(L.tileOf(x)));
@@ -917,7 +1040,7 @@ final class ModularStroke implements LiftingStroke {
     private void land(long now) {
         java.util.List<FlickFling.Drop> drops = flickFling.land(now);
         if (drops.isEmpty()) return;
-        int[] changed = StrokeMath.emptyRect(document.width, document.height);
+        int[] changed = StrokeMath.emptyRect(bw, bh);
         for (FlickFling.Drop d : drops) {
             int[] box = layDrop(d, true);
             if (!empty(box)) changed = empty(changed) ? box : union(changed, box);
@@ -934,7 +1057,7 @@ final class ModularStroke implements LiftingStroke {
             if (live && rawL != null) FlickFling.lay(rawL, null, d, 1, 0);
             return box;
         }
-        if (r.body == null) return StrokeMath.emptyRect(document.width, document.height);
+        if (r.body == null) return StrokeMath.emptyRect(bw, bh);
         if (!wet) return FlickFling.lay(W, null, d, r.body.amount, 0);
         // Fast-wet: the body as laid (in the window, to settle with it) and as shown.
         if (rawW == null) { rawW = buffer(0); wetD = buffer(-1); }
@@ -983,7 +1106,7 @@ final class ModularStroke implements LiftingStroke {
             stampL(rawL, false, pts.firstAt((float)prev), null, win);
             frozenD = dW;
         }
-        if (r.pen.splatter > 0) LineStamper.splatterLive(rawL, r.pen, pts, r.inkSize, done, StrokeMath.emptyRect(document.width, document.height));
+        if (r.pen.splatter > 0) LineStamper.splatterLive(rawL, r.pen, pts, r.inkSize, done, StrokeMath.emptyRect(bw, bh));
         int reach = Math.max(Math.max(mL.widest, (int)Math.ceil(r.inkSize * 0.9) + 2), r.lineReach) + 2;
         int[] C = boxOf(Math.max(0, pts.firstAt((float)prev) - 1), reach + (r.pen.splatter > 0 ? 50 : 0));
         L.copy(rawL, C);
@@ -1033,6 +1156,9 @@ final class ModularStroke implements LiftingStroke {
             if (y < t) t = y;
             if (y > b) b = y;
         }
+        // On a grid: the grid's points that box covers.
+        if (grid != null) return new int[]{Math.max(0, (int)Math.floor(grid.gridX(l - pad))), Math.max(0, (int)Math.floor(grid.gridY(t - pad))),
+                Math.min(bw - 1, (int)Math.ceil(grid.gridX(rt + pad + 1))), Math.min(bh - 1, (int)Math.ceil(grid.gridY(b + pad + 1)))};
         return new int[]{Math.max(0, (int)Math.floor(l - pad)), Math.max(0, (int)Math.floor(t - pad)),
                 Math.min(document.width - 1, (int)Math.ceil(rt + pad)), Math.min(document.height - 1, (int)Math.ceil(b + pad))};
     }
@@ -1311,7 +1437,7 @@ final class ModularStroke implements LiftingStroke {
         if (drying && !empty(rect)) {
             liftOut = liftBuffers();
             if (offPage) {
-                liftTones = r.replaces() ? StrokeTones.smeared(document) : new StrokeTones(document);
+                liftTones = new StrokeTones(document);
                 ModularCompose off = new ModularCompose(liftTones, r, paper);
                 off.under(under);
                 if (r.resist && !fluid(r)) off.sheen(true);
@@ -1358,6 +1484,8 @@ final class ModularStroke implements LiftingStroke {
     }
 
     @Override public boolean finish() {
+        // On a grid ({@link #onGrid}): the lift's last samples composed; no page to finish.
+        if (grid != null) { lastSamples(); return !empty(rect); }
         if (floatPen != null) return finishFloat();
         // Fading and Lemon Juice: the Undo steps from here on are the mark that changes by the clock from now; without a
         // session to tick it (a sample) it stays as laid.
@@ -1398,8 +1526,8 @@ final class ModularStroke implements LiftingStroke {
         // Undo step with it.
         // So does a crayon's wax, so washes slide off it.
         if (waxing) changed = layWax(changed);
-        // A stump's other half: what it softened on the pair's wash, one Undo step with the rest.
-        if (washCarry != null) changed = blendWash(changed);
+        // A stump's other half, what it softened on the pair's wash, and Reprint's other planes: one Undo step with the rest.
+        for (Other o : others) changed = blendOther(o, changed);
         L.clearAll(); W.clearAll(); D.clearAll();
         stay = null;
         // Hatching's nearest-dab distances go with the stroke's buffers.
@@ -1408,6 +1536,8 @@ final class ModularStroke implements LiftingStroke {
         liftOut = null;
         // Keeps Paint: the brush keeps what it ends with for its holder's next stroke.
         if (heldBy != null && carry != null) session.held.keep(heldBy, carry.kept());
+        // Scrape: a Slow wash it worked while wet stays so for the next stroke, spent by this one's time.
+        if (stillWet != null && r.carry.scrape() && changed) session.keepWet(document, pts.count > 1 && pts.t[0] != PenSpeed.UNTIMED && pts.t[pts.count - 1] != PenSpeed.UNTIMED ? pts.t[pts.count - 1] - pts.t[0] : 0);
         // Paint Load: what is left starts the holder's next stroke, if more than the Starting Load it would have anyway.
         if (loadedBy != null) session.held.keepLoad(loadedBy, paint.left() > r.loaded.start ? paint.left() : 0);
         // Stamp: the ink left, and when it last printed, for the holder's next stroke.
@@ -1415,8 +1545,8 @@ final class ModularStroke implements LiftingStroke {
         if (inkedBy != null && printed != null) session.held.keepStampInk(inkedBy, printed.left());
         mL.stamp = null; mW.stamp = null;
         plane = null; carry = null; compose.carry(null);
-        washPlane = null; washCarry = null;
-        under = null; compose.under(null);
+        others = new Other[0];
+        under = null; compose.under(null); rolled = null;
         java.util.Arrays.fill(stretchRows, null);
         scratch = null; settleRows = null;
         compose.release();
@@ -1427,7 +1557,8 @@ final class ModularStroke implements LiftingStroke {
         if (changed) {
             DryingWater water = pendingWet == null ? null : DryingWater.lay(document, paper, pendingRect[0], pendingRect[1],
                     pendingRect[2] - pendingRect[0] + 1, pendingRect[3] - pendingRect[1] + 1, pendingWet, r.wetMs, r.settle, room == null ? r.grav : null, shift, r.pen.seed, (int)(r.pen.seed ^ pts.hash()), r.erase, kind, pendingLands, room);
-            if (session != null) session.holdDrying(water); else if (water != null) water.finishNow(document);
+            // A fading or lemon juice mark (Later's, on Slow) settles at once too: the clock then changes it as laid.
+            if (session != null && !fades) session.holdDrying(water); else if (water != null) water.finishNow(document);
             // Halo: its veins grow from the stroke's edge while it is wet; without a session (a sample) to the end at once.
             if (found != null) {
                 HaloGrowth.Lift lift = new HaloGrowth.Lift(document, layer, laid, found, r.halo, (int)(r.pen.seed ^ pts.hash() ^ 0x51a3e01d), r.erase, kind);
@@ -1460,22 +1591,22 @@ final class ModularStroke implements LiftingStroke {
         return sheen ? document.finishWithPrevious() || true : document.finish();
     }
     /**
-     * A stump's other half ({@link #alsoBlends}): what its dabs moved on the pair's wash, composed there in a gesture of
-     * its own after the stroke's ({@code ink}: whether that changed the page), linked to it, as erasable as the stroke
-     * (a smudge lays nothing of its own, so what each pixel keeps is what it kept). Only where it moved anything.
-     * Returns whether either changed the page.
+     * One of {@link #others}: what its dabs changed there, composed in a gesture of its own after the stroke's
+     * ({@code ink}: whether the stroke, or an other before, changed the page), linked to it, as erasable as the stroke
+     * (a smudge lays nothing of its own, so what each pixel keeps is what it kept). Only where it changed anything.
+     * Returns whether any changed the page.
      */
-    private boolean blendWash(boolean ink) {
-        int[] fresh = washPlane.freshBounds();
-        if (fresh == null || empty(washRect)) return ink;
-        int[] at = {Math.max(fresh[0], washRect[0]), Math.max(fresh[1], washRect[1]), Math.min(fresh[2], washRect[2]), Math.min(fresh[3], washRect[3])};
+    private boolean blendOther(Other o, boolean ink) {
+        int[] fresh = o.plane.freshBounds();
+        if (fresh == null || empty(o.rect)) return ink;
+        int[] at = {Math.max(fresh[0], o.rect[0]), Math.max(fresh[1], o.rect[1]), Math.min(fresh[2], o.rect[2]), Math.min(fresh[3], o.rect[3])};
         if (empty(at)) return ink;
         int back = document.activeLayer();
-        document.selectLayer(washLayer);
+        document.selectLayer(o.layer);
         try {
-            document.begin(r.erase, washKind);
+            document.begin(r.erase, o.kind);
             ModularCompose wash = new ModularCompose(ModularCompose.of(document), r, paper);
-            wash.carry(washPlane);
+            wash.carry(o.plane);
             FloatTiles none = new FloatTiles(document.width, document.height, 0);
             wash.compose(none, none, null, at, ModularCompose.Phase.FINAL);
             wash.release();
@@ -1507,6 +1638,63 @@ final class ModularStroke implements LiftingStroke {
         return r.pattern == null ? 0 : (float) SpiroStamper.guide(r.pattern, ToolSettings.travel(pressure), tiltX, tiltY);
     }
     @Override public int ringMode() { return SpiroStamper.ring(r.pattern) ? r.pattern.spiro.mode : 1; }
+
+    /**
+     * What the screen shows of {@link #others} while the pen is down (the owner, 2026-11-04: Blend over a wash or Blur
+     * over pencil had "no effect until i lift the pen"): their dabs move paint on planes no gesture is open on, laid only
+     * at {@link #finish} ({@link #blendOther}, a gesture binds one plane), so until then the page holds none of it. Each
+     * pixel a dab changed there shows its plane as smudged so far ({@link CarryPlane#tone}, {@link CarryPlane#coverage}:
+     * what the finish composes), over the page's other layers ({@link ToneDocument#compositeToneShown}); the page itself,
+     * Undo, Replay and the finish are as before. Null for a stroke with none. Read on the page's thread; a quick render's
+     * dabs land on its own (each a float in a filled tile: at worst a pixel shown a dab late, drawn again from the page at the lift).
+     */
+    @Override public Unwritten unwritten() { return shown; }
+    private final Shown shown;
+    private final class Shown implements Unwritten {
+        private final int[] layers = new int[others.length], kinds = new int[others.length];
+        /** Each other's stand-in over the block asked for ({@link ToneDocument#compositeTonesShown}), grown as needed. */
+        private int[][] v = new int[others.length][0];
+        /** Changed since last taken, and in all; inclusive, empty when none. */
+        private int[] since = StrokeMath.emptyRect(document.width, document.height), ever = since.clone();
+        Shown() { for (int j = 0; j < others.length; j++) { layers[j] = others[j].layer; kinds[j] = others[j].kind; } }
+        synchronized void grow(int[] changed) { if (!empty(changed)) { since = union(since, changed); ever = union(ever, changed); } }
+        @Override public synchronized int[] take() { int[] t = since; since = StrokeMath.emptyRect(document.width, document.height); return empty(t) ? null : t; }
+        @Override public synchronized int[] all() { return empty(ever) ? null : ever.clone(); }
+        /** Only within what the dabs changed ({@link #all}): the rest of the block −1 at once. */
+        @Override public void tones(int x, int y, int w, int h, int[] out) {
+            java.util.Arrays.fill(out, 0, w * h, -1);
+            int[] e = all(), cut;
+            if (e == null || others.length == 0) return;
+            int x0 = Math.max(x, e[0]), y0 = Math.max(y, e[1]), x1 = Math.min(x + w - 1, Math.min(document.width - 1, e[2])), y1 = Math.min(y + h - 1, Math.min(document.height - 1, e[3]));
+            if (x0 > x1 || y0 > y1) return;
+            int cw = x1 - x0 + 1, ch = y1 - y0 + 1, count = cw * ch;
+            if (v[0].length < count) for (int j = 0; j < v.length; j++) v[j] = new int[count];
+            for (int j = 0; j < others.length; j++) at(others[j], x0, y0, cw, ch, v[j]);
+            cut = cw == w && ch == h ? out : new int[count];
+            document.compositeTonesShown(x0, y0, cw, ch, cut, layers, kinds, v);
+            if (cut != out) for (int row = 0; row < ch; row++) System.arraycopy(cut, row * cw, out, (y0 - y + row) * w + x0 - x, cw);
+        }
+        /**
+         * {@code o}'s plane over the block into {@code out}: at each pixel a dab changed ({@link CarryPlane#freshTile}:
+         * nothing composes it before the finish) its tone over white {@code << 8 |} its coverage, else −1.
+         */
+        private void at(Other o, int x, int y, int w, int h, int[] out) {
+            java.util.Arrays.fill(out, 0, w * h, -1);
+            int[] r = o.rect;
+            int x0 = Math.max(x, r[0]), y0 = Math.max(y, r[1]), x1 = Math.min(x + w - 1, r[2]), y1 = Math.min(y + h - 1, r[3]);
+            int side = CarryPlane.SIDE;
+            for (int py = y0; py <= y1; py++) for (int px = x0; px <= x1; px = (px | (side - 1)) + 1) {
+                // A tile at a time: filled, and marked where dabs changed it.
+                byte[] f = o.plane.has(px, py) ? o.plane.freshTile(px / side, py / side) : null;
+                if (f == null) continue;
+                for (int qx = px, end = Math.min(x1, px | (side - 1)), row = (py % side) * side; qx <= end; qx++) {
+                    if (f[row + qx % side] == 0) continue;
+                    int u = o.plane.tone(qx, py);
+                    out[(py - y) * w + qx - x] = u << 8 | Math.max(o.plane.coverage(qx, py), 255 - u);
+                }
+            }
+        }
+    }
 
     // ---- Float ----
 

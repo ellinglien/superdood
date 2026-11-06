@@ -23,7 +23,7 @@ public final class ModularCodeChecks {
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
         golden(); handBuilt(); fixtures(); shortCodes(); bad(); roundTrip(); identity(); added(); wet();
-        System.out.println("PASS: M share codes are the prototype's byte for byte (style, each part's choice and dials, seed), read back within half a step, read short codes as defaults and any case; bad codes and I/P codes read as nothing; a brush's key is its parts and seed; Tilt range, which the prototype lacks, is written only when wide; Wet is Drying's eighth choice, its Stays Wet written only when off its default, and no older code holds it");
+        System.out.println("PASS: M share codes are the prototype's byte for byte (style, each part's choice and dials, seed), read back within half a step, read short codes as defaults and any case; bad codes and I/P codes read as nothing, a newer version's as what this one knows; a brush's key is its parts and seed; Tilt range, which the prototype lacks, is written only when wide; Wet is Drying's eighth choice, its Stays Wet written only when off its default, and no older code holds it");
     }
     static void golden() {
         String[][] fresh = {
@@ -81,9 +81,11 @@ public final class ModularCodeChecks {
         check(ModularCode.decode("  " + BRAVE_ONION + "\n") != null, "Spaces around a pasted code don't matter");
     }
     static void bad() {
-        String[] codes = {null, "", "hello", "a.Mf0_0_0_0_0_0.1", "a.Mdd_0_0_0_0_0.1", "a.Md3i02_0_0_0_0_0.1", "a.Md0_0_0_0_0_0.zzzzzzz", "a.Md0_0_0_0_0.1",
-                "x.M0_0_0.1", "a.M9z0000.1", "a.Md0_0_0_0_0_0", "a b.Md0_0_0_0_0_0.1", "dapper-fig.I610gavij3f7q16o0000006m00.e1"};
-        for (String code : codes) check(ModularCode.decode(code) == null, "A bad code, or an I/P code, reads as no M brush: " + code);
+        String[] codes = {null, "", "hello", "a.Md0_0_0_0_0_0.zzzzzzz", "a.Md0_0_0_0_0.1", "a.Md0__0_0_0_0.1",
+                "x.M0_0_0.1", "a.M9z0000.1", "a.Md0_0_0_0_0_0", "a b.Md0_0_0_0_0_0.1", "2a.Md0_0_0_0_0_0.1", "dapper-fig.I610gavij3f7q16o0000006m00.e1"};
+        for (String code : codes) check(ModularCode.decode(code) == null && !ModularCode.newer(code), "A bad code, or an I/P code, reads as no M brush: " + code);
+        // A style, choice or option past this version's lists is a newer version's (docs/BRUSH-CODE.md; CodeSpecChecks has more).
+        for (String code : new String[]{"a.Mf0_0_0_0_0_0.1", "a.Mdh_0_0_0_0_0.1", "a.Md3i02_0_0_0_0_0.1"}) check(ModularCode.decode(code) != null && ModularCode.newer(code), "A newer version's code reads: " + code);
         check(BrushCode.decode("dapper-fig.I610gavij3f7q16o0000006m00.e1") != null, "I/P codes still read as before");
     }
     /** Tilt range: last of the hand's dials; a code without it reads normal, and a normal brush's code is the prototype's. */
@@ -102,7 +104,7 @@ public final class ModularCodeChecks {
             ModularBrush b = ModularStyle.at(i % ModularStyle.all().size()).roll(random);
             String code = ModularCode.encode(b);
             ModularBrush back = ModularCode.decode(code);
-            check(back != null && ModularCode.encode(back).equals(code) && back.seed == b.seed && back.style == b.style && back.name.equals(BrushCode.slug(b.name)), "A code reads back: " + code);
+            check(back != null && ModularCode.encode(back).equals(code) && back.seed == b.seed && back.style == b.style && back.name.equals(ModularCode.slug(b.name)), "A code reads back: " + code);
             for (BrushPart part : BrushPart.values()) {
                 check(back.choice(part) == b.choice(part), "Choices read back: " + code);
                 for (PartDial d : b.part(part).choice.dials) {

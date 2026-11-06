@@ -14,14 +14,15 @@ public final class WetPaintChecks {
         unchanged();
         finalUnderPen(); mixes(); darkStays(); rewets(); flows(); staysWet(); dries(); undo(); downhill(); clearWater(); dirties(); masking(); erasable(); layers(); wetBrush(); wetBrushRange(); wetInkKept();
         pastel(); dryBrush(); drawOnce(); ticked();
-        washOnce(); washMerges(); washCrossesWet(); washEdge(); washBlooms(); washGlazes(); washUndo(); washOthers(); inkWash();
+        washOnce(); washMerges(); washCrossesWet(); washEdge(); washBlooms(); washGlazes(); washUndo(); washOthers(); inkWash(); spreadCovers();
         System.out.println("PASS: brushes without Wet draw every page byte for byte as before it (preview and final, 60 and 200 px, 30 presets of every style, the old Gouache and Oils too); "
                 + "a Wet stroke writes each pixel once while the pen is down, mixes into the wet paint under it but not blank paper (dark stays dark), into dried paint for Gouache and not for Oils, moves after the lift and rests, runs downhill on a tilted page, stays wet across ink and pencil strokes and the eraser until the droplet's tap dries it, "
                 + "is one Undo step with its movement (Redo kept), lifts wet or dry paint as clear water, gets dirtier dragged through dark paint, stays out of masking fluid, lays paint as erasable as its medium on the pair's wash half; "
                 + "a Pastels stroke over it sinks into it and a Dry brush stroke drags it, one Undo step; the Wet brush (ink in water) writes each pixel once, holds its ink between strokes and lets it out, a grey's tap dips it, a clean one soaks wet ink up, it lifts dry paint, its ink stays dark on paper and runs downhill, one Undo step, masked; a full black dip lays near black at full pressure and a pale grey at a light touch, running dry along the stroke; each tool's Wet brush ink is kept between launches, a dip clearing it; Draw once writes each pixel of a Pastels stroke once, final; on the drawing screen's ticks (a settle worker) wet paint waits for a Slow wash and moves after, ending as unpaced; "
                 + "a wet watercolour (section 9) writes each pixel once under the pen, two strokes laid wet into wet are one wash (no edge where the first ended), one crossing a wash still wet a while after it shows no seam where they meet and is darker where both lie, it dries back darker at its edge than its middle, "
                 + "a stroke into a damp wash blooms (a frillier, darker front than one into a dry wash), it only darkens what is under it (dried paint glazed, never lightened), one Undo step with its movement, and Wet gouache, Wet oils and the Wet brush draw as before it; "
-                + "Ink wash's wet washes go on the wash half, cross wet into wet lighter than over a dried one, and Line and wash keeps its pen line crisp and dark beneath its wash");
+                + "Ink wash's wet washes go on the wash half, cross wet into wet lighter than over a dried one, and Line and wash keeps its pen line crisp and dark beneath its wash; "
+                + "opaque wet paint's pale spread over a dark mark on the layer below hides it by how much paint it holds, a watercolour over it writes as before");
     }
 
     // ---- brushes and pages ----
@@ -86,7 +87,9 @@ public final class WetPaintChecks {
      * since the previews changed: Split nib's sweeps its placed line's own nib (speed plan F6), washes' and sticks' are
      * their flat tone at every pixel (F5), Stump's and Water brush's at 60 px their smudge drawn live (2026-10-23, its
      * effect under the pen: QuickStroke.CARRY), Halftone brush's black dots in the panel's pattern (2026-10-24, the
-     * ink screens' preview: QuickStroke.Sweep#flatScreen); the ends as before.
+     * ink screens' preview: QuickStroke.Sweep#flatScreen); the ends as before. The 24 on a textured paper re-pinned
+     * 2026-11-01: drawn on their surfaces made whole (SurfaceGrain). 36 re-pinned 2026-11-02: the paper's grain a little
+     * quieter under every mark (StrokePaper.SHOWS).
      */
     static final String[][] BEFORE = {
             // Settled pages of Split nib, Soft charcoal, Sumi, Hog bristle, Soft pastel and Wax crayon at 200 px, Dry round at 60 and
@@ -97,36 +100,36 @@ public final class WetPaintChecks {
             // Settled pages of the lines past 16 px re-pinned 2026-10-29 (Steady line, Swell brush, Wet brush, Chisel marker,
             // Line and wash, Sumi, Mold ink, Chisel pastel, Wax crayon, Dot tone, Halftone brush at 200): the line's grid
             // closer, a crisp nib stepped a grid at most (LineStamper, EdgeRippleChecks); every page mid-stroke unchanged.
-            {"Steady line", "steady-line.M00il00000000at_000zz000000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud", "60", "e6194070", "46705366"},
-            {"Steady line", "steady-line.M00il00000000at_000zz000000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud", "200", "539f09e5", "d611d8c6"},
+            {"Steady line", "steady-line.M00il00000000at_000zz000000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud", "60", "e6194070", "5a4c8f37"},
+            {"Steady line", "steady-line.M00il00000000at_000zz000000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud", "200", "539f09e5", "2c5ddd6f"},
             {"Swell brush", "swell-brush.M10i0q6f40000at_000t7008h00000000000_0_000_1jz_8wgft00dr0000ey0000nz0.1s13pn4", "60", "f6616c5a", "da4e6eae"},
             {"Swell brush", "swell-brush.M10i0q6f40000at_000t7008h00000000000_0_000_1jz_8wgft00dr0000ey0000nz0.1s13pn4", "200", "f0b85432", "b87ecfba"},
-            {"Wet brush", "wet-brush.M10i0d2o54w00at_09ls2009s00000000000_0_100_1jz_8yrfo00000000ny0000nz0.16ebhgk", "60", "c2eb2ed7", "9a06d9e8"},
-            {"Wet brush", "wet-brush.M10i0d2o54w00at_09ls2009s00000000000_0_100_1jz_8yrfo00000000ny0000nz0.16ebhgk", "200", "ee32a7b0", "7e98fc1"},
+            {"Wet brush", "wet-brush.M10i0d2o54w00at_09ls2009s00000000000_0_100_1jz_8yrfo00000000ny0000nz0.16ebhgk", "60", "c2eb2ed7", "a6be61b6"},
+            {"Wet brush", "wet-brush.M10i0d2o54w00at_09ls2009s00000000000_0_100_1jz_8yrfo00000000ny0000nz0.16ebhgk", "200", "ee32a7b0", "e09d5a71"},
             {"Split nib", "split-nib.M24m0okjmi0000y00_000zz000000000000000_0_000_1jz_8lw00wk0000fq000000nz0.51j8ud", "60", "1a8344d8", "20bb42e"},
             {"Split nib", "split-nib.M24m0okjmi0000y00_000zz000000000000000_0_000_1jz_8lw00wk0000fq000000nz0.51j8ud", "200", "f1b87576", "407c7031"},
             {"Chisel marker", "chisel-marker.M31j2eei000000000at_000zzdj005z000000000_0_000_1jz_82o00000000005u0000nz0.t4mf73", "60", "b03d97fe", "59b0d46e"},
             {"Chisel marker", "chisel-marker.M31j2eei000000000at_000zzdj005z000000000_0_000_1jz_82o00000000005u0000nz0.t4mf73", "200", "5546e2da", "91dc7ab0"},
-            {"HB pencil", "hb-pencil.M40i000000000at_4e551_0_1v5_1jz_8arsr00dwjs00000000nz0.pg5zxt", "60", "70c70938", "5195dbd2"},
-            {"HB pencil", "hb-pencil.M40i000000000at_4e551_0_1v5_1jz_8arsr00dwjs00000000nz0.pg5zxt", "200", "1eaf831f", "4d701514"},
+            {"HB pencil", "hb-pencil.M40i000000000at_4e551_0_1v5_1jz_8arsr00dwjs00000000nz0.pg5zxt", "60", "70c70938", "5e6f9b0c"},
+            {"HB pencil", "hb-pencil.M40i000000000at_4e551_0_1v5_1jz_8arsr00dwjs00000000nz0.pg5zxt", "200", "1eaf831f", "111deb73"},
             // Charcoal's and the pastels' quick preview mid-stroke since it reads the stick's grain (QuickStroke.GRAIN, the
             // owner, 2026-10-22: "charcoal preview is also darker than the resulting mark"); their settled pages unchanged.
-            {"Soft charcoal", "soft-charcoal.M50i00000000yat_3eqlj_0_1nl_1jz_8pthh00x9is00000000nz0.51j8ud", "60", "e11ec97", "c1537b13"},
-            {"Soft charcoal", "soft-charcoal.M50i00000000yat_3eqlj_0_1nl_1jz_8pthh00x9is00000000nz0.51j8ud", "200", "a614565f", "7455f460"},
+            {"Soft charcoal", "soft-charcoal.M50i00000000yat_3eqlj_0_1nl_1jz_8pthh00x9is00000000nz0.51j8ud", "60", "4cef2b08", "ffb72ac5"},
+            {"Soft charcoal", "soft-charcoal.M50i00000000yat_3eqlj_0_1nl_1jz_8pthh00x9is00000000nz0.51j8ud", "200", "f28a2439", "12fad4d8"},
             {"Stump", "stump.M50i00000000yat_3eqlj_3p6ll00_1nl_1jz_8pthh00x9is00000000nz0.51j8ud", "60", "64e8f270", "ffd6d3cf"},
             {"Stump", "stump.M50i00000000yat_3eqlj_3p6ll00_1nl_1jz_8pthh00x9is00000000nz0.51j8ud", "200", "4c679207", "ffd6d3cf"},
-            {"Soft wash", "soft-wash.M60i0000000007q_1wva200000000ee_0_0fk_1jz_8la0000000000000000nz0.t4mf73", "60", "1b416df7", "c8f24c10"},
-            {"Soft wash", "soft-wash.M60i0000000007q_1wva200000000ee_0_0fk_1jz_8la0000000000000000nz0.t4mf73", "200", "5d72cc48", "915592ac"},
-            {"Drips", "drips.M60i000000000at_1y67700770000ee_0_05e_2ti7x0jsclllat_8g70000000000000000nz0.1rcs7", "60", "7a039c90", "805a95f"},
-            {"Drips", "drips.M60i000000000at_1y67700770000ee_0_05e_2ti7x0jsclllat_8g70000000000000000nz0.1rcs7", "200", "21d0ef25", "58c43c06"},
-            {"Water brush", "water-brush.M60i000000000at_1ulat00770000ee_4i0ll_000_2g7ll0jsee00at_0000000000000000000nz0.20k", "60", "a82c7363", "68a72ba9"},
-            {"Water brush", "water-brush.M60i000000000at_1ulat00770000ee_4i0ll_000_2g7ll0jsee00at_0000000000000000000nz0.20k", "200", "3219a858", "33cd9580"},
+            {"Soft wash", "soft-wash.M60i0000000007q_1wva200000000ee_0_0fk_1jz_8la0000000000000000nz0.t4mf73", "60", "1b416df7", "4cd58b50"},
+            {"Soft wash", "soft-wash.M60i0000000007q_1wva200000000ee_0_0fk_1jz_8la0000000000000000nz0.t4mf73", "200", "5d72cc48", "80e9b0b3"},
+            {"Drips", "drips.M60i000000000at_1y67700770000ee_0_05e_2ti7x0jsclllat_8g70000000000000000nz0.1rcs7", "60", "7a039c90", "36d0d179"},
+            {"Drips", "drips.M60i000000000at_1y67700770000ee_0_05e_2ti7x0jsclllat_8g70000000000000000nz0.1rcs7", "200", "21d0ef25", "5e9b904f"},
+            {"Water brush", "water-brush.M60i000000000at_1ulat00770000ee_4i0ll_000_2g7ll0jsee00at_0000000000000000000nz0.20k", "60", "a82c7363", "9640f3af"},
+            {"Water brush", "water-brush.M60i000000000at_1ulat00770000ee_4i0ll_000_2g7ll0jsee00at_0000000000000000000nz0.20k", "200", "3219a858", "c5a9e55b"},
             {"Masking fluid", "masking-fluid.M60i000000000at_5_0_000_1jz_0000000000000000000nz0.px", "60", "64e8f270", "ffd6d3cf"},
             {"Masking fluid", "masking-fluid.M60i000000000at_5_0_000_1jz_0000000000000000000nz0.px", "200", "64e8f270", "ffd6d3cf"},
-            {"Line and wash", "line-and-wash.M70i07pmj0000wd_0pipk0000ke000000000_0_000_1jz_8ls0000000000000000nz0.1t996q7", "60", "1ce3bd7e", "764e772d"},
-            {"Line and wash", "line-and-wash.M70i07pmj0000wd_0pipk0000ke000000000_0_000_1jz_8ls0000000000000000nz0.1t996q7", "200", "2ba460b3", "16236a60"},
-            {"Sumi", "sumi.M70i000000000at_000zz000000000000000_0_000_3lli0i0_25ess00000000000000nz0.15t", "60", "bd67b63e", "5061dfe"},
-            {"Sumi", "sumi.M70i000000000at_000zz000000000000000_0_000_3lli0i0_25ess00000000000000nz0.15t", "200", "74d3d4e7", "df8260e4"},
+            {"Line and wash", "line-and-wash.M70i07pmj0000wd_0pipk0000ke000000000_0_000_1jz_8ls0000000000000000nz0.1t996q7", "60", "1ce3bd7e", "d9480126"},
+            {"Line and wash", "line-and-wash.M70i07pmj0000wd_0pipk0000ke000000000_0_000_1jz_8ls0000000000000000nz0.1t996q7", "200", "2ba460b3", "cea10684"},
+            {"Sumi", "sumi.M70i000000000at_000zz000000000000000_0_000_3lli0i0_25ess00000000000000nz0.15t", "60", "bd67b63e", "e5758943"},
+            {"Sumi", "sumi.M70i000000000at_000zz000000000000000_0_000_3lli0i0_25ess00000000000000nz0.15t", "200", "74d3d4e7", "de0e2a21"},
             {"Mold ink", "mold-ink.M70i077at0000at_000zz000000000000000_0_000_4jsjsll_25ess00000000000000nz0.wx", "60", "740c05e0", "d22e500b"},
             {"Mold ink", "mold-ink.M70i077at0000at_000zz000000000000000_0_000_4jsjsll_25ess00000000000000nz0.wx", "200", "34a3c1fc", "abeffc0a"},
             // Mold's settled pages since its scouts move four times a tick (HaloChecks.black; the owner, 2026-10-22).
@@ -137,27 +140,27 @@ public final class WetPaintChecks {
             {"Wide gouache", "wide-gouache.M83h30zz0065_2zz00at_0_100_1jz_80g0000000000000000nz0.51j8ud", "200", "f82b4bdb", "9342a2b3"},
             {"Impasto", "impasto.M90i00000il003k_2zzh900_0_500_1jz_8d30000ty0000000000nz0.t4mf73", "60", "e99d3307", "bfc6b0c7"},
             {"Impasto", "impasto.M90i00000il003k_2zzh900_0_500_1jz_8d30000ty0000000000nz0.t4mf73", "200", "d0136c60", "12e8745b"},
-            {"Hog bristle", "hog-bristle.M96x7i0lli0i0p6_2zzll00_0_5i0_1jz_8i00000000000000000nz0.20a", "60", "3a6cb9b4", "8b610cdb"},
-            {"Hog bristle", "hog-bristle.M96x7i0lli0i0p6_2zzll00_0_5i0_1jz_8i00000000000000000nz0.20a", "200", "1ab2d580", "e06af513"},
-            {"Oil paint", "oil-paint.M99vleei0000090005e_2zza300_2llp6zz00js_5at_1jz_1ss0000000000000000nz0.20l", "60", "40a0208a", "1831eafb"},
-            {"Oil paint", "oil-paint.M99vleei0000090005e_2zza300_2llp6zz00js_5at_1jz_1ss0000000000000000nz0.20l", "200", "a46b6d6f", "933bcc93"},
+            {"Hog bristle", "hog-bristle.M96x7i0lli0i0p6_2zzll00_0_5i0_1jz_8i00000000000000000nz0.20a", "60", "3a6cb9b4", "203c6db9"},
+            {"Hog bristle", "hog-bristle.M96x7i0lli0i0p6_2zzll00_0_5i0_1jz_8i00000000000000000nz0.20a", "200", "1ab2d580", "9fbaeba1"},
+            {"Oil paint", "oil-paint.M99vleei0000090005e_2zza300_2llp6zz00js_5at_1jz_1ss0000000000000000nz0.20l", "60", "40a0208a", "ed70be58"},
+            {"Oil paint", "oil-paint.M99vleei0000090005e_2zza300_2llp6zz00js_5at_1jz_1ss0000000000000000nz0.20l", "200", "a46b6d6f", "964b6c88"},
             // Soft charcoal's note holds for the pastels.
-            {"Chisel pastel", "chisel-pastel.Ma1j2eei000008c00at_34z5w_0_2sl_1jz_89i0000omk400000000nz0.t4mf73", "60", "1e855d9a", "653898c7"},
-            {"Chisel pastel", "chisel-pastel.Ma1j2eei000008c00at_34z5w_0_2sl_1jz_89i0000omk400000000nz0.t4mf73", "200", "78eb8200", "2f5a85a4"},
-            {"Soft pastel", "soft-pastel.Ma0i000007s00at_3b98o_0_3nj_1jz_8hg0000sdb900000000nz0.51j8ud", "60", "d2993d80", "62262235"},
-            {"Soft pastel", "soft-pastel.Ma0i000007s00at_3b98o_0_3nj_1jz_8hg0000sdb900000000nz0.51j8ud", "200", "46def0c4", "86bc3e6f"},
+            {"Chisel pastel", "chisel-pastel.Ma1j2eei000008c00at_34z5w_0_2sl_1jz_89i0000omk400000000nz0.t4mf73", "60", "31fa9534", "fefbc270"},
+            {"Chisel pastel", "chisel-pastel.Ma1j2eei000008c00at_34z5w_0_2sl_1jz_89i0000omk400000000nz0.t4mf73", "200", "d13a17c9", "49752ae2"},
+            {"Soft pastel", "soft-pastel.Ma0i000007s00at_3b98o_0_3nj_1jz_8hg0000sdb900000000nz0.51j8ud", "60", "5b84b06f", "2fbf9428"},
+            {"Soft pastel", "soft-pastel.Ma0i000007s00at_3b98o_0_3nj_1jz_8hg0000sdb900000000nz0.51j8ud", "200", "e3d20407", "de0ee801"},
             // Wax crayon's quick preview mid-stroke since it lays its ink on the tooth's peaks (QuickStroke.TOOTH, the owner,
             // 2026-10-22: "the preview for crayon is pretty poor"); its settled pages unchanged.
-            {"Wax crayon", "wax-crayon.Ma0p600000000at_7ll0_0_1i0_0_0000000000000000000nz0.2f9", "60", "ab509f80", "4157959f"},
-            {"Wax crayon", "wax-crayon.Ma0p600000000at_7ll0_0_1i0_0_0000000000000000000nz0.2f9", "200", "40106ebc", "c08f1ef6"},
-            {"Dry round", "dry-round.Mb0i00000in0074_2k700at_0_2r6_1jz_8ny0000000000000000nz0.t4mf73", "60", "1e4e3597", "4721f2e5"},
-            {"Dry round", "dry-round.Mb0i00000in0074_2k700at_0_2r6_1jz_8ny0000000000000000nz0.t4mf73", "200", "1c605257", "5542de2f"},
-            {"Scumble", "scumble.Mb0i00000xd000d_2oi00at_0_4f9_1jz_8ce0000000000000000nz0.1s13pn4", "60", "c965db5e", "6cae0dea"},
-            {"Scumble", "scumble.Mb0i00000xd000d_2oi00at_0_4f9_1jz_8ce0000000000000000nz0.1s13pn4", "200", "2c572252", "415f10ba"},
-            {"Dry glaze", "dry-glaze.Mb25aeei00000lx0033_1caat00770000ee_0_1l5_1jz_8l40000000000000000nz0.1t996q7", "60", "9c6b002", "504ada4a"},
-            {"Dry glaze", "dry-glaze.Mb25aeei00000lx0033_1caat00770000ee_0_1l5_1jz_8l40000000000000000nz0.1t996q7", "200", "a6ab6aed", "466e6372"},
-            {"Bristle brush", "bristle-brush.Mb6rolljsqzi0_000zz000000000000000_0_1ll_1jz_8i00000000000000000nz0.209", "60", "cf78371a", "5e4f76dc"},
-            {"Bristle brush", "bristle-brush.Mb6rolljsqzi0_000zz000000000000000_0_1ll_1jz_8i00000000000000000nz0.209", "200", "ba5e1735", "a6b01803"},
+            {"Wax crayon", "wax-crayon.Ma0p600000000at_7ll0_0_1i0_0_0000000000000000000nz0.2f9", "60", "ab509f80", "ee146eae"},
+            {"Wax crayon", "wax-crayon.Ma0p600000000at_7ll0_0_1i0_0_0000000000000000000nz0.2f9", "200", "40106ebc", "e925ef29"},
+            {"Dry round", "dry-round.Mb0i00000in0074_2k700at_0_2r6_1jz_8ny0000000000000000nz0.t4mf73", "60", "1e4e3597", "fd3b7cf5"},
+            {"Dry round", "dry-round.Mb0i00000in0074_2k700at_0_2r6_1jz_8ny0000000000000000nz0.t4mf73", "200", "1c605257", "6d83b0ab"},
+            {"Scumble", "scumble.Mb0i00000xd000d_2oi00at_0_4f9_1jz_8ce0000000000000000nz0.1s13pn4", "60", "c965db5e", "f156bf27"},
+            {"Scumble", "scumble.Mb0i00000xd000d_2oi00at_0_4f9_1jz_8ce0000000000000000nz0.1s13pn4", "200", "2c572252", "13af7066"},
+            {"Dry glaze", "dry-glaze.Mb25aeei00000lx0033_1caat00770000ee_0_1l5_1jz_8l40000000000000000nz0.1t996q7", "60", "9c6b002", "29c2050d"},
+            {"Dry glaze", "dry-glaze.Mb25aeei00000lx0033_1caat00770000ee_0_1l5_1jz_8l40000000000000000nz0.1t996q7", "200", "a6ab6aed", "3dac85e4"},
+            {"Bristle brush", "bristle-brush.Mb6rolljsqzi0_000zz000000000000000_0_1ll_1jz_8i00000000000000000nz0.209", "60", "cf78371a", "89b40dca"},
+            {"Bristle brush", "bristle-brush.Mb6rolljsqzi0_000zz000000000000000_0_1ll_1jz_8i00000000000000000nz0.209", "200", "ba5e1735", "9e22cd30"},
             {"Cover hake", "cover-hake.Mc3i00zzedct_2lu00at_0_000_1jz_89d0000000000000000nz0.1t996q7", "60", "3967dffa", "e2cd8829"},
             {"Cover hake", "cover-hake.Mc3i00zzedct_2lu00at_0_000_1jz_89d0000000000000000nz0.1t996q7", "200", "f6c71622", "6ede541c"},
             {"Dot tone", "dot-tone.Me0i00000000000_60e0_0_000_0_0000000000000000000nz0.2e5", "60", "f61fd1b3", "cc038080"},
@@ -790,10 +793,10 @@ public final class WetPaintChecks {
         for (int k = 0; k < 2; k++) {
             ToneDocument d = page();
             WatercolorSession s = new WatercolorSession();
-            stroke(d, s, wash("Backrun"), 70, .6, line(40, 130, 440, 130));
+            stroke(d, s, wash("Watercolour backrun"), 70, .6, line(40, 130, 440, 130));
             settle(s, d);
             if (k == 1) s.settleNow(d);
-            stroke(d, s, wash("Backrun"), 60, .6, line(40, 175, 440, 175));
+            stroke(d, s, wash("Watercolour backrun"), 60, .6, line(40, 175, 440, 175));
             settle(s, d);
             // How much the first wash (rows 100..150) changed: what the bloom did to it.
             double sum = 0; int n = 0;
@@ -835,10 +838,11 @@ public final class WetPaintChecks {
     }
     /**
      * Wet gouache, Wet oils and the Wet brush take none of the watercolour's paths: their pages hash as before it (taken
-     * on inkwash-v2-lab 9be0dab), each on a canvas of its own.
+     * on inkwash-v2-lab 9be0dab), each on a canvas of its own. Wet gouache's and Wet oils' settled pages re-pinned
+     * 2026-11-06: their spread covers by its paint ({@link #spreadCovers}); mid-stroke and the Wet brush unchanged.
      */
     static void washOthers() {
-        String[][] before = {{"Wet gouache", "579cc49b 73e7037e"}, {"Wet oils", "f5651f26 e48da720"}, {"Wet brush", "a0e342b2 2ed8d94e"}};
+        String[][] before = {{"Wet gouache", "579cc49b dd8820fe"}, {"Wet oils", "f5651f26 fba7ce87"}, {"Wet brush", "a0e342b2 2ed8d94e"}};
         for (String[] row : before) {
             ModularBrush b = null;
             for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals(row[0])) b = p.brush().parts;
@@ -881,6 +885,52 @@ public final class WetPaintChecks {
     static ModularBrush inkWash(String name) {
         for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals(name) && p.style.name.equals("Ink wash")) return p.brush().parts;
         throw new IllegalArgumentException(name);
+    }
+    /**
+     * Opaque paint's spread covers like its stroke (the owner, 2026-11-06: "for the oil.. yes, spread cover like the stroke"):
+     * wet paint laid beside a black mark on the layer below, as the wet canvas lays it, spreads over the mark covering by its
+     * share of the paint (255 × its darkness over the paint's), so the mark shows through only by the rest; a watercolour's
+     * wash over the same mark writes its layer byte for byte as before (taken on explore-live 0e60d220).
+     */
+    static void spreadCovers() {
+        String washBefore = "337143c8";
+        for (boolean opaque : new boolean[]{false, true}) {
+            ToneDocument d = new ToneDocument(96, 48);
+            d.begin();
+            for (int y = 0; y < 48; y++) for (int x = 48; x < 96; x++) d.paintTone(x, y, 0);
+            d.finish();
+            d.addLayer();
+            WetWatercolor wet = new WetWatercolor(d, 50);
+            wet.paintOnly(true, true);
+            int[] mask = new int[24 * 48];
+            java.util.Arrays.fill(mask, 0xff000000);
+            d.begin(); wet.beginStroke();
+            if (opaque) wet.paintMask(mask, 24, 24, 0, 24, 48, 120, false, 1);
+            else {
+                WetWatercolor.Noise flat = (x, y) -> .5f;
+                wet.wash(new WetWatercolor.Wash(.5f, .5f, 0, .5f, 0, .985f, flat, flat, flat));
+                wet.washMask(mask, 24, 36, 0, 24, 48, 120, 1, 1);
+            }
+            wet.finishStroke();
+            for (int n = 0; wet.isAnimating(); n++) { check(n < 3000, "the wet paint rests"); wet.advance(false); }
+            if (!opaque) {
+                check(255 - d.tone(50, 24) > 20, "The watercolour reaches the mark");
+                check(layerCrc(d, 1).equals(washBefore), "A watercolour over a mark writes as before: " + layerCrc(d, 1));
+                continue;
+            }
+            int seen = 0;
+            for (int x = 48; x < 72; x++) {
+                int dark = 255 - d.tone(x, 24), cover = d.opacity(x, 24);
+                if (dark < 6) continue;
+                seen++;
+                int want = Math.round(255 * dark / 135f);
+                String what = "Opaque spread at x " + x + " (darkness " + dark + ") covers " + cover + ", not " + want;
+                check(Math.abs(cover - want) <= 3, what);
+                // Over the black mark it shows its grey, 120, by its cover: the mark shows through only by the rest.
+                check(Math.abs(d.compositeTone(x, 24) - 120 * cover / 255) <= 3, what + "; shows " + d.compositeTone(x, 24) + " over the mark");
+            }
+            check(seen > 0, "Opaque paint spreads over the mark");
+        }
     }
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 }

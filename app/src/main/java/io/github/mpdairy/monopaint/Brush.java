@@ -16,6 +16,8 @@ final class Brush {
     static Brush of(ModularBrush parts) { return new Brush(parts); }
 
     String name() { return parts.name; }
+    /** Its name where a person reads it ({@link WildSample#shownName}: "Water Effect"); {@link #name} is the kept one. */
+    String shownName() { return WildSample.shownName(parts.name, parts); }
     /** Whether it draws on the ink layer: ink, charcoal or graphite. Wash and cover paint on the wash layer. */
     boolean inks() { return ModularSizes.inks(parts); }
     /** The same brush: the same name and settings. */

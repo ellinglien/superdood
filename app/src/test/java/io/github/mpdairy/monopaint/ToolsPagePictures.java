@@ -23,7 +23,7 @@ import javax.imageio.ImageIO;
  * at the app's 1.2× text and 1.875 px a dp (both tablets): the owner's drawings as {@link ToolCard} places them ({@link
  * ToolsLayout#art}), a brush with none its engine stroke ({@link WildSample}, as {@link LabLibrary#traySampler}). A
  * stand-in for the device's views, not them: the icons are drawn plainly and the scratch pad is blank. One picture a
- * screen, and one of the Manta's with the selected slot's underline at the blink's grey-600 step. The vector helpers
+ * screen, and one of the Manta's with the selected slot's tile at the blink's grey-600 step. The vector helpers
  * ({@link #path}, {@link #art}) are DrawScreenPictures' too.
  */
 public final class ToolsPagePictures {
@@ -66,61 +66,61 @@ public final class ToolsPagePictures {
             public void put(String key, String value) { if (value == null) prefs.remove(key); else prefs.put(key, value); }
         };
         ToolSlots slots = new ToolSlots(store, new Random(1));
-        // As the owner's mockup: the first slot selected, the Tools tab under All.
+        // The first slot selected, on its kind (a first visit).
         ToolsPage page = new ToolsPage(slots, store, 0);
-        page.filter(ToolsPage.Chip.ALL);
-        page.layout(l.perPage(), l.columns, l.cardWidth);
+        page.layout(l.perPage(), l.cardWidth);
         BufferedImage image = new BufferedImage(px(width), px(height), BufferedImage.TYPE_BYTE_GRAY);
         Graphics2D g = image.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setColor(PAPER); g.fillRect(0, 0, image.getWidth(), image.getHeight());
-        bar(g, l);
+        bar(g, l, ToolsLayout.TITLE, ToolsLayout.JOB);
         int x = l.side, y = ToolsLayout.BAR + l.gap;
-        pad(g, l, page, x, y);
-        y += l.testHeight + l.label;
-        words(g, ToolsLayout.TOOLBAR, false, TypeStyle.CAPTION.sp, x, y - l.gap / 2f - LabText.line(TypeStyle.CAPTION.sp), GREY_800);
-        // Tools First at its right, off: a chip.
-        float sx = x + l.top - l.switchWidth(), sy = y - l.switchFoot() - ToolsLayout.CHIP;
-        rounded(g, sx, sy, l.switchWidth(), ToolsLayout.CHIP, 1, ToolsLayout.CHIP / 2f, INK, null);
-        words(g, DrawLayout.TOOLS_FIRST, false, TypeStyle.CAPTION.sp, sx + l.chipPad() + 1, sy + (ToolsLayout.CHIP - LabText.line(TypeStyle.CAPTION.sp)) / 2, INK);
         for (int i = 0; i < l.slotCount; i++) {
-            int c = i % l.slotColumns, r = i / l.slotColumns;
             Brush brush = page.current(i);
             ToolSwatches.Look look = page.look(i);
-            boolean selected = i == page.slot();
-            card(g, brush, ToolsPage.name(brush), selected, !selected, selected ? underline : null, x + c * (l.slotWidth + l.gap), y + r * (l.slotCard + l.gap),
-                    l.slotWidth, l.slotCard, l.slotArt(), l.slotArtHeight(), (w, h) -> WildSample.slotTray(brush.parts, look, w, h));
+            tile(g, brush, i == page.slot() ? underline : null, x + i * (l.slotWidth + l.slotGap), y, l, (w, h) -> WildSample.slotTray(brush.parts, look, w, h));
         }
-        y += l.slots;
-        if (l.wide) { x = l.side + l.top + l.apart; y = ToolsLayout.BAR; } else y += l.apart;
-        library(g, l, page, x, y);
+        y += l.slotCard + l.gap;
+        named(g, l, page, x, y);
+        String tried = ToolsLayout.TRY + ToolsPage.card(page.current(), l.nameRoom() / 2f).name;
+        if (l.wide) {
+            strip(g, l.testWidth, l.testHeight, ToolsLayout.TRY_HEAD, tried, x, y + ToolsLayout.NAME_ROW);
+            library(g, l, page, l.side + l.top + l.apart, y);
+        } else {
+            library(g, l, page, x, y + ToolsLayout.NAME_ROW + l.apart);
+            strip(g, l.testWidth, l.testHeight, ToolsLayout.TRY_HEAD, tried, x, l.height - l.side - l.testHeight - ToolsLayout.TRY_HEAD);
+        }
         g.dispose();
         ImageIO.write(image, "png", file);
     }
 
-    /** Back (the caret and its word), "Tools" in bold, Undo greyed, Brush Lab in a rounded box. */
-    static void bar(Graphics2D g, ToolsLayout l) {
+    /** The page's bar ({@link LabUi.PageBar}): Back (the caret and its word), the title in bold over its job's line, grey. */
+    static void bar(Graphics2D g, ToolsLayout l, String title, String job) {
         int y = (ToolsLayout.BAR - 44) / 2;
         button(g, "Back", false, false, true, l.side, y, LabLayout.backWidth(), 44, 0, "prev");
         int x = l.side + LabLayout.backWidth() + 10;
-        words(g, ToolsLayout.TITLE, true, TypeStyle.HEADING.sp, x, ToolsLayout.BAR / 2f - LabText.line(TypeStyle.HEADING.sp) / 2, INK);
-        int lab = ToolsLayout.buttonWidth(ToolsLayout.LAB), undo = l.undoWidth(), right = l.width - l.side, by = (ToolsLayout.BAR - 40) / 2;
+        float head = LabText.line(TypeStyle.HEADING.sp), line = LabText.line(TypeStyle.CAPTION.sp), top = (ToolsLayout.BAR - head - line) / 2;
+        words(g, title, true, TypeStyle.HEADING.sp, x, top, INK);
+        words(g, job, false, TypeStyle.CAPTION.sp, x, top + head, GREY_800);
+    }
+    /** The selected slot's tool: its name (bold) and line, Edit in Brush Lab in a rounded box at the row's right. */
+    static void named(Graphics2D g, ToolsLayout l, ToolsPage page, int x, int y) {
+        float sp = TypeStyle.CAPTION.sp, top = y + (ToolsLayout.NAME_ROW - LabText.line(sp)) / 2;
+        ToolsPage.Card card = ToolsPage.card(page.current(), l.nameRoom() / 2f);
+        words(g, card.name, true, sp, x, top, INK);
+        if (!card.line.isEmpty() && !card.line.equalsIgnoreCase(card.name))
+            words(g, " · " + card.line, false, sp, x + width(g, card.name, true, sp), top, GREY_800);
+        int lab = ToolsLayout.buttonWidth(ToolsLayout.LAB), right = x + l.top, by = y + (ToolsLayout.NAME_ROW - 40) / 2;
         button(g, ToolsLayout.LAB, false, false, true, right - lab, by, lab, 40, 0, "flask");
         rounded(g, right - lab, by, lab, 40, BASE, ToolsLayout.PAD_RADIUS, INK, null);
-        button(g, l.compact ? null : ToolsLayout.UNDO, false, true, true, right - lab - 10 - undo, by, undo, 40, 0, "undo");
     }
-    /** The scratch pad: a rounded box, Clear in its corner, the tool's name (bold) and line in its foot. */
-    static void pad(Graphics2D g, ToolsLayout l, ToolsPage page, int x, int y) {
-        rounded(g, x, y, l.testWidth, l.testHeight, BASE, ToolsLayout.PAD_RADIUS, INK, null);
-        float sp = TypeStyle.CAPTION.sp, line = LabText.line(sp);
-        float clear = LabText.width("Clear", sp, 0);
-        words(g, "Clear", false, sp, x + l.testWidth - l.gap / 2f - l.wet() - 8 - clear, y + (ToolsLayout.PAD_ROW - line) / 2 + 3, GREY_800);
-        ToolsPage.Card card = ToolsPage.card(page.current(), l.padRoom() / 2f);
-        float top = y + l.testHeight - l.gap - line;
-        words(g, card.name, true, sp, x + l.gap, top, INK);
-        if (!card.line.isEmpty() && !card.line.equalsIgnoreCase(card.name))
-            words(g, " · " + card.line, false, sp, x + l.gap + width(g, card.name, true, sp), top, GREY_800);
+    /** The try strip ({@link TestArea#strip}): what it is for and Clear in its {@code head} dp row, the test page {@code w × h} in a fine ink frame under it. */
+    static void strip(Graphics2D g, int w, int h, int head, String label, int x, int y) {
+        float sp = TypeStyle.CAPTION.sp, top = y + (head - LabText.line(sp)) / 2;
+        words(g, label, false, sp, x, top, GREY_800);
+        label(g, "Clear", x + w - 8 - LabLayout.labelWidth("CLEAR"), y + head / 2f, INK);
+        box(g, x, y + head, w, h, 1, INK);
     }
     /**
      * A {@link ToolCard} at {@code x, y}, {@code w × h} dp: the drawing (or {@code stroke}) in its {@code aw × ah} art box,
@@ -128,6 +128,26 @@ public final class ToolsPagePictures {
      * ({@code grey}) its ink in grey-600 (ToolCard.GREY), picture and name.
      */
     static void card(Graphics2D g, Brush brush, String name, boolean strong, boolean grey, Color underline, float x, float y, int w, int h, int aw, int ah, Sample stroke) throws java.io.IOException {
+        g.drawImage(artBox(g, brush, grey, aw, ah, stroke), px(x), px(y), null);
+        float sp = TypeStyle.CAPTION.sp;
+        words(g, cut(g, name, strong, sp, w - ToolsLayout.NAME_END), strong, sp, x, y + ah + ToolsLayout.NAME_GAP, grey ? GREY_600 : INK);
+        if (underline != null) { g.setColor(underline); g.fillRect(px(x), px(y + h - DrawLayout.MARK_CLEAR - DrawLayout.UNDERLINE), px(Math.min(w, aw)), px(DrawLayout.UNDERLINE)); }
+    }
+    /** A toolbar slot's tile ({@link ToolCard#tile}): its art alone in its padding, grey; the selected one ({@code on}, else null) a tile in that colour, its art in paper. */
+    static void tile(Graphics2D g, Brush brush, Color on, float x, float y, ToolsLayout l, Sample stroke) throws java.io.IOException {
+        BufferedImage box = artBox(g, brush, on == null, l.slotArt(), l.slotArtHeight(), stroke);
+        if (on != null) {
+            rounded(g, x, y, l.slotWidth, l.slotTile(), 0, ToolsLayout.PAD_RADIUS, on, on);
+            // Paper where the drawing is dark, the tile's colour elsewhere.
+            for (int py = 0; py < box.getHeight(); py++) for (int qx = 0; qx < box.getWidth(); qx++) {
+                int ink = 255 - box.getRaster().getSample(qx, py, 0);
+                box.getRaster().setSample(qx, py, 0, on.getRed() + (255 - on.getRed()) * ink / 255);
+            }
+        }
+        g.drawImage(box, px(x + ToolsLayout.SLOT_PAD), px(y + ToolsLayout.SLOT_PAD), null);
+    }
+    /** The art box, {@code aw × ah} dp: the drawing (or {@code stroke}) placed as {@link ToolsLayout#art}, its ink lifted to grey-600 when {@code grey}. */
+    static BufferedImage artBox(Graphics2D g, Brush brush, boolean grey, int aw, int ah, Sample stroke) throws java.io.IOException {
         String drawn = DrawLayout.drawing(brush);
         BufferedImage box = new BufferedImage(px(aw), px(ah), BufferedImage.TYPE_BYTE_GRAY);
         Graphics2D clip = box.createGraphics();
@@ -145,35 +165,22 @@ public final class ToolsPagePictures {
             int v = box.getRaster().getSample(qx, py, 0);
             box.getRaster().setSample(qx, py, 0, 255 - (255 - v) * lift / 255);
         }
-        g.drawImage(box, px(x), px(y), null);
-        float sp = TypeStyle.CAPTION.sp;
-        words(g, cut(g, name, strong, sp, w - ToolsLayout.NAME_END), strong, sp, x, y + ah + ToolsLayout.NAME_GAP, grey ? GREY_600 : INK);
-        if (underline != null) { g.setColor(underline); g.fillRect(px(x), px(y + h - DrawLayout.MARK_CLEAR - DrawLayout.UNDERLINE), px(Math.min(w, aw)), px(DrawLayout.UNDERLINE)); }
+        return box;
     }
-    /** The Library: the tabs (the chosen bold and underlined), the pages at their right, the chips, the grid. */
+    /** The Library: Search with the pages at the row's right, the filter row's chips, the grid. */
     static void library(Graphics2D g, ToolsLayout l, ToolsPage page, int x, int y) throws java.io.IOException {
-        float body = TypeStyle.BODY.sp, tx = x;
-        for (ToolsPage.Tab t : ToolsPage.Tab.values()) {
-            boolean on = t == page.tab();
-            words(g, t.label, on, body, tx, y + (ToolsLayout.TAB - LabText.line(body)) / 2, INK);
-            float tw = width(g, t.label, on, body);
-            if (on) { g.setColor(INK); g.fillRect(px(tx), px(y + ToolsLayout.TAB - 3 - RULE), px(tw), px(RULE)); }
-            tx += tw + l.tabGap();
-        }
-        // The search's magnifier, then the pages.
-        String pagesSaid = (page.page() + 1) + " / " + page.pages();
-        float pagerW = page.pages() > 1 ? 2 * ToolsLayout.PAGE_BUTTON + 8 + LabText.width(pagesSaid, TypeStyle.CAPTION.sp, 0) : 0;
-        icon(g, "search", x + l.sections - pagerW - ToolsLayout.PAGE_BUTTON + 7, y + ToolsLayout.TAB / 2f, 18, INK);
+        int search = ToolsLayout.buttonWidth(ToolsLayout.SEARCH);
+        button(g, ToolsLayout.SEARCH, false, false, true, x, y, search, ToolsLayout.FIND, 0, "search");
         if (page.pages() > 1) {
-            String count = pagesSaid;
+            String count = (page.page() + 1) + " / " + page.pages();
             float cw = LabText.width(count, TypeStyle.CAPTION.sp, 0), right = x + l.sections;
-            icon(g, "next", right - ToolsLayout.PAGE_BUTTON + 7, y + ToolsLayout.TAB / 2f, 18, page.page() < page.pages() - 1 ? INK : GREY_400);
-            words(g, count, false, TypeStyle.CAPTION.sp, right - ToolsLayout.PAGE_BUTTON - 4 - cw, y + (ToolsLayout.TAB - LabText.line(TypeStyle.CAPTION.sp)) / 2, GREY_800);
-            icon(g, "prev", right - 2 * ToolsLayout.PAGE_BUTTON - 8 - cw + 7, y + ToolsLayout.TAB / 2f, 18, page.page() > 0 ? INK : GREY_400);
+            icon(g, "next", right - ToolsLayout.PAGE_BUTTON + 7, y + ToolsLayout.FIND / 2f, 18, page.page() < page.pages() - 1 ? INK : GREY_400);
+            words(g, count, false, TypeStyle.CAPTION.sp, right - ToolsLayout.PAGE_BUTTON - 4 - cw, y + (ToolsLayout.FIND - LabText.line(TypeStyle.CAPTION.sp)) / 2, GREY_800);
+            icon(g, "prev", right - 2 * ToolsLayout.PAGE_BUTTON - 8 - cw + 7, y + ToolsLayout.FIND / 2f, 18, page.page() > 0 ? INK : GREY_400);
         }
         // The chips, a row while they fit (as LabUi.Wrap).
-        float cx = x, cy = y + ToolsLayout.TAB;
-        for (ToolsPage.Chip chip : page.chipsShown()) {
+        float cx = x, cy = y + ToolsLayout.FIND;
+        for (ToolsPage.Chip chip : ToolsPage.Chip.values()) {
             int cw = ToolsLayout.chipWidth(chip.label, l.chipPad());
             if (cx > x && cx + cw > x + l.sections) { cx = x; cy += ToolsLayout.CHIP + l.chipGap(); }
             boolean on = chip == page.filter();
@@ -181,13 +188,12 @@ public final class ToolsPagePictures {
             words(g, chip.label, false, TypeStyle.CAPTION.sp, cx + l.chipPad() + 1, cy + (ToolsLayout.CHIP - LabText.line(TypeStyle.CAPTION.sp)) / 2, on ? PAPER : INK);
             cx += cw + l.chipGap();
         }
-        float gy = y + ToolsLayout.TAB + l.chips() + l.gap;
+        float gy = y + ToolsLayout.FIND + l.chips() + l.gap;
         List<ToolsPage.Card> cards = page.cards();
         for (int i = 0; i < cards.size(); i++) {
             int c = i % l.columns;
-            if (c == 0 && i > 0) gy += l.cardHeight + ToolsLayout.ROW_GAP + (page.opens(cards, i) ? ToolsLayout.GROUP_GAP : 0);
+            if (c == 0 && i > 0) gy += l.cardHeight + ToolsLayout.ROW_GAP;
             ToolsPage.Card card = cards.get(i);
-            if (card == null) continue;
             card(g, card.brush, card.name, false, false, page.now(card) ? INK : null, x + c * l.cardWidth, gy, l.cardWidth, l.cardHeight, l.cardArt(), l.cardArtHeight(),
                     (w, h) -> WildSample.legibleTray(card.brush.parts, WildSample.PREVIEW, ModularSizes.sampleSize(card.brush.parts, h), w, h, true));
         }

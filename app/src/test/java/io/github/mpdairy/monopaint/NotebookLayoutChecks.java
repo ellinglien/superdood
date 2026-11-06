@@ -9,7 +9,7 @@ import java.util.Random;
  * nothing is cut, every word fits, every target at least 48 dp.
  */
 public final class NotebookLayoutChecks {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws java.io.IOException {
         Assets.install(Assets.folder(Assets.FOLDER));
         LabText.Measure label = LabText.face(TypeStyle.LABEL.sp, TypeStyle.LABEL.tracking), caption = LabText.face(TypeStyle.CAPTION.sp, 0);
         for (int[] s : NotebookLayout.SCREENS)
@@ -25,37 +25,48 @@ public final class NotebookLayoutChecks {
                 // New notebook's tile: a dashed cover with a +, its name under it as a notebook's is.
                 check(LabText.fits("New Notebook", l.tileWidth, LabText.face(TypeStyle.BODY.sp, 0), 1), "New notebook's name fits its tile at " + at);
                 // Inside a notebook.
-                check(l.notebookUsed() == s[1] && l.spreadHeight >= l.pageHeight, "The notebook screen adds up to its height at " + at);
+                check(l.notebookUsed() == s[1] && l.spreadHeight >= l.pageHeight && l.pagesTop >= 12, "The notebook screen adds up to its height, the taller bar in the top margin, at " + at);
                 // The page as big as fits between the bar and the strip, at the page's shape, and bigger than before the one
                 // bar (2026-10-19: a bar, the name under it, the page with ‹ › beside it, the strip, a row of actions).
                 int across = s[0] - 2 * l.margin;
-                check(l.pageWidth <= across && l.pageHeight == Math.min(l.spreadHeight, (int) Math.floor(across * aspect)) && l.pageHeight >= (l.compact ? 300 : 420),
-                        "The page as big as fits at " + at + " (" + l.pageWidth + " × " + l.pageHeight + ")");
+                // ‹ and › either side of it (the owner, 2026-11-03), CARET wide ("the page turn carets should be bigger").
+                check(l.pageWidth + 2 * NotebookLayout.CARET <= across && l.pageHeight == Math.min(l.spreadHeight, (int) Math.floor((across - 2 * NotebookLayout.CARET) * aspect))
+                        && l.pageHeight >= (l.compact ? 300 : 420), "The page as big as fits between its ‹ and › at " + at + " (" + l.pageWidth + " × " + l.pageHeight + ")");
                 int title = (int) Math.ceil(NotebookLayout.TITLE_LINES * LabText.line(TypeStyle.HEADING.sp));
                 int oldSpread = s[1] - 2 * l.margin - 2 * NotebookLayout.BAR - title - l.thumbHeight - NotebookLayout.TAB - NotebookLayout.TAB_GAP - 4 * l.gap;
-                int old = Math.min(oldSpread, (int) Math.floor((across - 2 * 56) * aspect));
-                check(l.pageHeight > old, "The page bigger than with the name, the arrows and the actions' row (" + old + " dp tall) at " + at + ": " + l.pageHeight);
+                // At the same ‹ › width (the owner's bigger carets, 2026-11-03, take 16 dp either side from a page whose width
+                // limits it): what the one bar gains is the bar's and the actions' rows.
+                int old = Math.min(oldSpread, (int) Math.floor((across - 2 * Math.max(56, NotebookLayout.CARET)) * aspect));
+                check(l.pageHeight > old || l.pageHeight == old && old < oldSpread, "The page bigger than with the name, the arrows and the actions' row (" + old + " dp tall) at " + at + ": " + l.pageHeight);
                 check(l.visible * l.thumbWidth + (l.visible - 1) * l.stripGap <= across && l.visible >= 4 && l.thumbHeight >= 72, "The strip fits across at " + at + " (" + l.visible + " pages)");
-                // One bar: ‹ Notebooks, the name, Draw, Use on Cover, Delete Page; the last two their icons alone on the Nomad in portrait.
+                // One bar (LabUi.PageBar): ‹ Notebooks, the name (no job line since 2026-11-06), Settings (its word), Open, Use on Cover, Delete Page; Settings and the last two their icons alone on the Nomad in portrait.
                 boolean nomadPortrait = s[0] == 749 && s[1] == 998;
                 check(l.labelled == !nomadPortrait, "The actions' words in the bar but on the Nomad in portrait (their icons there) at " + at);
                 int bar = NotebookLayout.backWidth() + NotebookLayout.actionWidth(NotebookLayout.OPEN, true) + NotebookLayout.coverWidth(l.labelled)
-                        + NotebookLayout.actionWidth(NotebookLayout.DELETE, l.labelled) + 4 * NotebookLayout.BAR_GAP + l.titleRoom;
+                        + NotebookLayout.actionWidth(NotebookLayout.DELETE, l.labelled) + NotebookLayout.settingsWidth(l.labelled) + LabLayout.TITLE_GAP + 4 * NotebookLayout.BAR_GAP + l.titleRoom;
                 check(bar == across && l.titleRoom >= NotebookLayout.TITLE_LEAST, "The bar's buttons and the name's " + l.titleRoom + " dp across it at " + at);
-                check(NotebookLayout.TITLE_LINES * LabText.line(TypeStyle.BODY.sp) <= NotebookLayout.BAR && NotebookLayout.BUTTON >= 48 && NotebookLayout.BAR >= NotebookLayout.BUTTON,
-                        "The name's two lines in the bar, its buttons 48 dp at " + at);
+                check(NotebookLayout.TITLE_LINES * LabText.line(TypeStyle.BODY.sp) + LabText.line(TypeStyle.CAPTION.sp) <= NotebookLayout.PAGES_BAR && NotebookLayout.BUTTON >= 48
+                        && NotebookLayout.BAR >= NotebookLayout.BUTTON, "The name's two lines over its job in the bar, its buttons 48 dp at " + at);
+                check(!l.labelled || label.width(NotebookLayout.SETTINGS) + 2 * NotebookLayout.ACTION_PAD <= NotebookLayout.settingsWidth(true), "Settings says its word, in its own case, where the others do at " + at);
+                check(LabText.line(TypeStyle.HEADING.sp) <= NotebookLayout.BAR, "The shelf's bar: its title, no job line under it, at " + at);
+                check(NotebookLayout.CARET >= 64 && NotebookLayout.CARET_ICON >= 40 && l.pageHeight >= 2 * NotebookLayout.CARET, "The page's ‹ and › big targets with big carets at " + at);
                 check(label.width("OPEN") + 2 * NotebookLayout.ACTION_PAD + 4 <= NotebookLayout.actionWidth(NotebookLayout.OPEN, true), "Open says its word at " + at);
                 // The drawing screen's page bar along the foot: ‹, the page and its count, ›.
                 check(l.pageBar == DrawLayout.pageBar(l.compact) && l.pageButton == DrawLayout.pageButton(l.compact) && 2 * l.pageButton + DrawLayout.pageNumber() <= s[0]
                         && l.pageBar - DrawLayout.PAGE_RULE >= 26, "The drawing screen's page bar along the foot at " + at);
             }
-        // The strip's window: the current page always in it, the + tile after the last.
+        // The strip's window (NotebookStrip.start): the place shown always in it, the covers scrolling with the pages, nothing pinned.
         NotebookLayout manta = new NotebookLayout(1024, 1365, NotebookLayout.aspectOf(NotebookLayout.SCREENS[0]));
-        for (int count = 1; count <= 100; count++)
-            for (int current = 0; current < count; current++) {
-                int start = manta.stripStart(current, count);
-                check(start <= current && current < start + manta.visible && start + manta.visible <= Math.max(manta.visible, count + 1), "The strip shows page " + (current + 1) + " of " + count);
+        DrawingBook book = new DrawingBook(InkWashLayers.blank(60, 80));
+        for (int count = 1; count <= 40; count++, book.addPage()) {
+            int slots = NotebookStrip.slots(book);
+            check(slots == count + 3, "The strip's slots: the front cover, " + count + " pages, + and the back cover");
+            for (int place = DrawingBook.BACK; place < count; place++) {
+                int start = NotebookStrip.start(book, place, manta.visible), slot = NotebookStrip.slotOf(book, place);
+                check(start <= slot && slot < start + manta.visible && start + manta.visible <= Math.max(manta.visible, slots), "The strip shows place " + place + " of " + count);
+                if (place == count - 1 && slots > manta.visible) check(start > 0, "The front cover scrolls away from the last page (not pinned), " + count + " pages");
             }
+        }
         // The shelf's pages: every notebook on one, New notebook first.
         for (int n = 0; n < 60; n++) {
             int seen = 0;
@@ -74,13 +85,13 @@ public final class NotebookLayoutChecks {
         }
         check(NotebookLayout.fits("Loose pages 12") && NotebookLayout.fits("Harbour sketches from the ferry, foggy"), "Loose pages and a longer name fit");
         // The bar's words: Title Case (docs/TEXT-STYLE.md), a button's two words (Use on Cover's "on" aside: the owner's own words).
-        for (String w : new String[]{NotebookLayout.BACK, NotebookLayout.OPEN, NotebookCovers.USE_BUTTON, NotebookCovers.NO_PICTURE_BUTTON, NotebookLayout.DELETE}) {
+        for (String w : new String[]{NotebookLayout.BACK, DrawLayout.NOTEBOOK_SETTINGS, NotebookLayout.SETTINGS, NotebookLayout.OPEN, NotebookCovers.USE_BUTTON, NotebookCovers.NO_PICTURE_BUTTON, NotebookLayout.DELETE}) {
             int big = 0;
             for (String word : w.split(" ")) if (Character.isUpperCase(word.charAt(0))) big++; else check(word.equals("on"), w + ": Title Case");
             check(big <= 2, w + ": two words at most");
         }
         check(!NotebookLayout.fits("Mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"), "A name that can't fit is refused, never cut");
-        System.out.println("PASS: the shelf and the inside of a notebook fit the Manta and the Nomad in either turn at any page shape without scrolling: at least four covers a shelf page with their names in three lines and \"24 pages · Oct 17\", inside a notebook one bar (‹ Notebooks, the name in two lines, Draw, Use on Cover and Delete Page, the last two their icons on the Nomad in portrait), the page as big as fits under it and bigger than before, a strip of pages round the current one, and the drawing screen's page bar along the foot; every automatic name fits, one that can't is refused");
+        System.out.println("PASS: the shelf and the inside of a notebook fit the Manta and the Nomad in either turn at any page shape without scrolling: at least four covers a shelf page with their names in three lines and \"24 pages · Oct 17\", inside a notebook one bar (‹ Notebooks, the name in two lines, no job line, Settings in its word, Open, Use on Cover and Delete Page, all but Open their icons on the Nomad in portrait), the page as big as fits under it between big ‹ and › and bigger than before, a strip of the covers and the pages scrolling round the current one, and the drawing screen's page bar along the foot; every automatic name fits, one that can't is refused");
     }
     static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 }

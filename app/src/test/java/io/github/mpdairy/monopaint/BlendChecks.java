@@ -67,7 +67,8 @@ public final class BlendChecks {
     static ModularBrush brush(String code) { ModularBrush b = ModularCode.decode(code); check(b != null, "decodes: " + code); return b; }
     /** {@code b} with Blend {@code option}. */
     static ModularBrush blend(ModularBrush b, int option) { ModularBrush c = b.copy(); c.part(BrushPart.MEDIUM).set(PartDial.M_BLEND, option); return c; }
-    static ModularBrush life(ModularBrush b, PartChoice life) { ModularBrush c = b.copy(); c.set(BrushPart.LIFE, new ModularBrush.Part(life)); return c; }
+    /** {@code b} with Drying {@code life} in place of its drying and its Later, as Drying held both before Later. */
+    static ModularBrush life(ModularBrush b, PartChoice life) { ModularBrush c = LaterChecks.withoutLater(b); c.set(BrushPart.LIFE, new ModularBrush.Part(life)); return c; }
     static ModularBrush erasable(ModularBrush b, double e) { ModularBrush c = b.copy(); c.part(BrushPart.MEDIUM).set(PartDial.ERASABLE, e); return c; }
     static double[][] wave() { return CarrySmudgeChecks.wave(); }
     /** A straight stroke at {@code y} from {@code x0} to {@code x1}, pressure travel .8. */
@@ -102,8 +103,8 @@ public final class BlendChecks {
         check(WASH_BEHIND.contains("_1ulat00770000ee2_") && (code("paint-behind")).contains("_2zz00at2_"), "Blend is the medium's last digit, after Erasable (the spec's Opaque behind _2zz00at2_)");
         // Blend 0 is not written: every medium at its own way keeps its code, and a Blend adds one digit (Erasable's two before it when they were left out).
         for (PartChoice m : BrushPart.MEDIUM.choices()) {
-            // Resist, Screentone and Crayon have no Blend of their own (ResistChecks, ScreenChecks, CrayonChecks).
-            if (m == PartChoice.RESIST || m == PartChoice.TONE || m == PartChoice.CRAYON) continue;
+            // Resist, Screentone, Crayon and Vector Ink have no Blend of their own (ResistChecks, ScreenChecks, CrayonChecks, VectorInkChecks).
+            if (m == PartChoice.RESIST || m == PartChoice.TONE || m == PartChoice.CRAYON || m == PartChoice.VECTOR) continue;
             ModularBrush b = brush(WHITE_GEL);
             b.set(BrushPart.MEDIUM, ModularBrush.switchTo(b.part(BrushPart.MEDIUM), m));
             b.part(BrushPart.MEDIUM).set(PartDial.ERASABLE, 1);
@@ -534,10 +535,10 @@ public final class BlendChecks {
         ModularBrush.Part ink = brush(WHITE_GEL).part(BrushPart.MEDIUM), cover = brush(code("white-paint")).part(BrushPart.MEDIUM);
         check(PartDial.M_BLEND.shown(1, ink).equals("White") && PartDial.M_BLEND.shown(0, ink).equals("Darken") && PartDial.M_BLEND.shown(0, cover).equals("Cover"), "Blend Mode's options: Darken, or Opaque's Cover, then White, Behind, Invert");
         java.util.List<PartDial> dials = ink.choice.dials;
-        // Fling last of all (FlickFlingChecks).
-        int n = dials.size() - 1 - PartDial.SCREEN_DIALS.length;
-        check(dials.get(n - 1) == PartDial.M_BLEND && dials.get(n - 2) == PartDial.ERASABLE && dials.subList(n, dials.size() - 1).equals(java.util.Arrays.asList(PartDial.SCREEN_DIALS))
-                && dials.get(dials.size() - 1) == PartDial.FLING, "Blend after Erasable on every medium, then only Screen's (ScreenChecks), then Fling");
+        // Fling after them (FlickFlingChecks), then only Dissolves (explore-media).
+        int fling = dials.indexOf(PartDial.FLING), n = fling - PartDial.SCREEN_DIALS.length;
+        check(dials.get(n - 1) == PartDial.M_BLEND && dials.get(n - 2) == PartDial.ERASABLE && dials.subList(n, fling).equals(java.util.Arrays.asList(PartDial.SCREEN_DIALS))
+                && dials.subList(fling + 1, dials.size()).equals(java.util.Arrays.asList(PartDial.SOLUBLE)), "Blend after Erasable on every medium, then only Screen's (ScreenChecks), then Fling, then Dissolves");
         java.util.Map<String, String> store = new java.util.HashMap<>();
         BrushLibrary.Store st = new BrushLibrary.Store() { public String get(String k) { return store.get(k); } public void put(String k, String v) { if (v == null) store.remove(k); else store.put(k, v); } };
         BrushLab lab = new BrushLab(new ToolSlots(st, new Random(1)), 2, new Random(7));

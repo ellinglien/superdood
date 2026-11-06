@@ -1,4 +1,4 @@
-# Building My Bad Drawings
+# Building Superdood
 
 ## What you need
 
@@ -34,7 +34,7 @@ keyPassword=...
 ```
 
 Android only installs an update signed with the same key as the installed app: keep the keystore backed up, and if
-you switch keys, uninstall first (notebooks stay in `Document/My Bad Drawings`; brushes and settings are kept in the
+you switch keys, uninstall first (notebooks stay in `Document/Superdood`; brushes and settings are kept in the
 app and are lost with it).
 
 ### The application id and the handover build
@@ -43,7 +43,7 @@ The app id is `ing.ell.mybaddrawings` since 2026-10-30; before that it was `app.
 install's brushes and settings across, `./gradlew -PlegacyId :app:assembleRelease` builds the old id once more,
 signed with the old key (`legacy.storeFile`, `legacy.keyAlias`, `legacy.storePassword`, `legacy.keyPassword` in
 `keystore.properties`). Installed over the old app and opened once, it leaves its private state in
-`Document/My Bad Drawings/.handover`; the new app takes it on its first launch with file access (`HandOver.java`,
+`Document/Superdood/.handover`; the new app takes it on its first launch with file access (`HandOver.java`,
 `docs/RENAMING.md`). Nobody else needs this.
 
 ## Checks
@@ -54,7 +54,7 @@ bash scripts/test_document.sh    # also runs the above, plus MonoPaint's documen
 ```
 
 Device checks (androidTest) run in a separate install, `ing.ell.mybaddrawings.checks`, with its own library folder
-(`Document/My Bad Drawings checks`), never touching your notebooks:
+(`Document/Superdood checks`), never touching your notebooks:
 
 ```sh
 ./gradlew -PisolatedChecks :app:assembleDebug :app:assembleDebugAndroidTest
@@ -76,7 +76,7 @@ The web companion is built from `docs/brush-lab/studio-src`:
 node docs/brush-lab/studio-src/build.cjs     # writes docs/brush-lab/studio.html (not tracked); open it in a browser
 ```
 
-The published copy is at https://ell.ing/brush-studio/.
+The published copy is at https://superdood.org/studio/.
 
 ## PNG conversion
 

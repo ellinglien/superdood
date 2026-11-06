@@ -14,7 +14,13 @@ final class LineStamper {
     /** What a stroke's stamps remember: the widest reach, the body's last dab distance, the hake's state, the bristles' swarm, a stipple's, hatching's, stamp's or spiro's state. */
     static final class Meta {
         int widest; double lastD = Double.NEGATIVE_INFINITY; HakeRibbon.State hake; BristleSwarm.State swarm;
+        /**
+         * On a fine grid ({@link FineGrid}): how far from the clip, page px, a step's dabs and dust can land (a stroke's
+         * {@link #widest} known from a drawing before); a step farther is passed over unworked. NaN: every step worked out.
+         */
+        double cull = Double.NaN;
         StippleStamper.State stipple; HatchStamper.State hatch; StampStamper.State stamp; SpiroStamper.State spiro; HandHatchStamper.State handHatch;
+        RulingPen.State ruling; TwigStick.State twig; FanBrush.State fan; Brayer.State roller;
     }
     /** Lay only dabs with dMin <= d < dMax; with a tail, taper them toward the end over tailLen by tailAmt. */
     static final class Window { double dMin, dMax = Double.POSITIVE_INFINITY, tailLen, tailAmt; boolean tail; }
@@ -27,7 +33,16 @@ final class LineStamper {
 
     /** stampLine: into {@code into}, from segment {@code from}; last = the stroke is lifting; clip null for the page. Returns the touched rectangle. */
     static int[] stamp(FloatTiles into, StrokePaper paper, ResolvedBrush.Pen b, StrokePoints pts, double size, boolean last, int from, int[] clip, Meta meta, Window win) {
-        int w = into.width, h = into.height, n = pts.count, step = into.step();
+        // On a fine grid (sharp dry brushes): the dabs worked out on the page as ever, then laid at the grid's points
+        // (toGrid); the rectangle returned is the grid's. Its paper reads the grid's points, the nib's wobble the page's.
+        FineGrid fine = into.grid;
+        int w = fine != null ? fine.pageWidth : into.width, h = fine != null ? fine.pageHeight : into.height, n = pts.count, step = into.step();
+        StrokePaper onPage = paper.page();
+        // On a grid the clip is the grid's points (the buffer's, as on the page); the dabs are worked out within the page pixels it covers.
+        int[] gclip = fine == null ? null : clip != null ? clip : new int[]{0, 0, fine.width - 1, fine.height - 1};
+        if (fine != null) clip = fine.pageRectOf(gclip);
+        // A worn tip's facet lies off the step: no step is passed over then.
+        double cull = fine != null && meta != null && !(b.wear > 0) ? meta.cull : Double.NaN;
         double total = n > 0 ? pts.d[n - 1] : 0;
         double big = StrokeMath.inkBig(size), bigS = Math.sqrt(big);
         double[] bristles = b.bristles();
@@ -35,7 +50,7 @@ final class LineStamper {
         double inLen = lens[0], outLen = lens[1], spread = b.fuzz;
         boolean dryOn = b.dry > 0, tiltOn = b.tilts();
         StickGrain G = spread > 0 ? StickGrain.of(b.seed) : null;
-        int[] rect = StrokeMath.emptyRect(w, h);
+        int[] rect = StrokeMath.emptyRect(into.width, into.height);
         java.util.ArrayList<Dab> dabs = new java.util.ArrayList<>();
         java.util.ArrayList<double[]> specksAt = new java.util.ArrayList<>();
         Nib nib = new Nib();
@@ -62,7 +77,10 @@ final class LineStamper {
             for (int s = k == 1 ? 0 : 1; s <= steps; s++) {
                 double t = (double)s / steps, x = lerp(pts.x[j], pts.x[k], t), y = lerp(pts.y[j], pts.y[k], t), d = lerp(pts.d[j], pts.d[k], t);
                 if (win != null && (d < win.dMin || d >= win.dMax)) continue;
-                nib(nib, b, paper, pts, size, big, bigS, inLen, outLen, total, last, win, tiltOn, j, k, t, x, y, d, dirx, diry, w, h);
+                if (cull == cull && (x < cl - cull || x > cr + cull || y < ct - cull || y > cb + cull)) continue;
+                nib(nib, b, onPage, pts, size, big, bigS, inLen, outLen, total, last, win, tiltOn, j, k, t, x, y, d, dirx, diry, w, h);
+                // Wears Down: the worn facet lies behind the point, toward the lean.
+                x += nib.ox; y += nib.oy;
                 double pr = nib.pr, v = nib.v, cosA = nib.cosA, sinA = nib.sinA, a = nib.a, bb = nib.bb, dk = nib.dk, soft = nib.soft, side = nib.shade;
                 // Crayon: its width wobbles along the stroke, by noise fixed to the page.
                 if (b.crayon) { double wob = Crayon.wobble(x, y); a *= wob; bb *= wob; }
@@ -77,12 +95,14 @@ final class LineStamper {
                 double grid = big > 1 ? gridSp * every : every > 1 ? stickSp * every : 0;
                 // Tilt Shading: a nib on its side lays a dab every so much of its width, its soft edge and grain hiding
                 // the scallops (a dab every sample would lay each pixel about ten times over).
-                if (side > 0) grid = Math.max(grid, 2 * a * ResolvedBrush.SIDE_STEP);
+                if (side > 0) grid = Math.max(grid, 2 * (nib.worn > 0 ? a / (1 + WORN_LONG * nib.worn) : a) * ResolvedBrush.SIDE_STEP);
                 if (grid > 0 && !(k == 1 && s == 0) && !(last && k == n - 1 && s == steps)
                         && Math.floor(d / grid) == Math.floor((d - seg / steps) / grid)) continue;
                 // Flick: past the lift its bristles run dry too (FlickFling), whatever the brush's own dry brush.
                 double flickDry = pts.flicks() ? pts.flickDry(d) : 0;
-                double load = b.load(d, v, pr) - flickDry;
+                // Paint Load: as its own paint runs out a line runs dry, as a dip pen's nib does before the next dip.
+                double runDry = pts.dry(j, k, t);
+                double load = b.load(d, v, pr) - flickDry - 1.1 * runDry;
                 // A stick's pressure eases its grain; a crayon's line holds how hard it presses (Crayon.press).
                 double press = press(b, pr);
                 int nBr = (int)Math.min(BRISTLES, 6 + Math.round(a));
@@ -98,11 +118,13 @@ final class LineStamper {
                     Dab dab = new Dab();
                     dab.x = x; dab.y = y; dab.a = a; dab.bb = bb; dab.cosA = cosA; dab.sinA = sinA; dab.grown = grown;
                     dab.sw = sw; dab.dk = dk; dab.press = press; dab.load = load; dab.nBr = nBr; dab.dirx = dirx; dab.diry = diry;
-                    dab.dry = dryOn || flickDry > 0; dab.soft = soft; dab.side = side;
+                    dab.dry = dryOn || flickDry > 0 || runDry > 0; dab.soft = soft; dab.side = side;
                     dab.x0 = x0; dab.x1 = x1; dab.y0 = y0; dab.y1 = y1;
-                    dabs.add(dab);
-                    area += (long)(x1 - x0 + 1) * (y1 - y0 + 1);
-                    StrokeMath.grow(rect, x0, y0, x1, y1);
+                    if (fine == null || toGrid(dab, fine, gclip, R, spread > 0 ? Math.max(1, spread * (bb * 1.4 + a * 0.12) * fine.k) * (side > 0 ? 1 + ResolvedBrush.SIDE_FEATHER * side : 1) : 0)) {
+                        dabs.add(dab);
+                        area += (long)(dab.x1 - dab.x0 + 1) * (dab.y1 - dab.y0 + 1);
+                        StrokeMath.grow(rect, dab.x0, dab.y0, dab.x1, dab.y1);
+                    }
                 }
                 // Dust: specks knocked off around the stick, seeded by where the dab is, so a re-lay lays the same ones.
                 if (spread > 0) {
@@ -116,8 +138,10 @@ final class LineStamper {
                         int X0 = Math.max(cl, (int)Math.floor(sx - sr - 1)), X1 = Math.min(cr, (int)Math.ceil(sx + sr + 1));
                         int Y0 = Math.max(ct, (int)Math.floor(sy - sr - 1)), Y1 = Math.min(cb, (int)Math.ceil(sy + sr + 1));
                         if (X1 < X0 || Y1 < Y0) continue;
-                        specksAt.add(new double[]{sx, sy, sr, sc, X0, Y0, X1, Y1});
-                        StrokeMath.grow(rect, X0, Y0, X1, Y1);
+                        double[] speck = fine == null ? new double[]{sx, sy, sr, sc, X0, Y0, X1, Y1} : speckToGrid(fine, gclip, sx, sy, sr, sc);
+                        if (speck == null) continue;
+                        specksAt.add(speck);
+                        StrokeMath.grow(rect, (int)speck[4], (int)speck[5], (int)speck[6], (int)speck[7]);
                     }
                 }
             }
@@ -133,10 +157,35 @@ final class LineStamper {
         return rect;
     }
 
+    /**
+     * Dab {@code d}, worked out on the page, as {@code fine}'s points lay it: its place and ellipse in grid points, its
+     * soft edges as wide on the page as ever but their one-pixel least a grid point ({@code sw}, the stick's fuzz worked
+     * out so), its rows and columns those of the grid it reaches ({@code R} page px round its centre). False when it misses
+     * the grid. At 1 to a pixel and no offset, the dab as it was.
+     */
+    private static boolean toGrid(Dab d, FineGrid fine, int[] clip, int R, double sw) {
+        int k = fine.k;
+        d.x = fine.gridX(d.x); d.y = fine.gridY(d.y); d.a *= k; d.bb *= k;
+        d.sw = sw;
+        if (d.soft > 0 && k > 1) d.soft = 1 + (d.soft - 1) * k;
+        d.x0 = Math.max(clip[0], (int)Math.floor(d.x - R * k)); d.x1 = Math.min(clip[2], (int)Math.ceil(d.x + R * k));
+        d.y0 = Math.max(clip[1], (int)Math.floor(d.y - R * k)); d.y1 = Math.min(clip[3], (int)Math.ceil(d.y + R * k));
+        return d.x1 >= d.x0 && d.y1 >= d.y0;
+    }
+    /** A dust speck at page {@code sx, sy}, radius {@code sr}, darkness {@code sc}, as {@code fine}'s points lay it ({@link #speck}'s form); null off the grid. */
+    private static double[] speckToGrid(FineGrid fine, int[] clip, double sx, double sy, double sr, double sc) {
+        double gx = fine.gridX(sx), gy = fine.gridY(sy), gr = sr * fine.k;
+        int X0 = Math.max(clip[0], (int)Math.floor(gx - gr - 1)), X1 = Math.min(clip[2], (int)Math.ceil(gx + gr + 1));
+        int Y0 = Math.max(clip[1], (int)Math.floor(gy - gr - 1)), Y1 = Math.min(clip[3], (int)Math.ceil(gy + gr + 1));
+        return X1 < X0 || Y1 < Y0 ? null : new double[]{gx, gy, gr, sc, X0, Y0, X1, Y1};
+    }
+
     /** A nib's short half-axis for long half-axis {@code a} and its {@code aspect}: at least a pixel, never past {@code a}. */
     static double shortHalf(double a, double aspect) { return Math.max(0.6, Math.min(a, Math.max(1, a * aspect))); }
     /** The nib at one place along the stroke ({@link #nib}): the pressure and speed there, its ellipse (half-axes a, bb; angle's cosine and sine) and the hand's darkness. */
-    static final class Nib { double pr, v, a, bb, cosA, sinA, dk, soft, shade; }
+    static final class Nib { double pr, v, a, bb, cosA, sinA, dk, soft, shade, ox, oy, worn; }
+    /** Wears Down: how much longer the worn facet is than the tip along the lean, and how much lighter it lays, at its widest. */
+    static final double WORN_LONG = 2.2, WORN_LIGHT = .15;
     /** What of its darkness pen {@code b}'s line holds at pressure {@code pr} where it lays most: a stick's eased grain, a crayon's press, else 1. */
     static double press(ResolvedBrush.Pen b, double pr) { return b.fuzz > 0 ? lerp(1, 0.3 + 0.7 * pr * pr, b.fuzz) : b.crayon ? pr : 1; }
     /**
@@ -194,7 +243,22 @@ final class LineStamper {
         double dk = StrokeMath.handDark(b.pDark, b.sDark, b.tDark, pr, v, lean);
         if (ga != 0) dk *= StrokeMath.gDark(b.gDark, ga);
         if (shade > 0) dk *= 1 - ResolvedBrush.SIDE_LIGHT * shade;
-        // Paint Load: what of its own paint the brush still lays here (LoadedPaint).
+        // Wears Down: on its facet the tip is a long flat oval along the lean, its point's side where the point was, lighter.
+        out.ox = 0; out.oy = 0; out.worn = 0;
+        if (b.wear > 0 && pts.fx != null) {
+            double tx = lerp(pts.tx[j], pts.tx[k], t), ty = lerp(pts.ty[j], pts.ty[k], t), az = BrushDirection.azimuth(tx, ty);
+            double ux = Double.isNaN(az) ? StrokePoints.HOLD_X : Math.cos(az), uy = Double.isNaN(az) ? StrokePoints.HOLD_Y : Math.sin(az);
+            double worn = pts.wornAt(j, k, t, ux, uy);
+            if (worn > 0) {
+                double long_ = a * (1 + WORN_LONG * worn);
+                bb = StrokeMath.lerp(bb, a, worn);
+                out.ox = ux * (long_ - a); out.oy = uy * (long_ - a);
+                a = long_; ang = az == az ? az : Math.atan2(uy, ux);
+                dk *= 1 - WORN_LIGHT * worn;
+                out.worn = worn;
+            }
+        }
+        // Paint Load: what of its own paint the brush still lays here (LoadedPaint); a line runs dry into streaks too (below).
         if (pts.own != null) dk *= pts.own(j, k, t);
         out.pr = pr; out.v = v; out.a = a; out.bb = bb; out.cosA = Math.cos(ang); out.sinA = Math.sin(ang); out.dk = dk;
         // Its edge's softness, px (0: the crisp edge's half pixel each side).
@@ -236,6 +300,8 @@ final class LineStamper {
         double x = d.x, y = d.y, a = d.a, bb = d.bb, cosA = d.cosA, sinA = d.sinA, sw = d.sw, dk = d.dk, press = d.press, load = d.load, dirx = d.dirx, diry = d.diry;
         double spread = b.fuzz;
         boolean crayon = b.crayon;
+        // On a fine grid a crayon's speckle and ragged edge stay the page's pixels' (Crayon's maps).
+        FineGrid fine = into.grid;
         int nBr = d.nBr, x0 = d.x0, x1 = d.x1;
         boolean dryOn = d.dry;
         double side = d.side;
@@ -265,7 +331,7 @@ final class LineStamper {
                     }
                     double gm = 0, gl = 0, grain = 0;
                     if (sw != 0) {
-                        gm = G.mid(px, py); gl = G.low(px, py);
+                        gm = paper.stick(G, 1, px, py); gl = paper.stick(G, 2, px, py);
                         grain = clamp(1 + 1.2 * spread * (gl - 0.5) + 0.5 * spread * (gm - 0.5), 0.2, 1.2);
                         double cap = press * grain * tooth;
                         if (dk != 1) cap *= dk;
@@ -279,7 +345,7 @@ final class LineStamper {
                         double e = (1 - dist) / Math.max(g, 1e-6) + sw * spread * (1.1 * (gm - 0.5) + 1.8 * (gl - 0.5));
                         double f = clamp((e + 0.5 * sw) / sw);
                         cov = f * f * (3 - 2 * f) * press * grain;
-                    } else if (crayon) cov = Crayon.press(dist, g, press, px, py);
+                    } else if (crayon) cov = Crayon.press(dist, g, press, fine == null ? px : fine.pageOf(px), fine == null ? py : fine.pageOfY(py));
                     else if (d.soft > 0) cov = clamp(0.5 - (dist - 1) / Math.max(g, 1e-6) / d.soft);
                     else cov = clamp(0.5 - (dist - 1) / Math.max(g, 1e-6));
                     if (side > 0) cov *= tooth;
@@ -288,7 +354,7 @@ final class LineStamper {
                     if (cov * dk <= now) continue;
                     if (dryOn) {
                         double across = clamp(((-dx * diry + dy * dirx) / a + 1) / 2, 0, 0.9999);
-                        if (step == 1) { if (bristles[(int)(across * nBr)] > load + 0.25 * ((G != null ? G.fine(px, py) : paper.fine(px, py)) - 0.5)) cov = 0; }
+                        if (step == 1) { if (bristles[(int)(across * nBr)] > load + 0.25 * ((G != null ? paper.stick(G, 0, px, py) : paper.fine(px, py)) - 0.5)) cov = 0; }
                         // On the lattice a bristle's gap, a pixel wide, would fall on some points and miss others (a dotted
                         // streak): the share of the point's four pixels the bristles leave dry.
                         else cov *= dry(bristles, nBr, load, G, paper, px, py, dx, dy, dirx, diry, a);
@@ -317,7 +383,7 @@ final class LineStamper {
         int wet = 0;
         for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
             double across = clamp(((-(dx + i) * diry + (dy + j) * dirx) / a + 1) / 2, 0, 0.9999);
-            if (bristles[(int)(across * nBr)] <= load + 0.25 * ((G != null ? G.fine(px + i, py + j) : paper.fine(px + i, py + j)) - 0.5)) wet++;
+            if (bristles[(int)(across * nBr)] <= load + 0.25 * ((G != null ? paper.stick(G, 0, px + i, py + j) : paper.fine(px + i, py + j)) - 0.5)) wet++;
         }
         return wet / 4.0;
     }
@@ -400,6 +466,9 @@ final class LineStamper {
 
     /** One round drop of radius {@code r} at {@code x, y}; {@code hypot}: the port's distance (Math.hypot), else engine.js's square root. */
     private static void drop(FloatTiles into, double x, double y, double r, boolean hypot, int[] rect) {
+        // On a fine grid: the drop in the grid's points, its edge a point wide.
+        FineGrid g = into.grid;
+        if (g != null) { x = g.gridX(x); y = g.gridY(y); r *= g.k; }
         int R = (int)Math.ceil(r + 1);
         int x0 = Math.max(0, (int)Math.floor(x - R)), x1 = Math.min(into.width - 1, (int)Math.ceil(x + R));
         int y0 = Math.max(0, (int)Math.floor(y - R)), y1 = Math.min(into.height - 1, (int)Math.ceil(y + R));

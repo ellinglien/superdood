@@ -1,0 +1,96 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pencil curves</title>
+<style>
+  body { margin: 0; font: 14px system-ui, sans-serif; background: #ddd; }
+  nav { padding: 8px 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  nav button { padding: 6px 10px; font: inherit; border: 1px solid #888; border-radius: 6px; background: #f4f4f4; }
+  nav button[aria-pressed="true"] { background: #222; color: #fff; }
+  #panes { display: flex; gap: 8px; padding: 0 8px; }
+  figure { margin: 0; flex: 1; min-width: 0; }
+  figcaption { padding: 4px 0; font-weight: 600; }
+  canvas { display: block; width: 100%; aspect-ratio: 3 / 4; background: #fff; touch-action: none; }
+  #tip { padding: 0 12px 6px; font-size: 12px; color: #555; }
+</style>
+<nav id="brushes"><button id="clear">Clear</button></nav>
+<div id="tip">Each stroke is drawn three times, once a curve. Apple Pencil: turn off Scribble in Settings.</div>
+<div id="panes"></div>
+<script src="textures.js"></script><script src="engine.js"></script>
+<script src="mbd-engine.wasm-runtime.js"></script><script src="mbd-engine.js"></script>
+<script type="module">
+// The Pencil curve, tuned by hand (the owner on the iPad): one stroke drawn in any pane is drawn in all three, each
+// with its candidate from PENCIL_CURVES (engine.js) before the Manta's curve; the one picked becomes PENCIL there.
+// Served by the relay at /pencil. The app's engine (web/engine) where the browser has WebAssembly GC, else the JS copy.
+const CURVES = [["Manta", "manta"], ["Between", "between"], ["Paintmageddon", "paintmageddon"]];
+// From the first-launch toolbar (probe.html's BRUSHES, ToolSlots.FIRST): name, code, size px, grey.
+const BRUSHES = [
+  ["Another pencil", "another-pencil.M40i000000000at_4ip2c_0_di0_1jz_800000000zzzz000000zz000000000530000005000c099zz.inw", 4.5, 1.0],
+  ["Verve felt", "verve-felt.M30i0776o0q00u1_000zz0000920000000_0_d00_0_8i00000zz0000400000nz0.jjds6x", 4, 1.0],
+  ["Fude fountain", "fude-fountain.M20ss007700003m_000zzat00000000000_0_000_0_8at0000i000ll000000nz01.1s13pn4", 2.5, 1.0],
+  ["Ink wash", "ink-wash.M60i0000000007q_1wva200000000_0_0fk_7_8zz0000000000000000nz0.t4mf73", 130, 0.176]];
+const W = 900, H = 1200;
+let E = null;
+if (window.MBDEngine && MBDEngine.supported()) try { E = await MBDEngine.load("mbd-engine.wasm", "mbd-assets.bin"); } catch (err) { console.info("Pencil curves: the JS copy draws (" + err + ")"); }
+await loadTextures();
+let brush = 2;
+const nav = document.getElementById("brushes");
+BRUSHES.forEach(([name], i) => { const b = nav.appendChild(document.createElement("button")); b.textContent = name; b.onclick = () => { brush = i; pick(); }; });
+const pick = () => [...nav.querySelectorAll("button:not(#clear)")].forEach((b, i) => b.setAttribute("aria-pressed", String(i === brush)));
+pick();
+const panes = CURVES.map(([label, key]) => {
+  const f = document.getElementById("panes").appendChild(document.createElement("figure"));
+  f.innerHTML = "<figcaption></figcaption><canvas></canvas>";
+  f.firstChild.textContent = label;
+  const cv = f.querySelector("canvas"); cv.width = W; cv.height = H;
+  return { curve: PENCIL_CURVES[key], cv, ctx: cv.getContext("2d"), s: null, page: null };
+});
+function blank(p) {
+  if (p.page) p.page.free();
+  p.page = E && E.page(W, H);
+  p.s = p.page ? { w: W, h: H, page: new Uint8Array(W * H).fill(255) } : modSurface(W, H, 7);
+  showPage(p.ctx, p.s, [0, 0, W - 1, H - 1]);
+}
+panes.forEach(blank);
+document.getElementById("clear").onclick = () => panes.forEach(blank);
+function pull(p, r) {
+  if (!p.page || !r) return r;
+  const w = r[2] - r[0] + 1, h = r[3] - r[1] + 1, t = p.page.tones(r[0], r[1], w, h);
+  for (let y = 0; y < h; y++) p.s.page.set(t.subarray(y * w, (y + 1) * w), (r[1] + y) * W + r[0]);
+  return r;
+}
+let live = null;
+const show = (p, r) => { if (r) showPage(p.ctx, p.s, r); };
+function samples(e, from) {
+  const r = from.getBoundingClientRect(), evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+  return (evs.length ? evs : [e]).map(ev => [(ev.clientX - r.left) * W / r.width, (ev.clientY - r.top) * H / r.height, ev]);
+}
+for (const p0 of panes) {
+  p0.cv.addEventListener("pointerdown", e => {
+    if (live) return;
+    try { p0.cv.setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ }
+    const [, code, size, grey] = BRUSHES[brush];
+    live = { id: e.pointerId, from: p0.cv, strokes: panes.map(p => {
+      const L = {};
+      if (p.page) { const st = p.page.stroke(code, size, grey); return { p, L, add: q => pull(p, st.add(q)), end: () => pull(p, st.end()) }; }
+      const st = new Stroke(p.s, readAnyCode(code).b, size, grey, null); return { p, L, add: q => st.add(q), end: () => st.end() };
+    }) };
+    move(e);
+  });
+  p0.cv.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+}
+function move(e) {
+  if (!live || e.pointerId !== live.id) return;
+  const pts = samples(e, live.from);
+  for (const s of live.strokes) show(s.p, s.add(pts.map(([x, y, ev]) => pointerSample(ev, s.L, x, y, s.p.curve))));
+}
+function end(e) {
+  if (!live || e.pointerId !== live.id) return;
+  for (const s of live.strokes) show(s.p, s.end());
+  live = null;
+  // Wet paint settles, ten ticks a second as on the Manta.
+  const tick = () => { let more = false; for (const p of panes) if (p.page && p.page.settling) { show(p, pull(p, p.page.tick())); more = true; } if (more && !live) setTimeout(tick, 100); };
+  setTimeout(tick, 100);
+}
+// The stroke ends at the first of pointerup, pointercancel or pointerleave (an iPad's Pencil can miss its pointerup), once.
+for (const p of panes) { p.cv.addEventListener("pointermove", move); for (const k of ["pointerup", "pointercancel", "pointerleave"]) p.cv.addEventListener(k, end); }
+</script>

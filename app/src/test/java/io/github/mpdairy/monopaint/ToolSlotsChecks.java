@@ -14,10 +14,11 @@ public final class ToolSlotsChecks {
     }
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
-        start(); reordered(); grown(); tenFromEight(); anySlot(); rollAndSave(); undo(); same(); converted(); interrupted(); unreadable(); smudge(); stamp(); perTool(); currentMigration();
-        System.out.println("PASS: ten tool slots start as the owner's toolbar (2026-10-28), Another pencil first, each at its own size and grey from FIRST, the eraser at 31 px, the old first brushes still Basic tools, the library holding them; the owner's tablet holding those ten in the old order takes FIRST's once, sizes, greys, wet ink, the selection and the finger moving with their brushes, any other toolbar left alone; a toolbar kept with six keeps them line for line, at their own sizes, and gains the rest, once; one kept with eight (the app's, the one waiting while a notebook's is open, a notebook's own) keeps its eight in place and gains Cheap ballpoint and Permanent marker; any slot holds any brush; the dice rolls a six-part brush in the slot brush's style; Undo takes back rolls and picks, latest first, until the page changes; slots holding built-ins or old Wild brushes become six-part brushes once, each at its old size and grey, and a conversion cut short loses nothing; putting back the brush a slot holds changes nothing; the smudge tool starts as the Stump, its chooser offers the Basic tools that smudge then saved smudge brushes and nothing that lays paint, and what it takes stays; the stamp tool starts as a Stamp, a cut nib stays across a restart, Undo takes it back, a frozen toolbar doesn't hold it and the slots are untouched; "
+        start(); reordered(); grown(); nineFromEight(); nineFromTen(); anySlot(); rollAndSave(); undo(); pickAndTake(); same(); converted(); interrupted(); unreadable(); smudge(); stamp(); perTool(); currentMigration(); hbDark();
+        System.out.println("PASS: nine tool slots start as the owner's toolbar (2026-10-28), Another pencil first, each at its own size and grey from FIRST, the eraser at 31 px, the old first brushes still Basic tools, the library holding them; the owner's tablet holding those ten in the old order takes FIRST's once, sizes, greys, wet ink, the selection and the finger moving with their brushes, any other toolbar left alone; a toolbar kept with six keeps them line for line, at their own sizes, and gains the rest, once; one kept with eight (the app's, the one waiting while a notebook's is open, a notebook's own) keeps its eight in place and gains the ninth; one kept with ten (before 2026-11-06) gives up its Fill in, whose size, grey, selection and finger go to Fill in's own place, the slots after it moving up with theirs, else its tenth, kept in Recent; Fill in a tool of its own at 2.5 px, black; any slot holds any brush; the dice rolls a six-part brush in the slot brush's style; Undo takes back rolls and picks, latest first, until the page changes; slots holding built-ins or old Wild brushes become six-part brushes once, each at its old size and grey, and a conversion cut short loses nothing; putting back the brush a slot holds changes nothing; the smudge tool starts as the Stump, its chooser offers the Basic tools that smudge then saved smudge brushes and nothing that lays paint, and what it takes stays; the stamp tool starts as a Stamp, a cut nib stays across a restart, Undo takes it back, a frozen toolbar doesn't hold it and the slots are untouched; "
                 + "each tool's own size and grey (2026-10-27), another's change leaving it, kept through picks, rolls, Undo, a kit, Reset to Default and a restart, a notebook's own toolbar bringing its own and leaving it the app's; "
-                + "the first launch since the one size and grey (2026-10-24 to 27) gives them to every slot and the stamp tool, once, the eraser and the smudge tool keeping theirs");
+                + "the first launch since the one size and grey (2026-10-24 to 27) gives them to every slot and the stamp tool, once, the eraser and the smudge tool keeping theirs; "
+                + "a slot and the app's waiting toolbar holding the HB pencil as it was (Pressure Dark .8) take today's once, at their own size and grey, a renamed one and the rest left as they were");
     }
     /** The first launch's toolbar before the owner's (2026-10-28), every slot at 44 px and grey .216: older checks' fixture. */
     static final String[][] OLD_FIRST = {
@@ -50,18 +51,23 @@ public final class ToolSlotsChecks {
     static boolean near(double a, double b) { return Math.abs(a - b) < 1e-9; }
 
     /** The owner's toolbar as the first launch's (2026-10-28): names in order, each slot's own size, px, and grey. */
-    static final String[] NAMES = {"Another pencil", "Steady line", "Verve felt", "Fude fountain", "Ink wash", "Watercolour washy", "Rob boss", "Filled shape", "Ben-Day brush", "High lighter"};
-    static final double[] PX = {4.5, 3, 4, 2.5, 130, 169, 96, 2.5, 12, 63}, GREYS = {1, 1, 1, 1, .176, .082, 1, 1, 1, .075};
+    static final String[] NAMES = {"Another pencil", "Steady line", "Verve felt", "Fude fountain", "Ink wash", "Watercolour wash", "Rob boss", "Ben-Day brush", "High lighter"};
+    static final double[] PX = {6, 3, 4, 11, 85, 275, 114, 17, 34}, GREYS = {1, 1, 1, 1, .541, .227, .424, 1, .102};
     static void start() {
         prefs = new HashMap<>();
         ToolSlots slots = new ToolSlots(store(), new Random(1));
-        check(ToolSlots.COUNT == 10 && ToolSlots.FIRST.length == 10, "Ten slots, a first brush each");
+        check(ToolSlots.COUNT == 9 && ToolSlots.FIRST.length == 9, "Nine slots, a first brush each");
+        ToolSwatches.Look fill = slots.swatches.look(ToolSlots.FILL_KEY, slots.brush(ToolSlots.FILL));
+        check(slots.brush(ToolSlots.FILL).name().equals("Fill in") && ToolSlots.fills(slots.brush(ToolSlots.FILL)) && fill.px == 2.5 && fill.darkness == 1
+                && ToolSlots.toolKey(ToolSlots.FILL).equals(ToolSlots.FILL_KEY), "Fill in a tool of its own, at 2.5 px and black, kept under its own key");
         // The first launch's defaults before 2026-10-28 stay Basic tools.
         for (String old : new String[]{"Halftone brush", "Dither pencil", "Wax crayon", "Sketch pencil", "Slow ink wash", "Cheap ballpoint", "Permanent marker"})
             check(ToolKits.preset(old) != null, old + " is still a Basic tool");
         ToolSwatches s = slots.swatches;
         for (int i = 0; i < ToolSlots.COUNT; i++) {
-            check(slots.brush(i).name().equals(NAMES[i]) && ModularCode.encode(slots.brush(i).parts).equals(ToolSlots.FIRST[i][2]), "A first launch's slot " + i + " holds " + NAMES[i] + " as its code says");
+            // Its settings the code's (the part after the name: Watercolour wash keeps Watercolour washy's code, 2026-11-06).
+            String code = ModularCode.encode(slots.brush(i).parts);
+            check(slots.brush(i).name().equals(NAMES[i]) && code.substring(code.indexOf(".M")).equals(ToolSlots.FIRST[i][2].substring(ToolSlots.FIRST[i][2].indexOf(".M"))), "A first launch's slot " + i + " holds " + NAMES[i] + " as its code says");
             check(ToolSlots.firstPx(i) == PX[i] && ToolSlots.firstGrey(i) == GREYS[i], "FIRST's slot " + i + " at " + PX[i] + " px and grey " + GREYS[i]);
             check(s.look(ToolSlots.key(i), slots.brush(i)).px == PX[i] && s.look(ToolSlots.key(i), slots.brush(i)).darkness == GREYS[i], "Slot " + i + " at its own " + PX[i] + " px and grey " + GREYS[i]);
         }
@@ -70,7 +76,7 @@ public final class ToolSlotsChecks {
                 && slots.stamp().parts.choice(BrushPart.TIP) == PartChoice.STAMP && slots.stamp().parts.choice(BrushPart.MEDIUM) == LegacyBrushes.builtin("INK").choice(BrushPart.MEDIUM),
                 "The stamp tool as before: a Fineliner stamp at 44 px and grey .216");
         check(!prefs.containsKey(ToolSwatches.CURRENT) && !prefs.containsKey(ToolSwatches.CURRENT_PX), "and no one size or grey");
-        check(slots.library.entries().size() == ToolSlots.COUNT && slots.library.entries().get(0).brush.sameAs(slots.brush(0)), "The library holds the ten, Another pencil first");
+        check(slots.library.entries().size() == ToolSlots.COUNT && slots.library.entries().get(0).brush.sameAs(slots.brush(0)), "The library holds the nine, Another pencil first");
         check(prefs.containsKey("tool_slots") && new ToolSlots(store(), new Random(2)).brush(2).sameAs(slots.brush(2)), "The slots survive a restart");
         check(prefs.containsKey(ToolSlots.REORDERED), "A first launch needs no reorder");
     }
@@ -80,7 +86,7 @@ public final class ToolSlotsChecks {
      * no Undo step; any other toolbar is left alone, and marked done.
      */
     static void reordered() {
-        int[] old = {1, 3, 0, 6, 4, 2, 5, 7, 8, 9}; // the FIRST row each old slot held, as the tablet had them: Steady line, Fude fountain, another pencil, rob boss, ...
+        int[] old = {1, 3, 0, 6, 4, 2, 5, 7, 8}; // the FIRST row each old slot held, as the tablet had them: Steady line, Fude fountain, another pencil, rob boss, ...
         prefs = new HashMap<>();
         new ToolSlots(store(), new Random(1));
         String[] lines = new String[ToolSlots.COUNT];
@@ -104,7 +110,7 @@ public final class ToolSlotsChecks {
         String done = prefs.toString();
         new ToolSlots(store(), new Random(2));
         check(prefs.toString().equals(done), "Once");
-        // Any other toolbar: nine of the ten and another brush.
+        // Any other toolbar: eight of the nine and another brush.
         lines[4] = style("Pencil", 9).write();
         prefs.put("tool_slots", String.join("\n", lines)); prefs.remove(ToolSlots.REORDERED); prefs.put(ToolSlots.SELECTED, ToolSlots.key(0));
         String other = prefs.get("tool_slots");
@@ -138,24 +144,24 @@ public final class ToolSlotsChecks {
         check(prefs.toString().equals(before), "Grown once: a second launch changes nothing");
     }
     /**
-     * Saved state from the eight-slot builds (before 2026-10-27) loads into ten, the eight kept in place: the slots' lines,
+     * Saved state from the eight-slot builds (before 2026-10-27) loads into nine, the eight kept in place: the slots' lines,
      * their sizes, greys and the selection; the app's toolbar waiting while a notebook's is open; a notebook's own toolbar
-     * (its lines in the notebook's options). The ninth and tenth take Cheap ballpoint and Permanent marker.
+     * (its lines in the notebook's options). The ninth takes the first launch's.
      */
-    static void tenFromEight() {
+    static void nineFromEight() {
         prefs = new HashMap<>();
         ToolSlots made = new ToolSlots(store(), new Random(1));
         made.use(0, style("Watercolor", 21)); made.use(7, style("Pencil", 22));
         made.swatches.useSize(ToolSlots.key(3), 17); made.swatches.useGrey(ToolSlots.key(7), .6);
-        String[] ten = prefs.get("tool_slots").split("\n", -1);
-        String eight = String.join("\n", java.util.Arrays.copyOf(ten, 8));
+        String[] nine = prefs.get("tool_slots").split("\n", -1);
+        String eight = String.join("\n", java.util.Arrays.copyOf(nine, 8));
         prefs.put("tool_slots", eight);
-        for (int i = 8; i < 10; i++) { prefs.remove(ToolSwatches.PX + "slot" + i); prefs.remove(ToolSwatches.DARK + "slot" + i); }
+        prefs.remove(ToolSwatches.PX + "slot8"); prefs.remove(ToolSwatches.DARK + "slot8");
         prefs.put("inkwash_tool", "slot7");
         ToolSlots slots = new ToolSlots(store(), new Random(1));
         String[] now = prefs.get("tool_slots").split("\n", -1);
-        check(now.length == 10 && String.join("\n", java.util.Arrays.copyOf(now, 8)).equals(eight), "The eight kept slots line for line");
-        check(slots.brush(8).sameAs(ToolSlots.first(8)) && slots.brush(9).sameAs(ToolSlots.first(9)), "The two new slots as a first launch has them");
+        check(now.length == 9 && String.join("\n", java.util.Arrays.copyOf(now, 8)).equals(eight), "The eight kept slots line for line");
+        check(slots.brush(8).sameAs(ToolSlots.first(8)), "The new slot as a first launch has it");
         check(slots.swatches.look("slot3", slots.brush(3)).px == 17 && slots.swatches.look("slot7", slots.brush(7)).darkness == .6 && "slot7".equals(prefs.get("inkwash_tool")),
                 "The eight keep their sizes, greys and the selection");
         // A notebook's own toolbar kept with eight lines, in its options and as the toolbar it loads.
@@ -166,12 +172,85 @@ public final class ToolSlotsChecks {
         for (String line : eightLines) record.append('\n').append(line);
         check(NotebookOptions.DEFAULT.readTools(record.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)).toolbar.equals(eightLines), "and read back from its record");
         ToolSlots.Toolbar own = ToolSlots.of(options);
-        check(own != null && own.lines().subList(0, 8).equals(eightLines) && own.brushes[8].sameAs(ToolSlots.first(8)) && own.brushes[9].sameAs(ToolSlots.first(9))
-                && own.px[9] == ToolSlots.firstPx(9) && own.darkness[9] == ToolSlots.firstGrey(9), "It loads into ten: its eight in place, the two new as a first launch has them");
-        check(ToolSlots.Toolbar.parse(eightLines.subList(0, 7)) == null && ToolSlots.Toolbar.parse(slots.toolbar().lines()) != null, "Seven lines don't read; ten do");
+        check(own != null && own.lines().subList(0, 8).equals(eightLines) && own.brushes[8].sameAs(ToolSlots.first(8))
+                && own.px[8] == ToolSlots.firstPx(8) && own.darkness[8] == ToolSlots.firstGrey(8), "It loads into nine: its eight in place, the new one as a first launch has it");
+        check(ToolSlots.Toolbar.parse(eightLines.subList(0, 7)) == null && ToolSlots.Toolbar.parse(slots.toolbar().lines()) != null, "Seven lines don't read; nine do");
         // The app's toolbar waiting while a notebook's is open, kept with eight lines by the build before.
         prefs.put(ToolSlots.APPWIDE, String.join("\n", slots.toolbar().lines().subList(0, 8)));
         check(slots.appWide().lines().subList(0, 8).equals(slots.toolbar().lines().subList(0, 8)), "The app's toolbar waiting with eight comes back with its eight");
+        prefs.remove(ToolSlots.APPWIDE);
+    }
+    /**
+     * Saved state from the ten-slot builds (2026-10-27 to 2026-11-06) loads into nine, nothing chosen lost: a slot holding
+     * Fill in (a copy under another name too) goes, its size, grey, selection and finger to Fill in's own place, the slots
+     * after it moving up with their sizes, greys, wet ink, selection and finger; with no Fill in, the tenth goes, kept in
+     * Recent, the selection on it the first slot's, the finger on it the eraser's. The app's toolbar waiting while a
+     * notebook's is open and a notebook's own (eleven lines don't read) the same. Once.
+     */
+    static void nineFromTen() {
+        // The ten-slot first launch's toolbar: FIRST with Fill in eighth, as the owner's tablet has it, renamed.
+        prefs = new HashMap<>();
+        new ToolSlots(store(), new Random(1));
+        java.util.List<String> lines = new java.util.ArrayList<>(java.util.Arrays.asList(prefs.get("tool_slots").split("\n", -1)));
+        Brush fill = Brush.read("fill it\t" + ModularCode.encode(ToolSlots.fill().parts));
+        lines.add(7, fill.write());
+        for (int i = 0; i < 10; i++) { prefs.put(ToolSwatches.PX + "slot" + i, Double.toString(100 + i)); prefs.put(ToolSwatches.DARK + "slot" + i, Double.toString(i / 10.0)); }
+        prefs.put(HeldPaint.WET_INK + "slot9", "0.5");
+        prefs.remove(ToolSwatches.PX + ToolSlots.FILL_KEY); prefs.remove(ToolSwatches.DARK + ToolSlots.FILL_KEY);
+        prefs.put("tool_slots", String.join("\n", lines)); prefs.put(ToolSlots.SELECTED, "slot7"); prefs.put(FingerTool.KEY, "slot10");
+        ToolSlots slots = new ToolSlots(store(), new Random(1));
+        String[] now = prefs.get("tool_slots").split("\n", -1);
+        check(now.length == 9 && slots.brush(6).name().equals("Rob boss") && slots.brush(7).name().equals("Ben-Day brush") && slots.brush(8).name().equals("High lighter"),
+                "Fill in's slot gone, the two after it moved up");
+        ToolSwatches.Look ben = slots.swatches.look("slot7", slots.brush(7)), high = slots.swatches.look("slot8", slots.brush(8)), own = slots.swatches.look(ToolSlots.FILL_KEY, ToolSlots.fill());
+        check(slots.swatches.look("slot6", slots.brush(6)).px == 106 && ben.px == 108 && ben.darkness == .8 && high.px == 109 && high.darkness == .9
+                && "0.5".equals(prefs.get(HeldPaint.WET_INK + "slot8")) && !prefs.containsKey(ToolSwatches.PX + "slot9") && !prefs.containsKey(HeldPaint.WET_INK + "slot9"),
+                "Each keeps its own size, grey and wet ink");
+        check(own.px == 107 && own.darkness == .7 && ToolSlots.FILL_KEY.equals(prefs.get(ToolSlots.SELECTED)) && FingerTool.Choice.SLOT_9.key.equals(prefs.get(FingerTool.KEY)),
+                "Fill in's own place takes its size, grey and the selection; the finger stays on High lighter");
+        check(FingerTool.Choice.saved(prefs.get(FingerTool.KEY)).tool() == 8, "as the drawing screen reads the finger");
+        boolean kept = false;
+        for (Brush b : slots.recent()) kept |= ToolSlots.fills(b);
+        check(!kept, "Fill in not kept in Recent: it has its place");
+        String done = prefs.toString();
+        new ToolSlots(store(), new Random(2));
+        check(prefs.toString().equals(done), "Once");
+        // The finger on Fill in's slot goes with it.
+        lines.set(7, ToolSlots.fill().write());
+        prefs.put("tool_slots", String.join("\n", lines)); prefs.put(FingerTool.KEY, "slot8"); prefs.put(ToolSlots.SELECTED, "slot9");
+        new ToolSlots(store(), new Random(1));
+        check(FingerTool.Choice.FILL.key.equals(prefs.get(FingerTool.KEY)) && FingerTool.Choice.saved(prefs.get(FingerTool.KEY)).tool() == ToolSlots.FILL && "slot8".equals(prefs.get(ToolSlots.SELECTED)),
+                "The finger on Fill in's slot draws with Fill in; the selection moves up");
+        // No Fill in: the tenth goes, kept in Recent.
+        prefs = new HashMap<>();
+        new ToolSlots(store(), new Random(1));
+        Brush tenth = style("Pencil", 31);
+        prefs.put("tool_slots", prefs.get("tool_slots") + "\n" + tenth.write());
+        prefs.put(ToolSwatches.PX + "slot9", "77"); prefs.put(ToolSlots.SELECTED, "slot9"); prefs.put(FingerTool.KEY, "slot10");
+        prefs.remove(ToolSwatches.PX + ToolSlots.FILL_KEY);
+        String nine = String.join("\n", java.util.Arrays.copyOf(prefs.get("tool_slots").split("\n", -1), 9));
+        slots = new ToolSlots(store(), new Random(1));
+        check(prefs.get("tool_slots").equals(nine) && slots.recent().get(0).sameAs(tenth) && !prefs.containsKey(ToolSwatches.PX + "slot9"),
+                "No Fill in: the nine kept line for line, the tenth first in Recent");
+        check("slot0".equals(prefs.get(ToolSlots.SELECTED)) && !prefs.containsKey(FingerTool.KEY)
+                && slots.swatches.look(ToolSlots.FILL_KEY, ToolSlots.fill()).px == ToolSlots.FIRST_FILL_PX, "The selection on it the first slot's, the finger the eraser's; Fill in at its first size");
+        // The app's toolbar waiting while a notebook's is open, and a notebook's own, kept with ten lines.
+        java.util.List<String> ten = new java.util.ArrayList<>(slots.toolbar().lines()), tenNoFill = new java.util.ArrayList<>(ten);
+        ten.add(3, fill.write() + "\t9\t0.5");
+        tenNoFill.add(tenth.write() + "\t9\t0.5");
+        check(ToolSlots.Toolbar.parse(ten).lines().equals(slots.toolbar().lines()) && ToolSlots.Toolbar.parse(tenNoFill).lines().equals(slots.toolbar().lines()),
+                "A notebook's ten lines read as nine: its Fill in gone, else its tenth");
+        NotebookOptions options = NotebookOptions.DEFAULT.withTools(NotebookOptions.Tools.LIBRARY, ten);
+        check(options.ownsTools() && ToolSlots.of(options).lines().equals(slots.toolbar().lines()), "and from a notebook's options");
+        java.util.List<String> eleven = new java.util.ArrayList<>(ten);
+        eleven.add(ten.get(0));
+        check(ToolSlots.Toolbar.parse(eleven) == null, "Eleven lines don't read");
+        Brush other = style("Watercolor", 32);
+        tenNoFill.set(9, other.write() + "\t9\t0.5");
+        prefs.put(ToolSlots.APPWIDE, String.join("\n", tenNoFill));
+        slots = new ToolSlots(store(), new Random(1));
+        check(prefs.get(ToolSlots.APPWIDE).split("\n", -1).length == 9 && slots.appWide().lines().equals(tenNoFill.subList(0, 9)) && slots.recent().get(0).sameAs(other),
+                "The app's toolbar waiting with ten comes back with nine, its tenth in Recent");
         prefs.remove(ToolSlots.APPWIDE);
     }
     static void anySlot() {
@@ -195,6 +274,21 @@ public final class ToolSlotsChecks {
         slots.use(1, old(3));
         check(slots.brush(1).name().equals("Wax crayon") && slots.library.recent(4).get(0).brush.name().equals("Wax crayon") && slots.library.recent(4).size() == 4,
                 "Putting a library brush in a slot makes it the most recent of four");
+    }
+    /** A pick keeps the brush it lets go in Recent; the Tools page's and Brush Lab's slots come back an Undo step each, or a kit's as one (ToolSlots.pick, take). */
+    static void pickAndTake() {
+        prefs = new HashMap<>();
+        ToolSlots slots = new ToolSlots(store(), new Random(4));
+        Brush rolled = slots.roll(3), fude = ToolKits.preset("Fude pen").brush(), wax = ToolKits.preset("Wax crayon").brush();
+        check(slots.pick(3, fude) && slots.brush(3).sameAs(fude) && slots.recent().stream().anyMatch(b -> b.sameAs(rolled)), "A pick puts the tool in and keeps the roll it let go in Recent");
+        check(!slots.pick(3, fude), "Picking the tool the slot holds changes nothing");
+        Brush[] back = new Brush[ToolSlots.COUNT];
+        Brush one = slots.brush(1), four = slots.brush(4);
+        back[1] = wax; back[4] = fude;
+        boolean[] used = slots.take(back, false);
+        check(used[1] && used[4] && !used[0] && slots.undo() == 4 && slots.undo() == 1, "Brush Lab's slots come back an Undo step each");
+        used = slots.take(back, true);
+        check(used[1] && used[4] && slots.undo() >= 0 && slots.brush(1).sameAs(one) && slots.brush(4).sameAs(four), "A kit's slots come back as one Undo step");
     }
     static void undo() {
         prefs = new HashMap<>();
@@ -312,34 +406,52 @@ public final class ToolSlotsChecks {
     static void smudge() {
         prefs = new HashMap<>();
         ToolSlots slots = old(store(), new Random(4));
-        check(ToolSlots.ERASER == ToolSlots.COUNT && ToolSlots.SMUDGE == ToolSlots.COUNT + 1 && ToolSlots.STAMP == ToolSlots.COUNT + 2 && ToolSlots.TOOLS == ToolSlots.COUNT + 3, "The bar's tools: eight slots, the eraser, the smudge tool, the stamp tool");
+        check(ToolSlots.ERASER == ToolSlots.COUNT && ToolSlots.SMUDGE == ToolSlots.COUNT + 1 && ToolSlots.STAMP == ToolSlots.COUNT + 2 && ToolSlots.FILL == ToolSlots.COUNT + 3 && ToolSlots.TOOLS == ToolSlots.COUNT + 4, "The bar's tools: the slots, the eraser, the smudge tool, the stamp tool, Fill in");
         Brush stump = slots.smudge();
-        check(stump.name().equals(ToolSlots.SMUDGE_FIRST) && ToolPresets.find(stump) != null && ToolSlots.smudges(stump), "The smudge tool starts as the Blend stump Basic tool, a smudge brush");
+        check(stump.name().equals("Blend") && stump.name().equals(ToolSlots.SMUDGE_FIRST) && ToolPresets.find(stump) != null && ToolSlots.smudges(stump), "The smudge tool starts as the Blend Basic tool, a smudge brush");
         for (int i = 0; i < ToolSlots.COUNT; i++) check(!ToolSlots.smudges(slots.brush(i)), "A first slot's brush (" + slots.brush(i).name() + ") lays paint: no smudge brush");
+        // The chooser (the owner, 2026-10-30: "just TWO tools"; Blur, 2026-11-01): Blend, Water and Blur, each a Basic tool that smudges.
         java.util.List<Brush> choices = slots.smudgeChoices();
-        int basic = 0;
-        for (ToolPresets.Preset p : ToolPresets.all()) if (ToolSlots.smudges(p.brush())) basic++;
-        check(basic >= 1 && choices.size() == basic && choices.get(0).sameAs(stump), "The chooser: the Basic tools that smudge (" + basic + "), the Blend stump first");
+        check(choices.size() == 3 && choices.get(0).sameAs(stump) && choices.get(1).name().equals("Water") && ToolPresets.find(choices.get(1)) != null
+                && choices.get(2).name().equals("Blur") && ToolPresets.find(choices.get(2)) != null, "The chooser: Blend, Water, then Blur, no more: " + choices.size());
         for (Brush b : choices) check(ToolSlots.smudges(b), b.name() + " in the chooser smudges");
-        // A saved smudge brush (a Stump with its own name) comes after the Basic tools; a saved brush that lays paint never shows.
+        // A saved smudge brush (a Blend with its own name) stays in the library, out of the chooser; held, it shows first.
         ModularBrush own = stump.parts.copy();
         own.name = "My stump";
         Brush saved = Brush.of(own);
         slots.library.save(saved);
         slots.library.save(style("Watercolor", 7));
-        choices = slots.smudgeChoices();
-        check(choices.size() == basic + 1 && choices.get(basic).sameAs(saved), "A saved smudge brush follows the Basic tools; a saved paint doesn't show");
-        check(slots.useSmudge(saved) && slots.smudge().sameAs(saved) && !slots.useSmudge(saved), "The smudge tool takes a chooser's brush; the one it holds changes nothing");
+        check(slots.smudgeChoices().size() == 3 && slots.library.find(saved) != null, "A saved smudge brush stays in the library, not the chooser");
+        check(slots.useSmudge(saved) && slots.smudge().sameAs(saved) && !slots.useSmudge(saved), "The smudge tool takes a brush; the one it holds changes nothing");
         check(new ToolSlots(store(), new Random(5)).smudge().sameAs(saved), "and keeps it across a restart");
+        choices = slots.smudgeChoices();
+        check(choices.size() == 4 && choices.get(0).sameAs(saved) && choices.get(1).name().equals("Blend"), "The tool's own brush shows first when it is none of them");
         check(slots.brush(0).name().equals("Fineliner"), "The slots are untouched");
         // A brush no longer in the library or the Basic tools still shows, first, so the chooser always holds the tool's own.
         prefs.remove(BrushLibrary.LIBRARY);
         slots = new ToolSlots(store(), new Random(6));
         Brush held = slots.smudge();
         check(held.sameAs(saved) && slots.smudgeChoices().get(0).sameAs(held), "The tool's own brush shows first when the chooser wouldn't hold it otherwise");
+        // Once: an older smudge Basic tool moves to the one of the two that does its work; anything else stays.
+        String[][] moves = {{"Blend stump", "Blend"}, {"Stump", "Blend"}, {"Water brush", "Water"}, {"Damp tissue", "Water"}, {"Dirty brush", "Dirty brush"}, {"Wash comb", "Wash comb"}};
+        for (String[] move : moves) {
+            prefs = new HashMap<>();
+            slots = old(store(), new Random(4));
+            slots.useSmudge(FloatChecks.find(move[0]).brush());
+            prefs.remove(ToolSlots.SMUDGE_TWO);
+            Brush now = new ToolSlots(store(), new Random(5)).smudge();
+            check(now.name().equals(move[1]) && ToolPresets.find(now) != null, "A smudge tool holding " + move[0] + " holds " + move[1] + " once: " + now.name());
+            slots = new ToolSlots(store(), new Random(5));
+            slots.useSmudge(FloatChecks.find(move[0]).brush());
+            check(new ToolSlots(store(), new Random(6)).smudge().name().equals(move[0]), "and only once: " + move[0] + " picked again stays");
+        }
+        prefs = new HashMap<>();
+        check(new ToolSlots(store(), new Random(4)).smudge().name().equals("Blend") && "1".equals(prefs.get(ToolSlots.SMUDGE_TWO)), "A first launch starts with Blend, the move done");
+        // Blend's icon is the blending stump's, Water's the water brush's.
+        check(ToolSlots.smudgeKind(stump) == ToolSlots.SmudgeKind.BLUR && ToolSlots.smudgeKind(ToolKits.preset("Water").brush()) == ToolSlots.SmudgeKind.WATER, "Blend blurs, Water waters");
         // Its icon follows what its brush does (the owner, 2026-10-19): a blur for the blending stump, a smearing finger for a push, the stump for the rest.
         java.util.Map<String, ToolSlots.SmudgeKind> kinds = new java.util.HashMap<>();
-        for (ToolPresets.Preset p : ToolPresets.all()) if (ToolSlots.smudges(p.brush())) kinds.put(p.name, ToolSlots.smudgeKind(p.brush()));
+        for (ToolPresets.Preset p : ToolPresets.withRetired()) if (ToolSlots.smudges(p.brush())) kinds.put(p.name, ToolSlots.smudgeKind(p.brush()));
         check(kinds.get("Blend stump") == ToolSlots.SmudgeKind.BLUR && kinds.get("Stump") == ToolSlots.SmudgeKind.PUSH && kinds.get("Wash comb") == ToolSlots.SmudgeKind.STUMP,
                 "The Blend stump blurs (Soften 1), the Stump pushes (Smear, Soften 0), the Wash comb combs: " + kinds);
         for (PartChoice carry : new PartChoice[]{PartChoice.LIFT, PartChoice.DRAG}) {
@@ -361,6 +473,37 @@ public final class ToolSlotsChecks {
         check(new ToolSlots(store(), new Random(5)).stamp().sameAs(cut), "and stays across a restart");
         check(slots.brush(0).sameAs(slot0) && prefs.get("tool_slots").split("\n").length == ToolSlots.COUNT, "The slots are untouched");
         check(slots.undo() == ToolSlots.STAMP && slots.stamp().sameAs(first), "Undo takes the cut back");
+    }
+    /**
+     * The HB pencil without Pressure Dark (2026-11-05): a slot holding the one before (RETIRED) and the app's own
+     * toolbar waiting while a notebook's is open take today's once, each at its own size and grey; an HB pencil renamed,
+     * and every other slot, stay line for line.
+     */
+    static void hbDark() {
+        prefs = new HashMap<>();
+        new ToolSlots(store(), new Random(1));
+        check("1".equals(prefs.get(ToolSlots.HB_DARK)), "A first launch needs no HB pencil move");
+        Brush was = null, now = ToolKits.preset("HB pencil").brush();
+        for (ToolPresets.Preset p : ToolPresets.retired()) if (p.name.equals("HB pencil")) was = p.brush();
+        check(!was.sameAs(now), "the HB pencil before is another brush");
+        String[] lines = prefs.get("tool_slots").split("\n", -1);
+        lines[3] = was.write();
+        String mine = "My HB\t" + ModularCode.encode(was.parts);
+        lines[5] = mine;
+        prefs.put("tool_slots", String.join("\n", lines)); prefs.remove(ToolSlots.HB_DARK);
+        prefs.put(ToolSwatches.PX + ToolSlots.key(3), "7.5"); prefs.put(ToolSwatches.DARK + ToolSlots.key(3), "0.8");
+        prefs.put(ToolSlots.APPWIDE, was.write() + "\t4.5\t1.0\n" + ToolSlots.first(1).write() + "\t3.0\t1.0");
+        ToolSlots slots = new ToolSlots(store(), new Random(1));
+        check(slots.brush(3).sameAs(now), "Slot 3 holds today's HB pencil");
+        ToolSwatches.Look look = slots.swatches.look(ToolSlots.key(3), slots.brush(3));
+        check(look.px == 7.5 && look.darkness == .8, "at its own size and grey");
+        String[] after = prefs.get("tool_slots").split("\n", -1);
+        for (int i = 0; i < ToolSlots.COUNT; i++) if (i != 3) check(after[i].equals(lines[i]), "Slot " + i + " as it was");
+        check(prefs.get(ToolSlots.APPWIDE).equals(now.write() + "\t4.5\t1.0\n" + ToolSlots.first(1).write() + "\t3.0\t1.0"), "the app's waiting toolbar's HB pencil today's, its size and grey kept");
+        check("1".equals(prefs.get(ToolSlots.HB_DARK)), "done");
+        prefs.put("tool_slots", String.join("\n", lines));
+        new ToolSlots(store(), new Random(1));
+        check(prefs.get("tool_slots").equals(String.join("\n", lines)), "Once");
     }
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 
@@ -393,14 +536,14 @@ public final class ToolSlotsChecks {
         ModularBrush changed = wax.brush().parts.copy(); changed.part(BrushPart.TIP).set(PartDial.WEIGHT, 1.3); Brush edited = Brush.of(changed);
         slots.use(1, edited);
         check(DrawLayout.edited(slots.brush(1)) == wax && slots.use(1, DrawLayout.edited(slots.brush(1)).brush()), "Reset puts the Basic tool back");
-        check(slots.brush(1).write().equals(wax.brush().write()) && s.look("slot1", slots.brush(1)).px == 9 && s.look("slot1", slots.brush(1)).darkness == .4,
-                "Reset restores its code at slot 1's own size and grey");
+        check(slots.brush(1).write().equals(wax.brush().write()) && s.look("slot1", slots.brush(1)).px == 13 && s.look("slot1", slots.brush(1)).darkness == 1,
+                "Reset restores its code at its own size and grey (Wax crayon now carries a look)");
         slots.undo();
         check(slots.brush(1).sameAs(edited), "Undo takes the reset back");
         check(slots.enter(own) && s.look("slot3", slots.brush(3)).px == 50 && s.look("slot3", slots.brush(3)).darkness == .9, "A notebook's own toolbar brings its sizes and greys");
         s.useGrey(ToolSlots.key(3), .6);
         slots.leave();
-        check(s.look("slot3", slots.brush(3)).px == 44 && s.look("slot3", slots.brush(3)).darkness == .216 && s.look("slot1", slots.brush(1)).px == 9, "Leaving brings the app's back");
+        check(s.look("slot3", slots.brush(3)).px == 44 && s.look("slot3", slots.brush(3)).darkness == .216 && s.look("slot1", slots.brush(1)).px == 13, "Leaving brings the app's back");
     }
     /** The first launch since the one size and grey (2026-10-24 to 27): they become every slot's and the stamp tool's own, once. */
     static void currentMigration() {

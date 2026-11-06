@@ -104,6 +104,18 @@ final class MagnetDrag {
         if (b[2] < a[2]) out.add(new int[]{b[2], top, a[2], bottom});
         return out;
     }
+    /** The parts of {@code a} outside every one of {@code bs} (null: none): {@code a} cut by each in turn. */
+    static List<int[]> minus(int[] a, List<int[]> bs) {
+        List<int[]> out = new ArrayList<>();
+        out.add(a.clone());
+        if (bs == null) return out;
+        for (int[] b : bs) {
+            List<int[]> next = new ArrayList<>();
+            for (int[] part : out) next.addAll(minus(part, b));
+            out = next;
+        }
+        return out;
+    }
     /** {@code a} and {@code b} together: the least rectangle holding both. */
     static int[] union(int[] a, int[] b) { return new int[]{Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])}; }
     /** Its area, px. */

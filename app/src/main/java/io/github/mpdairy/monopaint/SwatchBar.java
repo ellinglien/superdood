@@ -47,6 +47,7 @@ final class SwatchBar {
     private String shown;
     /** The tool shown. */
     private int tool;
+    private final SwatchFaces.Host host;
 
     /** {@code hold}: the strip's long press (Opacity, {@link InkWashBar}). */
     SwatchBar(PaintActivity app, SwatchFaces.Host host, ToolButton dropper, Runnable hold) {
@@ -54,25 +55,14 @@ final class SwatchBar {
         this.dropper = dropper;
         view = LabUi.column(app);
         view.setGravity(Gravity.CENTER_HORIZONTAL);
-        ToolSwatches swatches = app.inkWash.slots.swatches;
         // The dot on top, the picker box under it (the owner's drawing, 2026-10-27: "i'd like to try using it to replace the
         // shade picker and size select"): the strip its lower-left triangle, the slider over it its upper-right one, each tab
         // on its outer side (side by side, the strip on the left, from 2026-10-24 to 27).
+        this.host = host;
         box = new PickerBox(app, app.selectionFeedback, new SizeSlider.Listener() {
             @Override public boolean ready() { return host.ready(); }
-            @Override public void set(double t) {
-                swatches.useSize(InkWash.key(tool), ToolSwatches.sizeAt(t));
-                host.changed(true);
-                view.announceForAccessibility(DrawLayout.sizeSaid(app.inkWash.look(tool).px));
-            }
-        }, darkness -> {
-            if (!host.ready()) return;
-            swatches.useGrey(InkWash.key(tool), darkness);
-            host.changed(true);
-            host.greyPicked(-1);
-            Brush brush = app.inkWash.brush(tool);
-            if (brush != null) view.announceForAccessibility(ToolSwatches.greyWords(darkness, ModularSizes.swatch(brush.parts, darkness)));
-        }, hold,
+            @Override public void set(double t) { setSize(t); }
+        }, this::setGrey, hold,
                 // A rub loads the brush with the grey in use (the oil paint spec).
                 travel -> { if (host.ready()) host.rubbed(travel); });
         slider = box.slider; strip = box.strip;
@@ -109,6 +99,8 @@ final class SwatchBar {
         boolean first = shown == null;
         shown = now;
         this.tool = tool;
+        // Zen's corner shows the same nib and grey while its fan is open (its own redraw: the column is hidden).
+        app.showZenDot();
         boolean hasGreys = DrawLayout.greys(tool);
         Runnable dot = () -> readout.show(look, brush, hasGreys);
         // The eraser or the smudge tool to or from a slot: the strip drawn as paper or shown, in the same update, with no
@@ -127,6 +119,23 @@ final class SwatchBar {
         // gathered into a tool tap's one update of the column (the owner, 2026-10-24: "switching to eraser, brush selector
         // blinked": it was laid out and drawn again through Android, the whole column with it).
         app.selectionFeedback.updateBinary(view, new Rect(0, 0, view.getWidth(), view.getHeight()), change);
+    }
+    /** Before a change: the pen's stroke ended; false when nothing may change now. */
+    boolean ready() { return host.ready(); }
+    /** The size slider's position {@code t} (0 finest to 1 broadest) set as the shown tool's size: the slider's lift, Zen Mode's fan ({@link ZenFanView}). */
+    void setSize(double t) {
+        app.inkWash.slots.swatches.useSize(InkWash.key(tool), ToolSwatches.sizeAt(t));
+        host.changed(true);
+        view.announceForAccessibility(DrawLayout.sizeSaid(app.inkWash.look(tool).px));
+    }
+    /** Grey {@code darkness} (0–1) set as the shown tool's: the strip's tap, Zen Mode's fan. */
+    void setGrey(double darkness) {
+        if (!host.ready()) return;
+        app.inkWash.slots.swatches.useGrey(InkWash.key(tool), darkness);
+        host.changed(true);
+        host.greyPicked(-1);
+        Brush brush = app.inkWash.brush(tool);
+        if (brush != null) view.announceForAccessibility(ToolSwatches.greyWords(darkness, ModularSizes.swatch(brush.parts, darkness)));
     }
     /** Where the strip's page shade offer goes beside. */
     View strip() { return strip; }

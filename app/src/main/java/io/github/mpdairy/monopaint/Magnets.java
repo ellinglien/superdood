@@ -183,15 +183,17 @@ final class Magnets {
      * notebook's page): each tile over what is under it, bottom first, clipped to the picture. The one way every copy
      * of a page gets its magnets.
      */
-    static void stamp(int[] argb, int width, int height, Magnets magnets, Tiles tiles) {
+    static void stamp(int[] argb, int width, int height, Magnets magnets, Tiles tiles) { stamp(argb, 0, 0, width, height, magnets, tiles); }
+    /** As {@link #stamp(int[], int, int, Magnets, Tiles)}, {@code argb} the page's {@code width × height} at {@code left, top} (Live pages' probe: a change's rectangle). */
+    static void stamp(int[] argb, int left, int top, int width, int height, Magnets magnets, Tiles tiles) {
         for (Magnet m : magnets.list) {
             Tile t = tiles.tile(m);
             int[] b = bounds(m);
             for (int ty = 0; ty < t.height; ty++) {
-                int y = b[1] + ty;
+                int y = b[1] + ty - top;
                 if (y < 0 || y >= height) continue;
                 for (int tx = 0; tx < t.width; tx++) {
-                    int x = b[0] + tx;
+                    int x = b[0] + tx - left;
                     if (x < 0 || x >= width) continue;
                     int src = t.argb[ty * t.width + tx], alpha = src >>> 24;
                     if (alpha == 0) continue;

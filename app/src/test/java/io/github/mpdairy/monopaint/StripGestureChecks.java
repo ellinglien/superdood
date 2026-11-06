@@ -61,12 +61,12 @@ public final class StripGestureChecks {
         // The window round the page drawn on: page 12's tile in the middle of 21, the ends held.
         check(NotebookLayout.window(StripGesture.tileOf(11, 100), 103, 21) == 2 && NotebookLayout.window(0, 103, 21) == 0 && NotebookLayout.window(102, 103, 21) == 82
                 && NotebookLayout.window(5, 6, 21) == 0, "The window round the drawing page, held at the ends; a short notebook shows whole");
-        // A turn keeps the window while the page turned to shows in it (only the marks move), not under the pinned +.
-        check(StripGesture.shows(2, 3, 100, 21) && StripGesture.shows(2, 21, 100, 21) && !StripGesture.shows(2, 22, 100, 21) && !StripGesture.shows(2, 1, 100, 21),
-                "Kept from tile 2 for tiles 2 to 21, the last slot the pinned +");
-        check(StripGesture.shows(82, 102, 100, 21) && !StripGesture.shows(83, 90, 100, 21) && !StripGesture.shows(-1, 0, 100, 21),
-                "At the end the + has its own tile; a window past the end, or none yet, is not kept");
-        check(StripGesture.shows(0, 5, 3, 21) && !StripGesture.shows(1, 5, 3, 21), "A short notebook shows whole, from the first tile only");
+        // The + tile: its own after the last page where the window has it, else pinned last.
+        check(StripGesture.plusSlot(0, 6, 3) == 4 && StripGesture.plusSlot(2, 21, 100) == 20, "The + its own tile in a short notebook, pinned last in a long one");
+        // The page drawn on centred after every turn, held at the ends (the owner, 2026-11-06: on page 14, pages to its left show).
+        check(StripGesture.round(0, 100, 21) == 0 && StripGesture.round(13, 100, 21) == 4 && StripGesture.round(49, 100, 21) == 40
+                && StripGesture.round(99, 100, 21) == 82 && StripGesture.round(DrawingBook.BACK, 100, 21) == 82 && StripGesture.round(1, 3, 6) == 0,
+                "Page 1 and the last held at the ends, page 14 and 50 centred, a short notebook whole");
         // Moving: each place maps as DrawingBook.move moves it.
         int[] order = {0, 1, 2, 3, 4};
         int from = 1, to = 3;

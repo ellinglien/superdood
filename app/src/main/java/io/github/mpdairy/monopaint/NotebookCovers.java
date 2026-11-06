@@ -19,6 +19,33 @@ import java.util.zip.CRC32;
  * {@code CoverDesignChecks}).
  */
 final class NotebookCovers {
+    /**
+     * Cover {@code side} of {@code b} (the notebook {@code name}) {@code w × h} as the shelf and the strip show it
+     * ({@link #shown}), tones: the browser app's shelf and strip ({@code WebBooks}), and the Manta's shelf to a browser ({@link LiveBooks}).
+     */
+    static byte[] of(DrawingBook b, int side, String name, int w, int h) throws java.io.IOException {
+        boolean front = side == DrawingBook.FRONT;
+        PagePicture pictured = front && b.cover() >= 0 ? picture(b, b.cover()) : null;
+        PagePicture marks = b.coverDrawn(side) ? picture(b, side) : null;
+        return shown(front, b.design(), DrawingFiles.name(name), w, h, pictured, marks);
+    }
+    /** Page {@code i}'s picture (a cover's of its marks alone): the one it has, else made from the page and kept with it (NotebookScreens.picture). */
+    static PagePicture picture(DrawingBook book, int i) throws java.io.IOException {
+        byte[] bytes = book.picture(i);
+        if (bytes != null) return PagePicture.decode(bytes);
+        DrawingBook.PictureKey key = book.pictureKey(i);
+        ToneDocument decoded = book.cachedPage(i);
+        ToneDocument.Snapshot page = decoded != null ? decoded.layerSnapshot() : null;
+        if (page == null) {
+            PackedPage packed = book.packed(i);
+            if (packed == null) return null;
+            page = DocumentCodec.read(new java.io.ByteArrayInputStream(packed.bytes())).layerSnapshot();
+        }
+        PagePicture made = DrawingBook.isCover(i) ? PagePicture.marks(page, null) : PagePicture.of(page, null);
+        book.offerPicture(key, made.encode());
+        return made;
+    }
+
     /** What the page number says on the front and back covers (docs/TEXT-STYLE.md). */
     static final String FRONT_WORD = "Cover", BACK_WORD = "Back";
     /** The menu's words for no cover picture. */

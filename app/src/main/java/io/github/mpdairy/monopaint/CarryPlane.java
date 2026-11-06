@@ -32,6 +32,13 @@ final class CarryPlane {
     private final float[][] keptA, keptP;
     /** Each tile's pixels a dab changed since they were last composed (1), beside {@link #a}. */
     private final byte[][] fresh;
+    /**
+     * Each tile's coverage ({@link #a}) once all of it is written, else null: a quick render's compose reads
+     * {@link #has} over its whole rectangle while the pen's thread fills tiles further on, and a tile seen here is seen
+     * whole, never its coverage without its marks or darkness (the JIT and an ARM core may reorder the plain stores).
+     * An atomic array, not a VarHandle: Android before 13 and TeaVM (web/engine) have this one.
+     */
+    private final java.util.concurrent.atomic.AtomicReferenceArray<float[]> filled;
     private final boolean onDemand;
     /** The layer it moves: −1, the gesture's, as the gesture found it; else that layer as it is ({@link ToneDocument#layerPixels}). */
     private final int layer;
@@ -65,6 +72,7 @@ final class CarryPlane {
         a = new float[columns * rows][]; p = new float[columns * rows][]; fresh = new byte[columns * rows][];
         keptA = new float[columns * rows][]; keptP = new float[columns * rows][];
         blank = new boolean[columns * rows];
+        filled = new java.util.concurrent.atomic.AtomicReferenceArray<>(columns * rows);
     }
 
     /**
@@ -73,6 +81,35 @@ final class CarryPlane {
      * fluid's still does). Before any tile is filled.
      */
     void water(int[] stillWet) { foundP = new float[a.length][]; wet = new float[a.length][]; unset = stillWet; }
+    /** How wet a page pixel is, 0 dry to 1 fresh ({@link WatercolorSession#wetness}). */
+    interface Wet { float at(int x, int y); }
+    /** Scrape: where its wetness is read from as each tile fills, and each filled tile's (null where all of it is dry). */
+    private Wet wetFrom;
+    private float[][] wetness;
+    /** Scrape: each tile's wetness is read from {@code from} (or null: dry) as it fills. Before any tile is filled. */
+    void wetFrom(Wet from) { wetFrom = from; wetness = from == null ? null : new float[a.length][]; }
+    /** Tile {@code tx, ty}'s wetness ({@link #wetFrom}) as it filled, beside {@link #coverageTile}; null where dry or unfilled. */
+    float[] wetnessTile(int tx, int ty) { return wetness == null ? null : wetness[ty * columns + tx]; }
+    /**
+     * Reprint ({@link Carry#reprint}): each filled tile's loose coverage and darkness as found, and how far each pixel has
+     * been reprinted so far (0 to 1, the most any dab took it), so that it is always reprinted from the page as found and
+     * a pass back over it never builds on itself.
+     */
+    private float[][] foundA, reached;
+    /** Keeps what Reprint needs ({@link #foundA}, {@link #foundTile}, {@link #reachedTile}). Before any tile is filled. */
+    void reprint() { foundA = new float[a.length][]; foundP = new float[a.length][]; reached = new float[a.length][]; }
+    /** Tile {@code tx, ty}'s loose coverage as found (Reprint's), beside {@link #coverageTile}; null if unfilled. */
+    float[] foundCoverageTile(int tx, int ty) { return foundA == null ? null : foundA[ty * columns + tx]; }
+    /** Tile {@code tx, ty}'s reprint so far (Reprint's), made on first use for a filled tile; null without {@link #reprint}. */
+    float[] reachedTile(int tx, int ty) {
+        if (reached == null) return null;
+        int k = ty * columns + tx;
+        float[] w = reached[k];
+        if (w == null && a[k] != null) synchronized (this) { w = reached[k]; if (w == null) reached[k] = w = new float[SIDE * SIDE]; }
+        return w;
+    }
+    /** Whether filled tile {@code tx, ty} holds no loose paint ({@link #blank}). */
+    boolean blankTile(int tx, int ty) { return blank[ty * columns + tx]; }
     /** Tile {@code tx, ty}'s loose darkness as found (Clear Water's), beside {@link #darknessTile}; null if unfilled. */
     float[] foundTile(int tx, int ty) { return foundP == null ? null : foundP[ty * columns + tx]; }
     /** Tile {@code tx, ty}'s wetness (Clear Water's), made on first use for a filled tile; null without {@link #water}. */
@@ -146,7 +183,20 @@ final class CarryPlane {
         blank[k] = !loose;
         keptA[k] = ka; keptP[k] = kp;
         if (foundP != null) foundP[k] = tp.clone();
+        if (foundA != null) foundA[k] = ta.clone();
+        if (wetFrom != null) {
+            float[] wt = null;
+            for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+                float v = wetFrom.at(left + x, top + y);
+                if (v <= 0) continue;
+                if (wt == null) wt = new float[SIDE * SIDE];
+                wt[y * SIDE + x] = v;
+            }
+            wetness[k] = wt;
+        }
         fresh[k] = new byte[SIDE * SIDE]; p[k] = tp; a[k] = ta;
+        // Published after every store above (a volatile store): what {@link #has} reads.
+        filled.set(k, ta);
     }
 
     /**
@@ -203,8 +253,13 @@ final class CarryPlane {
         f[i] = 0;
         return true;
     }
-    /** Whether the tile holding page pixel {@code x, y} is filled: there the plane, not the page as found, is what lies under the stroke. */
-    boolean has(int x, int y) { return a[(y / SIDE) * columns + x / SIDE] != null; }
+    /**
+     * Whether the tile holding page pixel {@code x, y} is filled: there the plane, not the page as found, is what lies
+     * under the stroke. Once true, this thread reads the whole tile ({@link #filled}): a tile the pen's thread fills
+     * while a render composes (one no dab of the render's has reached: the page as found) is seen either not yet
+     * filled or whole.
+     */
+    boolean has(int x, int y) { return filled.get((y / SIDE) * columns + x / SIDE) != null; }
     /** The tone over white at page pixel {@code x, y} of a filled tile, its kept and loose parts together, 0–255, rounded. */
     int tone(int x, int y) {
         int k = (y / SIDE) * columns + x / SIDE, i = (y % SIDE) * SIDE + x % SIDE;

@@ -2,16 +2,17 @@ package io.github.mpdairy.monopaint;
 
 public final class FingerToolChecks {
     public static void main(String[] args) {
-        choices(); refused(); cancels(); starts(); palms();
-        System.out.println("PASS: one finger does Nothing, Eraser (what it always did, the choice at first), Smudge or a slot's brush, kept under its key; it never draws while the pen is down or near, for a palm-sized contact or before it moves; a second finger, the pen landing or a contact swelling to a palm's takes it back, a pressing fingertip's stroke kept");
+        choices(); refused(); cancels(); starts(); palms(); taps();
+        System.out.println("PASS: one finger does Nothing, Eraser (what it always did, the choice at first), Smudge, Fill in or a slot's brush, kept under its key; it never draws while the pen is down or near, for a palm-sized contact or before it moves; a second finger, the pen landing or a contact swelling to a palm's takes it back, a pressing fingertip's stroke kept; a two- or three-finger tap is ignored while the pen is near and for a second after");
     }
     static void choices() {
         FingerTool.Choice[] all = FingerTool.Choice.values();
-        check(all.length == 3 + ToolSlots.COUNT, "Nothing, Eraser, Smudge and the ten slots");
-        check(FingerTool.Choice.NOTHING.tool() == -1 && FingerTool.Choice.ERASER.tool() == ToolSlots.ERASER && FingerTool.Choice.SMUDGE.tool() == ToolSlots.SMUDGE,
-                "Nothing draws nothing; Eraser and Smudge draw with the bar's eraser and smudge tool");
+        check(all.length == 4 + ToolSlots.COUNT, "Nothing, Eraser, Smudge, Fill in and the nine slots");
+        check(FingerTool.Choice.NOTHING.tool() == -1 && FingerTool.Choice.ERASER.tool() == ToolSlots.ERASER && FingerTool.Choice.SMUDGE.tool() == ToolSlots.SMUDGE
+                        && FingerTool.Choice.FILL.tool() == ToolSlots.FILL && FingerTool.Choice.of(ToolSlots.FILL) == FingerTool.Choice.FILL && !FingerTool.Choice.FILL.slot(),
+                "Nothing draws nothing; Eraser, Smudge and Fill in draw with the bar's eraser, smudge tool and Fill in");
         for (int slot = 0; slot < ToolSlots.COUNT; slot++) {
-            FingerTool.Choice c = all[3 + slot];
+            FingerTool.Choice c = all[4 + slot];
             // No numbers (the owner, 2026-10-19): a slot's choice is called by the brush in it.
             int s = slot;
             check(c.tool() == slot && c.slot() && c.label(i -> i == s ? "Brush pen" : "?").equals("Brush pen") && c.key.equals("slot" + (slot + 1)),
@@ -25,7 +26,7 @@ public final class FingerToolChecks {
             check(FingerTool.Choice.saved(c.key) == c && keys.add(c.key), c + " is kept under a key of its own");
             if (c.slot()) continue;
             String label = c.label(i -> null);
-            check(label.split(" ").length <= 2 && label.matches("[A-Z][a-z]+"), label + ": a button's two words at most, sentence case, no symbols (docs/TEXT-STYLE.md)");
+            check(label.split(" ").length <= 2 && label.matches("[A-Z][a-z]+( [a-z]+)?"), label + ": a button's two words at most, sentence case, no symbols (docs/TEXT-STYLE.md)");
             check(c.row(i -> null).equals("Finger Action: " + label) && c.row(i -> null).split(" ").length <= 4, c.row(i -> null) + ": the menu's row, four words at most");
         }
     }
@@ -59,6 +60,13 @@ public final class FingerToolChecks {
         }
         check(ToolSettings.pressure(FingerTool.PRESSURE_TRAVEL) > ToolSettings.pressure(0) && ToolSettings.pressure(FingerTool.PRESSURE_TRAVEL) < ToolSettings.pressure(1),
                 "A finger's brush draws at a medium press");
+    }
+    static void taps() {
+        long seen = 50_000;
+        check(!FingerTool.tapCounts(seen, seen, false) && !FingerTool.tapCounts(seen, seen, true), "A tap while the pen hovers or touches is a resting hand's: ignored");
+        check(!FingerTool.tapCounts(seen + 100, seen, false) && !FingerTool.tapCounts(seen + FingerTool.PEN_PALM_MS - 1, seen, false), "A tap within " + FingerTool.PEN_PALM_MS + " ms of the pen leaving or lifting is ignored");
+        check(FingerTool.tapCounts(seen + FingerTool.PEN_PALM_MS, seen, false) && FingerTool.tapCounts(seen + 5000, seen, false), "After the window, a tap undoes or redoes again");
+        check(FingerTool.tapCounts(seen, 0, false) && !FingerTool.tapCounts(seen + 5000, seen, true), "With no pen seen it counts; with the pen down it never does");
     }
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 }

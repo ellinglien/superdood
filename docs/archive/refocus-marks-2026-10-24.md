@@ -1,6 +1,6 @@
 # Refocus: the owner's keep / tuck / cut marks (2026-10-24)
 
-From https://claude.ai/artifact/BJaYnqrYfBZXedYTDLvbNh. Goal: a paper notebook that feels like real media, useful first, then a little mischief.
+From a private page. Goal: a paper notebook that feels like real media, useful first, then a little mischief.
 
 | id | group | feature | where it is now | owner | note |
 |---|---|---|---|---|---|

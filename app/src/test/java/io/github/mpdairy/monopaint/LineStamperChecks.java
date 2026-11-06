@@ -51,8 +51,8 @@ public final class LineStamperChecks {
         check(peak < 1 && up.get(200, 200) == 1, "laid low it is lighter: " + peak);
         check(edge >= 6, "and its edge soft: " + edge + " rows between");
         // The Pencil presets (not Loose hatch, a hatch; Another pencil too since the owner retuned it, 2026-10-28) and the Charcoal and
-        // Pastels sticks (not the stumps or crayons) have it, and nothing else does.
-        java.util.List<String> not = java.util.Arrays.asList("Loose hatch", "Blend stump", "Stump", "Wax crayon", "Crayon scratch");
+        // Pastels sticks (not the stumps or crayons; nor Metalpoint, a wire that has no side to lay down) have it, and nothing else does.
+        java.util.List<String> not = java.util.Arrays.asList("Loose hatch", "Blend", "Blur", "Blend stump", "Stump", "Wax crayon", "Crayon scratch", "Metalpoint");
         for (ToolPresets.Preset p : ToolPresets.all()) {
             double side = p.brush().parts.part(BrushPart.HAND).get(PartDial.SIDE_SHADE, 0);
             boolean has = (p.style.name.equals("Pencil") || p.style.name.equals("Charcoal") || p.style.name.equals("Pastels")) && !not.contains(p.name);
@@ -61,7 +61,7 @@ public final class LineStamperChecks {
     }
     /**
      * Tilt Shading as drawn (the owner, 2026-10-23: "on an angled pencil the shade is usually a little lighter than a
-     * straight mark... and it's a bit more diffused"): the 2B pencil and Soft charcoal presets on their own paper at the
+     * straight mark... and it's a bit more diffused"): the 2B pencil and Soft charcoal presets at Texture 0 (the tilt alone) at the
      * same pressure, upright and at 70 degrees. Laid low the band's middle is lighter, but not washed out (55 to 80% of
      * the upright mark's darkness), and more of the band is its soft edge.
      */
@@ -69,6 +69,8 @@ public final class LineStamperChecks {
         for (String name : new String[]{"2B pencil", "Soft charcoal"}) {
             ModularBrush b = null;
             for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals(name)) b = p.brush().parts;
+            // At Texture 0: the tilt alone, whatever surface the page is on (the surface spec, 2026-11-01).
+            b = b.copy(); b.part(BrushPart.PAPER).set(PartDial.TOOTH, 0);
             double size = ModularSizes.size(b, InkWashSizes.Preset.MEDIUM);
             double[] up = band(b, size, 0), low = band(b, size, 70);
             double share = low[0] / up[0];

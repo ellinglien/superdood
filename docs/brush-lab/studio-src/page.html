@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Brush Studio</title>
-<meta name="description" content="Brush Studio for Scribulor: every part of a brush and its dials, drawn by the real engine at the Manta's 16 greys.">
+<meta name="description" content="Brush Studio for Superdood: every part of a brush and its dials, drawn by the real engine at the Manta's 16 greys.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&amp;display=swap">
 <style>
 /*@@FONTS@@*/
@@ -17,6 +17,7 @@
   <nav class="tabs" id="tabs" aria-label="Studio">
     <button type="button" data-tab="community" aria-pressed="false">Community library</button>
     <button type="button" data-tab="roll" aria-pressed="false">Random</button>
+    <button type="button" data-tab="guide" aria-pressed="false">Guide</button>
   </nav>
 </header>
 <div class="shell">
@@ -26,14 +27,20 @@
   <span class="frame idloop"><canvas id="idloop" aria-hidden="true"></canvas></span>
   <div class="ident" id="ident">
     <button type="button" class="idname" id="idname" data-act="rename" title="Rename"><span id="idnametext"></span><span class="ico" data-icon="pencil"></span></button>
-    <input type="text" class="idinput" id="idinput" maxlength="32" hidden aria-label="Brush name">
+    <span class="idform" id="idform" hidden><input type="text" class="idinput" id="idinput" maxlength="32" aria-label="Brush name"><button type="button" class="btn sm" data-act="renamedone">Done</button></span>
   </div>
+  <p class="idmark"><span id="idedited"></span><button type="button" class="idsuggest" id="idsuggest" data-act="suggest" hidden></button></p>
   <p class="words" id="words"></p>
+  <!-- The app's Brush Lab row: New, Open, Save (only for a brush opened from the library), Save as New -->
   <div class="acts" id="brushacts">
+    <button type="button" class="btn sm" data-act="newbrush">New</button>
+    <button type="button" class="btn sm" data-act="library">Open</button>
+    <button type="button" class="btn sm withicon" data-act="save" id="savebtn"><span id="savetext">Save</span><span class="ico" data-icon="check" id="saveico"></span></button>
+    <button type="button" class="btn sm" data-act="saveasnew" id="saveasnewbtn">Save as New</button>
+  </div>
+  <div class="acts">
     <button type="button" class="btn sm withicon" data-act="undo" data-undo><span class="ico" data-icon="undo"></span><span>Undo</span></button>
     <button type="button" class="btn sm" data-act="revert" id="revertbtn">Revert</button>
-    <button type="button" class="btn sm withicon" data-act="save" id="savebtn"><span id="savetext">Save</span><span class="ico" data-icon="check" id="saveico"></span></button>
-    <button type="button" class="btn sm" data-act="library">Load</button>
     <button type="button" class="btn sm" data-act="share" id="sharebtn" aria-expanded="false">Share</button>
   </div>
   <nav class="change" id="change" aria-label="Change this brush">
@@ -42,7 +49,7 @@
     <button type="button" class="btn big" data-tab="mix" aria-pressed="false">Mix</button>
   </nav>
   <span class="status" id="status" role="status" aria-live="polite"></span>
-  <!-- Share: this brush's code, to copy or to scan on the tablet, and Publish to Community library (the artifact's db) -->
+  <!-- Share: this brush's code, to copy or to scan on the tablet, and Share to Community (community.js, superdood.org's service) -->
   <div class="sharepanel" id="sharepanel" hidden role="dialog" aria-label="Share">
     <div class="qrbox"><canvas id="qr" aria-label="QR code of the brush code"></canvas></div>
     <div class="sharetext">
@@ -50,14 +57,19 @@
       <div class="acts">
         <button type="button" class="btn primary" data-act="copy">Copy code</button>
         <button type="button" class="btn" data-act="download" id="dltablet">Download for tablet</button>
-        <button type="button" class="btn" data-act="publish" id="pubbtn" disabled>Publish to Community library</button>
+        <button type="button" class="btn" data-act="publish" id="pubbtn" disabled>Share to Community</button>
         <span class="grow"></span><button type="button" class="btn sm" data-act="share">Close</button>
       </div>
-      <p class="note">Save it to Document/Scribulor in your Drive; the tablet adds it next time Scribulor opens.</p>
+      <p class="note">Save it to Document/Superdood in your Drive; the tablet adds it next time Superdood opens.</p>
       <div class="acts"><button type="button" class="btn" data-act="export" id="exportbtn">Export</button>
-        <span class="note" id="exportnote">A Procreate set of this brush and the saved ones. Drying and smudge stay in Scribulor.</span></div>
-      <div class="acts pubconfirm" id="pubconfirm" hidden><span class="note">Everyone with this page can try it.</span>
-        <button type="button" class="btn primary" data-act="pubyes">Publish</button><button type="button" class="btn" data-act="pubno">Cancel</button></div>
+        <span class="note" id="exportnote">A Procreate set of this brush and the saved ones. Drying and Affects Page stay in Superdood.</span></div>
+      <div class="pubconfirm" id="pubconfirm" hidden>
+        <label class="field"><span class="lab">Name</span><input type="text" id="pubname" maxlength="32" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span class="lab">Shared By</span><input type="text" id="pubmaker" maxlength="40" placeholder="anonymous" autocomplete="nickname"></label>
+        <label class="field"><span class="lab">Note</span><input type="text" id="pubtext" maxlength="200" placeholder="optional" autocomplete="off"></label>
+        <input type="text" id="pubsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
+        <p class="note">Shared brushes appear right away and are free for anyone to use. Names are checked.</p>
+        <div class="acts"><button type="button" class="btn primary" data-act="pubyes" id="pubyes">Share</button><button type="button" class="btn" data-act="pubno">Cancel</button></div></div>
       <span class="note" id="pubnote"></span>
     </div>
   </div>
@@ -122,7 +134,7 @@
       <ol class="hist" id="hist"></ol>
       <div class="acts">
         <button type="button" class="btn sm" data-act="comparepick" id="comparebtn" aria-pressed="false">Compare two</button>
-        <button type="button" class="btn sm" data-act="saveasnew">Save as new</button>
+        <button type="button" class="btn sm" data-act="saveasnew">Save as New</button>
       </div>
     </aside>
   </section>
@@ -143,12 +155,19 @@
     <div class="rollfoot"><button type="button" class="btn primary big withicon" data-act="wild"><span class="ico" data-icon="dice"></span><span>Generate other random brushes</span></button></div>
   </section>
 
-  <!-- 0 · Community library: brushes people published (the artifact's db), else eight examples; Try puts one in Adjust -->
+  <!-- 5 · Guide: what each part, choice and dial does, as the app offers them (guide.js, Brush Lab Dials' tiles) -->
+  <section class="screen guide" id="s-guide" data-screen="guide" hidden>
+    <div class="hrow wrap"><h2>Guide</h2><span class="cap">Every choice and dial in the app's Brush Lab, one change at a time. Click a picture to try it.</span></div>
+    <div class="guidebar"><nav class="guidenav" id="guidenav" aria-label="Parts"></nav><button type="button" class="btn" id="guideback" data-act="guideback" hidden></button></div>
+    <div class="guidebody" id="guidebody"></div>
+  </section>
+
+  <!-- 0 · Community library: brushes people shared (community.js, superdood.org's service), else eight examples; Try puts one in Adjust -->
   <section class="screen community" id="s-community" data-screen="community" hidden>
     <div class="hrow wrap"><h2>Community library</h2><span class="tag" id="commtag">Examples</span><span class="cap">Brushes people made and shared</span><span class="note" id="commnote"></span></div>
     <div class="sharedgrid" id="sharedgrid"></div>
       <div class="foot">
-  <span>Scribulor Brush Studio<!-- engine: /*@@ENGINE_FILES@@*/ --></span>
+  <span>Superdood Brush Studio<!-- engine: /*@@ENGINE_FILES@@*/ --></span>
   <details><summary>Type: iA Writer Duo · SIL Open Font License 1.1</summary>
     <p>iA Writer Duo © 2018 Information Architects Inc., with Reserved Font Name “iA Writer”; based on IBM Plex © 2017 IBM Corp., with Reserved Font Name “Plex”. Embedded unmodified under the SIL Open Font License 1.1:</p>
     <pre>/*@@OFL@@*/</pre></details>
@@ -161,8 +180,8 @@
   <div class="sheetbox">
     <div class="hrow"><h2>Library</h2><span class="grow"></span><button type="button" class="btn sm" data-act="libclose">Close</button></div>
     <div class="loadcode">
-      <label class="field"><span class="lab">Load a code</span><input type="text" id="paste" placeholder="name.M…" autocomplete="off" spellcheck="false"></label>
-      <div class="acts"><button type="button" class="btn" data-act="paste">Paste</button><button type="button" class="btn" data-act="loadcode">Load</button><span class="note" id="loadnote"></span></div>
+      <label class="field"><span class="lab">Paste code</span><input type="text" id="paste" placeholder="name.M…" autocomplete="off" spellcheck="false"></label>
+      <div class="acts"><button type="button" class="btn" data-act="paste">Paste</button><button type="button" class="btn" data-act="loadcode">Open</button><span class="note" id="loadnote"></span></div>
     </div>
     <div id="libbody"></div>
   </div>
@@ -185,6 +204,18 @@
 <script id="export">
 /*@@EXPORT@@*/
 </script>
+<script id="guide">
+/*@@GUIDE@@*/
+</script>
+<!-- The app's engine, compiled to WebAssembly (web/engine): TeaVM's runtime, its API, and its bytes and the paper scans it reads, gzipped. -->
+<script id="teavm">
+/*@@TEAVM@@*/
+</script>
+<script id="mbdengine">
+/*@@MBDENGINE@@*/
+</script>
+<script id="wasm" type="application/octet-stream">/*@@WASM@@*/</script>
+<script id="wasmassets" type="application/octet-stream">/*@@WASMASSETS@@*/</script>
 <script id="studio">
 /*@@STUDIO@@*/
 </script>

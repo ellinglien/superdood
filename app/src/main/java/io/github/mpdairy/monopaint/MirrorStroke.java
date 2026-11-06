@@ -153,7 +153,9 @@ final class MirrorStroke implements LiftingStroke {
     @Override public boolean buildsWhileHeld() { return primary.buildsWhileHeld(); }
     @Override public float ringGuide(float pressure, float tiltX, float tiltY) { return primary.ringGuide(pressure, tiltX, tiltY); }
     @Override public int ringMode() { return primary.ringMode(); }
+    @Override public Unwritten unwritten() { return primary.unwritten(); }
     @Override public boolean screened() { return primary instanceof LiftingStroke && ((LiftingStroke) primary).screened(); }
+    @Override public boolean inShape() { return primary instanceof LiftingStroke && ((LiftingStroke) primary).inShape(); }
 
     @Override public boolean developsAfterLift() {
         return !done && ((fills ? !filled : next < (fold == null ? maps.length : stretches.size())) || primary instanceof LiftingStroke && ((LiftingStroke) primary).developsAfterLift());

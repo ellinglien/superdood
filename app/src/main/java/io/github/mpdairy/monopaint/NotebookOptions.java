@@ -13,7 +13,7 @@ import java.util.List;
  * defaults to off ({@link #DEFAULT}: no guides, the app-wide toolbar); {@link BookOptions}
  * keeps only what isn't the default, so an old notebook, which has none, is read as the default and written byte for byte
  * as before. The guides' step on the screen ({@link #guidesShown}, 2026-10-22) and Page Colour ({@link #paper}, 2026-10-23) are kept the same way. Stages 4 and 5 add the Rules (No Erasing, Brushes, Timed Pages;
- * Lock Pages, 2026-10-27; Nib Preview, 2026-10-29, on by default; Self-Portrait Prompt, 2026-10-30), each with a record of its own beside these. Lock Settings (Open, Locked, Sealed) was cut (the refocus, 2026-10-24): a
+ * Lock Pages, 2026-10-27; Nib Preview, 2026-10-29, on by default), each with a record of its own beside these. Lock Settings (Open, Locked, Sealed) was cut (the refocus, 2026-10-24): a
  * notebook locked before opens unlocked, its rules as they were ({@link BookOptions#LOCK} is passed by). Pure, checked on the desktop ({@code NotebookOptionsChecks}, {@code NotebookRulesChecks}).
  */
 final class NotebookOptions {
@@ -40,17 +40,23 @@ final class NotebookOptions {
 
     /**
      * How many slots a notebook's own toolbar has: {@link ToolSlots#COUNT} (checked), kept here so the file's classes stand
-     * without the tools; and the fewest it is read with: one kept with eight (before 2026-10-27) keeps them, the slots after
-     * them as a first launch has them ({@link ToolSlots.Toolbar#parse}).
+     * without the tools; and the fewest and most it is read with: one kept with eight (before 2026-10-27) keeps them, the
+     * slots after them as a first launch has them, one kept with ten (2026-10-27 to 2026-11-06) gives one up ({@link
+     * ToolSlots.Toolbar#parse}).
      */
-    static final int SLOTS = 10, FEWEST_SLOTS = 8;
+    static final int SLOTS = 9, FEWEST_SLOTS = 8, MOST_SLOTS = 10;
 
     /** The template's guides' steps on the screen ({@link #guidesShown}). */
     static final int FULL = 0, HALF = 1, FAINT = 2, HIDDEN = 3;
     /** Page Colour's default ({@link #paper}): white paper. */
     static final int WHITE = 255;
 
-    static final NotebookOptions DEFAULT = new NotebookOptions(NotebookTemplate.BLANK, Tools.MINE, Collections.<String>emptyList(), false, 0, 0, FULL, WHITE, false, true, false);
+    static final NotebookOptions DEFAULT = new NotebookOptions(NotebookTemplate.BLANK, Tools.MINE, Collections.<String>emptyList(), false, 0, 0, FULL, WHITE, false, true, BrushTexture.DEFAULT);
+    /**
+     * A new notebook's options: the defaults on Fine (the owner, 2026-11-03: the pencils were tuned on Fine and look gappy
+     * on Smooth). Not {@link #DEFAULT}, which is what a file without records means: older notebooks stay Smooth.
+     */
+    static final NotebookOptions NEW = DEFAULT.withSurface(BrushTexture.FINE_SPECK);
 
     final NotebookTemplate template;
     final Tools tools;
@@ -75,11 +81,6 @@ final class NotebookOptions {
      */
     final boolean nibPreview;
     /**
-     * Self-Portrait Prompt (the owner, 2026-10-30: "put it in notebook settings as an optional thing, new for every new
-     * page"): each page added to the notebook is dealt a card ({@link DailyPrompt}; {@code PaintActivity.addPage}). Off by
-     * default; pages there already are untouched.
-     */
-    final boolean selfPortrait;
 
     /**
      * How the template's guides show on the screen (the owner, 2026-10-22: "A way to hide/show/adjust transparency of
@@ -114,24 +115,38 @@ final class NotebookOptions {
     /** Page Colour's words for paper tone {@code tone} (docs/TEXT-STYLE.md): White, Black, else "47% grey". */
     static String paperWord(int tone) { return tone >= WHITE ? "White" : tone <= 0 ? "Black" : Math.round((WHITE - tone) * 100f / WHITE) + "% grey"; }
 
-    private NotebookOptions(NotebookTemplate template, Tools tools, List<String> toolbar, boolean noErasing, int brushes, int seconds, int guidesShown, int paper, boolean lockPages, boolean nibPreview, boolean selfPortrait) {
-        this.template = template; this.tools = tools; this.toolbar = toolbar; this.lockPages = lockPages; this.nibPreview = nibPreview; this.selfPortrait = selfPortrait;
+    /**
+     * Surface (the owner, 2026-11-01: "Surface moves to the notebook"): the paper every page is on, unless a page has its
+     * own ({@code DrawingBook#surface}), which every brush on it meets ({@link ModularBrush#onSurface}). A new
+     * notebook starts on Fine ({@link #NEW}); a notebook without its record, any older one, is Smooth (no legacy mode; its
+     * drawings are pixels and stay).
+     */
+    final BrushTexture surface;
+
+    private NotebookOptions(NotebookTemplate template, Tools tools, List<String> toolbar, boolean noErasing, int brushes, int seconds, int guidesShown, int paper, boolean lockPages, boolean nibPreview, BrushTexture surface) {
+        this.template = template; this.tools = tools; this.toolbar = toolbar; this.lockPages = lockPages; this.nibPreview = nibPreview;
         this.noErasing = noErasing; this.brushes = brushes; this.seconds = seconds;
         this.guidesShown = guidesShown >= FULL && guidesShown <= HIDDEN ? guidesShown : FULL;
         this.paper = Math.max(0, Math.min(WHITE, paper));
+        this.surface = surface == null ? BrushTexture.DEFAULT : surface;
     }
+    /** Surface {@code s} (null: the default, Smooth). */
+    NotebookOptions withSurface(BrushTexture s) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, s); }
+    /** The Surface record's bytes ({@code SURF}): one byte, the surface's index. */
+    byte[] surfaceBytes() { return new byte[]{(byte) surface.ordinal()}; }
+    /** These options with the Surface record read ({@code null}: none, Smooth; one this version doesn't know: Smooth). */
+    NotebookOptions readSurface(byte[] bytes) { return bytes == null || bytes.length != 1 ? this : withSurface(BrushTexture.of(bytes[0] & 255)); }
 
-    NotebookOptions withTemplate(NotebookTemplate template) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, selfPortrait); }
-    NotebookOptions withGuidesShown(int step) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, step, paper, lockPages, nibPreview, selfPortrait); }
+    NotebookOptions withTemplate(NotebookTemplate template) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface); }
+    NotebookOptions withGuidesShown(int step) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, step, paper, lockPages, nibPreview, surface); }
     /** The next of {@link #GUIDE_STEPS} after this one's, Hidden going back to Full. */
     NotebookOptions withNextGuidesStep() { return withGuidesShown((guidesShown + 1) % GUIDE_STEPS.length); }
-    NotebookOptions withLockPages(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, on, nibPreview, selfPortrait); }
-    NotebookOptions withNibPreview(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, on, selfPortrait); }
-    NotebookOptions withSelfPortrait(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, on); }
-    NotebookOptions withNoErasing(boolean on) { return new NotebookOptions(template, tools, toolbar, on, brushes, seconds, guidesShown, paper, lockPages, nibPreview, selfPortrait); }
+    NotebookOptions withLockPages(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, on, nibPreview, surface); }
+    NotebookOptions withNibPreview(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, on, surface); }
+    NotebookOptions withNoErasing(boolean on) { return new NotebookOptions(template, tools, toolbar, on, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface); }
     /** Timed Pages {@code seconds}, the nearest of {@link #SECONDS} (none or less: off). */
     NotebookOptions withSeconds(int seconds) {
-        return new NotebookOptions(template, tools, toolbar, noErasing, brushes, SECONDS[nearest(SECONDS, seconds)], guidesShown, paper, lockPages, nibPreview, selfPortrait);
+        return new NotebookOptions(template, tools, toolbar, noErasing, brushes, SECONDS[nearest(SECONDS, seconds)], guidesShown, paper, lockPages, nibPreview, surface);
     }
     /** Which of {@code choices} (ascending) is nearest {@code value}. */
     static int nearest(int[] choices, int value) {
@@ -140,21 +155,21 @@ final class NotebookOptions {
         return best;
     }
     /** Page Colour {@code tone} (0 to 255; anything past them the nearest). */
-    NotebookOptions withPaper(int tone) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, tone, lockPages, nibPreview, selfPortrait); }
+    NotebookOptions withPaper(int tone) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, tone, lockPages, nibPreview, surface); }
     /** Brushes {@code count}: 1 to {@link #MOST_BRUSHES}; anything else is All. */
     NotebookOptions withBrushes(int count) {
-        return new NotebookOptions(template, tools, toolbar, noErasing, count >= 1 && count <= MOST_BRUSHES ? count : 0, seconds, guidesShown, paper, lockPages, nibPreview, selfPortrait);
+        return new NotebookOptions(template, tools, toolbar, noErasing, count >= 1 && count <= MOST_BRUSHES ? count : 0, seconds, guidesShown, paper, lockPages, nibPreview, surface);
     }
-    /** My Toolbar (no lines), or {@code tools} with its own {@code toolbar} lines ({@link #FEWEST_SLOTS} to {@link #SLOTS} of them; anything else is My Toolbar). */
+    /** My Toolbar (no lines), or {@code tools} with its own {@code toolbar} lines ({@link #FEWEST_SLOTS} to {@link #MOST_SLOTS} of them; anything else is My Toolbar). */
     NotebookOptions withTools(Tools tools, List<String> toolbar) {
-        if (tools == Tools.MINE || !slotCount(toolbar)) return new NotebookOptions(template, Tools.MINE, Collections.<String>emptyList(), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, selfPortrait);
-        return new NotebookOptions(template, tools, Collections.unmodifiableList(new ArrayList<>(toolbar)), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, selfPortrait);
+        if (tools == Tools.MINE || !slotCount(toolbar)) return new NotebookOptions(template, Tools.MINE, Collections.<String>emptyList(), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface);
+        return new NotebookOptions(template, tools, Collections.unmodifiableList(new ArrayList<>(toolbar)), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface);
     }
     /** The same options with the toolbar lines changed (the notebook's brushes, sizes or greys changed); My Toolbar keeps none, Each Page the first page's roll. */
     NotebookOptions withToolbar(List<String> toolbar) { return tools == Tools.MINE || tools == Tools.EACH_PAGE ? this : withTools(tools, toolbar); }
 
-    /** Whether {@code toolbar} has a toolbar's count of lines: {@link #FEWEST_SLOTS} to {@link #SLOTS}. */
-    private static boolean slotCount(List<String> toolbar) { return toolbar != null && toolbar.size() >= FEWEST_SLOTS && toolbar.size() <= SLOTS; }
+    /** Whether {@code toolbar} has a toolbar's count of lines: {@link #FEWEST_SLOTS} to {@link #MOST_SLOTS}. */
+    private static boolean slotCount(List<String> toolbar) { return toolbar != null && toolbar.size() >= FEWEST_SLOTS && toolbar.size() <= MOST_SLOTS; }
     /** Whether {@code line} is a toolbar line ({@link ToolSlots.Toolbar#lines}): a brush's two fields, then its size and grey. The brush itself is read where it is used. */
     private static boolean readsAsLine(String line) {
         if (line == null || line.isEmpty()) return false;
@@ -213,10 +228,6 @@ final class NotebookOptions {
     byte[] nibPreviewBytes() { return new byte[]{(byte) (nibPreview ? 1 : 0)}; }
     /** These options with the Nib Preview record read ({@code null}: none, on). */
     NotebookOptions readNibPreview(byte[] bytes) { return bytes == null || bytes.length != 1 ? this : withNibPreview(bytes[0] != 0); }
-    /** The Self-Portrait Prompt record's bytes ({@code SELF}): one byte, 1 for on. */
-    byte[] selfPortraitBytes() { return new byte[]{(byte) (selfPortrait ? 1 : 0)}; }
-    /** These options with the Self-Portrait Prompt record read ({@code null}: none, off). */
-    NotebookOptions readSelfPortrait(byte[] bytes) { return bytes == null || bytes.length != 1 ? this : withSelfPortrait(bytes[0] != 0); }
     /** The No Erasing record's bytes: one byte, 1 for on. */
     byte[] noErasingBytes() { return new byte[]{(byte) (noErasing ? 1 : 0)}; }
     /** The Brushes record's bytes: the count, one byte. */
@@ -262,10 +273,10 @@ final class NotebookOptions {
         if (!(other instanceof NotebookOptions)) return false;
         NotebookOptions o = (NotebookOptions) other;
         return template.equals(o.template) && tools == o.tools && toolbar.equals(o.toolbar)
-                && noErasing == o.noErasing && brushes == o.brushes && seconds == o.seconds && guidesShown == o.guidesShown && paper == o.paper && lockPages == o.lockPages && nibPreview == o.nibPreview && selfPortrait == o.selfPortrait;
+                && noErasing == o.noErasing && brushes == o.brushes && seconds == o.seconds && guidesShown == o.guidesShown && paper == o.paper && lockPages == o.lockPages && nibPreview == o.nibPreview && surface == o.surface;
     }
     @Override public int hashCode() {
         return template.hashCode() * 31 + 7 * tools.hashCode() + 13 * toolbar.hashCode()
-                + (noErasing ? 17 : 0) + 19 * brushes + 23 * seconds + 37 * guidesShown + 41 * paper + (lockPages ? 43 : 0) + (nibPreview ? 0 : 47) + (selfPortrait ? 53 : 0);
+                + (noErasing ? 17 : 0) + 19 * brushes + 23 * seconds + 37 * guidesShown + 41 * paper + (lockPages ? 43 : 0) + (nibPreview ? 0 : 47) + 59 * surface.ordinal();
     }
 }

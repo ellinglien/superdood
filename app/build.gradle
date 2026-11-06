@@ -1,3 +1,4 @@
+import javax.inject.Inject
 plugins { id 'com.android.application' }
 // The app's visible name has one switch: AppName.NAME in the Java source (docs/RENAMING.md). It gives the launcher label
 // and the library folders here, and every message and file name in the code.
@@ -17,8 +18,8 @@ android {
         applicationId project.hasProperty('legacyId') ? 'app.helpyy.inkwash' : 'ing.ell.mybaddrawings'
         minSdk 27
         targetSdk 34
-        versionCode 9
-        versionName '0.9'
+        versionCode 10
+        versionName '1.0'
         testInstrumentationRunner 'io.github.mpdairy.monopaint.WidthInstrumentation'
         ndk { abiFilters 'arm64-v8a' }
         // Drawings in Document/<folder>, PNG copies in EXPORT/<folder>.
@@ -75,4 +76,26 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+}
+// Share on Wi-Fi (LiveHost) serves the live page from the APK: at each build the engine is built to WebAssembly
+// (web/engine/build.sh; its Gradle skips that when no Java changed) and the page's files packed into assets/web
+// (scripts/live-probe/relay.py pack), so the APK carries the current web app.
+abstract class PackWeb extends DefaultTask {
+    @OutputDirectory abstract DirectoryProperty getOutputDir()
+    @Internal abstract DirectoryProperty getRepo()
+    @Inject abstract ExecOperations getExec()
+    @Inject abstract FileSystemOperations getFiles()
+    @TaskAction void pack() {
+        def web = outputDir.get().dir('web').asFile
+        files.delete { delete web }
+        exec.exec { workingDir repo.get().asFile; commandLine 'bash', 'web/engine/build.sh' }
+        exec.exec { workingDir repo.get().asFile; commandLine 'python3', 'scripts/live-probe/relay.py', 'pack', web.path }
+    }
+}
+def packWeb = tasks.register('packWeb', PackWeb) {
+    repo = rootProject.layout.projectDirectory
+    outputs.upToDateWhen { false }
+}
+androidComponents {
+    onVariants(selector().all()) { variant -> variant.sources.assets?.addGeneratedSourceDirectory(packWeb) { it.outputDir } }
 }

@@ -61,13 +61,17 @@ public final class BrushLibraryChecks {
         java.io.File in = new java.io.File(folder, BrushImport.NAME);
         java.nio.file.Files.write(in.toPath(), ("# from Brush Studio\n\nnot a brush\n" + pen(11, "kiwi-free").write().split("\t", 2)[1] + "\n"
                 + "zealous-shallot.M67gzlduui0_1zfmq009t0500ee_0_000_1jz_8rx0000000000000000nz0.vvrysb\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        check(BrushImport.run(into, in) == 2 && into.entries().size() == 2, "Codes in the import file join the library, lines that don't read are skipped");
+        check(BrushImport.run(into, in, note -> { }) == 2 && into.entries().size() == 2, "Codes in the import file join the library, lines that don't read are skipped");
         check(!in.exists() && new java.io.File(folder, BrushImport.DONE).isFile(), "The import file is renamed, so each code comes in once");
-        check(BrushImport.run(into, in) == 0, "No file: nothing to add");
+        check(BrushImport.run(into, in, note -> { }) == 0, "No file: nothing to add");
         java.io.File f2 = new java.io.File(folder, "Friend.INKWASH.txt");
         java.nio.file.Files.write(f2.toPath(), (pen(12, "plum-free").write().split("\t", 2)[1] + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        check(BrushImport.runAll(into, folder) == 1 && !f2.exists() && new java.io.File(folder, "Friend (added).txt").isFile(), "Any .inkwash.txt in the folder is imported and renamed to (added).txt");
-        check(BrushImport.runAll(into, folder) == 0 && !BrushImport.isImport("Friend (added).txt") && !BrushImport.isImport(BrushImport.DONE), "Renamed files are not imported again");
+        check(BrushImport.runAll(into, folder, note -> { }) == 1 && !f2.exists() && new java.io.File(folder, "Friend (added).txt").isFile(), "Any .inkwash.txt in the folder is imported and renamed to (added).txt");
+        check(BrushImport.runAll(into, folder, note -> { }) == 0 && !BrushImport.isImport("Friend (added).txt") && !BrushImport.isImport(BrushImport.DONE), "Renamed files are not imported again");
+        java.io.File f3 = new java.io.File(folder, "Newer.inkwash.txt");
+        java.nio.file.Files.write(f3.toPath(), "brave-onion.Mz4p6okati000ee00_0atzz9000000020000_0_277_1e0_6ee00ee0000we000000nz0.1u5hvr4\nbrave-onion.N2ab_c.1x\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        java.util.List<String> said = new java.util.ArrayList<>();
+        check(BrushImport.runAll(into, folder, said::add) == 1 && said.equals(java.util.Arrays.asList(BrushImport.NEWER, BrushImport.NEEDS_NEWER)), "A newer version's code is added, saying some parts differ; a newer shape's says it needs one: " + said);
     }
 
     /** The owner's "duplicated names" (2026-10-29): once, the newest of a name stays; a save never adds a second. */

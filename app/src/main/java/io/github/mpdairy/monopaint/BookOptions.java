@@ -78,8 +78,18 @@ import java.util.zip.CRC32;
  * <p>Nib Preview (the owner, 2026-10-29) adds {@code NIBP} (one byte, 1 for on), only when off: absent, any older notebook,
  * is on. Versions before it skip it and show the hover ring.
  *
- * <p>Self-Portrait Prompt (the owner, 2026-10-30) adds {@code SELF} (one byte, 1 for on), only when on: absent, any older
- * notebook, is off. Versions before it skip it and deal no cards.
+ * <p>Self-Portrait Prompt (the owner, 2026-10-30, cut 2026-11-05) added {@code SELF} (one byte, 1 for on), only when on:
+ * no longer written, and passed over where an older notebook has it.
+ *
+ * <p>Surface (the owner, 2026-11-01: "Surface moves to the notebook") adds {@code SURF} (one byte, the surface's index,
+ * {@link BrushTexture}), only when not Smooth, and {@code PSRF} (the page count, then a byte a page: 0 for the notebook's,
+ * else its own surface's index plus one), only when a page has its own. Absent, any older notebook, every page is
+ * Smooth. Versions before them skip both; their brushes draw on their own papers there, as they always did.
+ *
+ * <p>Favourites (the owner, 2026-11-06) adds {@code PFAV} (the page count, then four bytes a page: its star mark, 0 for
+ * none; a stack's is its bottom page's), only when a page has one: in a notebook, the id its copy in Favourites carries;
+ * in Favourites, the same id on that copy. Absent, any older notebook, no page is starred. Versions before it skip it
+ * (and drop it at their next save of that notebook: its stars show empty again, the copies stay).
  */
 final class BookOptions {
     static final int MAGIC = 0x494e4f31; // INO1
@@ -88,7 +98,8 @@ final class BookOptions {
             TEMPLATE = tag("TMPL"), GUIDES = tag("GPDF"), TOOLS = tag("TOOL"),
             NO_ERASING = tag("NERS"), ONE_BRUSH = tag("ONEB"), BRUSHES = tag("BRSH"), PAGE_TEMPLATES = tag("PTPL"), TIMED = tag("TIMD"), TIMED_SECONDS = tag("TSEC"), LOCK = tag("LOCK"),
             PAPER = tag("PAPM"), GHOST = tag("GHST"), STEPS = tag("STEP"), STRENGTH = tag("PSTR"), STACKS = tag("STAK"),
-            LAST = tag("LAST"), GUIDES_SHOWN = tag("GSHN"), PAGE_COLOUR = tag("PCOL"), PAGE_RULES = tag("PRUL"), PAGE_SECONDS = tag("PTIM"), LOCK_PAGES = tag("TLCK"), NIB_PREVIEW = tag("NIBP"), SELF_PORTRAIT = tag("SELF");
+            LAST = tag("LAST"), GUIDES_SHOWN = tag("GSHN"), PAGE_COLOUR = tag("PCOL"), PAGE_RULES = tag("PRUL"), PAGE_SECONDS = tag("PTIM"), LOCK_PAGES = tag("TLCK"), NIB_PREVIEW = tag("NIBP"),
+            SURFACE = tag("SURF"), PAGE_SURFACES = tag("PSRF"), PAGE_FAVES = tag("PFAV");
     static int tag(String name) { byte[] b = name.getBytes(java.nio.charset.StandardCharsets.US_ASCII); return (b[0] & 255) << 24 | (b[1] & 255) << 16 | (b[2] & 255) << 8 | (b[3] & 255); }
 
     /**
@@ -110,6 +121,10 @@ final class BookOptions {
         int[] pageRules;
         /** Each page's own time, s ({@code DrawingBook#pageSeconds}; null or all 0 keeps nothing). */
         int[] pageSeconds;
+        /** Each page's own surface, its index plus one, 0 for the notebook's ({@code DrawingBook#pageSurfaces}; null or all 0 keeps nothing). */
+        int[] pageSurfaces;
+        /** Favourites: each page's star mark ({@code DrawingBook#pageFaves}; null or all 0 keeps nothing). */
+        int[] pageFaves;
         /** The day (epoch day) a page was last added to or changed; -1: not known, nothing kept. */
         long lastDay = -1;
         /** Whether a file needs the block for them. */
@@ -247,6 +262,8 @@ final class BookOptions {
         covers.pageTemplates = pageTemplates(bytes(found.get(PAGE_TEMPLATES), file), pages);
         covers.pageRules = pageRules(bytes(found.get(PAGE_RULES), file), pages);
         covers.pageSeconds = pageSeconds(bytes(found.get(PAGE_SECONDS), file), pages);
+        covers.pageSurfaces = pageSurfaces(bytes(found.get(PAGE_SURFACES), file), pages);
+        covers.pageFaves = pageFaves(bytes(found.get(PAGE_FAVES), file), pages);
         byte[] last = bytes(found.get(LAST), file);
         covers.lastDay = last != null && last.length == 4 ? Math.max(-1, BookPictures.readInt(last, 0)) : -1;
         covers.tracing = TracingPaper.read(bytes(found.get(PAPER), file), bytes(found.get(GHOST), file), bytes(found.get(STEPS), file), bytes(found.get(STRENGTH), file), bytes(found.get(STACKS), file), pages);
@@ -270,7 +287,7 @@ final class BookOptions {
         if (options.seconds > 0) { records.add(new Entry(TIMED, options.minutesBytes())); records.add(new Entry(TIMED_SECONDS, options.secondsBytes())); }
         if (options.lockPages) records.add(new Entry(LOCK_PAGES, options.lockPagesBytes()));
         if (!options.nibPreview) records.add(new Entry(NIB_PREVIEW, options.nibPreviewBytes()));
-        if (options.selfPortrait) records.add(new Entry(SELF_PORTRAIT, options.selfPortraitBytes()));
+        if (options.surface != BrushTexture.DEFAULT) records.add(new Entry(SURFACE, options.surfaceBytes()));
         TracingPaper t = covers.tracing;
         if (t != null) {
             if (t.paper != TracingPaper.PLAIN) records.add(new Entry(PAPER, t.paperBytes()));
@@ -285,6 +302,10 @@ final class BookOptions {
         if (rules != null) records.add(new Entry(PAGE_RULES, rules));
         byte[] seconds = pageSecondBytes(covers.pageSeconds);
         if (seconds != null) records.add(new Entry(PAGE_SECONDS, seconds));
+        byte[] surfaces = pageSurfaceBytes(covers.pageSurfaces);
+        if (surfaces != null) records.add(new Entry(PAGE_SURFACES, surfaces));
+        byte[] faves = pageFaveBytes(covers.pageFaves);
+        if (faves != null) records.add(new Entry(PAGE_FAVES, faves));
         if (covers.lastDay >= 0) records.add(new Entry(LAST, java.nio.ByteBuffer.allocate(4).putInt((int) covers.lastDay).array()));
         return records;
     }
@@ -302,7 +323,7 @@ final class BookOptions {
         options = options.readBrushes(bytes(found.get(BRUSHES), file));
         options = options.readMinutes(bytes(found.get(TIMED), file)).readSeconds(bytes(found.get(TIMED_SECONDS), file));
         options = options.readLockPages(bytes(found.get(LOCK_PAGES), file)).readNibPreview(bytes(found.get(NIB_PREVIEW), file))
-                .readSelfPortrait(bytes(found.get(SELF_PORTRAIT), file));
+                .readSurface(bytes(found.get(SURFACE), file));
         return options;
     }
     /** Each page's template key, a line a page (empty for none); null when none is set. */
@@ -357,6 +378,34 @@ final class BookOptions {
         int[] seconds = new int[pages];
         for (int i = 0; i < pages; i++) { seconds[i] = b.getShort() & 0xffff; if (seconds[i] > NotebookOptions.SECONDS[NotebookOptions.SECONDS.length - 1]) return null; }
         return seconds;
+    }
+    /** Each page's own surface: the page count, then a byte a page (0: the notebook's, else index plus one); null when no page has one. */
+    static byte[] pageSurfaceBytes(int[] surfaces) { return pageRuleBytes(surfaces); }
+    /** {@link #pageSurfaceBytes} read for {@code pages} pages; null for none or a record for another page count; a surface this version doesn't know is the notebook's. */
+    static int[] pageSurfaces(byte[] bytes, int pages) {
+        if (bytes == null || bytes.length != 4 + pages || java.nio.ByteBuffer.wrap(bytes).getInt() != pages) return null;
+        int[] surfaces = new int[pages];
+        for (int i = 0; i < pages; i++) { int s = bytes[4 + i] & 255; surfaces[i] = s <= BrushTexture.values().length ? s : 0; }
+        return surfaces;
+    }
+    /** Favourites: each page's star mark, the page count then four bytes a page; null when no page has one. */
+    static byte[] pageFaveBytes(int[] faves) {
+        if (faves == null) return null;
+        boolean any = false;
+        for (int f : faves) any |= f != 0;
+        if (!any) return null;
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(4 + 4 * faves.length).putInt(faves.length);
+        for (int f : faves) b.putInt(f);
+        return b.array();
+    }
+    /** {@link #pageFaveBytes} read for {@code pages} pages; null for none, or a record for another page count. */
+    static int[] pageFaves(byte[] bytes, int pages) {
+        if (bytes == null || bytes.length != 4 + 4 * pages) return null;
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(bytes);
+        if (b.getInt() != pages) return null;
+        int[] faves = new int[pages];
+        for (int i = 0; i < pages; i++) faves[i] = b.getInt();
+        return faves;
     }
     private static byte[] bytes(Record record, Bytes file) throws IOException { return record == null || record.length < 0 || record.length > 1 << 20 ? null : file.read(record.offset, record.length); }
     /** The design a found block keeps ({@code found} null: none): the default without one, or for one this version doesn't know. */

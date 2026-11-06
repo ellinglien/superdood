@@ -1,0 +1,74 @@
+{
+"hand": { "label": "Control", "choices": {
+  "steady": { "label": "Steady", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "wider": { "label": "Press Wide", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "darker": { "label": "Press Dark", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "both": { "label": "Press Both", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "brush": { "label": "Springy", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "side": { "label": "Tilt Shade", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "nib": { "label": "Tilt Turn", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "quick": { "label": "Flick", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } },
+  "custom": { "label": "Custom", "dials": { "ps": "Pressure Size", "pd": "Pressure Dark", "pw": "Pressure Nib", "ts": "Tilt Size", "td": "Tilt Dark", "tw": "Tilt Nib", "ss": "Speed Size", "sd": "Speed Dark", "sw": "Speed Nib", "gain": "Response", "dir": "Fast Strokes", "gs": "Page Tilt Size", "gd": "Page Tilt Dark", "gw": "Page Tilt Nib", "pdrive": "Pressure Sets", "sdrive": "Speed Sets", "tdrive": "Tilt Sets", "shift": "Grey Shift", "sorder": "Order", "sgreys": "Greys", "grad": "Gradient", "gto": "End Grey", "glen": "Length", "tshade": "Tilt Shading", "smooth": "Steady Hand", "stick": "Long Stick" } }
+} },
+"tip": { "label": "Tip", "choices": {
+  "round": { "label": "Round", "dials": { "weight": "Size", "taperIn": "Taper In", "taperOut": "Taper Out", "dry": "Dry Brush", "wobble": "Wobble", "soft": "Soft Edge", "flick": "Flick", "wear": "Wears Down" } },
+  "chisel": { "label": "Chisel", "dials": { "aspect": "Nib Width", "angle": "Nib Angle", "weight": "Size", "taperIn": "Taper In", "taperOut": "Taper Out", "dry": "Dry Brush", "wobble": "Wobble", "soft": "Soft Edge", "flick": "Flick", "wear": "Wears Down" } },
+  "flat": { "label": "Flat Nib", "dials": { "aspect": "Nib Width", "angle": "Nib Angle", "weight": "Size", "taperIn": "Taper In", "taperOut": "Taper Out", "dry": "Dry Brush", "wobble": "Wobble", "soft": "Soft Edge", "flick": "Flick" } },
+  "hake": { "label": "Hake", "dials": { "weight": "Size", "headTurn": "Head Follows", "angle": "Nib Angle", "dry": "Dry Brush", "soft": "Soft Edge", "flick": "Flick" } },
+  "split": { "label": "Split Nib", "dials": { "gap": "Tine Gap", "aspect": "Nib Width", "angle": "Nib Angle", "weight": "Size", "taperIn": "Taper In", "taperOut": "Taper Out", "dry": "Dry Brush", "flick": "Flick" } },
+  "multi": { "label": "Rake", "dials": { "count": "Lines", "reach": "Line Spacing", "weight": "Size", "taperIn": "Taper In", "taperOut": "Taper Out", "dry": "Dry Brush", "wobble": "Wobble", "flick": "Flick" } },
+  "bristles": { "label": "Bristle", "dials": { "hairs": "Hairs", "splay": "Splay", "cohesion": "Clump", "dryness": "Dry Brush", "weight": "Size", "load": "Paint Load", "flick": "Flick" } },
+  "stipple": { "label": "Stipple", "dials": { "dot": "Dot Size", "scatter": "Scatter", "jitter": "Uneven Dots", "weight": "Size", "hold": "Build-Up", "flick": "Flick" } },
+  "hatch": { "label": "Hatch", "dials": { "pitch": "Line Spacing", "lineW": "Line Weight", "hangle": "Line Angle", "headTurn": "Lines Follow", "layers": "Layers", "weight": "Size", "flick": "Flick" } },
+  "filbert": { "label": "Filbert", "dials": { "aspect": "Nib Width", "angle": "Nib Angle", "weight": "Size", "taperIn": "Taper In", "taperOut": "Taper Out", "dry": "Dry Brush", "wobble": "Wobble", "soft": "Soft Edge", "flick": "Flick" } },
+  "stamp": { "label": "Stamp", "dials": { "weight": "Size", "spacing": "Spacing", "headTurn": "Turns", "inkFade": "Ink Fade", "flick": "Flick" } },
+  "spiro": { "label": "Spiro", "dials": { "weight": "Size", "mode": "Mode", "curve": "Curve", "loops": "Loops per cm", "teeth": "Ring Teeth", "wheel": "Wheel", "hole": "Hole", "petals": "Petals", "ratio": "Ratio", "phase": "Phase", "fades": "Fade Turns", "flick": "Flick" } },
+  "ruling": { "label": "Ruling Pen", "dials": { "weight": "Size", "load": "Paint Load", "flick": "Flick" } },
+  "twig": { "label": "Twig", "dials": { "weight": "Size", "load": "Paint Load", "wobble": "Wobble", "flick": "Flick" } },
+  "fan": { "label": "Fan", "dials": { "hairs": "Hairs", "splay": "Splay", "weight": "Size", "dryness": "Dry Brush", "flick": "Flick" } },
+  "roller": { "label": "Brayer", "dials": { "weight": "Size", "load": "Paint Load", "pickup": "Pick Up Paint", "flick": "Flick" } }
+} },
+"medium": { "label": "Medium", "choices": {
+  "ink": { "label": "Ink", "dials": { "wet": "Wet", "line": "Pen Line", "pool": "Pooling", "splatter": "Spatter", "bleed": "Bleed", "bloom": "Bloom", "lines": "Line Style", "offset": "Line Shift", "chaos": "Breaks", "erase": "Erasable", "blend": "Blend Mode", "screen": "Print Shading", "cell": "Pattern Size", "sangle": "Angle", "mis": "Double Print", "gain": "Dot Swell", "uneven": "Patchy Ink", "fling": "Fling", "soluble": "Dissolves" } },
+  "wash": { "label": "Wash", "dials": { "wet": "Wet", "pool": "Dark Edge", "bleed": "Bleed", "bloom": "Bloom", "backrun": "Backruns", "line": "Pen Line", "erase": "Erasable", "blend": "Blend Mode", "screen": "Print Shading", "cell": "Pattern Size", "sangle": "Angle", "mis": "Double Print", "gain": "Dot Swell", "uneven": "Patchy Ink", "fling": "Fling" } },
+  "cover": { "label": "Opaque", "dials": { "cover": "Opacity", "impasto": "Thick Paint", "erase": "Erasable", "blend": "Blend Mode", "screen": "Print Shading", "cell": "Pattern Size", "sangle": "Angle", "mis": "Double Print", "gain": "Dot Swell", "uneven": "Patchy Ink", "fling": "Fling" } },
+  "charcoal": { "label": "Charcoal", "dials": { "spread": "Messy Edge", "hold": "Density", "dust": "Dust When Tilted", "erase": "Erasable", "blend": "Blend Mode", "screen": "Print Shading", "cell": "Pattern Size", "sangle": "Angle", "mis": "Double Print", "gain": "Dot Swell", "uneven": "Patchy Ink", "fling": "Fling", "soluble": "Dissolves" } },
+  "graphite": { "label": "Graphite", "dials": { "grade": "Grade", "spread": "Messy Edge", "erase": "Erasable", "blend": "Blend Mode", "screen": "Print Shading", "cell": "Pattern Size", "sangle": "Angle", "mis": "Double Print", "gain": "Dot Swell", "uneven": "Patchy Ink", "fling": "Fling", "soluble": "Dissolves" } },
+  "resist": { "label": "Resist", "dials": { "erase": "Erasable" } },
+  "tone": { "label": "Screentone", "dials": { "pattern": "Pattern", "ttone": "Darkness", "cell": "Pattern Size", "sangle": "Angle" } },
+  "crayon": { "label": "Crayon", "dials": { "wax": "Wax", "scratch": "Scratch" } },
+  "vector": { "label": "Vector Ink", "dials": { } }
+} },
+"carry": { "label": "Affects Page", "choices": {
+  "off": { "label": "Off", "dials": { } },
+  "lift": { "label": "Lift", "dials": { "pick": "Pick Up Paint", "lay": "Lay Down Paint" } },
+  "drag": { "label": "Drag", "dials": { "pick": "Pick Up Paint", "lay": "Lay Down Paint", "load": "Own Paint", "keep": "Keeps Paint", "pload": "Paint Load", "pmin": "Starting Load" } },
+  "smudge": { "label": "Smear", "dials": { "pick": "Pick Up Paint", "lay": "Lay Down Paint", "load": "Own Paint", "soften": "Soften", "keep": "Keeps Paint", "pload": "Paint Load", "pmin": "Starting Load", "press": "Press to Push" } },
+  "water": { "label": "Clear Water", "dials": { "pick": "Pick Up Paint", "lay": "Lay Down Paint", "press": "Press to Lift" } },
+  "stayin": { "label": "Stay in Lines", "dials": { "flood": "Flood" } },
+  "scrape": { "label": "Scrape", "dials": { "pick": "Depth" } },
+  "reprint": { "label": "Reprint", "dials": { } }
+} },
+"life": { "label": "Drying", "choices": {
+  "none": { "label": "Instant", "dials": { } },
+  "wet": { "label": "Quick", "dials": { "window": "Wet Edge", "runs": "Runs Downhill", "pool": "Pools Downhill", "sink": "Grainy" } },
+  "dry": { "label": "Slow", "dials": { "drying": "Drying Time", "settle": "Flow While Wet", "runs": "Runs Downhill", "drips": "Drips", "pool": "Pools Downhill", "sink": "Grainy", "blend": "Rock to Blend" } },
+  "wetpaint": { "label": "Wet", "dials": { "stays": "Stays Wet", "runs": "Runs Downhill" } }
+} },
+"later": { "label": "After", "choices": {
+  "off": { "label": "Off", "dials": { } },
+  "float": { "label": "Float", "dials": { "drying": "Floating Time", "spread": "Ring Size", "drift": "Drift Downhill" } },
+  "halo": { "label": "Mold", "dials": { "reach": "Mold Length", "growth": "Mold Growth" } },
+  "fade": { "label": "Fading", "dials": { "fadeIn": "Fades In" } },
+  "lemon": { "label": "Lemon Juice", "dials": { "dryIn": "Dries In" } },
+  "salt": { "label": "Salt", "dials": { "grains": "Grains", "dryIn": "Dries In" } },
+  "wrap": { "label": "Plastic Wrap", "dials": { "crinkle": "Crinkle", "dryIn": "Dries In" } },
+  "feather": { "label": "Feathering", "dials": { "threads": "Thread Length", "spreadIn": "Spreads In" } },
+  "fox": { "label": "Foxing", "dials": { "spots": "Spots", "dryIn": "Ages In" } },
+  "letterpress": { "label": "Letterpress", "dials": { "impression": "Impression", "spreadIn": "Prints In" } },
+  "torn": { "label": "Torn Paper", "dials": { "tear": "Torn Edge", "spreadIn": "Tears In" } },
+  "stitch": { "label": "Cross-Stitch", "dials": { "stitch": "Stitch Size", "dryIn": "Stitches In" } },
+  "cracks": { "label": "Cracks", "dials": { "cracks": "Cracks", "dryIn": "Ages In" } },
+  "tarnish": { "label": "Tarnish", "dials": { "tarnish": "Tarnish", "dryIn": "Tarnishes In" } }
+} }
+}

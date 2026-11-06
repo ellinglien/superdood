@@ -11,19 +11,20 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * Brush Lab's state, as the prototype's: copies of the ten slots' brushes and the selected one it works on (the slot it
+ * Brush Lab's state, as the prototype's: copies of the nine slots' brushes and the selected one it works on (the slot it
  * opened on: the lab shows no other since 2026-10-29), the settings locked, the lab's own Undo, what it last did ({@link
  * #status}) and the library's cards. A slot holds a six-part brush, with its parts and dials. The library is written at
- * once (Save, Save as New, delete), as are each slot's size and grey (the drawing screen's); the slots only take their
- * brushes when the drawing screen does, on Back. What each slot held at the start ({@link #start}) can be put back
- * ({@link #restore}); an unsaved brush a change lets go is kept in Recent ({@link ToolSlots#keep}, its note {@link #note}).
+ * once (Save, Save as new, delete), as are each slot's size and grey (the drawing screen's); the slots only take their
+ * brushes when the drawing screen does, on Back. What each slot held at the start ({@link #start}) goes back to the
+ * Tools page; the brush a change lets go is Undo's, and kept in Recent when unsaved ({@link ToolSlots#keep}, its note
+ * {@link #note}; Back to went 2026-11-03).
  * <p>
  * New, Open and Save (the owner, 2026-10-29, option A: "once it's edited, maybe suggest a new name?"): the lab knows the
  * library entry the brush came from ({@link #savedId}: opened from the library, or saved here; never the slot's own
  * brush), and the brush as it was then ({@link #edited}). {@link #save} writes that entry over in
  * place, keeping its name unless one was given ({@link #rename}); {@link #saveAsNew} always adds a copy, under the
- * suggested name ({@link #suggestion}) unless one was given; {@link #newBrush} and {@link #load} (a pasted code) start a
- * brush no entry holds. Pure, checked on the desktop.
+ * suggested name ({@link #suggestion}) unless one was given ({@link #save(boolean)}: Save, its As New on or not);
+ * {@link #newBrush} (New ▾'s styles) and {@link #load} (a pasted code) start a brush no entry holds. Pure, checked on the desktop.
  */
 final class BrushLab {
     /** How many changes Undo can take back. */
@@ -46,6 +47,14 @@ final class BrushLab {
         final Brush brush;
         final boolean now;
         Swap(PartChoice choice, Brush brush, boolean now) { this.choice = choice; this.brush = brush; this.now = now; }
+        /** Its tile's caption (the swap panel's, {@link SwapStrip}, the browser's): the choice's label, then its note, if any. */
+        List<String> caption() {
+            List<String> caption = new ArrayList<>();
+            caption.add(ModularWords.tileLabel(choice));
+            String note = ModularWords.swapNote(brush.parts, choice.part);
+            if (!note.isEmpty()) caption.add(note);
+            return caption;
+        }
     }
 
     /**
@@ -108,7 +117,7 @@ final class BrushLab {
     final ToolSlots.Start start;
     /** What the latest change says once (the brush it kept in Recent), or null. */
     private String note;
-    /** The lab's copies of the ten slots' brushes, which Back returns; and the one it works on. */
+    /** The lab's copies of the nine slots' brushes, which Back returns; and the one it works on. */
     private final Brush[] brushes = new Brush[ToolSlots.COUNT];
     private int selected;
     /** {@link #brush()}'s parts: the lab's own, which it changes in place. */
@@ -135,7 +144,7 @@ final class BrushLab {
     boolean canUndo() { return !history.isEmpty(); }
     /** The brush's share code (an M code). */
     String code() { return ModularCode.encode(parts); }
-    /** What Back returns: the ten slots' brushes. */
+    /** What Back returns: the nine slots' brushes. */
     Brush[] results() {
         Brush[] results = new Brush[ToolSlots.COUNT];
         for (int i = 0; i < ToolSlots.COUNT; i++) results[i] = copyOf(brushes[i]);
@@ -192,12 +201,6 @@ final class BrushLab {
         rollNew(ModularStyle.named(ModularStyle.ANYTHING_GOES));
         status = "Randomized " + parts.name;
     }
-    /** A new six-part brush in {@code style}, keeping what's locked; nothing for the six-part brush's own style. */
-    void pickStyle(ModularStyle style) {
-        if (style == parts.style) return;
-        rollNew(style);
-        status = "New " + style.label + " brush";
-    }
     /** Cut Stamp ({@link StampNib}): the brush's Stamp prints nib {@code nib} from now on, a change Undo takes back. */
     void cutNib(int nib) {
         if (parts.nib == nib) return;
@@ -205,17 +208,31 @@ final class BrushLab {
         show(Brush.of(parts.withNib(nib)));
         status = StampNib.DONE;
     }
-    /** A part's choice chip: the part switches to {@code choice}, keeping the dials both share. */
+    /**
+     * A part's choice chip: {@code choice}'s part switches to it, keeping the dials both share ({@link #switched}).
+     */
     void choose(BrushPart part, PartChoice choice) {
-        if (parts.choice(part) == choice) return;
+        if (parts.choice(choice.part) == choice) return;
         remember();
-        parts.set(part, ModularBrush.switchTo(parts.part(part), choice).normalize());
-        status = part.label + ": " + choice.label;
+        switched(parts, choice);
+        status = choice.part.label + ": " + choice.label;
+    }
+    /**
+     * {@code b}'s part switched to {@code c}, keeping the dials both share: a drying that a Later doesn't go with drops
+     * the Later ({@link PartChoice#goesWith}); a Later that doesn't go with the drying brings its own ({@link
+     * ModularBrush#normalize}).
+     */
+    static void switched(ModularBrush b, PartChoice c) {
+        if (c.part == BrushPart.LIFE && !b.choice(BrushPart.LATER).goesWith(c)) b.set(BrushPart.LATER, new ModularBrush.Part(PartChoice.LATER_OFF));
+        b.set(c.part, ModularBrush.switchTo(b.part(c.part), c).normalize());
+        b.normalize();
     }
     /** A slider is pressed: remembers the brush for Undo. */
     void startSlide() { remember(); }
     /** A slider moves: the dial follows; a hand cell makes the hand Custom meanwhile. */
-    void slide(PartDial dial, double value) {
+    void slide(PartDial dial, double value) { slide(parts, dial, value); }
+    /** {@link #slide(PartDial, double)} on {@code parts} (Brush Studio's too, WebEngine.studioEdit). */
+    static void slide(ModularBrush parts, PartDial dial, double value) {
         ModularBrush.Part p = parts.part(dial.part);
         if (!p.has(dial)) return;
         p.set(dial, value);
@@ -225,9 +242,13 @@ final class BrushLab {
      * A slider is let go: the hand is named for its cells. A slide draws again only its own part ({@link #redraw}).
      */
     void endSlide(PartDial dial) {
+        settle(parts, dial);
+        status = label(dial) + " " + dial.shown(parts.part(dial.part).get(dial), parts.part(dial.part));
+    }
+    /** {@link #endSlide}'s brush on {@code parts}: normalized, the hand named for its cells. */
+    static void settle(ModularBrush parts, PartDial dial) {
         parts.normalize();
         if (dial.part == BrushPart.HAND) parts.set(BrushPart.HAND, ModularBrush.namedHand(parts.part(BrushPart.HAND)));
-        status = label(dial) + " " + dial.shown(parts.part(dial.part).get(dial), parts.part(dial.part));
     }
     /**
      * A double tap on a slider: the dial goes back to its choice's default (what a fresh part of that choice gets,
@@ -260,9 +281,17 @@ final class BrushLab {
      * A part's choice chips: those rolls may pick (a hand's presets), and the current choice when it isn't one
      * (a decoded Bristles or Drag, a Custom hand).
      */
-    List<PartChoice> chips(BrushPart part) {
+    List<PartChoice> chips(BrushPart part) { return chips(parts, part); }
+    /** {@link #chips(BrushPart)} for {@code parts} (Brush Studio's too, WebEngine.studioParts). */
+    static List<PartChoice> chips(ModularBrush parts, BrushPart part) {
         List<PartChoice> chips = new ArrayList<>();
-        for (PartChoice c : part.choices()) if (c == parts.choice(part) || ModularFeatures.offered(c) && c != PartChoice.CUSTOM) chips.add(c);
+        // Paper picks no paper (the surface spec, 2026-11-01): the page's surface is the notebook's; Paper keeps its Texture alone.
+        if (part == BrushPart.PAPER) return chips;
+        // Vector Ink sets parts aside (VectorInk.tidy): its tip is Round.
+        if (VectorInk.is(parts) && (VectorInk.setAside(part) || part == BrushPart.TIP)) return chips;
+        // Later's in the order the lab shows them (PartChoice.LATER_SHOWN: grouped by kind), not the code's.
+        // Drying offers only how long the mark stays wet; After every Later, one that doesn't go with the drying bringing its own (switched).
+        for (PartChoice c : part == BrushPart.LATER ? PartChoice.LATER_SHOWN : part.choices()) if (c == parts.choice(part) || ModularFeatures.offered(c) && c != PartChoice.CUSTOM) chips.add(c);
         return chips;
     }
     /**
@@ -273,9 +302,9 @@ final class BrushLab {
     List<Swap> swaps(BrushPart part) {
         List<Swap> swaps = new ArrayList<>();
         for (PartChoice c : chips(part)) {
-            boolean now = c == parts.choice(part);
+            boolean now = c == parts.choice(c.part);
             ModularBrush b = parts.copy();
-            if (!now) b.set(part, ModularBrush.switchTo(parts.part(part), c).normalize());
+            if (!now) switched(b, c);
             swaps.add(new Swap(c, Brush.of(b), now));
         }
         return swaps;
@@ -284,12 +313,22 @@ final class BrushLab {
      * A part's dials as the lab shows them: its choice's, in order, but those that don't draw yet, Screen's own dials
      * while it is none (newmods.js dialShown), and those a Spiro's curve doesn't use.
      */
-    List<PartDial> dials(BrushPart part) {
+    List<PartDial> dials(BrushPart part) { return dials(parts, part); }
+    /** {@link #dials(BrushPart)} for {@code parts} (Brush Studio's too, WebEngine.studioParts). */
+    static List<PartDial> dials(ModularBrush parts, BrushPart part) {
         List<PartDial> dials = new ArrayList<>();
         ModularBrush.Part p = parts.part(part);
+        // Vector Ink: its tip's Size alone, no Texture, nothing of the parts it sets aside.
+        if (VectorInk.is(parts)) { if (part == BrushPart.TIP) dials.add(PartDial.WEIGHT); return part == BrushPart.HAND ? dials(parts, part, p) : dials; }
+        return dials(parts, part, p);
+    }
+    private static List<PartDial> dials(ModularBrush parts, BrushPart part, ModularBrush.Part p) {
+        List<PartDial> dials = new ArrayList<>();
         boolean screened = (int) p.get(PartDial.SCREEN, 0) > 0;
         for (PartDial d : p.choice.dials)
             if (ModularFeatures.shown(d) && (screened || !d.underScreen() || p.choice == PartChoice.TONE) && SpiroStamper.shows(p, d)) dials.add(d);
+        // Medium's card holds Paper's one dial, Texture: how much of the page's surface shows through (the surface spec, 2026-11-01).
+        if (part == BrushPart.MEDIUM) dials.add(PartDial.TOOTH);
         return dials;
     }
     void toggleLock(PartDial dial) { if (!partLocks.dials.remove(dial)) partLocks.dials.add(dial); }
@@ -314,18 +353,23 @@ final class BrushLab {
         // Gravity moves only a transparent body of wet paint: none for opaque Cover, or a line without a wash.
         if (dial.gravity() && dial.part == BrushPart.LIFE) { ResolvedBrush r = ResolvedBrush.of(parts, 8, 1); if (r.body == null || r.cover > 0) return false; }
         // On water (Float) Smudge's Lay down does nothing: Drag and Smear comb what floats by Pick up, laying Own paint.
-        if (dial == PartDial.LAY && parts.choice(BrushPart.LIFE) == PartChoice.FLOAT) return false;
+        if (dial == PartDial.LAY && parts.floats()) return false;
         // On water every medium floats as a darkening film: Blend does nothing there (newmods.js dialActive), nor Screen.
-        if ((dial == PartDial.M_BLEND || dial == PartDial.SCREEN || dial.underScreen()) && m != PartChoice.TONE && parts.choice(BrushPart.LIFE) == PartChoice.FLOAT) return false;
-        // A dither's pattern is its own, a grain's has no angle (the new patterns all turn); Tone's sand neither (newmods.js dialActive).
+        if ((dial == PartDial.M_BLEND || dial == PartDial.SCREEN || dial.underScreen()) && m != PartChoice.TONE && parts.floats()) return false;
+        // Under Float and Mold, ways of drying of their own, Drying's dials do nothing but Mold's Drying Time.
+        PartChoice later = parts.choice(BrushPart.LATER);
+        if (dial.part == BrushPart.LIFE && (later == PartChoice.LATER_FLOAT || later == PartChoice.LATER_MOLD && dial != PartDial.DRYING)) return false;
+        // A dither's pattern is its own, a grain's has no angle (the new patterns all turn, but riso, photocopy and soft dither, grains too; maze to rings turn); Tone's sand neither (newmods.js dialActive).
         int screen = (int) medium.get(PartDial.SCREEN, 0), pattern = (int) medium.get(PartDial.PATTERN, 0);
         if (dial == PartDial.CELL && (m == PartChoice.TONE ? pattern == 2 : screen == 3)) return false;
-        if (dial == PartDial.S_ANGLE && (m == PartChoice.TONE ? pattern == 2 : screen == 3 || screen == 4)) return false;
+        if (dial == PartDial.S_ANGLE && (m == PartChoice.TONE ? pattern == 2 : screen == 3 || screen == 4 || screen >= 15 && screen <= 17)) return false;
+        // Pixels and Stitches lay a grey a cell, no dots to swell or speckle (PrintScreen.cells).
+        if ((dial == PartDial.S_GAIN || dial == PartDial.UNEVEN) && m != PartChoice.TONE && screen >= 24) return false;
         return !(dial == PartDial.ANGLE && t == PartChoice.HAKE && (int) tip.get(PartDial.HEAD_TURN) == 0);
     }
 
     /**
-     * The Control card's rows under its grid, in order: Response and Fast is; Tilt Shading for a nib's line; a Spiro's drives; Grey Shift, and
+     * The Control card's rows under its grid, in order: Response and Fast is; Tilt Shading for a nib's line; Steady Hand and Long Stick (not a Spiro's); a Spiro's drives; Grey Shift, and
      * while it is on its Order (a Pattern's), its Greys and then its set's swatches ({@link GreySet}), as null; then
      * Gradient, for a medium that takes it ({@link GreyGradient#takes}), and while it is on a To Grey's End Grey, its
      * Length, and a Cycle's Greys and set when Grey Shift doesn't show them already.
@@ -333,8 +377,12 @@ final class BrushLab {
     static List<PartDial> handRows(ModularBrush b) { return handRows(b, true); }
     /** {@link #handRows(ModularBrush)}, without Gradient's rows unless {@code gradient}. */
     static List<PartDial> handRows(ModularBrush b, boolean gradient) {
+        // Vector Ink: Response alone (its pressure to size is the grid's; its width doesn't follow speed).
+        if (VectorInk.is(b)) return new ArrayList<>(Arrays.asList(PartDial.GAIN));
         List<PartDial> rows = new ArrayList<>(Arrays.asList(PartDial.GAIN, PartDial.DIR));
         if (tiltShades(b)) rows.add(PartDial.SIDE_SHADE);
+        // Steady Hand and Long Stick: every brush's but a Spiro's, whose ring is set where the pen is (SteadyHand.of).
+        if (b.choice(BrushPart.TIP) != PartChoice.SPIRO) { rows.add(PartDial.STEADY_HAND); rows.add(PartDial.LONG_STICK); }
         if (b.choice(BrushPart.TIP) == PartChoice.SPIRO) rows.addAll(Arrays.asList(PartDial.DRIVES));
         rows.add(PartDial.SHIFT);
         if (SwatchPicker.rule(b) == SwatchPicker.PATTERN) rows.add(PartDial.SHIFT_ORDER);
@@ -362,6 +410,11 @@ final class BrushLab {
     static String level(ModularBrush.Part hand, PartDial cell) {
         String level = level(hand.get(cell));
         return cell == PartDial.TS && level.equals("full") && (int) hand.get(PartDial.TILT_RANGE) == 1 ? "max" : level;
+    }
+    /** A cell's words in the grid ({@link HandGrid}, the browser's): its {@link #level} in caps, the speed-size cell's with "+" or "−" for Fast is once it acts. */
+    static String cellText(ModularBrush.Part hand, PartDial cell) {
+        String level = level(hand, cell).toUpperCase(Locale.ROOT);
+        return cell == PartDial.SS && hand.get(cell) > .1 ? ((int) hand.get(PartDial.DIR) == 1 ? "+" : "−") + level : level;
     }
     /**
      * A hand cell's tap (ui.js 697): off to some (.5), some to full (1), full to off; the hand is named for its cells.
@@ -409,6 +462,23 @@ final class BrushLab {
      * Grey Shift's set ({@link SwatchPicker}): grey {@code k} of the brush's greys taken in, or left out; the last one
      * stays. Whether it changed.
      */
+    /** One of Grey Shift's set's greys ({@link #greys}): as the brush lays it (0–255), whether it is in the set, its words. */
+    static final class Grey {
+        final int tone;
+        final boolean in;
+        final String said;
+        Grey(int tone, double darkness, boolean in) { this.tone = tone; this.in = in; said = ToolSwatches.greyWords(darkness, tone) + (in ? "" : ", left out"); }
+    }
+    /** Grey Shift's set as it stands: the brush's greys ({@link SwatchPicker#palette}), each laid as the brush lays it, in or out. */
+    List<Grey> greys() {
+        int n = SwatchPicker.size(SwatchPicker.palette(parts));
+        List<Grey> greys = new ArrayList<>(n);
+        for (int k = 0; k < n; k++) {
+            double darkness = SwatchPicker.darkness(parts, slots.swatches, k);
+            greys.add(new Grey(ModularSizes.swatch(parts, darkness), darkness, SwatchPicker.in(parts, k)));
+        }
+        return greys;
+    }
     boolean toggleGrey(int k) {
         ModularBrush.Part hand = ModularBrush.namedHand(parts.part(BrushPart.HAND));
         int palette = SwatchPicker.palette(parts);
@@ -439,6 +509,14 @@ final class BrushLab {
     }
     /** Whether the brush in the lab is in the library (Save reads Saved): the lab's own, not the slot's as stored. */
     boolean saved() { return slots.library.contains(brush()); }
+    /** Save's words in About This Brush's header ({@code BrushLabActivity}, the browser's lab): "Saved" once saved, else Save. */
+    String saveWords() { return saved() ? LabLayout.SAVED : LabLayout.SAVE; }
+    /**
+     * Save, its As New beside it ({@code asNew}): {@link #saveAsNew} when on, or for a brush from no library entry (a
+     * Basic tool, a New one, a pasted code: nothing to write over, so As New isn't offered, as Save as New was its only
+     * save until 2026-11-03); else {@link #save()}, the entry written over.
+     */
+    void save(boolean asNew) { if (asNew || savedEntry() == null) saveAsNew(); else save(); }
     /** Whether the brush changed since it was opened or saved (the "Edited" mark). */
     boolean edited() { return !brush().sameAs(opened); }
     /** The library entry Save writes over, or null: Save adds the brush. */
@@ -451,12 +529,19 @@ final class BrushLab {
      * A new name for an edited brush, said by what it now is ({@link BrushNames#name}: deadpan, Title Case, its part's
      * word in it), the owner's "once it's edited, maybe suggest a new name?" (2026-10-29); null when it isn't edited, a
      * name was given, or the name it would get is its own. A name another library brush has is passed by for the next
-     * (2026-10-29: Save as New adds no second brush of a name).
+     * (2026-10-29: Save as New adds no second brush of a name), and one repeating the library's latest names
+     * (2026-11-02: "seems to repeat quite often").
      */
     String suggestion() {
         if (!edited() || named) return null;
-        String name = BrushNames.name(parts, slots.library::has);
+        String name = BrushNames.name(parts, slots.library::has, latestNames());
         return name == null || name.equals(brush().name()) ? null : Brush.clean(name);
+    }
+    /** The library's latest names, newest first, that a new name keeps from repeating ({@link BrushNames#RECENT}). */
+    private List<String> latestNames() {
+        List<String> out = new ArrayList<>();
+        for (BrushLibrary.Entry e : slots.library.entries()) if (out.size() < BrushNames.RECENT) out.add(e.brush.name());
+        return out;
     }
     /** Takes the {@link #suggestion} as the brush's name, a name given; false with none. */
     boolean takeSuggestion() { String name = suggestion(); return name != null && rename(name); }
@@ -504,11 +589,14 @@ final class BrushLab {
         saved(entry.id);
         status = "Opened " + brush().name();
     }
-    /** New: a new brush in the brush's style, keeping what's locked, that no library entry holds; an Undo step. */
-    void newBrush() {
-        rollNew(parts.style);
+    /**
+     * New ▾ (Start from ▾ until 2026-11-03): a new brush in {@code style}, the brush's own too, keeping what's locked,
+     * that no library entry holds; an Undo step.
+     */
+    void newBrush(ModularStyle style) {
+        rollNew(style);
         savedId = null; opened = copyOf(brush()); named = false;
-        status = "New " + parts.style.label + " brush";
+        status = "New " + style.label + " brush";
     }
     /**
      * Puts the brush a pasted share code describes in the selected slot: an M code, or an old I or P code as its six
@@ -516,12 +604,14 @@ final class BrushLab {
      */
     boolean load(String code) {
         ModularBrush m = BrushImport.decode(code);
-        if (m == null) { status = "Not a brush code. Paste all of it."; return false; }
+        String newer = BrushImport.newerNote(code);
+        if (m == null) { status = newer != null ? newer : "Not a brush code. Paste all of it."; return false; }
         letGo();
         remember();
         show(Brush.of(m));
         savedId = null; opened = copyOf(brush()); named = false;
         status = "Loaded " + brush().name();
+        if (newer != null) note = newer;
         return true;
     }
     /**
@@ -560,24 +650,6 @@ final class BrushLab {
     /** What the latest change said (the brush kept in Recent), once; else null. */
     String note() { String said = note; note = null; return said; }
 
-    // Back to the start
-
-    /** Whether slot {@code i} holds something else than at the start (the dot under it). */
-    boolean changed(int i) { return start.changed(i, brushes[i]); }
-    /** The selected slot's brush at the start ("Back to Fineliner"). */
-    Brush started() { return start.brushes[selected]; }
-    /**
-     * Back to the start: the selected slot holds what it did when the lab opened (or the Tools page before it); a change
-     * Undo takes back, the unsaved brush it replaces kept in Recent. Whether it changed anything.
-     */
-    boolean restore() {
-        if (!changed(selected)) return false;
-        letGo();
-        remember();
-        show(copyOf(start.brushes[selected]));
-        status = "Back to " + brush().name();
-        return true;
-    }
     /** Shows {@code b}, a brush of the lab's own (see {@link #copyOf}), in the selected slot: its parts are what the lab changes. */
     private void show(Brush b) { brushes[selected] = b; parts = b.parts; }
     /** Shows a new six-part brush made from the lab's. */
@@ -586,7 +658,10 @@ final class BrushLab {
     private void rollNew(ModularStyle style) {
         letGo();
         remember();
-        showParts(style.roll(random, parts, partLocks));
+        ModularBrush b = style.roll(random, parts, partLocks);
+        // Named again by the library: passing by its names and repeats of its latest (the roll knows no library).
+        b.name = BrushNames.described(b, b.name, slots.library::has, latestNames());
+        showParts(b);
     }
     /**
      * The selected slot's brush, on opening or selecting it: the slot's own, not opened from the library, so Save adds it

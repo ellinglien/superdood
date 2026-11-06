@@ -75,5 +75,10 @@ final class PinchPan {
     /** The button's percentage: "200%". */
     static String caption(int percent) { return percent + "%"; }
     /** Its screen-reader words: "Zoom 200%, locked". */
-    static String describe(int percent, boolean locked) { return "Zoom " + caption(percent) + ", " + (locked ? "locked" : "unlocked"); }
+    static String describe(int percent, boolean locked) { return describe(percent) + ", " + (locked ? "locked" : "unlocked"); }
+    /**
+     * The browser's, which has no padlock: "Zoom 200%". There two fingers always pinch and pan, as a finger is told from
+     * the pen (which stops them while down or near) and a two-finger tap still undoes.
+     */
+    static String describe(int percent) { return "Zoom " + caption(percent); }
 }

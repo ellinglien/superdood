@@ -31,7 +31,7 @@ public final class StumpChecks {
     static void codes() {
         ModularBrush stump = preset("Stump");
         String plain = ModularCode.encode(stump);
-        check(plain.equals(ToolPresets.ROWS[findRow("Stump")][2]), "the Stump's code is as before: " + plain);
+        check(plain.equals(FloatChecks.find("Stump").code), "the Stump's code is as before: " + plain);
         for (double v : new double[]{.01, .3, .5, 1}) {
             String code = ModularCode.encode(soften(stump, v, .7));
             ModularBrush back = ModularCode.decode(code);
@@ -44,7 +44,7 @@ public final class StumpChecks {
                 && blend.choice(BrushPart.MEDIUM) == PartChoice.CHARCOAL, "Blend stump: the Stump at Soften 1, Pick up .8");
         check(wash.choice(BrushPart.TIP) == PartChoice.MULTI_LINE && wash.choice(BrushPart.MEDIUM) == PartChoice.WASH && wash.part(BrushPart.CARRY).get(PartDial.SOFTEN) == 1
                 && wash.part(BrushPart.CARRY).get(PartDial.LOAD) == 0 && ModularWords.stump(wash) && ModularWords.combs(wash), "Wash comb: a Rake, Wash, Smear, Own paint 0, Soften 1");
-        check(comb.choice(BrushPart.TIP) == PartChoice.MULTI_LINE && comb.choice(BrushPart.LIFE) == PartChoice.FLOAT && ModularWords.clearWater(comb)
+        check(comb.choice(BrushPart.TIP) == PartChoice.MULTI_LINE && comb.mischief() == PartChoice.LATER_FLOAT && ModularWords.clearWater(comb)
                 && comb.part(BrushPart.CARRY).sameAs(FloatChecks.clear().part(BrushPart.CARRY)), "Comb: Clear water with a Rake");
         check(ModularWords.plainWords(blend).contains("Softens.") && ModularWords.caption(blend).contains("stump") && ModularWords.plainWords(wash).contains("Combs.")
                 && ModularWords.caption(wash).contains("comb") && ModularWords.plainWords(stump).contains("Smears."), "Words: Softens., Combs., Smears.");
@@ -54,7 +54,6 @@ public final class StumpChecks {
             check(b.part(BrushPart.CARRY).get(PartDial.SOFTEN, 0) == 0, s.name + " rolls Soften 0");
         }
     }
-    static int findRow(String name) { for (int i = 0; i < ToolPresets.ROWS.length; i++) if (ToolPresets.ROWS[i][1].equals(name)) return i; return -1; }
 
     /** 2. Blend stump and Wash comb draw the web lab's golden pages (scripts/carry_goldens.cjs), as CarrySmudgeChecks' six. */
     static void goldens() throws Exception {

@@ -15,6 +15,8 @@ final class LoadedPaint {
     static final double FULL_PX = 3000;
     /** The width a full load's length is given for; a broader brush holds more, a narrower less, by the root of its width (half to twice). */
     static final double REF_PX = 60;
+    /** The most a line's load goes past a {@link #REF_PX} brush's: a pen-sized line's. */
+    static final double NIB_MOST = 6;
     /**
      * A rub's load ({@link #rubbed}): page px of stroke a screen px of the pen's travel over a grey loads (MonoPaint's
      * Loading speed: about as far as the pen rubbed; twice that here, so a few passes over the bar's small faces fill it).
@@ -36,12 +38,14 @@ final class LoadedPaint {
 
     /**
      * Smudge part {@code carry}'s Paint Load for a brush {@code size} page px wide (its body's, else its line's), or null
-     * when it has none: off, or a smudge without it.
+     * when it has none: off, or a smudge without it. {@code nib}: a line's (no body), whose nib holds the same ink however
+     * broad its line, so a fine line goes as much further as it is narrower ({@link #REF_PX} over its width, a half to
+     * {@link #NIB_MOST} times): a dip pen's dip writes a few lines, not a few letters.
      */
-    static LoadedPaint of(ModularBrush.Part carry, double size) {
+    static LoadedPaint of(ModularBrush.Part carry, double size, boolean nib) {
         double load = carry.get(PartDial.PLOAD, 0);
         if (!(load > 0)) return null;
-        double scale = StrokeMath.clamp(Math.sqrt(Math.max(1, size) / REF_PX), .5, 2);
+        double scale = nib ? StrokeMath.clamp(REF_PX / Math.max(1, size), .5, NIB_MOST) : StrokeMath.clamp(Math.sqrt(Math.max(1, size) / REF_PX), .5, 2);
         return new LoadedPaint(FULL_PX * load * load * scale, StrokeMath.clamp(carry.get(PartDial.PMIN, PartDial.PMIN.def)));
     }
 
@@ -119,9 +123,11 @@ final class LoadedPaint {
         /** Spends up to the newest of {@code pts}' samples and writes their {@link StrokePoints#own}. */
         void spend(StrokePoints pts) {
             pts.owns();
+            if (pts.dry == null) pts.dry = new float[pts.own.length];
             for (int k = at + 1; k < pts.count; k++) {
                 if (k > 0) spent += ((double) pts.d[k] - pts.d[k - 1]) * widthShare(r, pts.p[k], pts.v[k]);
                 pts.own[k] = (float) paint.amount(share, spent);
+                pts.dry[k] = 1 - pts.own[k];
             }
             at = pts.count - 1;
         }

@@ -38,6 +38,16 @@ final class DryingTicker {
 
     DryingTicker(View view, WatercolorSession session, Host host) { this.view = view; this.session = session; this.host = host; }
 
+    // Later's media work out a mark's finished state on a worker of their own, so a lift never waits on it: the stroke
+    // shows as laid and the ticks take the mark in once it is ready (ToneDocument.laterWork).
+    static {
+        ToneDocument.laterWork = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "later-media");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
     /** After a stroke, a page shown or a pause: ticks while the session's wash settles, or when the page's next fading mark is due. */
     void start() {
         view.removeCallbacks(tick);

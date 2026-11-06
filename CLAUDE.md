@@ -1,9 +1,12 @@
 # Product philosophy
 
 Read `PHILOSOPHY.md` before adding or changing anything the user sees.
-My Bad Drawings is a deliberately minimal fork of MonoPaint: few, clear tools, no
+Superdood is a deliberately minimal fork of MonoPaint: few, clear tools, no
 settings. Proposals that add tools, modes or options must justify themselves
-against it.
+against it. The one exception is System Settings (the owner, 2026-11-04: "can
+we add system settings? this would be a new section to adjust a few things"):
+app-wide behaviour only (Automatic Refresh, the touch controls), kept to a few
+short rows; see PHILOSOPHY.md.
 
 # Text style
 
@@ -31,4 +34,4 @@ Before implementing any feature:
 
 # Upstream
 
-See `docs/INTEGRATION.md` before touching upstream MonoPaint files or the brush engine: keep the engine pure Java and separable, keep My Bad Drawings UI in its own classes, edit upstream files only when needed, split generic fixes into small focused commits, and update that doc when engine boundaries or upstream-touching changes land.
+See `docs/INTEGRATION.md` before touching upstream MonoPaint files or the brush engine: keep the engine pure Java and separable, keep Superdood UI in its own classes, edit upstream files only when needed, split generic fixes into small focused commits, and update that doc when engine boundaries or upstream-touching changes land.

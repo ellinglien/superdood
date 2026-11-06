@@ -19,9 +19,10 @@ import java.util.function.Supplier;
  * art box ({@link #setArt}) with the owner's drawing of the tool, cut at its handle end and scaled to the box's width
  * as every other ({@link ToolsLayout#art}), or, for a brush with no drawing, its stroke at that size, either drawn in the
  * background ({@link SampleQueue}) and kept across openings ({@link #PICTURES}); under it the name on one line at its
- * left (13 sp, bold for the selected slot, the other slots grey: {@link #setChosen}), cut with … to fit. No frame, no grid lines. The one in use is underlined
- * across the art's width ({@link #setNow}), a slot changed on this visit a small grey dot at its name's right ({@link
- * #setChanged}). Drawn again only when what it shows changes (e-ink).
+ * left (13 sp), cut with … to fit. No frame, no grid lines. The card in use is underlined across the art's width
+ * ({@link #setNow}). A toolbar slot is a tile ({@link #tile}, 2026-11-03): its art alone in {@link ToolsLayout#SLOT_PAD},
+ * no name, the selected one inverted, an ink tile with its drawing in paper, the others grey ({@link #setChosen}); one
+ * changed on this visit a small grey dot under it ({@link #setChanged}). Drawn again only when what it shows changes (e-ink).
  */
 @SuppressLint("ViewConstructor")
 final class ToolCard extends View {
@@ -44,7 +45,7 @@ final class ToolCard extends View {
     private Bitmap picture;
     /** Its words for a screen reader, made when asked ({@link #describe}), else null. */
     private Supplier<String> described;
-    private boolean now, changed, bold, grey;
+    private boolean now, changed, bold, grey, tile;
 
     ToolCard(Context context, SampleQueue samples) {
         super(context);
@@ -54,6 +55,8 @@ final class ToolCard extends View {
 
     /** The art box, {@code width × height} dp. */
     void setArt(int width, int height) { artWidth = width; artHeight = height; }
+    /** A toolbar slot's tile: its art alone in its padding, inverted while chosen. */
+    ToolCard tile() { tile = true; return this; }
     /**
      * Shows {@code brush} as {@code name}: the owner's drawing of it ({@link DrawLayout#drawing}), else its stroke from
      * {@code stroke}, asked only when {@code key} (what it shows) changed.
@@ -69,9 +72,9 @@ final class ToolCard extends View {
     /** Its screen-reader words, made only when a screen reader asks (a brush's words take a while: a page of cards opens without them). */
     void describe(Supplier<String> said) { described = said; }
     @Override public CharSequence getContentDescription() { return described != null ? described.get() : super.getContentDescription(); }
-    /** The one in use (the selected slot, the card holding its tool): underlined. */
+    /** The card holding the selected slot's tool: underlined. */
     void setNow(boolean now) { if (now != this.now) { this.now = now; invalidate(); } }
-    /** A slot: the selected one black, its name bold; the others' picture and name grey (the owner, 2026-10-28: "make the non-selected tools a little grey so it's clear that they're not selected"). */
+    /** A slot: the selected one inverted; the others' picture grey (the owner, 2026-10-28: "make the non-selected tools a little grey so it's clear that they're not selected"). */
     void setChosen(boolean chosen) { if (chosen != bold || chosen == grey) { bold = chosen; grey = !chosen; invalidate(); } }
     /** A slot whose brush changed on this visit: its dot. */
     void setChanged(boolean changed) { if (changed != this.changed) { this.changed = changed; invalidate(); } }
@@ -131,6 +134,7 @@ final class ToolCard extends View {
     @Override protected void onDraw(Canvas canvas) {
         int w = getWidth(), aw = dp(artWidth);
         canvas.drawColor(Theme.PAPER);
+        if (tile) { drawTile(canvas); return; }
         int ink = grey ? GREY : Theme.INK;
         fill.setColor(ink);
         if (picture != null) canvas.drawBitmap(picture, 0, 0, fill);
@@ -151,6 +155,23 @@ final class ToolCard extends View {
             int bottom = getHeight() - dp(DrawLayout.MARK_CLEAR);
             canvas.drawRect(0, bottom - dp(DrawLayout.UNDERLINE), Math.min(w, aw), bottom, fill);
         }
+    }
+    /** A slot's tile: the selected one an ink tile, its drawing in paper (as a chosen chip); a changed one's dot under it. */
+    private void drawTile(Canvas canvas) {
+        int pad = dp(ToolsLayout.SLOT_PAD), tall = dp(artHeight) + 2 * pad;
+        fill.setAntiAlias(true);
+        if (bold) {
+            fill.setColor(Theme.INK);
+            float r = dp(ToolsLayout.PAD_RADIUS);
+            canvas.drawRoundRect(0, 0, getWidth(), tall, r, r, fill);
+        }
+        fill.setColor(bold ? Theme.ON_INK : grey ? GREY : Theme.INK);
+        if (picture != null) canvas.drawBitmap(picture, pad, pad, fill);
+        if (changed) {
+            fill.setColor(Theme.GREY_800);
+            canvas.drawCircle(getWidth() / 2f, tall + dp(ToolsLayout.DOT_ROW) / 2f, dp(LoopCard.DOT) / 2, fill);
+        }
+        fill.setAntiAlias(false);
     }
     /** The slots not selected: their picture's ink and their name in this solid grey (e-ink: no see-through). */
     static final int GREY = Theme.GREY_600;

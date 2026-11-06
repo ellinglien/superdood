@@ -6,9 +6,15 @@
 const $ = id => document.getElementById(id);
 const escH = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const DPX = 1.875;                       // device pixels per dp on the Supernotes (300 ppi): every picture is drawn at the Manta's scale
-const PART_ORDER = ["tip", "medium", "paper", "life", "hand", "carry"];   // the word list's order: Tip, Medium, Paper, Drying, Control, Smudge
+// The parts as the app's Brush Lab shows them, in its order and with its labels (app-features.json, from BrushPart.SHOWN_LATER:
+// Control, Tip, Medium, Affects Page, Drying, After): the lab's model's parts; After's card is the app's model's alone
+// (appParts). Display only: codes keep PARTS' order.
+const PART_ORDER = Object.keys(APP_FEATURES).filter(p => PARTS.includes(p));
+// No Paper card: its one dial, Texture, is a row of Medium's card, as in the app (BrushLab.dials); the paper is the page's.
+const cardOf = p => p === "paper" ? "medium" : p;
+const partLabel = p => p === "paper" ? DIALS.paper.tooth.label : APP_FEATURES[p].label;
 // Part cards show waves (one part or setting); anything that is a whole brush shows the loop (docs/DESIGN.md "Loop and wave").
-const SWATCH_ROLE = { tip: "tip", medium: "medium", carry: "carry", paper: "paper", life: "life", hand: "hand" };
+const SWATCH_ROLE = { tip: "tip", medium: "medium", carry: "carry", paper: "paper", life: "life", hand: "hand", later: "later" };
 const GREY_STEPS = [1, .53, .3];
 const STORE = "inkwash.studio.v1";
 const NK = 41;                           // knots on each of the test stroke's curves
@@ -20,7 +26,8 @@ const lc = t => String(t).toLowerCase();
 const ST = {
   B: null, tab: "lab", focus: { part: "medium", key: "wet" }, locks: { parts: new Set(), dials: new Set() }, lib: [],
   prev: null, drag: null, sizeSel: 1, shadeSel: 0, showDiff: true, eraser: false, zoom: 16, cross: { row: "tip", col: "medium" },
-  wild: [], comparePick: false, picked: [], qr: false, cursor: .5
+  wild: [], comparePick: false, picked: [], qr: false, cursor: .5,
+  from: null, named: false   // the library brush Save writes over (its name; one brush a name), and whether a name was given since
 };
 const H = { nodes: [], cur: -1, next: 0 };
 const TUNE = { geo: null, P: null, T: null, V: null, A: null, path: null, key: "", res: null, fit: null, size: 0 };
@@ -30,7 +37,7 @@ const BRUSHES = new Map();   // code|name → brush, so a history row or a tile 
 function fromCode(code, name) {
   const k = code + "|" + (name || "");
   if (BRUSHES.has(k)) return cloneBrush(BRUSHES.get(k));
-  const r = readAnyCode(code); if (!r) return null;
+  const r = appRead(code); if (!r) return null;
   if (name) r.b.name = cleanName(String(name));
   if (BRUSHES.size > 400) BRUSHES.clear();
   BRUSHES.set(k, r.b);
@@ -90,7 +97,8 @@ function wildRoll(base, lk) {
       for (const key of HAND_CELLS) P.d[key] = r() < .5 ? 0 : r();
       P.d.gain = lerp(.6, 1.5, r()); P.d.dir = r() < .5 ? 1 : 0; P.k = matchHand(P);
     } else {
-      const list = CHOICES[part], c = list[(r() * list.length) | 0];
+      // Filled Shape is the app's hidden choice (merged into Fill in, 2026-10-31): no roll picks it; nor Vector Ink (never rolled).
+      const list = CHOICES[part].filter(c => c.k !== "shape" && c.k !== "vector"), c = list[(r() * list.length) | 0];
       P = freshPart(part, c.k);
       for (const key of c.dials) {
         const sp = DIALS[part][key]; if (sp.hide) continue;
@@ -108,7 +116,7 @@ function wildRoll(base, lk) {
   normBrush(B);
   // Last: what stands out takes the adjective's place ("drip-plum"; parts.js describedName, from the seed, no draw).
   B.name = describedName(B, B.name);
-  return B;
+  return appRolled(base, B, lk, true);
 }
 // The basic tools: the app's four, Float's two and Erasable's three (as the lab adds them).
 function basicTools() {
@@ -140,14 +148,14 @@ function addFavourites() {
   for (const code of FAVOURITES) {
     if (ST.favs.includes(code)) continue;
     ST.favs.push(code);
-    const r = readAnyCode(code); if (r && !ST.lib.some(b => b.name === r.b.name)) ST.lib.push(r.b);
+    const r = appRead(code); if (r && !ST.lib.some(b => b.name === r.b.name)) ST.lib.push(r.b);
   }
 }
 
 // ---------- the render pool: a few workers running the engine and render.js, or the page itself ----------
 const POOL = { workers: [], idle: [], inPage: false, ready: false, q: [], flight: new Map(), latest: new Map(), cache: new Map(), bytes: 0, n: 0, pumping: false, done: 0 };
 const hashStr = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };
-const jobKey = j => [j.k, j.bare && studioWhite(j.B) ? "white" : "", (j.role || "") + (j.tilt ? "+t" : "") + (j.drops ? "+d" : ""), j.w, j.h, j.shade ?? 1, j.size || 0, j.under ? 1 : 0, j.bare ? 1 : 0, j.pathKey || "", j.bare ? "" : brushKey(j.B)].join("|");
+const jobKey = j => [j.k, j.bare && studioWhite(j.B) ? "white" : "", (j.role || "") + (j.tilt ? "+t" : "") + (j.drops ? "+d" : ""), j.w, j.h, j.shade ?? 1, j.size || 0, j.under ? 1 : 0, j.bare ? 1 : 0, j.pathKey || "", j.bare ? "" : brushKey(j.B) + (j.B.app ? "|" + j.B.app : ""), j.sharp ? [j.sharp.k, j.sharp.x, j.sharp.y, j.sharp.w, j.sharp.h].join(",") : ""].join("|");
 // Ask for a picture for a slot (one place on the page); a newer ask for the same slot replaces an older one still waiting.
 function request(slot, job, cb, prio = 2) {
   const key = jobKey(job);
@@ -195,7 +203,7 @@ function finishJob(res) {
   const e = POOL.flight.get(res.id); if (!e) return;
   POOL.flight.delete(res.id); POOL.done++;
   if (res.error) { console.warn("Brush Studio: a picture failed: " + res.error); return; }
-  const out = { w: res.w, h: res.h, gray: res.gray, ms: res.ms };
+  const out = { w: res.w, h: res.h, gray: res.gray, ms: res.ms, wasm: res.wasm, sharp: res.sharp || null };
   POOL.cache.set(res.id, out); POOL.bytes += out.gray.length;
   for (const k of POOL.cache.keys()) { if (POOL.bytes < 96e6) break; POOL.bytes -= POOL.cache.get(k).gray.length; POOL.cache.delete(k); }
   for (const w of e.waiters) if (POOL.latest.get(w.slot) === res.id) { try { w.cb(out); } catch (err) { console.error(err); } }
@@ -203,10 +211,13 @@ function finishJob(res) {
 function startPool() {
   POOL.ready = true;
   if (/[?&]inpage\b/.test(location.search) || typeof Worker === "undefined") { POOL.inPage = true; pumpPool(); return; }
-  const src = $("engine").textContent + "\n;\n" + $("render").textContent + "\n;\n" +
+  // Each worker loads the app's engine too (WASM's bytes, when the page has it); its jobs wait for it.
+  const src = $("engine").textContent + "\n;\n" + $("render").textContent + "\n;\n" + (WASM ? $("teavm").textContent + "\n;\n" + $("mbdengine").textContent + "\n;\n" : "") +
+    "let ready = Promise.resolve();\n" +
     "self.onmessage = e => { const m = e.data; if (m.textures) { for (const k in m.textures) TEXTURES[k] = m.textures[k]; return; }\n" +
-    "  let out; try { out = studioJob(m); } catch (err) { self.postMessage({ id: m.id, error: String(err && err.stack || err) }); return; }\n" +
-    "  self.postMessage(out, [out.gray.buffer]); };";
+    "  if (m.wasm) { ready = MBDEngine.load(m.wasm, m.assets).then(E => { STUDIO_WASM = E; }, err => console.warn('Brush Studio: a worker draws with the JS copy: ' + err)); return; }\n" +
+    "  ready.then(() => { let out; try { out = studioJob(m); } catch (err) { self.postMessage({ id: m.id, error: String(err && err.stack || err) }); return; }\n" +
+    "  self.postMessage(out, [out.gray.buffer]); }); };";
   const n = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
   try {
     const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
@@ -215,6 +226,7 @@ function startPool() {
       w.onmessage = e => { w.job = null; POOL.idle.push(w); finishJob(e.data); pumpPool(); };
       w.onerror = e => { if (e.preventDefault) e.preventDefault(); poolFallBack(); };
       w.postMessage({ textures: TEXTURES });
+      if (WASM) w.postMessage({ wasm: WASM.wasm, assets: WASM.assets });
       POOL.workers.push(w); POOL.idle.push(w);
     }
   } catch (e) { poolFallBack(); return; }
@@ -261,6 +273,9 @@ ICON.undo = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="cur
 ICON.pencil = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter"><path d="M4 16l1-4 8-8 3 3-8 8z"/><path d="M11 6l3 3"/></svg>';
 ICON.check = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 10.5l4 4 8-9"/></svg>';
 ICON.caret = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="currentColor"><path d="M5 7h10l-5 6z"/></svg>';
+ICON.info = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7.2"/><path d="M10 9v5"/><path d="M10 6.3v.2" stroke-width="2.2"/></svg>';
+// ⓘ: the Guide's entry for a part or dial (guideId), or nothing where the Guide has none (After).
+const infoBtn = (to, what) => to ? `<button type="button" class="icn info" data-act="guideinfo" data-to="${to}" aria-label="About ${escH(what)}" title="About ${escH(what)}">${ICON.info}</button>` : "";
 const lockBtn = (act, id, on, what) => `<button type="button" class="icn${on ? " on" : ""}" data-act="${act}" data-id="${id}" aria-pressed="${on}" aria-label="Lock ${escH(what)}">${on ? ICON.lock : ICON.open}</button>`;
 const dieBtn = (act, part, key, off, what) => `<button type="button" class="icn" data-act="${act}" data-part="${part}"${key ? ` data-key="${key}"` : ""}${off ? " disabled" : ""} aria-label="Roll ${escH(what)}">${ICON.die}</button>`;
 
@@ -272,7 +287,7 @@ function setStatus(t) { const s = $("status"); s.textContent = t; clearTimeout(s
 function save() {
   try {
     localStorage.setItem(STORE, JSON.stringify({
-      v: 1, favs: ST.favs || [], cur: [encodeM(ST.B), ST.B.name], base: ST.base ? [ST.base.code, ST.base.name] : null, lib: ST.lib.map(b => [encodeM(b), b.name]),
+      v: 1, favs: ST.favs || [], cur: [appCode(ST.B), ST.B.name], base: ST.base ? [ST.base.code, ST.base.name] : null, from: ST.from, named: ST.named, lib: ST.lib.map(b => [appCode(b), b.name]),
       hist: { nodes: H.nodes.map(n => [n.id, n.parent, n.code, n.name, n.what, n.at]), cur: H.cur, next: H.next },
       focus: ST.focus, sizeSel: ST.sizeSel, shadeSel: ST.shadeSel, tab: ST.tab, cross: ST.cross, zoom: ST.zoom, showDiff: ST.showDiff,
       locks: { parts: [...ST.locks.parts], dials: [...ST.locks.dials] },
@@ -289,21 +304,24 @@ function loadSaved() {
     if (!cur) return false;
     ST.B = cur;
     ST.lib = (o.lib || []).map(([c, n]) => fromCode(c, n)).filter(Boolean);
-    if (Array.isArray(o.base) && readAnyCode(o.base[0])) ST.base = { code: String(o.base[0]), name: String(o.base[1] || "") };
+    if (Array.isArray(o.base) && appRead(o.base[0])) ST.base = { code: String(o.base[0]), name: String(o.base[1] || "") };
+    // One brush a name (the app's BrushLibrary, 2026-10-29): of names alike, case aside, the newest (first) stays.
+    ST.lib = ST.lib.filter((b, i) => ST.lib.findIndex(c => sameName(c.name, b.name)) === i);
+    ST.from = typeof o.from === "string" ? o.from : null; ST.named = o.named === true;
     if (o.hist && Array.isArray(o.hist.nodes)) {
-      H.nodes = o.hist.nodes.filter(a => Array.isArray(a) && readAnyCode(a[2])).map(([id, parent, code, name, what, at]) => ({ id: id | 0, parent: parent | 0, code, name: String(name || ""), what: String(what || ""), at: +at || Date.now() }));
+      H.nodes = o.hist.nodes.filter(a => Array.isArray(a) && appRead(a[2])).map(([id, parent, code, name, what, at]) => ({ id: id | 0, parent: parent | 0, code, name: String(name || ""), what: String(what || ""), at: +at || Date.now() }));
       H.cur = o.hist.cur | 0; H.next = Math.max(o.hist.next | 0, ...H.nodes.map(n => n.id + 1), 0);
       if (!H.nodes.some(n => n.id === H.cur)) H.cur = H.nodes.length ? H.nodes[H.nodes.length - 1].id : -1;
     }
     if (o.focus && DIALS[o.focus.part] && DIALS[o.focus.part][o.focus.key]) ST.focus = { part: o.focus.part, key: o.focus.key };
     ST.sizeSel = clamp(o.sizeSel | 0, 0, 2); ST.shadeSel = clamp(o.shadeSel | 0, 0, 2);
     const tab = { understand: "lab", explore: "mix", share: "lab" }[o.tab] || o.tab;
-    if (["community", "lab", "tune", "mix", "roll"].includes(tab)) ST.tab = tab;
+    if (["community", "lab", "tune", "mix", "roll", "guide"].includes(tab)) ST.tab = tab;
     if (Array.isArray(o.favs)) ST.favs = o.favs.map(String);
-    if (o.cross && PARTS.includes(o.cross.row) && PARTS.includes(o.cross.col) && o.cross.row !== o.cross.col) ST.cross = { row: o.cross.row, col: o.cross.col };
+    if (o.cross && PART_ORDER.includes(o.cross.row) && PART_ORDER.includes(o.cross.col) && o.cross.row !== o.cross.col) ST.cross = { row: o.cross.row, col: o.cross.col };
     if ([1, 4, 16].includes(o.zoom)) ST.zoom = o.zoom;
     ST.showDiff = o.showDiff !== false;
-    if (o.locks) { ST.locks.parts = new Set((o.locks.parts || []).filter(p => PARTS.includes(p))); ST.locks.dials = new Set((o.locks.dials || []).map(String)); }
+    if (o.locks) { ST.locks.parts = new Set((o.locks.parts || []).filter(p => PART_ORDER.includes(p))); ST.locks.dials = new Set((o.locks.dials || []).map(String)); }
     const t = o.tune;
     if (t && Array.isArray(t.geo) && t.geo.length > 3 && [t.P, t.T, t.V, t.A].every(a => Array.isArray(a) && a.length === NK)) {
       TUNE.geo = t.geo.map(([x, y]) => ({ x: +x, y: +y }));
@@ -316,7 +334,7 @@ function loadSaved() {
 
 // ---------- history: every change a node; a change made after jumping back starts a branch ----------
 function addNode(what) {
-  const code = encodeM(ST.B), here = H.nodes.find(n => n.id === H.cur);
+  const code = appCode(ST.B), here = H.nodes.find(n => n.id === H.cur);
   if (here && here.code === code && here.name === ST.B.name) return;
   H.nodes.push({ id: H.next++, parent: here ? here.id : -1, code, name: ST.B.name, what, at: Date.now() });
   H.cur = H.next - 1;
@@ -329,7 +347,7 @@ function addNode(what) {
 function commit(B, what, ba) {
   const from = ST.B;
   ST.B = normBrush(B);
-  if (brushKey(from) === brushKey(ST.B) && from.name === ST.B.name) return;
+  if (brushKey(from) === brushKey(ST.B) && from.name === ST.B.name && appCode(from) === appCode(ST.B)) return;
   ST.prev = { B: from, what: ba || what };
   addNode(what);
   save();
@@ -341,8 +359,14 @@ function rollBrush(style) {
   const old = ST.B, B = rollStyle(style || old.style || WILDCARD, old, ST.locks);
   // Erasable's lock holds across media (it means the same in each); rollStyle keeps a locked dial only on the same choice.
   if (ST.locks.dials.has("medium.erase") && !ST.locks.parts.has("medium")) B.medium.d.erase = old.medium.d.erase;
-  return normBrush(B);
+  const N = appRolled(old, normBrush(B), ST.locks, false);
+  N.name = appName(N) || N.name;
+  return N;
 }
+// The app's name for B (BrushNames.name through its engine: paint colours, deadpan forms, a part and a name), passing
+// by the library's names and repeats of its latest; null where the engine isn't loaded or doesn't read B, for the
+// lab's JS copy (parts.js brushNameOf, the older eight forms).
+const appName = B => STUDIO_WASM && STUDIO_WASM.brushName(appCode(B), ST.lib.map(b => b.name)) || null;
 function randomize() {
   const B = rollBrush();
   commit(B, "Randomized", "Randomized: " + B.name);
@@ -382,34 +406,117 @@ function refresh() {
   else if (ST.tab === "mix") renderMix();
   else if (ST.tab === "roll") renderRoll();
   else if (ST.tab === "community") renderCommunity();
+  else if (ST.tab === "guide") renderGuide();
   if (ST.shareOpen) renderSharePanel();
 }
 function renderIdent() {
   const B = ST.B;
   $("idnametext").textContent = B.name; $("idname").title = "Rename " + B.name;
-  $("words").textContent = brushWords(B);
+  // Sharp dry brushes: a brush the app keeps sharp says so, in the Medium card's words for Vector Ink (ModularWords.noMacro).
+  $("words").textContent = brushWords(B) + (STUDIO_WASM && STUDIO_WASM.staysSharp(appCode(B)) ? " Sharp at any zoom." : "");
   drawSample($("idloop"), "id", B, "loop", 0);
   renderSaveState();
 }
 // Save reads its state at a glance: solid while the brush has changes the library doesn't hold, "Saved" once it does.
-const isSaved = () => { const code = encodeM(ST.B); return ST.lib.some(b => b.name === ST.B.name && encodeM(b) === code); };
-const canRevert = () => !!ST.base && !(ST.base.code === encodeM(ST.B) && ST.base.name === ST.B.name);
+const isSaved = () => { const code = appCode(ST.B); return ST.lib.some(b => b.name === ST.B.name && appCode(b) === code); };
+// Changed since it was opened or saved: Revert's and the "Edited" mark's (the app's BrushLab.edited).
+const canRevert = () => !!ST.base && !(ST.base.code === appCode(ST.B) && ST.base.name === ST.B.name);
+// The app's Brush Lab (2026-10-29): a brush not from the library shows only Save as New, solid; one opened from the
+// library shows Save (writes over it) and Save as New (a copy), plain. Under the name: Edited, and a suggested name.
 function renderSaveState() {
-  const saved = isSaved(), b = $("savebtn");
+  const saved = isSaved(), entry = savedEntry(), b = $("savebtn"), s = suggestion();
+  b.hidden = !entry;
   b.classList.toggle("primary", !saved); b.classList.toggle("saved", saved);
   $("savetext").textContent = saved ? "Saved" : "Save"; $("saveico").hidden = !saved;
+  b.title = saved ? "Saved" : entry ? "Save over " + entry.name : "";
+  $("saveasnewbtn").classList.toggle("primary", !entry);
   $("revertbtn").disabled = !canRevert();
+  $("idedited").textContent = canRevert() ? "Edited" : "";
+  const sb = $("idsuggest");
+  sb.hidden = !s; sb.textContent = s ? "Suggested: " + s : ""; sb.title = s ? "Use the name " + s : "";
 }
-// What Revert returns to: the brush as last saved, or as it was loaded or opened.
-function setBase(B) { ST.base = { code: encodeM(B), name: B.name }; }
+// What Revert returns to: the brush as last saved, or as it was loaded or opened; lib: opened from the library, so
+// Save writes over it. Either way no name given yet.
+function setBase(B, lib) { ST.base = { code: appCode(B), name: B.name }; ST.from = lib ? B.name : null; ST.named = false; }
 function revert() {
   if (!canRevert()) return;
   const B = fromCode(ST.base.code, ST.base.name); if (!B) return;
+  ST.named = false;
   commit(B, "Reverted", "Reverted to " + B.name);
   setStatus("Reverted.");
 }
+
+// ---------- names in the library: one brush a name (the app's BrushLibrary and BrushLab, 2026-10-29) ----------
+// Names match with case and spaces round them aside ("Polite smear", "polite Smear ").
+const sameName = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+const libHas = (name, skip) => ST.lib.some(b => b !== skip && sameName(b.name, name));
+// The name a brush is saved under: its own, unless another library brush has it, then with the first free number
+// after it ("Polite Smear 2"; a number it ends in replaced). skip: the entry Save writes over.
+function freeName(name, skip) {
+  if (!libHas(name, skip)) return name;
+  const base = name.replace(/ \d+$/, "");
+  for (let n = 2; ; n++) {
+    const c = cleanName(base.slice(0, NAME_MAX - String(n).length - 1).trim() + " " + n);
+    if (!libHas(c, skip)) return c;
+  }
+}
+// The library entry Save writes over, or null: then only Save as New.
+const savedEntry = () => ST.from === null ? null : ST.lib.find(b => sameName(b.name, ST.from)) || null;
+// A new name for an edited brush, said by what it now is (appName, else brushNameOf), passing by the library's names;
+// null when it isn't edited, a name was given, or it is its name already.
+function suggestion() {
+  if (!canRevert() || ST.named) return null;
+  const n = appName(ST.B) || brushNameOf(ST.B, name => libHas(name));
+  return n === null || n === ST.B.name ? null : cleanName(n);
+}
+// Renames the brush, a name given; false for an empty or unchanged name.
+function rename(text) {
+  const name = cleanName(text || "");
+  if (!name || name === ST.B.name) return false;
+  const B = cloneBrush(ST.B); B.name = name;
+  ST.named = true;
+  commit(B, "Named " + name, "Named " + name);
+  return true;
+}
+// B is now in the library as saved: what Save writes over, what Revert returns to; its name in the history if new.
+function savedAs(B, said) {
+  if (B.name !== ST.B.name) commit(cloneBrush(B), "Saved as " + B.name, "Saved as " + B.name);
+  setBase(B, true);
+  save(); renderIdent(); setStatus(said);
+}
+// Adds the brush as name, numbered when another has it, newest; the same name and settings already there are only
+// moved to the front ("Already saved").
+function addToLibrary(name) {
+  const B = cloneBrush(ST.B); B.name = name;
+  const code = appCode(B), i = ST.lib.findIndex(b => b.name === name && appCode(b) === code);
+  if (i >= 0) { ST.lib.unshift(ST.lib.splice(i, 1)[0]); savedAs(ST.lib[0], "Already saved."); return; }
+  B.name = freeName(name);
+  ST.lib.unshift(B);
+  savedAs(B, "Saved.");
+}
+// Save: writes over the entry it was opened from, in its place, keeping that entry's name unless one was given; with
+// none (only Save as New shows then), adds it.
+function saveToLibrary() {
+  const entry = savedEntry();
+  if (!entry) { addToLibrary(ST.B.name); return; }
+  if (!canRevert()) { setStatus("Already saved."); return; }
+  const B = cloneBrush(ST.B);
+  B.name = ST.named ? freeName(ST.B.name, entry) : entry.name;
+  ST.lib[ST.lib.indexOf(entry)] = B;
+  savedAs(B, "Saved.");
+}
+// Save as New: a copy added under the name given, else the suggestion, else its own; the entry it came from left alone.
+function saveAsNew() { const s = suggestion(); addToLibrary(ST.named || !s ? ST.B.name : s); }
+// New: a fresh brush in this one's style, keeping the locks, not from the library.
+function newBrush() {
+  const B = rollBrush(), said = "New " + STYLE_LABEL(B.style || WILDCARD) + " brush";
+  setBase(B);
+  commit(B, "New", said);
+  setStatus(said + ".");
+}
 function setTab(t) {
   ST.tab = t;
+  if (t !== "guide") GUIDE.back = null;
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tab === t)));
   document.querySelectorAll(".screen").forEach(s => { s.hidden = s.dataset.screen !== t; });
   save();
@@ -432,17 +539,21 @@ function validFocus() {
   const keys = dialKeys(f.part, B[f.part].k);
   ST.focus = keys.length ? { part: f.part, key: keys[0] } : { part: "medium", key: dialKeys("medium", B.medium.k)[0] || "erase" };
 }
+// A choice dial's options as chips; act "opt" sets one through the lab's model, "appopt" through the app's (appEdit).
+const chipHtml = (act, part, key, i, on, text) => `<button type="button" class="chip" data-act="${act}" data-part="${part}" data-key="${key}" data-v="${i}" aria-pressed="${on}">${escH(text)}</button>`;
 function dialCtl(B, part, key) {
   const sp = DIALS[part][key], v = B[part].d[key], label = labelOf(B, part, key);
-  if (sp.choices) return `<div class="opts" role="group" aria-label="${escH(label)}">` + sp.choices.map((o, i) =>
-    `<button type="button" class="chip" data-act="opt" data-part="${part}" data-key="${key}" data-v="${i}" aria-pressed="${(v | 0) === i}">${escH(optText(part, B[part].k, key, i))}</button>`).join("") + `</div>`;
+  // Options the app has past the lab's (Screen's Risograph, Photocopy): set through the app's model.
+  const more = ((appDialOf(part, key) || {}).options || []).slice(sp.choices ? sp.choices.length : 0);
+  if (sp.choices) return `<div class="opts" role="group" aria-label="${escH(label)}">` + sp.choices.map((o, i) => chipHtml("opt", part, key, i, (v | 0) === i, optText(part, B[part].k, key, i))).join("") +
+    more.map((o, i) => chipHtml("appopt", part, key, sp.choices.length + i, false, o)).join("") + `</div>`;
   const [lo, hi] = rangeFor(part, B[part].k, key), step = sp.int ? 1 : (hi - lo) / 1295;
   return `<input type="range" min="${lo}" max="${hi}" step="${step}" value="${v}" data-part="${part}" data-key="${key}" aria-label="${escH(label)}">`;
 }
 function dialHtml(B, part, key) {
   const sp = DIALS[part][key], f = ST.focus, foc = f.part === part && f.key === key, lk = dialLocked(part, key), label = labelOf(B, part, key);
   return `<div class="dial${isDef(B, part, key) ? " def" : ""}${foc ? " focus" : ""}" data-dial="${part}.${key}">` +
-    `<button type="button" class="dname" data-act="focus" data-part="${part}" data-key="${key}">${escH(label)}</button>` +
+    `<span class="dn"><button type="button" class="dname" data-act="focus" data-part="${part}" data-key="${key}">${escH(label)}</button>${infoBtn(guideId(part, key, B[part].k), label)}</span>` +
     `<span class="dval" data-val="${part}.${key}">${sp.choices ? "" : escH(fmtV(part, key, B[part].d[key]))}</span>` +
     lockBtn("lockdial", part + "." + key, ST.locks.dials.has(part + "." + key), label) + dieBtn("rolldial", part, key, lk, label) +
     `<div class="ctl">${dialCtl(B, part, key)}</div></div>`;
@@ -450,32 +561,56 @@ function dialHtml(B, part, key) {
 // What each part does, one line under its header (docs/TEXT-STYLE.md: named, short, no "you").
 // The part descriptions are the lab's (parts.js ROLE and ERASE_ROLE): one set for both.
 const PART_DESC = Object.assign(Object.fromEntries(PARTS.map(p => [p, ROLE[p].blurb])), { erase: ERASE_ROLE.blurb });
+PART_DESC.later = "How the mark changes over time.";
+// A part's choice swatches: { k, label, on, app } each, app: a choice the lab's model hasn't (appchoice, appEdit).
+const choicesHtml = (part, name, list) => `<div class="choices" role="group" aria-label="${escH(name)}">` + list.map(c => `<button type="button" class="choice" data-act="${c.app ? "appchoice" : "choice"}" data-part="${part}" data-k="${escH(c.k)}" data-label="${escH(c.label)}" aria-pressed="${!!c.on}" aria-label="${escH(c.label)}" title="${escH(c.label)}">` +
+  `<span class="frame"><canvas data-sw="${part}" data-k="${escH(c.k)}"${c.app ? ' data-app="1"' : ""}></canvas></span><span class="clab">${escH(c.label)}</span></button>`).join("") + `</div>`;
 function cardHtml(B, part) {
-  const P = B[part], lockP = ST.locks.parts.has(part), name = ROLE[part].label;
-  const choices = CHOICES[part].filter(c => !(part === "hand" && c.k === "custom" && P.k !== "custom"));
-  const keys = dialKeys(part, P.k, B);
-  return `<section class="card" data-part="${part}"><div class="chead"><span class="plabel">${escH(name)}</span><span class="cname">${escH(cardName(B, part))}</span><span class="grow"></span>` +
+  const P = B[part], lockP = ST.locks.parts.has(part), name = partLabel(part);
+  // Custom and Filled Shape (hidden in the app's Brush Lab, 2026-10-31) show only on a brush that holds them.
+  const choices = CHOICES[part].filter(c => !((part === "hand" && c.k === "custom" || c.k === "shape") && P.k !== c.k)).map(c => ({ k: c.k, label: c.label, on: c.k === P.k }));
+  // Then the app's choices the lab's model hasn't (Ruling Pen, Fan Brush, …), from the app's model.
+  if (ST.appParts) for (const c of ST.appParts[part].choices) if (!CHOICES[part].some(j => j.k === c.k)) choices.push({ k: c.k, label: c.label, app: true });
+  const rows = dialKeys(part, P.k, B).map(k => dialHtml(B, part, k));
+  if (part === "medium") rows.push(dialHtml(B, "paper", "tooth"));
+  return `<section class="card" data-part="${part}"><div class="chead"><span class="plabel">${escH(name)}</span>${infoBtn(guideId(part), name)}<span class="cname">${escH(cardName(B, part))}</span><span class="grow"></span>` +
     lockBtn("lockpart", part, lockP, name) + dieBtn("rollpart", part, null, lockP, name) + `</div><p class="cdesc">${PART_DESC[part]}</p>` +
-    `<div class="choices" role="group" aria-label="${escH(name)}">` + choices.map(c => `<button type="button" class="choice" data-act="choice" data-part="${part}" data-k="${escH(c.k)}" data-label="${escH(c.label)}" aria-pressed="${c.k === P.k}" aria-label="${escH(c.label)}" title="${escH(c.label)}">` +
-      `<span class="frame"><canvas data-sw="${part}" data-k="${escH(c.k)}"></canvas></span><span class="clab">${escH(c.label)}</span></button>`).join("") + `</div>` +
-    (keys.length ? `<div class="dials">${keys.map(k => dialHtml(B, part, k)).join("")}</div>` : "") + `</section>`;
+    choicesHtml(part, name, choices) + (rows.length ? `<div class="dials">${rows.join("")}</div>` : "") + `</section>`;
 }
+// A part the lab's model can't hold (After; a newer tip, print or dial) as the app's model has it (appParts): its choices
+// and dials, each edited there (appEdit), locked and rolled as the lab's cards are (appPartAs, appRollV).
+// shortcut: no sweep or before/after for the app's dials (the focus is the lab's model's); when Studio's editing moves to the app's model, they can.
+function appCardHtml(part, P) {
+  const lockP = ST.locks.parts.has(part), on = (P.choices.find(c => c.on) || {}).k;
+  const rows = P.dials.filter(d => !isErase(d.part, d.key)).map(d => {
+    const id = d.part + "." + d.key, def = Math.abs(d.v - d.def) <= (d.hi - d.lo) * .004 + 1e-9;
+    const ctl = d.options ? `<div class="opts" role="group" aria-label="${escH(d.label)}">` + d.options.map((o, i) => chipHtml("appopt", d.part, d.key, i, (d.v | 0) === i, o)).join("") + `</div>`
+      : `<input type="range" min="${d.lo}" max="${d.hi}" step="${d.int ? 1 : (d.hi - d.lo) / 1295}" value="${d.v}" data-app="1" data-part="${d.part}" data-key="${d.key}" aria-label="${escH(d.label)}">`;
+    return `<div class="dial${def ? " def" : ""}" data-dial="${id}"><span class="dn"><span class="dname">${escH(d.label)}</span>${infoBtn(guideId(d.part, d.key, d.part === part ? on : null), d.label)}</span>` +
+      `<span class="dval" data-appval="${id}">${d.options ? "" : escH(d.shown)}</span>` +
+      lockBtn("lockdial", id, ST.locks.dials.has(id), d.label) + dieBtn("approlldial", d.part, d.key, dialLocked(d.part, d.key), d.label) + `<div class="ctl">${ctl}</div></div>`;
+  });
+  return `<section class="card" data-part="${part}"><div class="chead"><span class="plabel">${escH(P.label)}</span>${infoBtn(guideId(part), P.label)}<span class="cname">${escH(P.name)}</span><span class="grow"></span>` +
+    lockBtn("lockpart", part, lockP, P.label) + dieBtn("approllpart", part, null, lockP, P.label) + `</div><p class="cdesc">${PART_DESC[part]}</p>` + choicesHtml(part, P.label, P.choices.map(c => ({ ...c, app: true }))) + (rows.length ? `<div class="dials">${rows.join("")}</div>` : "") + `</section>`;
+}
+// The app's dial key of part (on its card: Texture is Medium's) in parts (appParts; the cards' as built when left out).
+const appDialOf = (part, key, A = ST.appParts) => A && A[cardOf(part)] && A[cardOf(part)].dials.find(d => d.part === part && d.key === key);
 // Erasable, the last dial of every medium, as a card of its own: its name focuses it.
 function eraseCardHtml(B) {
   // Tone has no Erasable of its own: it always erases (the eraser scrapes it).
   if (!choiceOf("medium", B.medium.k).dials.includes("erase"))
-    return `<section class="card" data-part="erase"><div class="chead"><span class="plabel">Erasable</span><span class="cname">Always</span><span class="grow"></span></div><p class="cdesc">${PART_DESC.erase}</p></section>`;
+    return `<section class="card" data-part="erase"><div class="chead"><span class="plabel">Erasable</span>${infoBtn(guideId("medium", "erase", B.medium.k), "Erasable")}<span class="cname">Always</span><span class="grow"></span></div><p class="cdesc">${PART_DESC.erase}</p></section>`;
   const foc = ST.focus.part === "medium" && ST.focus.key === "erase", lk = dialLocked("medium", "erase");
-  return `<section class="card" data-part="erase"><div class="chead"><button type="button" class="plabel dname" data-act="focus" data-part="medium" data-key="erase">Erasable</button>` +
+  return `<section class="card" data-part="erase"><div class="chead"><button type="button" class="plabel dname" data-act="focus" data-part="medium" data-key="erase">Erasable</button>${infoBtn(guideId("medium", "erase", B.medium.k), "Erasable")}` +
     `<span class="cname" data-val="medium.erase">${escH(cap1s(fmtV("medium", "erase", B.medium.d.erase)))}</span><span class="grow"></span>` +
     lockBtn("lockdial", "medium.erase", ST.locks.dials.has("medium.erase"), "Erasable") + dieBtn("rolldial", "medium", "erase", lk, "Erasable") + `</div><p class="cdesc">${PART_DESC.erase}</p>` +
     `<div class="dials"><div class="dial solo${isDef(B, "medium", "erase") ? " def" : ""}${foc ? " focus" : ""}" data-dial="medium.erase">` +
     `<div class="ctl">${dialCtl(B, "medium", "erase")}</div></div></div></section>`;
 }
 // ---------- the Lab's layout: the cards packed into columns that fill the window's height, the rest for the page ----------
-// The cards in the word list's order (Erasable after Medium, whose dial it is), cut into n columns in order so the
+// The cards in the app's order (Erasable after Medium, whose dial it is), cut into n columns in order so the
 // tallest is as short as it can be; n is the fewest columns that fit the height, the test page column takes the rest.
-const CARD_ORDER = ["tip", "medium", "erase", "paper", "life", "hand", "carry"];
+const CARD_ORDER = Object.keys(APP_FEATURES).filter(p => PARTS.includes(p) || p === "later").flatMap(p => p === "medium" ? [p, "erase"] : [p]);
 const COL_GAP = 16, COL_W = 232, SIDE_MIN = 380;
 function partition(hs, n) {
   const fits = T => { let k = 1, c = 0; for (const h of hs) { if (h > T) return false; if (c + h > T && c > 0) { k++; c = 0; } c += h; } return k <= n; };
@@ -504,7 +639,9 @@ function measureCards(html, w, labels) {
 }
 function buildCards() {
   const B = ST.B, box = $("cards"), lab = $("s-lab");
-  const html = CARD_ORDER.map(p => p === "erase" ? eraseCardHtml(B) : cardHtml(B, p));
+  // The app's model's cards where the lab's can't hold the part (After always), with the app's engine; else the lab's alone.
+  const A = ST.appParts = appParts(B);
+  const html = CARD_ORDER.filter(p => A || p !== "later").map(p => p === "erase" ? eraseCardHtml(B) : A && (p === "later" || A[p].held) ? appCardHtml(p, A[p]) : cardHtml(B, p));
   const W = lab.clientWidth || 1200, H = (lab.clientHeight || 700) - ($("adjhead").offsetHeight + 10), wide = innerWidth > 1180 && innerHeight > 620;
   let plan = null;
   if (wide) {
@@ -548,7 +685,7 @@ function drawSwatches() {
   const B = ST.B;
   document.querySelectorAll("#cards canvas[data-sw]").forEach(c => {
     const part = c.dataset.sw, k = c.dataset.k;
-    drawSample(c, "sw:" + part + ":" + k, withChoice(B, part, k), SWATCH_ROLE[part], 3);
+    drawSample(c, "sw:" + part + ":" + k, c.dataset.app ? appEdit(B, part, k) : withChoice(B, part, k), SWATCH_ROLE[part], 3);
   });
 }
 // During a drag, only the dial's own row changes on the page; the pictures follow.
@@ -589,7 +726,7 @@ const sweepOpts = (B, part, key) => ({ tilt: part === "hand" && /^t/.test(key), 
 function renderSweep() {
   const B = ST.B, { part, key } = ST.focus, vals = sweepValues(B, part, key), v = B[part].d[key], so = sweepOpts(B, part, key);
   $("sweeptitle").textContent = labelOf(B, part, key);
-  $("sweeppart").textContent = isErase(part, key) ? "" : ROLE[part].label;
+  $("sweeppart").textContent = isErase(part, key) ? "" : partLabel(cardOf(part));
   const box = $("sweep"), sig = part + "." + key + ":" + vals.length;
   if (box.dataset.sig !== sig) {
     box.dataset.sig = sig;
@@ -638,11 +775,13 @@ function drawBA() {
   $("aftercap").textContent = ST.prev ? "After: " + (changed && pct < 1 ? "under 1" : Math.round(pct)) + "% changed" : "After";
 }
 // ---------- the test page: draw on it with the brush; every stroke is drawn again when the brush changes ----------
-const TP = { surf: null, ctx: null, log: [], live: null, water: null, bath: null, cost: 0, queued: false, last: null };
+const TP = { surf: null, ctx: null, log: [], live: null, water: null, bath: null, wet: null, cost: 0, queued: false, last: null };
 const TP_HOST = {
   halos: true,   // a Halo stroke's veins grow here ten times a second (newmods.js haloLift), not at once
   get water() { return TP.water; }, getWater() { return TP.water ??= new Water(TP.surf, 2026); },
-  get bath() { return TP.bath; }, getBath() { if (!TP.bath || !TP.bath.wet) TP.bath = new Bath(TP.surf); return TP.bath; }
+  get bath() { return TP.bath; }, getBath() { if (!TP.bath || !TP.bath.wet) TP.bath = new Bath(TP.surf); return TP.bath; },
+  // Wet paint (wet.js): stays wet across strokes, as on the Manta, and moves after each lift (tickWet).
+  get wet() { return TP.wet; }, getWet() { return TP.wet ??= new WetCanvas(TP.surf); }
 };
 function fitTest() {
   const fr = $("testframe"), cv = $("test"); if (!fr.clientWidth) return;
@@ -650,26 +789,49 @@ function fitTest() {
   TP.ctx = cv.getContext("2d");
   if (TP.surf && TP.surf.w === w && TP.surf.h === h) return;
   cv.width = w; cv.height = h;
-  TP.surf = modSurface(w, h, 2026);
+  TP.surf = tpSurface(w, h);
   replayTest();
 }
-// Marks already on the page, so Opaque, Smudge and wet edges have something to work over (as the lab's test area).
-function seedMarks(s) {
-  const B0 = BASICS[0], wash = cloneBrush(BASICS[2]), w = s.w, h = s.h;
-  wash.life = freshPart("life", "none"); normBrush(wash);
-  const band = [], zig = [];
-  for (let i = 0; i <= 60; i++) { const u = i / 60; band.push({ x: w * (.04 + .22 * u), y: h * .22 + Math.sin(u * 6) * 6, p: .8, t: i * 8, tx: NaN, ty: NaN }); }
-  for (let i = 0; i <= 80; i++) { const u = i / 80; zig.push({ x: w * (.04 + .22 * u), y: h * .14 + (i % 20 < 10 ? (i % 10) : 10 - (i % 10)) * h * .009, p: .7, t: i * 6, tx: NaN, ty: NaN }); }
-  layStroke(s, wash, band, Math.min(90, h * .12), .7, null);
-  layStroke(s, B0, zig, 6, 1, null);
-  s.base.set(s.page);
+// On the app's engine (when this brush reads there) the test page is TP.page, a page of the app's, and TP.surf only the
+// greys it shows, pulled from it where it changes (tpPull), for showPage and the rest to read; else the JS copy's surface.
+const tpWasm = () => !!STUDIO_WASM && STUDIO_WASM.reads(appCode(ST.B));
+function tpSurface(w, h) {
+  if (TP.page) { TP.page.free(); TP.page = null; }
+  if (!tpWasm()) return modSurface(w, h, 2026);
+  TP.page = STUDIO_WASM.page(w, h);
+  return { w, h, page: new Uint8Array(w * h).fill(255) };
+}
+function tpPull(r) {
+  if (!r) return null;
+  const s = TP.surf, w = r[2] - r[0] + 1, h = r[3] - r[1] + 1, t = TP.page.tones(r[0], r[1], w, h);
+  for (let y = 0; y < h; y++) s.page.set(t.subarray(y * w, (y + 1) * w), (r[1] + y) * s.w + r[0]);
+  return r;
+}
+// A stroke on TP.page whose changes are pulled as they are drawn: as the JS copy's Stroke, add and end give the rect.
+const tpStroke = st => st && { add: samples => tpPull(st.add(samples)), end: () => tpPull(st.end()) };
+const tpLay = (B, pts, size, shade) => { const st = tpStroke(TP.page.stroke(appCode(B), size, shade)); if (!st) return; for (let i = 0; i < pts.length; i += 3) st.add(pts.slice(i, i + 3).map(p => [p.x, p.y, p.p, p.t, p.tx, p.ty])); st.end(); tpRest(); };
+// Whatever settles (wet paint, a Slow wash, a bath, halos), at once to rest (a redraw), or ten ticks a second as on the
+// Manta (DryingTicker.TICK_MS) while no pen is down.
+function tpRest() { let k = 0; do tpPull(TP.page.tick()); while (TP.page.settling && ++k < 20000); }
+function tpTick(page) {
+  if (page !== TP.page || page.ticking) return;
+  page.ticking = true;
+  const go = () => {
+    if (page !== TP.page) return;
+    if (!TP.live) { const r = tpPull(page.tick()); if (r) showPage(TP.ctx, TP.surf, r); if (!page.settling) { page.ticking = false; return; } }
+    setTimeout(go, 100);
+  };
+  setTimeout(go, 100);
 }
 function printBath() { const b = TP.bath; if (b && b.wet) { const r = b.print(); if (r && TP.ctx) showPage(TP.ctx, TP.surf, r); } }
 function replayTest() {
-  const s = TP.surf; if (!s || !TP.ctx) return;
+  if (!TP.surf || !TP.ctx) return;
   const t0 = performance.now();
-  blankPage(s); TP.water = null; TP.bath = null;
-  seedMarks(s);
+  // The app's engine: a fresh page each time (or the JS copy's, when this brush and the last differ in which draws them).
+  if (TP.page || tpWasm()) TP.surf = tpSurface(TP.surf.w, TP.surf.h);
+  const s = TP.surf;
+  if (TP.page) { replayWasm(s, t0); return; }
+  blankPage(s); TP.water = null; TP.bath = null; TP.wet = null;
   for (const e of TP.log) {
     try {
       if (e.er) {
@@ -681,11 +843,24 @@ function replayTest() {
       const st = new Stroke(s, ST.B, e.size, e.shade, TP_HOST);
       for (const ev of e.evs) st.add(ev);
       st.end();
+      // Drawn again at once: wet paint moves as it did after each stroke, to rest.
+      if (TP.wet) TP.wet.settle();
     } catch (err) { console.error(err); }
   }
   if (TP.water && TP.water.wet) TP.water.dryAll();
   printBath();
   if (s.halos && s.halos.length && typeof haloDryAll === "function") haloDryAll(s);
+  showPage(TP.ctx, s, [0, 0, s.w - 1, s.h - 1]);
+  TP.cost = performance.now() - t0;
+}
+function replayWasm(s, t0) {
+  const code = appCode(ST.B);
+  for (const e of TP.log) {
+    const st = tpStroke(e.er ? TP.page.eraser(e.max) : TP.page.stroke(code, e.size, e.shade));
+    for (const ev of e.evs) st.add(ev);
+    st.end();
+    if (!e.er) tpRest();
+  }
   showPage(TP.ctx, s, [0, 0, s.w - 1, s.h - 1]);
   TP.cost = performance.now() - t0;
 }
@@ -695,19 +870,11 @@ function scheduleReplay(dragging) {
   TP.queued = true;
   requestAnimationFrame(() => { TP.queued = false; if (!TP.live) replayTest(); });
 }
-// A real pen gives pressure and tilt; a mouse or finger gets pressure from speed (slower is heavier), upright (the lab's).
+// A pointer as the Manta's pen (engine.js pointerSample): a pen's pressure through the Manta's curve and its tilt; a
+// mouse, finger or stylus with no pressure, pressure from its pace, upright.
 function penSample(e, L) {
-  const cv = $("test"), r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * cv.width / r.width, y = (e.clientY - r.top) * cv.height / r.height, isPen = e.pointerType === "pen";
-  let p;
-  if (isPen && e.pressure > 0) p = e.pressure;
-  else {
-    const dt = L.lastT ? Math.max(1, e.timeStamp - L.lastT) : 16, dd = L.lastX !== undefined ? Math.hypot(x - L.lastX, y - L.lastY) : 0;
-    L.sp = L.sp * .8 + (dd / dt) * .2; L.d += dd;
-    p = (.4 + .5 * smooth(L.d / 60)) * clamp(1.08 - .2 * L.sp, .45, 1);
-  }
-  L.lastT = e.timeStamp; L.lastX = x; L.lastY = y;
-  const tilted = isPen && (e.tiltX || e.tiltY);
-  return [x, y, p, e.timeStamp, tilted ? e.tiltX : NaN, tilted ? e.tiltY : NaN];
+  const cv = $("test"), r = cv.getBoundingClientRect();
+  return pointerSample(e, L, (e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height);
 }
 function wireTest() {
   const cv = $("test");
@@ -716,7 +883,12 @@ function wireTest() {
     e.preventDefault();
     try { cv.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events can't capture */ }
     const L = { sp: 0, d: 0 }, first = penSample(e, L), s = TP.surf;
-    if (ST.eraser) {
+    if (TP.page) {
+      const max = ERASER_MAX[ST.sizeSel] || 120;
+      L.entry = ST.eraser ? { er: true, max, pen: e.pointerType === "pen", evs: [[first]] } : { er: false, size: sizePx(), shade: shade(), evs: [[first]] };
+      if (ST.eraser) L.er = tpStroke(TP.page.eraser(max)); else L.st = tpStroke(TP.page.stroke(appCode(ST.B), sizePx(), shade()));
+      const r = (L.er || L.st).add([first]); if (r) showPage(TP.ctx, s, r);
+    } else if (ST.eraser) {
       printBath(); if (TP.water && TP.water.wet) TP.water.dryAll();
       showPage(TP.ctx, s, [0, 0, s.w - 1, s.h - 1]);
       const max = ERASER_MAX[ST.sizeSel] || 120;
@@ -749,12 +921,14 @@ function wireTest() {
     const L = TP.live; if (!L) return;
     TP.live = null; clearInterval(L.hold);
     TP.log.push(L.entry); if (TP.log.length > 60) TP.log.shift();
-    if (L.er) return;
-    const r = L.st.end(); if (r) showPage(TP.ctx, TP.surf, r);
+    if (L.er && !TP.page) return;
+    const r = (L.er || L.st).end(); if (r) showPage(TP.ctx, TP.surf, r);
+    if (TP.page) { if (!L.er) { TP.last = L.entry; $("lastbtn").disabled = false; } if (TP.page.settling) tpTick(TP.page); return; }
     TP.last = L.entry; $("lastbtn").disabled = false;
     if (TP.water && TP.water.wet) tickWater(TP.water);
     if (TP.bath && TP.bath.wet) tickBath(TP.bath);
     if (TP.surf.halos && TP.surf.halos.length) tickHalos(TP.surf);
+    if (TP.wet && TP.wet.moving()) tickWet(TP.wet);
   };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
 }
@@ -763,6 +937,21 @@ function tickWater(W) {
   if (W !== TP.water || !W.wet) return;
   if (!TP.live) { W.step(); const d = W.takeDirty(); if (d) showPage(TP.ctx, TP.surf, d); }
   setTimeout(() => tickWater(W), 1000 / TPS);
+}
+// Wet paint moves a frame at a time while no pen is down (the app's WetCanvas.step: flowing water as fast as it can,
+// still paint a frame every 150 ms), about 8 ms of work a frame.
+function tickWet(C) {
+  if (C !== TP.wet || C.ticking) return;
+  C.ticking = true;
+  const go = () => {
+    if (C !== TP.wet) { C.ticking = false; return; }
+    if (TP.live) { setTimeout(go, 50); return; }
+    const next = C.step(8), d = C.takeDirty();
+    if (d) showPage(TP.ctx, TP.surf, d);
+    if (next < 0) { C.ticking = false; return; }
+    if (next > 16) setTimeout(go, next); else requestAnimationFrame(go);
+  };
+  requestAnimationFrame(go);
 }
 function tickHalos(s) {
   if (s.studioTicking) return;
@@ -827,8 +1016,63 @@ function setDial(part, key, v) {
 }
 function setChoice(part, k) {
   const old = ST.B[part].k; if (old === k) return;
-  const B = withChoice(ST.B, part, k), name = ROLE[part].label;
+  const B = withChoice(ST.B, part, k), name = partLabel(part);
   commit(B, name + ": " + lc(choiceLabel(part, k)), name + ": " + lc(choiceLabel(part, old)) + " to " + lc(choiceLabel(part, k)));
+}
+
+// The app's model's edits (appEdit): a choice, an option, a slider dragged then let go; said as the lab's are.
+function appChoice(part, k) {
+  const P = appParts(ST.B)[part], was = P.choices.find(c => c.on), now = P.choices.find(c => c.k === k);
+  if (!now || now.on) return;
+  commit(appEdit(ST.B, part, k), P.label + ": " + lc(now.label), P.label + ": " + lc(was ? was.label : P.name) + " to " + lc(now.label));
+}
+function appCommitDial(from, B, part, key) {
+  const was = appDialOf(part, key, appParts(from)), now = appDialOf(part, key, appParts(B));
+  if (now) commit(B, now.label + " " + now.shown, now.label + " " + (was ? was.shown : "") + " to " + now.shown);
+}
+const appSetDial = (part, key, v) => appCommitDial(ST.B, appEdit(ST.B, part, null, key, v), part, key);
+function appLiveDial(part, key, v) {
+  ST.drag ??= { from: cloneBrush(ST.B), part, key };
+  ST.B = appEdit(ST.drag.from, part, null, key, v);
+  const d = appDialOf(part, key, appParts(ST.B));
+  if (d) document.querySelectorAll(`[data-appval="${part}.${key}"]`).forEach(e => { e.textContent = d.shown; });
+  renderIdent();
+  scheduleReplay(true);
+}
+function appCommitLive() {
+  const d = ST.drag; ST.drag = null; if (!d) return;
+  const B = ST.B; ST.B = d.from;
+  appCommitDial(d.from, B, d.part, d.key);
+}
+// A rolled value for one of the app's dials (studioParts): any option, or anywhere in its range.
+const appRollV = d => d.options ? (Math.random() * d.options.length) | 0 : d.int ? Math.round(lerp(d.lo, d.hi, Math.random())) : lerp(d.lo, d.hi, Math.random());
+// B with part on choice k through the app's model (appEdit), each dial as P (the part's card before) had it where kept
+// (every dial when keep; else a locked dial on the same choice), else rolled.
+function appPartAs(B, part, P, k, keep, locks) {
+  let N = appEdit(B, part, k);
+  const same = (P.choices.find(c => c.on) || {}).k === k;
+  for (const d of appParts(N)[part].dials) {
+    if (isErase(d.part, d.key)) continue;
+    const was = same && P.dials.find(e => e.part === d.part && e.key === d.key);
+    const v = was && (keep || locks.dials.has(d.part + "." + d.key)) ? was.v : keep ? null : appRollV(d);
+    if (v !== null && v !== d.v) N = appEdit(N, d.part, null, d.key, v);
+  }
+  return N;
+}
+// After a roll of the lab's model (B, from old), the parts it can't roll, through the app's model: a locked part the
+// app's model holds (After, a newer tip or print) as it was; After on its choice, its unlocked dials rolled; when wild
+// (Anything goes), each unlocked part on any of the app's choices, one the lab's model hasn't (or After's) taken there.
+function appRolled(old, B, locks, wild) {
+  const A0 = appParts(old); if (!A0) return B;
+  let N = B;
+  for (const [part, P] of Object.entries(A0)) {
+    const on = (P.choices.find(c => c.on) || {}).k;
+    if (locks.parts.has(part)) { if (P.held || part === "later") N = appPartAs(N, part, P, on, true, locks); continue; }
+    // Wild, After is Off half the time (its first choice): on every brush, the Random tab would be all After.
+    const k = !wild ? (part === "later" ? on : null) : part === "later" && Math.random() < .5 ? P.choices[0].k : P.choices[(Math.random() * P.choices.length) | 0].k;
+    if (k && (part === "later" || !CHOICES[part].some(c => c.k === k))) N = appPartAs(N, part, P, k, false, locks);
+  }
+  return N;
 }
 
 // ---------- 2 · Close-up ----------
@@ -925,7 +1169,7 @@ function renderTuneStrip() {
   const fr = $("stripframe"); if (!fr.clientWidth) return;
   const job = pathJob(ST.B, fr, sizePx(), false);
   TUNE.size = job.size;
-  request("tune:strip", job, res => { TUNE.res = res; TUNE.fit = studioFit(TUNE.path, res.w, res.h, job.size); TUNE.pts = studioPathPts(TUNE.path, TUNE.fit); paint($("strip"), res); TUNE.off = null; placeCursor(); drawClose(); }, 1);
+  request("tune:strip", job, res => { TUNE.res = res; TUNE.job = job; TUNE.sharp = null; TUNE.fit = studioFit(TUNE.path, res.w, res.h, job.size); TUNE.pts = studioPathPts(TUNE.path, TUNE.fit); paint($("strip"), res); TUNE.off = null; placeCursor(); drawClose(); }, 1);
 }
 function cursorPoint() {
   if (!TUNE.pts || !TUNE.arc) return null;
@@ -961,12 +1205,33 @@ function drawClose() {
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.drawImage(TUNE.off, sx, sy, vw, vh, 0, 0, cv.width, cv.height);
+  closeSharp(ctx, cv, sx, sy, vw, vh, z);
   if (z >= 16) {
     ctx.fillStyle = "#dddddd";
     const k = z * dpr, ox = (Math.ceil(sx) - sx) * k, oy = (Math.ceil(sy) - sy) * k;
     for (let x = ox; x < cv.width; x += k) ctx.fillRect(Math.round(x), 0, 1, cv.height);
     for (let y = oy; y < cv.height; y += k) ctx.fillRect(0, Math.round(y), cv.width, 1);
   }
+}
+// Sharp dry brushes (the app's SharpView): at 4× and 16×, a brush the app draws sharp when zoomed draws its close-up
+// finer (4 points a pixel, 8 at 16×), over the pixels, once its part is drawn; the pixels, as they are, meanwhile.
+function closeSharp(ctx, cv, sx, sy, vw, vh, z) {
+  if (z < 4 || !STUDIO_WASM || !TUNE.job || !STUDIO_WASM.staysSharp(appCode(ST.B))) return;
+  const k = z >= 16 ? 8 : 4, x = Math.max(0, Math.floor(sx) - 1), y = Math.max(0, Math.floor(sy) - 1);
+  const w = Math.min(TUNE.res.w - x, Math.ceil(vw) + 3), h = Math.min(TUNE.res.h - y, Math.ceil(vh) + 3), q = TUNE.sharp;
+  if (q && q.k === k && q.x <= sx && q.y <= sy && q.x + q.w >= sx + vw && q.y + q.h >= sy + vh) {
+    if (!q.canvas) {
+      const c = document.createElement("canvas"); c.width = q.w * k; c.height = q.h * k;
+      const cc = c.getContext("2d"), img = cc.createImageData(c.width, c.height), d = img.data;
+      for (let i = 0; i < q.gray.length; i++) { const v = q.gray[i]; if (v < 0) continue; const g = Math.round(v / 17) * 17; d[4 * i] = d[4 * i + 1] = d[4 * i + 2] = g; d[4 * i + 3] = 255; }
+      cc.putImageData(img, 0, 0); q.canvas = c;
+    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(q.canvas, (sx - q.x) * k, (sy - q.y) * k, vw * k, vh * k, 0, 0, cv.width, cv.height);
+    return;
+  }
+  clearTimeout(TUNE.sharpWait);
+  TUNE.sharpWait = setTimeout(() => request("tune:sharp", { ...TUNE.job, sharp: { k, x, y, w, h } }, res => { if (res.sharp) { TUNE.sharp = res.sharp; drawClose(); } }, 2), 120);
 }
 // ---------- history ----------
 const timeOf = t => { const d = new Date(t); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
@@ -1012,8 +1277,9 @@ function jumpTo(id) {
 }
 function brushDiffs(A, B) {
   const a = [], b = [];
-  for (const part of PART_ORDER) {
-    if (A[part].k !== B[part].k) { a.push(ROLE[part].label + ": " + lc(choiceLabel(part, A[part].k))); b.push(ROLE[part].label + ": " + lc(choiceLabel(part, B[part].k))); continue; }
+  // Paper (its Texture) with Medium, whose card shows it.
+  for (const part of PART_ORDER.flatMap(p => p === "medium" ? [p, "paper"] : [p])) {
+    if (A[part].k !== B[part].k) { a.push(partLabel(part) + ": " + lc(choiceLabel(part, A[part].k))); b.push(partLabel(part) + ": " + lc(choiceLabel(part, B[part].k))); continue; }
     for (const key of choiceOf(part, A[part].k).dials) {
       if (DIALS[part][key].hide) continue;
       const va = A[part].d[key], vb = B[part].d[key];
@@ -1040,17 +1306,12 @@ function renderCompare() {
     request("cmp:" + k + "p", pathJob(X, c.parentElement, 0, true), r => paint(c, r), 1);
   });
 }
-function saveAsNew() {
-  const B = cloneBrush(ST.B); B.name = cleanName(kinOf(ST.B.name, B.seed));
-  ST.lib = ST.lib.filter(b => b.name !== B.name); ST.lib.unshift(B); setBase(B);
-  commit(B, "Saved as " + B.name, "Saved as " + B.name);
-  setStatus("Saved.");
-}
 
 // ---------- 3 · Mix ----------
-const crossChoices = part => CHOICES[part].filter(c => c.k !== "custom");
+// Vector Ink sets the other parts aside (the app's VectorInk.tidy): crossed with them it would show one brush again and again.
+const crossChoices = part => CHOICES[part].filter(c => c.k !== "custom" && c.k !== "shape" && c.k !== "vector");
 function renderMix() {
-  const opts = PART_ORDER.map(p => `<option value="${p}">${escH(ROLE[p].label)}</option>`).join("");
+  const opts = PART_ORDER.map(p => `<option value="${p}">${escH(partLabel(p))}</option>`).join("");
   for (const [id, k] of [["crossrow", "row"], ["crosscol", "col"]]) { const s = $(id); if (!s.options.length) s.innerHTML = opts; s.value = ST.cross[k]; }
   const B = ST.B, { row, col } = ST.cross, R = crossChoices(row), C = crossChoices(col), box = $("cross");
   // Wide: the tiles sized so the grid fits the window's height; narrow: they share the width.
@@ -1082,7 +1343,7 @@ function renderRoll() {
 }
 function crossed(B, row, rk, col, ck) { return withChoice(withChoice(B, row, rk), col, ck); }
 function renderLocks() {
-  const items = PART_ORDER.map(p => [p, ROLE[p].label, ST.locks.parts.has(p)]).concat([["erase", "Erasable", ST.locks.dials.has("medium.erase")]]);
+  const items = PART_ORDER.concat(STUDIO_WASM ? ["later"] : []).map(p => [p, partLabel(p), ST.locks.parts.has(p)]).concat([["erase", "Erasable", ST.locks.dials.has("medium.erase")]]);
   $("wildlocks").innerHTML = items.map(([p, l, on]) => `<button type="button" class="chip" data-act="wildlock" data-part="${p}" aria-pressed="${on}">${on ? ICON.lock : ICON.open}${escH(l)}</button>`).join("");
 }
 function rollWild() { ST.wild = Array.from({ length: 12 }, () => wildRoll(ST.B, ST.locks)); renderWild(); }
@@ -1096,7 +1357,7 @@ function renderWild() {
 // ---------- 5 · Share ----------
 // ---------- Share: a panel from the brush bar ----------
 function renderSharePanel() {
-  const code = encodeM(ST.B);
+  const code = appCode(ST.B);
   $("sharepanel").hidden = !ST.shareOpen; $("sharebtn").setAttribute("aria-expanded", String(!!ST.shareOpen));
   if (!ST.shareOpen) { COMM.confirm = false; return; }
   $("code").value = code;
@@ -1115,154 +1376,24 @@ async function saveFile(file, blob) {
 async function downloadForTablet() {
   const name = (ST.B.name || "brush").replace(/[\\/:*?"<>|]+/g, "").trim() || "brush", file = name + ".inkwash.txt";
   ST.lastDownload = file;
-  await saveFile(file, new Blob([encodeM(ST.B) + "\n"], { type: "text/plain" }));
+  await saveFile(file, new Blob([appCode(ST.B) + "\n"], { type: "text/plain" }));
 }
 // Export (export.js, the brush export spec): a Procreate set of This brush and the library's Saved brushes, each once,
 // drawn and zipped here in the page.
-const exportList = () => { const seen = new Set(); return [ST.B, ...ST.lib].filter(b => { const k = b.name + "|" + encodeM(b); return !seen.has(k) && seen.add(k); }); };
+const exportList = () => { const seen = new Set(); return [ST.B, ...ST.lib].filter(b => { const k = b.name + "|" + appCode(b); return !seen.has(k) && seen.add(k); }); };
 async function exportSet() {
   const btn = $("exportbtn"); if (btn.disabled) return;
   btn.disabled = true;
   try {
-    const list = exportList(), file = "Scribulor.brushset";
-    const bytes = await procreateSet(list, "Scribulor", () => new Promise(r => setTimeout(r, 0)));
+    const list = exportList(), file = "Superdood.brushset";
+    const bytes = await procreateSet(list, "Superdood", () => new Promise(r => setTimeout(r, 0)));
     ST.lastExport = { file, bytes: bytes.length, n: list.length };
     await saveFile(file, new Blob([bytes], { type: "application/octet-stream" }));
     setStatus("Set exported.");
   } catch (e) { setStatus("Export failed."); ST.lastExport = { error: String(e && e.stack || e) }; }
   finally { btn.disabled = false; }
 }
-// ---------- Community library: brushes people published, kept in the artifact's db (studio.NOTES.md) ----------
-// One document a person, brushes/<their user id>: { list: [{ code, name, at }] }, newest first. Who published a brush
-// is the document's id (the db's rules let each person write only their own); names come from user.profiles() when
-// drawn and are never stored. Rows are other people's input: every code must read as a brush before it is shown,
-// and everything shown is escaped. Without db (signed out, a saved copy of the page) the eight examples stay.
-const COMM_MAX = 50;
-const COMM = { state: "wait", db: null, user: null, me: null, readOnly: false, docs: new Map(), items: [], shown: [], names: {}, show: 48, confirm: false, busy: false, sig: "" };
-const COMM_FATAL = new Set(["invalid_argument", "resource_exhausted", "quota_exceeded", "revoked", "not_granted", "capability_disabled", "capability_removed", "transform_error"]);
-async function startCommunity() {
-  const c = window.claude;
-  let db = null, user = null;
-  try { if (c && typeof c.use === "function") [db, user] = await Promise.all([c.use("db"), c.use("user")]); } catch (e) { db = null; }
-  if (!db) { COMM.state = "off"; commChanged(); return; }
-  COMM.db = db; COMM.user = user || null;
-  try { COMM.me = user ? await user.id() : null; } catch (e) { COMM.me = null; }
-  try { if (user && await user.can("data.write") === false) COMM.readOnly = true; } catch (e) { /* null: let a refused write decide */ }
-  COMM.state = "live";
-  subscribeCommunity(0);
-  commChanged();
-}
-// Subscribed once, for the page's life (a fresh one only after the bridge itself stops answering).
-function subscribeCommunity(tries) {
-  let q;
-  try { q = COMM.db.collection("brushes").limit(1000); } catch (e) { COMM.state = "off"; commChanged(); return; }
-  q.onSnapshot(snap => { readCommunity(snap); commChanged(); }, err => {
-    const code = err && err.code;
-    if (!COMM_FATAL.has(code) && tries < 3) setTimeout(() => subscribeCommunity(tries + 1), 2000 + Math.random() * 2000);
-    else { COMM.state = "off"; COMM.items = []; commChanged(); }
-  });
-}
-// A person's list as stored, kept only where it reads: a code that decodes, a short name, a time.
-function cleanList(body) {
-  const raw = body && Array.isArray(body.list) ? body.list.slice(0, COMM_MAX) : [], out = [];
-  for (const x of raw) {
-    if (!x || typeof x !== "object" || typeof x.code !== "string" || x.code.length > 240) continue;
-    const name = typeof x.name === "string" ? cleanName(x.name.slice(0, 64)) : "";
-    const B = fromCode(x.code, name); if (!B || !B.name) continue;
-    out.push({ code: x.code, name: B.name, at: Number.isFinite(x.at) ? x.at : 0, B });
-  }
-  return out;
-}
-function readCommunity(snap) {
-  const docs = new Map(), items = [];
-  for (const d of snap.docs) {
-    if (!d.exists) continue;
-    const list = cleanList(d.data());
-    docs.set(d.id, list);
-    for (const x of list) items.push(Object.assign({ uid: d.id, mine: !!COMM.me && d.id === COMM.me }, x));
-  }
-  items.sort((a, b) => b.at - a.at);
-  COMM.docs = docs; COMM.items = items;
-}
-function commChanged() {
-  if (ST.tab === "community") renderCommunity();
-  if (ST.shareOpen) renderPublish();
-}
-const whoText = x => "by " + (COMM.names[x.uid] || (x.mine ? "me" : "someone"));
-function renderCommunity() {
-  const sg = $("sharedgrid"), live = COMM.state === "live" && COMM.items.length > 0;
-  $("commtag").hidden = live;
-  $("commnote").textContent = COMM.state === "off" ? "Sign in to see and share brushes." : COMM.state === "live" && !live ? "No brushes shared yet." : "";
-  sg.classList.toggle("live", live);
-  const list = live ? COMM.items.slice(0, COMM.show) : [];
-  const sig = live ? list.map(x => x.uid + "|" + x.at + "|" + x.code + "|" + x.name + (x.mine ? "*" : "")).join("\n") + (COMM.items.length > COMM.show ? "+" : "") + (COMM.busy || COMM.readOnly ? "!" : "") : "examples";
-  if (sig !== COMM.sig) {
-    COMM.sig = sig; COMM.shown = list;
-    sg.innerHTML = live ? list.map((x, i) => `<article><span class="frame"><canvas data-cm="${i}"></canvas></span><span class="tname">${escH(x.name)}</span>` +
-      `<span class="who" data-i="${i}">${escH(whoText(x))}</span><span class="tcap">${escH(captionOf(x.B))}</span><span class="cacts"><button type="button" class="btn" data-act="commtry" data-i="${i}">Try</button>` +
-      (x.mine && !COMM.readOnly ? `<button type="button" class="del" data-act="commremove" data-i="${i}"${COMM.busy ? " disabled" : ""}>Remove</button>` : "") + `</span></article>`).join("") +
-      (COMM.items.length > COMM.show ? `<button type="button" class="btn more" data-act="commmore">Show more</button>` : "")
-      : EXAMPLES.map((b, i) => `<article><span class="frame"><canvas data-ex="${i}"></canvas></span><span class="tname">${escH(b.name)}</span>` +
-      `<span class="who">Example</span><span class="tcap">${escH(captionOf(b))}</span><button type="button" class="btn" data-act="extry" data-i="${i}">Try</button></article>`).join("");
-  }
-  // Eight in a row where they fit, else four (two rows), two on a phone.
-  const w = $("s-community").clientWidth || innerWidth;
-  sg.style.gridTemplateColumns = `repeat(${w / 8 >= 140 ? 8 : w >= 560 ? 4 : 2}, minmax(0, 1fr))`;
-  sg.querySelectorAll("canvas[data-ex]").forEach(c => drawSample(c, "ex:" + c.dataset.ex, EXAMPLES[+c.dataset.ex], "loop", 3));
-  sg.querySelectorAll("canvas[data-cm]").forEach(c => { const x = COMM.shown[+c.dataset.cm]; if (x) drawSample(c, "cm:" + c.dataset.cm, x.B, "loop", 3); });
-  // Who: resolved as drawn (cheap by contract), set as text.
-  if (live && COMM.user) {
-    const ids = [...new Set(list.map(x => x.uid))];
-    Promise.resolve(COMM.user.profiles(ids)).then(ps => {
-      let moved = false;
-      for (const id of ids) { const n = ps && ps[id] && typeof ps[id].name === "string" ? ps[id].name : ""; if (COMM.names[id] !== n) { COMM.names[id] = n; moved = true; } }
-      if (moved) sg.querySelectorAll(".who[data-i]").forEach(el => { const x = COMM.shown[+el.dataset.i]; if (x) el.textContent = whoText(x); });
-    }, () => { });
-  }
-}
-// The Share panel's Publish to Community library: live when this viewer can write their own row.
-function renderPublish() {
-  const b = $("pubbtn"), conf = $("pubconfirm"), code = encodeM(ST.B);
-  const can = COMM.state === "live" && !!COMM.me && !COMM.readOnly;
-  const done = can && (COMM.docs.get(COMM.me) || []).some(x => x.code === code);
-  b.disabled = !can || done || COMM.busy;
-  b.textContent = done ? "Published" : "Publish to Community library";
-  $("pubnote").textContent = COMM.state === "off" || (COMM.state === "live" && !COMM.me) ? "Sign in to share brushes." : COMM.readOnly ? "Contributor access needed." : "";
-  if (!can || done) COMM.confirm = false;
-  conf.hidden = !COMM.confirm; b.hidden = COMM.confirm;
-}
-const rawItem = x => ({ code: x.code, name: x.name, at: x.at });
-async function retryOnce(f) {
-  try { return await f(); } catch (e) {
-    if (!e || !e.code || COMM_FATAL.has(e.code)) throw e;
-    await new Promise(r => setTimeout(r, 300 + Math.random() * 700));
-    return f();
-  }
-}
-// One write to this viewer's own document, one at a time.
-async function writeMine(list, done, failed) {
-  if (COMM.busy) return;
-  COMM.busy = true; COMM.confirm = false; commChanged();
-  try {
-    const ref = COMM.db.collection("brushes").doc(COMM.me);
-    await retryOnce(() => list.length ? ref.set({ list }) : ref.delete());
-    setStatus(done);
-  } catch (e) {
-    const code = e && e.code;
-    if (code === "invalid_argument") COMM.readOnly = true;
-    setStatus(code === "quota_exceeded" ? "Library full." : failed);
-  } finally { COMM.busy = false; COMM.sig = ""; commChanged(); }
-}
-function publishBrush() {
-  if (COMM.state !== "live" || !COMM.me || COMM.readOnly) return;
-  const code = encodeM(ST.B), mine = (COMM.docs.get(COMM.me) || []).filter(x => x.code !== code);
-  if (mine.length >= COMM_MAX) { COMM.confirm = false; renderPublish(); setStatus("At most " + COMM_MAX + " each."); return; }
-  writeMine([{ code, name: cleanName(String(ST.B.name || "")), at: Date.now() }, ...mine.map(rawItem)], "Published.", "Not published.");
-}
-function removeBrush(i) {
-  const x = COMM.shown[i]; if (!x || !x.mine || COMM.state !== "live") return;
-  writeMine((COMM.docs.get(COMM.me) || []).filter(y => !(y.at === x.at && y.code === x.code)).map(rawItem), "Removed.", "Not removed.");
-}
+// The Community library and Share to Community: community.js, built onto the end of this file.
 function drawQr(text) {
   const q = qrMatrix(text), cv = $("qr"); if (!q) return;
   const quiet = 4, sc = 8, n = (q.size + 2 * quiet) * sc;
@@ -1270,13 +1401,15 @@ function drawQr(text) {
   const ctx = cv.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, n, n); ctx.fillStyle = "#000000";
   for (let y = 0; y < q.size; y++) for (let x = 0; x < q.size; x++) if (q.dark[y * q.size + x]) ctx.fillRect((x + quiet) * sc, (y + quiet) * sc, sc, sc);
 }
+// A newer version's code (docs/BRUSH-CODE.md) says so, as the app's Open sheet (BrushImport.NEWER, NEEDS_NEWER).
+const NEWER = "Newer version, some parts differ", NEEDS_NEWER = "Needs a newer version";
 function loadCode(text) {
-  const r = readAnyCode(text);
-  if (!r) { $("loadnote").textContent = "That isn't a brush code."; return false; }
+  const r = appRead(text);
+  if (!r) { $("loadnote").textContent = newerShape(text) ? NEEDS_NEWER : "That isn't a brush code."; return false; }
   $("loadnote").textContent = ""; $("library").hidden = true;
   setBase(r.b);
   commit(r.b, r.b.name, "Loaded " + r.b.name);
-  setStatus("Loaded.");
+  setStatus(r.newer ? NEWER : "Loaded.");
   return true;
 }
 // A brush given in the link (studio.html#<share code>) opens as This brush, over whatever the page remembered.
@@ -1284,7 +1417,7 @@ function openHash() {
   let c = "";
   try { c = decodeURIComponent(location.hash.slice(1)); } catch (e) { /* not a code */ }
   // The same brush again (the page reloaded) adds nothing to its history.
-  if (c && encodeM(ST.B) !== c && !loadCode(c)) setStatus("That isn't a brush code.");
+  if (c && appCode(ST.B) !== c && !loadCode(c)) setStatus(newerShape(c) ? NEEDS_NEWER : "That isn't a brush code.");
 }
 function copyCode() {
   const t = $("code").value, done = () => setStatus("Copied.");
@@ -1301,11 +1434,6 @@ function openLibrary() {
   $("library").hidden = false;
   $("libbody").querySelectorAll("canvas[data-lib]").forEach(c => { const s = c.dataset.lib, list = s[0] === "s" ? ST.lib : BASICS, b = list[+s.slice(1)]; drawSample(c, "lib:" + s, b, "loop", 1); });
 }
-function saveToLibrary() {
-  const B = cloneBrush(ST.B);
-  ST.lib = ST.lib.filter(b => b.name !== B.name); ST.lib.unshift(B);
-  setBase(B); save(); renderSaveState(); setStatus("Saved.");
-}
 
 // ---------- events ----------
 const ACT = {
@@ -1316,10 +1444,14 @@ const ACT = {
   pickstyle: t => pickStyle(t.dataset.style),
   library: () => openLibrary(),
   libclose: () => { $("library").hidden = true; },
-  libload: t => { const b = (t.dataset.src === "s" ? ST.lib : BASICS)[+t.dataset.i]; $("library").hidden = true; if (b) { setBase(b); commit(cloneBrush(b), b.name, "Loaded " + b.name); } },
-  libdel: t => { ST.lib.splice(+t.dataset.i, 1); save(); openLibrary(); },
+  libload: t => { const b = (t.dataset.src === "s" ? ST.lib : BASICS)[+t.dataset.i]; $("library").hidden = true; if (b) { setBase(b, t.dataset.src === "s"); commit(cloneBrush(b), b.name, "Opened " + b.name); renderSaveState(); } },
+  libdel: t => { ST.lib.splice(+t.dataset.i, 1); save(); openLibrary(); renderSaveState(); },
   save: () => saveToLibrary(),
-  rename: () => { const i = $("idinput"); i.value = ST.B.name; i.hidden = false; $("idname").hidden = true; i.focus(); i.select(); },
+  // The field opens on the suggested name, if any, to take or type over (the app's rename field).
+  rename: () => { const i = $("idinput"); i.value = suggestion() || ST.B.name; $("idform").hidden = false; $("idname").hidden = true; i.focus(); i.select(); },
+  renamedone: () => finishRename(),
+  suggest: () => { const s = suggestion(); if (s) rename(s); },
+  newbrush: () => newBrush(),
   clear: () => { TP.log = []; TP.last = null; replayTest(); setStatus("Cleared."); },
   eraser: () => { ST.eraser = !ST.eraser; renderTools(); },
   size: t => { ST.sizeSel = +t.dataset.i; ST.eraser = false; renderTools(); save(); },
@@ -1327,10 +1459,17 @@ const ACT = {
   focus: t => setFocus(t.dataset.part, t.dataset.key, true),
   choice: t => setChoice(t.dataset.part, t.dataset.k),
   opt: t => setDial(t.dataset.part, t.dataset.key, +t.dataset.v),
+  appchoice: t => appChoice(t.dataset.part, t.dataset.k),
+  appopt: t => appSetDial(t.dataset.part, t.dataset.key, +t.dataset.v),
+  approllpart: t => {
+    const p = t.dataset.part, P = appParts(ST.B)[p], B = appPartAs(ST.B, p, P, P.choices[(Math.random() * P.choices.length) | 0].k, false, ST.locks);
+    commit(B, P.label + ": " + lc(appParts(B)[p].name), P.label + " rolled");
+  },
+  approlldial: t => appSetDial(t.dataset.part, t.dataset.key, appRollV(appDialOf(t.dataset.part, t.dataset.key, appParts(ST.B)))),
   sweep: t => setDial(ST.focus.part, ST.focus.key, +t.dataset.v),
   lockpart: t => { const p = t.dataset.id; ST.locks.parts.has(p) ? ST.locks.parts.delete(p) : ST.locks.parts.add(p); save(); buildCards(); },
   lockdial: t => { const id = t.dataset.id; ST.locks.dials.has(id) ? ST.locks.dials.delete(id) : ST.locks.dials.add(id); save(); buildCards(); },
-  rollpart: t => { const p = t.dataset.part, B = rollOnePart(ST.B, p, ST.locks); commit(B, ROLE[p].label + ": " + lc(cardName(B, p)), ROLE[p].label + " rolled"); },
+  rollpart: t => { const p = t.dataset.part, B = rollOnePart(ST.B, p, ST.locks); commit(B, partLabel(p) + ": " + lc(cardName(B, p)), partLabel(p) + " rolled"); },
   rolldial: t => {
     const { part, key } = t.dataset;
     let B;
@@ -1356,18 +1495,12 @@ const ACT = {
   saveasnew: () => saveAsNew(),
   crosstry: t => {
     const { row, col } = ST.cross, B = crossed(ST.B, row, t.dataset.r, col, t.dataset.c), bits = [];
-    for (const p of [row, col]) if (B[p].k !== ST.B[p].k) bits.push(ROLE[p].label + ": " + lc(choiceLabel(p, B[p].k)));
+    for (const p of [row, col]) if (B[p].k !== ST.B[p].k) bits.push(partLabel(p) + ": " + lc(choiceLabel(p, B[p].k)));
     if (bits.length) commit(B, bits.join(", "), bits.join(", "));
   },
   wild: () => rollWild(),
   wildlock: t => { const p = t.dataset.part; if (p === "erase") { ST.locks.dials.has("medium.erase") ? ST.locks.dials.delete("medium.erase") : ST.locks.dials.add("medium.erase"); } else ST.locks.parts.has(p) ? ST.locks.parts.delete(p) : ST.locks.parts.add(p); save(); renderLocks(); },
   wildtry: t => { const b = ST.wild[+t.dataset.i]; if (b) { setBase(b); commit(cloneBrush(b), b.name, "Tried " + b.name); renderWild(); } },
-  commtry: t => { const x = COMM.shown[+t.dataset.i]; if (x) { const B = cloneBrush(x.B); setBase(B); commit(B, B.name, "Tried " + B.name); setTab("lab"); } },
-  commremove: t => removeBrush(+t.dataset.i),
-  commmore: () => { COMM.show += 48; renderCommunity(); },
-  publish: () => { COMM.confirm = true; renderPublish(); },
-  pubyes: () => publishBrush(),
-  pubno: () => { COMM.confirm = false; renderPublish(); },
   extry: t => { const b = EXAMPLES[+t.dataset.i]; if (b) { setBase(b); commit(cloneBrush(b), b.name, "Tried " + b.name); setTab("lab"); } },
   copy: () => copyCode(),
   download: () => downloadForTablet(),
@@ -1377,12 +1510,9 @@ const ACT = {
   loadcode: () => loadCode($("paste").value)
 };
 function finishRename() {
-  const i = $("idinput"); if (i.hidden) return;
-  const name = cleanName(i.value || "");
-  i.hidden = true; $("idname").hidden = false;
-  if (!name || name === ST.B.name) return;
-  const B = cloneBrush(ST.B); B.name = name;
-  commit(B, "Named " + name, "Named " + name);
+  if ($("idform").hidden) return;
+  $("idform").hidden = true; $("idname").hidden = false;
+  rename($("idinput").value);
 }
 function wire() {
   document.addEventListener("click", e => {
@@ -1390,10 +1520,10 @@ function wire() {
     const tab = e.target.closest("[data-tab]"); if (tab) setTab(tab.dataset.tab);
     if (e.target === $("library")) $("library").hidden = true;
   });
-  document.addEventListener("input", e => { const t = e.target; if (t.type === "range" && t.dataset.part) liveDial(t.dataset.part, t.dataset.key, +t.value); });
+  document.addEventListener("input", e => { const t = e.target; if (t.type === "range" && t.dataset.part) (t.dataset.app ? appLiveDial : liveDial)(t.dataset.part, t.dataset.key, +t.value); });
   document.addEventListener("change", e => {
     const t = e.target;
-    if (t.type === "range" && t.dataset.part) commitDial();
+    if (t.type === "range" && t.dataset.part) (t.dataset.app ? appCommitLive : commitDial)();
     else if (t.id === "showdiff") { ST.showDiff = t.checked; save(); drawBA(); }
     else if (t.id === "crossrow" || t.id === "crosscol") {
       const k = t.id === "crossrow" ? "row" : "col", other = k === "row" ? "col" : "row";
@@ -1403,7 +1533,7 @@ function wire() {
   });
   document.addEventListener("keydown", e => {
     if (e.target.id === "idinput" && e.key === "Enter") finishRename();
-    if (e.target.id === "idinput" && e.key === "Escape") { $("idinput").hidden = true; $("idname").hidden = false; }
+    if (e.target.id === "idinput" && e.key === "Escape") { $("idform").hidden = true; $("idname").hidden = false; }
     if (e.target.id === "paste" && e.key === "Enter") loadCode($("paste").value);
     if (e.key === "Escape" && !$("library").hidden) $("library").hidden = true;
     if (e.key === "Escape" && ST.shareOpen) { ST.shareOpen = false; renderSharePanel(); }
@@ -1413,8 +1543,9 @@ function wire() {
   const peek = (e, on) => {
     const c = e.target.closest && e.target.closest(".choice"); if (!c) return;
     const name = c.closest(".card").querySelector(".cname"); if (!name) return;
-    if (on && c.getAttribute("aria-pressed") !== "true") { name.textContent = c.dataset.label; name.classList.add("peek"); }
-    else { name.textContent = cardName(ST.B, c.dataset.part); name.classList.remove("peek"); }
+    // The words it had come back (an app card's are the app's model's, not cardName's).
+    if (on && c.getAttribute("aria-pressed") !== "true") { if (!name.classList.contains("peek")) name.dataset.was = name.textContent; name.textContent = c.dataset.label; name.classList.add("peek"); }
+    else if (name.classList.contains("peek")) { name.textContent = name.dataset.was; name.classList.remove("peek"); }
   };
   $("cards").addEventListener("pointerover", e => peek(e, true));
   $("cards").addEventListener("pointerout", e => peek(e, false));
@@ -1431,6 +1562,25 @@ function wire() {
 // The height above a screen: the bar and the brush bar (each tab fits the window below them).
 function setTopH() { document.documentElement.style.setProperty("--toph", $("top").offsetHeight + "px"); }
 
+// ---------- the app's engine ----------
+// The app's own engine, compiled to WebAssembly (web/engine), draws every picture and the test page where the browser
+// has WebAssembly GC (Chrome 119+, Firefox 120+, Safari 18.2+); elsewhere, with ?js, or for a brush the app doesn't
+// read, the lab's JS copy does, as before. Its bytes are in the page, gzipped (build.cjs).
+let WASM = null;
+async function gunzip(id) {
+  const b64 = $(id).textContent.trim(), bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return new Uint8Array(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+}
+async function loadWasm() {
+  if (!$("wasm") || /[?&]js\b/.test(location.search)) return;
+  if (!MBDEngine.supported() || typeof DecompressionStream === "undefined") { console.info("Brush Studio: this browser has no WebAssembly GC; drawing with the JS copy of the engine."); return; }
+  try {
+    const [wasm, assets] = await Promise.all([gunzip("wasm"), gunzip("wasmassets")]);
+    STUDIO_WASM = await MBDEngine.load(wasm, assets);
+    WASM = { wasm, assets };
+  } catch (e) { STUDIO_WASM = null; console.info("Brush Studio: the app's engine didn't load (" + e + "); drawing with the JS copy."); }
+}
+
 // ---------- start ----------
 async function start() {
   BASICS = basicTools(); EXAMPLES = exampleBrushes();
@@ -1446,12 +1596,13 @@ async function start() {
   $("lastbtn").disabled = true;
   validFocus(); focusCompare();
   await loadTextures();
+  await loadWasm();
   startPool();
   fitTest();
   openHash();
   window.addEventListener("hashchange", openHash);
   refresh();
-  window.STUDIO = { ST, H, TP, TUNE, POOL, exportList, randomize, undo, revert, isSaved, setTab, setFocus, setDial, setChoice, loadCode, commit, refresh, encodeM, readAnyCode, wildRoll, replayTest, useLastStroke, BASICS };
+  window.STUDIO = { get wasm() { return !!STUDIO_WASM; }, ST, H, TP, TUNE, POOL, exportList, randomize, undo, revert, isSaved, suggestion, appName, freeName, setTab, setFocus, setDial, setChoice, loadCode, commit, refresh, encodeM: appCode, readAnyCode: appRead, appParts, appChoice, appSetDial, wildRoll, replayTest, useLastStroke, BASICS };
   window.STUDIO.COMM = COMM;
   document.documentElement.dataset.ready = "1";
   startCommunity();

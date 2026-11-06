@@ -4,21 +4,21 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 /**
- * Which tool is selected (one of the ten slots, the eraser or the smudge tool) and each one's size and shade, kept
+ * Which tool is selected (one of the nine slots, Fill in, the eraser or the smudge tool) and each one's size and shade, kept
  * between launches ({@link ToolSwatches}), what one finger on the page does ({@link FingerTool}), and the strokes they
  * draw. Every stroke on a page starts in {@link
  * #stroke(ToneDocument, Brush, ToolSwatches.Look, WatercolorSession)}: the drawing screen's and Brush Lab's test page.
  */
 final class InkWash {
-    /** The eraser's place after the ten slots: in the bar, and as {@link #selected}. */
+    /** The eraser's place after the nine slots: in the bar, and as {@link #selected}. */
     static final int ERASER = ToolSlots.ERASER;
     /** The smudge tool's place after the eraser. */
     static final int SMUDGE = ToolSlots.SMUDGE;
-    /** The stamp tool's place after the smudge tool: a slot-like brush of its own ({@link ToolSlots#stamp}). */
+    /** The stamp tool's place after the smudge tool: a slot-like brush of its own ({@link ToolSlots#stamp}); Fill in's after it ({@link ToolSlots#FILL}). */
     static final int STAMP = ToolSlots.STAMP;
     private final SharedPreferences preferences;
     final WatercolorSession session = new WatercolorSession();
-    /** What the ten slots hold; the dice is any 32 bits. */
+    /** What the nine slots hold; the dice is any 32 bits. */
     final ToolSlots slots;
     /** The selected tool: a slot, {@link #ERASER}, {@link #SMUDGE} or {@link #STAMP}. */
     int selected;
@@ -80,15 +80,17 @@ final class InkWash {
     /** Adds the brushes in the import files beside the drawings (at launch, and when the drawing screen comes back). */
     void importBrushes() {
         java.io.File shared = backup();
-        if (shared != null) BrushImport.runAll(slots.library, shared.getParentFile());
+        if (shared != null) BrushImport.runAll(slots.library, shared.getParentFile(), note -> importNote = note);
     }
+    /** What the last import said, for the drawing screen to show once: a code from a newer version ({@link BrushImport#newerNote}); else null. */
+    String importNote;
     /** Where saved brushes are kept for good ({@link BrushBackup}): beside the drawings, once the app may write there; else null. */
     private static java.io.File backup() {
         boolean shared = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && android.os.Environment.isExternalStorageManager();
         return shared ? new java.io.File(DrawingStorage.shared(), BrushBackup.NAME) : null;
     }
     /** What a tool's size, shade and selection are kept under; the eraser's are as they were before slots. */
-    static String key(int tool) { return tool == ERASER ? ToolSwatches.ERASER_KEY : tool == SMUDGE ? ToolSlots.SMUDGE_KEY : ToolSlots.key(tool); }
+    static String key(int tool) { return ToolSlots.toolKey(tool); }
     private static int parse(String saved) {
         for (int tool = 0; tool < ToolSlots.TOOLS; tool++) if (key(tool).equals(saved)) return tool;
         return 0;
@@ -122,55 +124,44 @@ final class InkWash {
         before(document, brush(chosen));
         Brush brush = brush(chosen);
         ToolSwatches.Look look = shifted(chosen, brush, holder(chosen, finger));
+        // Record and Replay: the brush (none: the eraser, and the kinds it takes), size and grey this stroke was made with.
         int eraseKinds = erasing();
-        DrawingStroke stroke = drawn(document, brush, look, session, eraseKinds);
-        // Record and Replay: the brush, size and grey this stroke was made with (none for the eraser and the smudge tool).
-        recorder = brush == null || chosen == SMUDGE ? null : new StrokeLog.Recorder(ModularCode.encode(brush.parts), look.px, look.darkness);
-        // Mirrors (Copy Strokes): each copy the stroke's change reflected, where its brush allows (ModularStroke.laysAgain),
-        // else the same tool at the same size and grey, the page's drying laid first as before any stroke: drawn whole
-        // at lift, so a live stroke fed its samples at once.
-        ResolvedBrush resolved = brush == null || !document.mirrors().copies() ? null : ResolvedBrush.of(brush.parts, look.px, look.darkness);
-        // Filled Shape: the outline as drawn and mirrored, then its area filled (FilledShape).
-        return FilledShape.of(document, brush == null ? null : brush.parts, mirrored(document, stroke, () -> {
-            session.settleBefore(document, brush == null ? null : brush.parts);
-            if (brush == null) return EraseBothStroke.pen(document, (float) look.px, eraseKinds);
-            session.dry(brush.name() + " mirror copy");
-            return ModularStroke.start(document, brush.parts, look.px, look.darkness, session);
-        }, () -> brush == null ? 2 * look.px : 2 * ModularStroke.reach(resolved) + 8, resolved != null && ModularStroke.laysAgain(resolved)), look.px, look.darkness, session);
+        recorder = StrokeLog.Recorder.of(brush, look, eraseKinds, holder(chosen, finger), chosen == SMUDGE, finger);
+        // Sharp dry brushes: the pen's stroke of a brush kept sharp is fed as the log keeps it (DrawingPad.feed).
+        if (brush != null && chosen != SMUDGE && !finger && SharpStrokes.takes(brush.parts, look.px, look.darkness)) SharpStrokes.keep(recorder, brush.parts, look.px, look.darkness, session);
+        // Mirrors and Filled Shape as the browser's too (StrokeStart).
+        return StrokeStart.start(document, brush, look, session, eraseKinds);
     }
     /**
      * Scribulor: a shape of the selected slot's ({@link DrawingPad#shapesOn}): what comes before its stroke, then its layer
-     * the one the slot's strokes go to; the look it lays at, its size the outline's width and its grey the shape's.
+     * the one the slot's strokes go to ({@link StrokeStart#shape}); the look it lays at, its size the outline's width and
+     * its grey the shape's. Record and Replay: {@link #shapeCode} the slot's brush.
      */
     ToolSwatches.Look shape(ToneDocument document) {
         Brush brush = brush(selected);
-        before(document, brush);
-        session.dry("shape");
-        ModularStroke.selectLayer(document, brush.parts);
+        slots.pageChanged();
+        drawn.add(brush);
+        StrokeStart.shape(document, brush.parts, session);
         recorder = null;
+        shapeCode = ModularCode.encode(brush.parts);
         return look(selected);
     }
-    /** Record and Replay ({@link StrokeLog}): the recorder for the stroke {@link #stroke(ToneDocument, int, boolean)} just made, or null. */
-    StrokeLog.Recorder recorder;
-    /** A replayed stroke ({@link PageReplay}): brush {@code code} at {@code px} and {@code darkness}, as {@link #stroke(ToneDocument, Brush, ToolSwatches.Look, WatercolorSession)} lays it; null if the code doesn't read. */
-    DrawingStroke replay(ToneDocument document, String code, double px, double darkness) {
-        ModularBrush parts = ModularCode.decode(code);
-        if (parts == null) return null;
-        session.settleBefore(document, parts);
-        session.dry("replay stroke");
-        return FilledShape.of(document, parts, QuickStroke.start(document, parts, px, darkness, session), px, darkness, session);
-    }
+    /** The brush code of the slot whose shape {@link #shape} just began ({@link StrokeLog.Entry#shape}). */
+    String shapeCode;
     /**
-     * {@code stroke} on a page with mirrors that act ({@link Mirrors}): Copy Strokes' copies after it, each laid as its
-     * change reflected ({@code reflects}: {@link ModularStroke#laysAgain}) or started by {@code copies}, {@code reach}
-     * the most its marks reach past its samples (page px, worked out only then), or Real Mirror's, folded into the kept
-     * side ({@link MirrorStroke}; {@code copies} for a stretch past a jump); else the stroke itself.
+     * Make Ink ({@link TextBoxes#ink}): {@code letters} laid by slot {@code slot}'s brush at its size and grey, as a fill
+     * lays it ({@link FillTool#print}), after what comes before any stroke; the caller finishes it. Null for an empty slot.
      */
-    static DrawingStroke mirrored(ToneDocument document, DrawingStroke stroke, MirrorStroke.Copies copies, java.util.function.DoubleSupplier reach, boolean reflects) {
-        Mirrors mirrors = document.mirrors();
-        if (mirrors.reflects()) return new MirrorStroke(document, stroke, mirrors.view(), copies);
-        return mirrors.copies() ? new MirrorStroke(document, stroke, mirrors.group(), copies, reach.getAsDouble(), reflects) : stroke;
+    ModularStroke ink(ToneDocument document, int slot, FillRegion.Room letters) {
+        Brush brush = brush(slot);
+        if (brush == null) return null;
+        before(document, brush);
+        recorder = null;
+        ToolSwatches.Look look = look(slot);
+        return FillTool.print(document, brush.parts, look.px, look.darkness, session, letters);
     }
+    /** Record and Replay ({@link StrokeLog}): the recorder for the stroke {@link #stroke(ToneDocument, int, boolean)} or {@link #fingerEraser} just made, or null. */
+    StrokeLog.Recorder recorder;
     /**
      * Grey Shift ({@link SwatchPicker}): tool {@code tool}'s look at the grey {@code brush} picks at this touch, in
      * {@code holder}'s turn; as it was for one that doesn't shift. The grey it picks is the stroke's alone: the
@@ -186,43 +177,20 @@ final class InkWash {
         session.settleBefore(document, brush == null ? null : session.onWater(document, brush.parts));
         // Undo takes back the stroke now, not a brush rolled before it.
         slots.pageChanged();
-        // Drawing on a hidden layer shows it rather than refusing.
+        // Drawing on a hidden layer shows it rather than refusing (the Manta refuses a wholly hidden one first, PaintActivity.allowStroke).
         InkWashLayers.showSelected(document);
         drawn.add(brush);
     }
-    /**
-     * {@code brush}'s stroke ({@link QuickStroke#start}: drawn live, or quick then rendered at lift when live would lag
-     * the pen) at {@code look}'s px and darkness, or the eraser's for none at its preset, on the selected pair of
-     * {@code document}: on its ink half for ink, charcoal and graphite, its wash half for wash and cover. A Drying wash
-     * still settling is laid where it is first.
-     */
-    static DrawingStroke stroke(ToneDocument document, Brush brush, ToolSwatches.Look look, WatercolorSession session) { return stroke(document, brush, look, session, 0); }
-    /** As above, the eraser taking only marks of {@code eraseKinds} ({@link EraseKind}; 0: everything); a Filled Shape's outline filled at the lift ({@link FilledShape}). */
-    static DrawingStroke stroke(ToneDocument document, Brush brush, ToolSwatches.Look look, WatercolorSession session, int eraseKinds) {
-        DrawingStroke stroke = drawn(document, brush, look, session, eraseKinds);
-        return brush == null ? stroke : FilledShape.of(document, brush.parts, stroke, look.px, look.darkness, session);
-    }
-    /** {@link #stroke(ToneDocument, Brush, ToolSwatches.Look, WatercolorSession, int)} as drawn, no shape filled. */
-    private static DrawingStroke drawn(ToneDocument document, Brush brush, ToolSwatches.Look look, WatercolorSession session, int eraseKinds) {
-        // Clear Water while paint floats on the pair works on the water (WatercolorSession#onWater).
-        ModularBrush parts = brush == null ? null : session.onWater(document, brush.parts);
-        session.settleBefore(document, parts);
-        session.dry(brush != null ? brush.name() + " stroke" : "eraser stroke");
-        if (brush == null) return EraseBothStroke.pen(document, (float) look.px, eraseKinds);
-        return QuickStroke.start(document, parts, look.px, look.darkness, session);
-    }
+    /** {@code brush}'s stroke at {@code look}'s px and darkness, unmirrored ({@link StrokeStart#stroke}; null: the eraser). */
+    static DrawingStroke stroke(ToneDocument document, Brush brush, ToolSwatches.Look look, WatercolorSession session) { return StrokeStart.stroke(document, brush, look, session, 0); }
     /** Whose brush a stroke of tool {@code tool} is, its paint kept apart ({@link HeldPaint}): the tool's, or the finger's with it. */
-    static String holder(int tool, boolean finger) { return key(tool) + (finger ? "/finger" : ""); }
+    static String holder(int tool, boolean finger) { return ToolSlots.holder(tool, finger); }
     /**
      * Whether tool {@code tool}'s brush (a slot's or the smudge tool's) keeps paint (Keeps Paint) and holds some now: its
      * own, or the finger's when one finger draws with it. The bar shows it in that paint's grey ({@link #heldGrey}), and
      * the tool's long press offers Clean Brush.
      */
-    boolean dirty(int tool) {
-        Brush brush = brush(tool);
-        if (brush == null || !ToolSlots.keepsPaint(brush)) return false;
-        return session.held.dirty(holder(tool, false)) || finger().tool() == tool && session.held.dirty(holder(tool, true));
-    }
+    boolean dirty(int tool) { return ToolSlots.dirty(session.held, brush(tool), tool, finger().tool()); }
     /** The grey tool {@code tool}'s held paint shows in ({@link DrawLayout#heldGrey}), its pen's, else its finger's; -1 when it holds none. */
     int heldGrey(int tool) {
         if (!dirty(tool)) return -1;
@@ -243,10 +211,7 @@ final class InkWash {
     /** The share of a full load tool {@code tool}'s next stroke starts with ({@link LoadedPaint#shown}), or NaN when its brush never runs out: its tray row's gauge. */
     double paintLoad(int tool) { return LoadedPaint.shown(session.held, holder(tool, false), brush(tool), look(tool)); }
     /** Clean Brush: tool {@code tool}'s brush, and the finger's with it, start their next strokes clean. Whether either held paint. */
-    boolean clean(int tool) {
-        boolean pen = session.held.clean(holder(tool, false)), finger = session.held.clean(holder(tool, true));
-        return pen || finger;
-    }
+    boolean clean(int tool) { return ToolSlots.clean(session.held, tool); }
     /** The broadest a tile's loop draws, px: a fifth of its reach, so the loop still reads; a broader slot says its size in mm. */
     static float tileCap(int width, int height) { return WildSample.reach(width, height) * .2f; }
     /** A finger erases at one size, {@code diameter} page pixels; cancelled (a tap, a palm, the pen), the page is as it was. */
@@ -256,6 +221,7 @@ final class InkWash {
         slots.pageChanged();
         InkWashLayers.showSelected(document);
         int eraseKinds = erasing();
-        return mirrored(document, new EraseBothStroke(document, diameter, eraseKinds), () -> { session.settleNow(document); return new EraseBothStroke(document, diameter, eraseKinds); }, () -> 2 * diameter, false);
+        recorder = StrokeLog.Recorder.fingerEraser(diameter, eraseKinds);
+        return StrokeStart.mirrored(document, new EraseBothStroke(document, diameter, eraseKinds), () -> { session.settleNow(document); return new EraseBothStroke(document, diameter, eraseKinds); }, () -> 2 * diameter, false);
     }
 }

@@ -20,8 +20,8 @@ final class PsdWriter {
 
     /** A layer as the file holds it: its name, its two channels packed, and whether any pixel of it shows. */
     static final class Layer {
-        final String name; final byte[] grey, alpha; final boolean shows;
-        private Layer(String name, byte[] grey, byte[] alpha, boolean shows) { this.name = name; this.grey = grey; this.alpha = alpha; this.shows = shows; }
+        final String name; final Channel grey, alpha; final boolean shows;
+        private Layer(String name, Channel grey, Channel alpha, boolean shows) { this.name = name; this.grey = grey; this.alpha = alpha; this.shows = shows; }
     }
     /** {@code rows}, {@code width × height}, packed as layer {@code name}: read once, a row at a time, so a page's layer is never held whole. */
     static Layer layer(String name, int width, int height, Rows rows) {
@@ -32,13 +32,16 @@ final class PsdWriter {
             java.util.Arrays.fill(g, (byte) 0); java.util.Arrays.fill(a, (byte) 0);
             rows.row(y, g, a);
             for (int x = 0; x < width && !shows; x++) shows = a[x] != 0;
-            grey.row(y, g); alpha.row(y, a);
+            grey.row(g); alpha.row(a);
         }
-        return new Layer(name, grey.bytes(), alpha.bytes(), shows);
+        return new Layer(name, grey, alpha, shows);
     }
 
-    /** {@code layers} (bottom first) over the merged image {@code merged} (a byte a pixel, row by row), {@code width × height} at {@code dpi}. */
-    static void write(OutputStream output, int width, int height, int dpi, List<Layer> layers, byte[] merged) throws IOException {
+    /**
+     * {@code layers} (bottom first) over the merged image {@code merged} (packed as it was drawn), {@code width × height}
+     * at {@code dpi}, streamed: nothing besides the packed channels is held.
+     */
+    static void write(OutputStream output, int width, int height, int dpi, List<Layer> layers, Channel merged) throws IOException {
         DataOutputStream out = new DataOutputStream(output);
         // Header: one channel (grey) at 8 bits, mode 1, Grayscale.
         out.writeBytes("8BPS"); out.writeShort(1); out.write(new byte[6]);
@@ -51,14 +54,16 @@ final class PsdWriter {
         out.writeInt(4 + 2 + 2 + 4 + resolution.size());
         out.writeBytes("8BIM"); out.writeShort(1005); out.writeShort(0); out.writeInt(resolution.size()); resolution.writeTo(out);
         // Layer and mask information: the layers' records, then their channels, in the same order.
-        ByteArrayOutputStream info = new ByteArrayOutputStream();
-        DataOutputStream l = new DataOutputStream(info);
+        ByteArrayOutputStream records = new ByteArrayOutputStream();
+        DataOutputStream l = new DataOutputStream(records);
         l.writeShort(layers.size());
+        long channels = 0;
         for (Layer layer : layers) {
             l.writeInt(0); l.writeInt(0); l.writeInt(height); l.writeInt(width);
             l.writeShort(2);
-            l.writeShort(-1); l.writeInt(layer.alpha.length);
-            l.writeShort(0); l.writeInt(layer.grey.length);
+            l.writeShort(-1); l.writeInt(layer.alpha.size());
+            l.writeShort(0); l.writeInt(layer.grey.size());
+            channels += layer.alpha.size() + layer.grey.size();
             l.writeBytes("8BIM"); l.writeBytes("norm");
             l.writeByte(255); l.writeByte(0); l.writeByte(0); l.writeByte(0);
             byte[] name = layer.name.getBytes(StandardCharsets.ISO_8859_1);
@@ -69,31 +74,33 @@ final class PsdWriter {
             l.writeInt(16); for (int i = 0; i < 4; i++) l.writeInt(0x0000ffff);
             l.writeByte(nameLength); l.write(name, 0, nameLength); l.write(new byte[padded - 1 - nameLength]);
         }
-        for (Layer layer : layers) { l.write(layer.alpha); l.write(layer.grey); }
-        while (info.size() % 4 != 0) info.write(0);
-        out.writeInt(4 + info.size() + 4);
-        out.writeInt(info.size()); info.writeTo(out);
+        long info = records.size() + channels, pad = (4 - info % 4) % 4;
+        out.writeInt((int) (4 + info + pad + 4));
+        out.writeInt((int) (info + pad)); records.writeTo(out);
+        for (Layer layer : layers) { layer.alpha.writeTo(out); layer.grey.writeTo(out); }
+        out.write(new byte[(int) pad]);
         out.writeInt(0); // no global layer mask
         // The merged image: PackBits, every row's length first.
-        Channel image = new Channel(height);
-        byte[] row = new byte[width];
-        for (int y = 0; y < height; y++) { System.arraycopy(merged, y * width, row, 0, width); image.row(y, row); }
-        out.write(image.bytes());
+        merged.writeTo(out);
         out.flush();
     }
 
-    /** A channel packed: compression 1 (PackBits), each row's packed length, then the rows. */
-    private static final class Channel {
-        final int[] lengths;
-        final ByteArrayOutputStream data = new ByteArrayOutputStream();
+    /** A channel packed as its rows come, top first: compression 1 (PackBits), each row's packed length, then the rows. */
+    static final class Channel {
+        private final int[] lengths;
+        private int rows;
+        private final ByteArrayOutputStream data = new ByteArrayOutputStream();
         Channel(int height) { lengths = new int[height]; }
-        void row(int y, byte[] row) { int before = data.size(); packBits(row, data); lengths[y] = data.size() - before; }
-        byte[] bytes() {
-            ByteArrayOutputStream out = new ByteArrayOutputStream(2 + 2 * lengths.length + data.size());
+        /** The next row. */
+        void row(byte[] row) { int before = data.size(); packBits(row, data); lengths[rows++] = data.size() - before; }
+        /** Its bytes in the file. */
+        int size() { return 2 + 2 * lengths.length + data.size(); }
+        void writeTo(OutputStream out) throws IOException {
             out.write(0); out.write(1);
-            for (int n : lengths) { out.write(n >> 8); out.write(n); }
-            out.write(data.toByteArray(), 0, data.size());
-            return out.toByteArray();
+            byte[] n = new byte[2 * lengths.length];
+            for (int i = 0; i < lengths.length; i++) { n[2 * i] = (byte) (lengths[i] >> 8); n[2 * i + 1] = (byte) lengths[i]; }
+            out.write(n);
+            data.writeTo(out);
         }
     }
     /** {@code row} PackBits-encoded into {@code out}: runs of 2 to 128 alike as (1 − n, byte), the rest as (n − 1, n bytes). */

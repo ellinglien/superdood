@@ -14,14 +14,39 @@ import java.util.Random;
 public final class ScreenChecks {
     public static void main(String[] args) throws Exception {
         Assets.install(Assets.folder(Assets.FOLDER));
-        codes(); pure(); aligned(); tracks(); newPrints(); builds(); printFile(); newsprint(); tone(); scrape(); shaded(); quick(); cores(); kept(); rolls(); words(); lab();
-        System.out.println("PASS: Screen is the last of every medium's dials after Blend (screen cell sangle mis gain uneven) and Tone is Medium choice 6 (pattern ttone cell sangle), each written only when not its default: every preset's and old code byte for byte, none of them screened; every screen, in ink and wash, Instant, Quick and Slow, lays only pure black on white; a redraw matches, and each screen inks about as much as the tone asks (the six appended after Grain, as well: rosette, Ben-Day, crosshatch, wavy lines, mezzotint and diamond dots grow only darker with the grey, nest, turn with Angle, differ from each other, match their Screentone twins, and are the page's); a grey swatch and a light pen give fewer dots, the stroke's tone even under its tip, and a second stroke over the first prints its own tone, lighter too, the pen line under it untouched, the print tone kept per layer: the eraser takes it, Undo and Redo bring it back, a file keeps it, and a page without a screened mark writes as before; Misregister lays its faint pass at its offset, Ink gain swells dots, Uneven drops specks; Tone lays black dots at its level over its fill and leaves the pen line and the wash layer as they were, its patterns differ and the gradient darkens down the page; the eraser scrapes it in streaks, more each pass, until gone, and erases the line under it in one; a chosen Paint takes it in one pass, a chosen Pen only the line under it; a print over prints replaces them where it lies; on a shaded page each lays black and leaves the paper's shade; quick strokes end as drawn live and several cores as one; every screen's kept thresholds are the ones worked out, bit for bit; rolls give a Screen 1 in 25 (Anything goes, Marker, Ink wash, Charcoal) or 40 (Fineliner, Pencil), never Watercolor, and Tone 1 in 40 to Anything goes only, every other roll as before; the words and Brush Lab say them");
+        if (args.length > 0 && args[0].startsWith("older")) { for (String[] t : older(args[0])) System.out.println(String.join("\t", t)); return; }
+        codes(); oldKinds(); pure(); aligned(); tracks(); newPrints(); stochastic(); lined(); cells(); builds(); printFile(); newsprint(); tone(); scrape(); shaded(); quick(); cores(); kept(); rolls(); words(); lab();
+        System.out.println("PASS: Screen is the last of every medium's dials after Blend (screen cell sangle mis gain uneven) and Tone is Medium choice 6 (pattern ttone cell sangle), each written only when not its default: every preset's and old code byte for byte, none of them screened; every screen, in ink and wash, Instant, Quick and Slow, lays only pure black on white; two overlapping strokes lay both's dots and no more, a redraw matches, and each screen inks about as much as the tone asks (the six appended after Grain, as well: rosette, Ben-Day, crosshatch, wavy lines, mezzotint and diamond dots grow only darker with the grey, nest, turn with Angle, differ from each other, match their Screentone twins, and are the page's); a grey swatch and a light pen give fewer dots, the stroke's tone even under its tip, and a second stroke over the first prints the darker of the two, a light pass over a hard one never lightens it, the pen line under it untouched, the print tone kept per layer: the eraser takes it, Undo and Redo bring it back, a file keeps it, and a page without a screened mark writes as before; Misregister lays its faint pass at its offset, Ink gain swells dots, Uneven drops specks; Tone lays black dots at its level over its fill and leaves the pen line and the wash layer as they were, its patterns differ and the gradient darkens down the page; the eraser scrapes it in streaks, more each pass, until gone, and erases the line under it in one; a chosen Paint takes it in one pass, a chosen Pen only the line under it; on a shaded page each lays black and leaves the paper's shade; quick strokes end as drawn live and several cores as one; every screen's kept thresholds are the ones worked out, bit for bit; riso, photocopy and soft dither (appended after hatching, every older print and pattern as before by CRC) grow only darker with the grey, are the page's, the same every time and their own: soft dither each grey's share spread evenly, riso clumpy with speckled solids and a roller streak now and then, the photocopy snapping greys where its lamp drifts, with specks and flecks; maze, brick, basketweave, waves, honeycomb and rings (appended after soft dither) seamless, the page's and even over it, their lines thickening with the grey from thin to black, at their Pattern Size and Angle; pixels and stitches (appended after rings) a grey a cell of a grid fixed to the page, laid whole or not at all, a stroke's every cell one grey, darker only with the grey and pressure, seamless, stitches a cross in each with the fabric white round it, at their Pattern Size and Angle; rolls give a Screen 1 in 25 (Anything goes, Marker, Ink wash, Charcoal) or 40 (Fineliner, Pencil), never Watercolor, and Tone 1 in 40 to Anything goes only, every other roll as before; the words and Brush Lab say them");
     }
     static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
+    /**
+     * Codes with riso, photocopy and soft dither, maze to rings, and pixels and stitches, for the versions before them (OlderLaterCheck,
+     * scripts/test_inkwash.sh): {code, what it writes back, "newer"}: Print Shading at its fresh None, its other dials kept, saying
+     * it is a newer version's. {@code which}: "older" all but pixels and stitches; "older-lined" maze to rings only, for the version
+     * before them (which reads riso's in full); "older-cells" pixels and stitches only, for the version before them.
+     */
+    static java.util.List<String[]> older(String which) {
+        boolean lined = which.equals("older-lined");
+        java.util.List<String[]> out = new java.util.ArrayList<>();
+        ModularBrush[] stochastic = {screened(ink(), RISO), set(screened(ink(), PHOTOCOPY), PartDial.CELL, 9), screened(wash(), SOFT_DITHER), set(screened(wash(), RISO), PartDial.MIS, 3)},
+                newer = {screened(ink(), MAZE), set(screened(wash(), RINGS), PartDial.CELL, 9), set(screened(ink(), WAVES), PartDial.S_ANGLE, 20), set(screened(wash(), MAZE + 1), PartDial.MIS, 3)};
+        java.util.List<ModularBrush> all = new java.util.ArrayList<>(Arrays.asList(newer));
+        if (!lined) all.addAll(0, Arrays.asList(stochastic));
+        if (which.equals("older-cells")) all = Arrays.asList(screened(ink(), PIXELS), set(screened(wash(), STITCHES), PartDial.CELL, 12), set(set(screened(ink(), PIXELS), PartDial.CELL, 10), PartDial.S_ANGLE, 20));
+        for (ModularBrush b : all)
+            out.add(new String[]{ModularCode.encode(b), ModularCode.encode(screened(b, 0)), "newer"});
+        return out;
+    }
 
     static final int W = 480, H = 360;
-    /** Print Shading's choices after None: the first four, then the six appended (rosette, Ben-Day, crosshatch, wavy lines, mezzotint, diamond dots). */
-    static final int SCREENS = 14;
+    /**
+     * Print Shading's choices after None: the first four, then the six appended (rosette, Ben-Day, crosshatch, wavy lines, mezzotint, diamond dots),
+     * stipple to hatching, then riso, photocopy and soft dither, then maze to rings ({@code PRINTS}: those pure black and white), then
+     * pixels and stitches, a grey a cell ({@link #cells}).
+     */
+    static final int SCREENS = 25, PRINTS = 23;
+    /** The last that turns with Angle (Hatching); riso, photocopy and soft dither after it are grains ({@link #stochastic}). */
+    static final int HATCHING = 14, RISO = 15, PHOTOCOPY = 16, SOFT_DITHER = 17, MAZE = 18, BRICK = 19, BASKETWEAVE = 20, WAVES = 21, HONEYCOMB = 22, RINGS = 23, PIXELS = 24, STITCHES = 25;
     /** Screentone's patterns: the first four, crosshatch, wavy lines and mezzotint, then stipple, woodcut, scribble and hatching. */
     static final int TONES = 11;
     static final String INK = ResistChecks.INK;
@@ -85,8 +110,8 @@ public final class ScreenChecks {
                 && ModularCode.encode(back).equals(ModularCode.encode(all)), "Cell, Angle, Misregister, Ink gain and Uneven round-trip: " + seg(ModularCode.encode(all)));
         check(ModularCode.encode(set(screened(ink, 2), PartDial.CELL, 6)).equals(ModularCode.encode(screened(ink, 2))), "a dial at its default isn't written");
         for (PartChoice c : new PartChoice[]{PartChoice.INK, PartChoice.WASH, PartChoice.COVER, PartChoice.CHARCOAL, PartChoice.GRAPHITE}) {
-            java.util.List<PartDial> dials = c.dials;
-            // Then Fling, last of all (FlickFlingChecks).
+            // Then Fling, last of all (FlickFlingChecks), but Dissolves after it (explore-media).
+            java.util.List<PartDial> dials = c.has(PartDial.SOLUBLE) ? c.dials.subList(0, c.dials.size() - 1) : c.dials;
             check(dials.subList(dials.size() - 7, dials.size() - 1).equals(Arrays.asList(PartDial.SCREEN_DIALS)) && dials.get(dials.size() - 8) == PartDial.M_BLEND && dials.get(dials.size() - 1) == PartDial.FLING, c + ": Screen's dials after Blend, then Fling");
         }
         check(!PartChoice.RESIST.has(PartDial.SCREEN) && PartDial.SCREEN.key.equals("screen") && PartDial.CELL.key.equals("cell") && PartDial.S_ANGLE.key.equals("sangle")
@@ -111,7 +136,7 @@ public final class ScreenChecks {
 
     static void pure() {
         for (ModularBrush base : new ModularBrush[]{ink(), wash(), ErasableChecks.preset("Messy stick")})
-            for (int s = 1; s <= SCREENS; s++)
+            for (int s = 1; s <= PRINTS; s++)
                 for (PartChoice life : new PartChoice[]{PartChoice.NONE, PartChoice.FAST_WET, PartChoice.DRYING}) {
                     ModularBrush b = BlendChecks.life(screened(base, s), life);
                     ToneDocument d = blank();
@@ -126,7 +151,7 @@ public final class ScreenChecks {
     // ---- 3. fixed to the page ----
 
     static void aligned() {
-        for (int s = 1; s <= SCREENS; s++) {
+        for (int s = 1; s <= PRINTS; s++) {
             ModularBrush b = screened(wash(), s);
             ToneDocument a = blank(), c = blank(), both = blank(), again = blank();
             live(a, b, 120, 1, across(40, 440, 160));
@@ -135,25 +160,27 @@ public final class ScreenChecks {
             live(both, b, 120, 1, across(60, 420, 210));
             live(again, b, 120, 1, across(40, 440, 160));
             int[] ta = shown(a), tc = shown(c), tb = shown(both), pa = printed(a, b), pc = printed(c, b);
-            // A print over prints replaces them where it lies (ResolvedBrush.replaces, the owner, 2026-10-29): the second
-            // stroke's dots there, the first's elsewhere; along the second's soft edge (three pixels each side) a blend of the two.
-            int overlap = 0, wrong = 0;
+            // Exactly both strokes' dots, where one reached and where both did: the same tone prints the same dots, so
+            // strokes over strokes fill evenly (a print over prints darkens only: the owner, 2026-11-06).
+            int overlap = 0, lost = 0, wrong = 0;
             for (int i = 0; i < tb.length; i++) {
+                boolean either = ta[i] == 0 || tc[i] == 0;
                 if (ta[i] == 0 && tc[i] == 0) overlap++;
-                if (!near(pc, i, 3) && tb[i] != (pc[i] < 255 ? tc[i] : ta[i])) wrong++;
+                if (either && tb[i] != 0) lost++;
+                if ((tb[i] == 0) != either) wrong++;
             }
-            check(wrong == 0 && overlap > 200 && pa.length == pc.length, "screen " + s + ": a stroke over another lays its own dots where it lies, the first's elsewhere (" + overlap + " px both, " + wrong + " wrong)");
+            check(lost == 0 && wrong == 0 && overlap > 200 && pa.length == pc.length, "screen " + s + ": two overlapping strokes lay both's dots and no more (" + overlap + " px both, " + lost + " lost, " + wrong + " wrong)");
             check(LegacyConversionChecks.crc(a).equals(LegacyConversionChecks.crc(again)), "screen " + s + ": the stroke drawn again lays the same pixels");
         }
-        // Two screens on one layer: a halftone, then a dither over it is the dither alone where it lies (its plane cleared
-        // between its dots), the halftone's dots gone.
+        // Two screens on one layer: a halftone, then a dither over it keeps the halftone's dots and adds its own from
+        // the print tone both built (the screen of the stroke that last raised a pixel decides only its new dots).
         { ModularBrush half = screened(wash(), 1), dither = screened(wash(), 3);
           ToneDocument one = blank(), two = blank();
-          live(one, dither, 120, 1, across(40, 440, 180)); live(two, half, 120, 1, across(40, 440, 180)); live(two, dither, 120, 1, across(40, 440, 180));
-          int[] t1 = shown(one), t2 = shown(two), p1 = printed(one, dither);
-          int differ = 0, inside = 0;
-          for (int i = 0; i < t1.length; i++) if (p1[i] < 255 && !near(p1, i, 3)) { inside++; if (t1[i] != t2[i]) differ++; }
-          check(differ == 0 && inside > 10000, "a dither over a halftone is the dither alone where it lies: " + differ + " of " + inside + " px differ"); }
+          live(one, half, 120, 1, across(40, 440, 180)); live(two, half, 120, 1, across(40, 440, 180)); live(two, dither, 120, 1, across(40, 440, 180));
+          int[] t1 = shown(one), t2 = shown(two);
+          int lost = 0, added = 0;
+          for (int i = 0; i < t1.length; i++) { if (t1[i] == 0 && t2[i] != 0) lost++; if (t2[i] == 0 && t1[i] != 0) added++; }
+          check(lost == 0 && added > 1000, "a dither over a halftone keeps its dots and adds its own: " + lost + " lost, " + added + " added"); }
         // The threshold is the page's: one pixel's is the same whatever the stroke.
         PrintScreen one = PrintScreen.of(screened(ink(), 1).part(BrushPart.MEDIUM)), two = PrintScreen.of(screened(wash(), 1).part(BrushPart.MEDIUM));
         boolean same = true;
@@ -164,8 +191,10 @@ public final class ScreenChecks {
     // ---- 4. coverage follows the tone ----
 
     static void tracks() {
-        String[] names = {"", "halftone", "engraving", "dither", "grain", "rosette", "ben-day", "crosshatch", "wavy lines", "mezzotint", "diamond dots", "stipple", "woodcut", "scribble", "hatching"};
-        for (int s = 1; s <= SCREENS; s++) {
+        String[] names = {"", "halftone", "engraving", "dither", "grain", "rosette", "ben-day", "crosshatch", "wavy lines", "mezzotint", "diamond dots", "stipple", "woodcut", "scribble", "hatching", "riso", "photocopy", "soft dither", "maze", "brick", "basketweave", "waves", "honeycomb", "rings", "pixels", "stitches"};
+        for (int s = 1; s <= PRINTS; s++) {
+            // The photocopy snaps greys to black or white by design (stochastic()).
+            if (s == PHOTOCOPY) continue;
             PrintScreen p = PrintScreen.of(screened(ink(), s).part(BrushPart.MEDIUM));
             double last = -1;
             StringBuilder said = new StringBuilder();
@@ -185,16 +214,6 @@ public final class ScreenChecks {
     }
     static ToneDocument drawn(ModularBrush b, double darkness) { ToneDocument d = blank(); live(d, b, 120, darkness, wave()); return d; }
     /** The print tone of {@code b}'s layer on {@code d} at every pixel (255 where none). */
-    /** Whether pixel {@code i} of a print tone {@code p} lies within {@code r} px of the edge of where it is printed (below 255). */
-    static boolean near(int[] p, int i, int r) {
-        int x = i % W, y = i / W;
-        boolean in = p[i] < 255;
-        for (int dy = -r; dy <= r; dy++) for (int dx = -r; dx <= r; dx++) {
-            int nx = x + dx, ny = y + dy;
-            if (nx >= 0 && ny >= 0 && nx < W && ny < H && (p[ny * W + nx] < 255) != in) return true;
-        }
-        return false;
-    }
     static int[] printed(ToneDocument d, ModularBrush b) {
         int layer = ModularStroke.layerOf(d, b);
         int[] out = new int[W * H];
@@ -224,7 +243,8 @@ public final class ScreenChecks {
 
     /** Each appended print: coverage tracks the grey and only grows with it, its ink nests, it is the page's, it differs from the others, and Screentone's twins match. */
     static void newPrints() {
-        for (int s = 5; s <= SCREENS; s++) {
+        for (int s = 5; s <= PRINTS; s++) {
+            if (s > HATCHING && s < MAZE) continue;
             PrintScreen p = PrintScreen.of(screened(ink(), s).part(BrushPart.MEDIUM)), q = PrintScreen.of(screened(wash(), s).part(BrushPart.MEDIUM));
             boolean[] was = new boolean[240 * 240];
             int steps = 0;
@@ -270,6 +290,250 @@ public final class ScreenChecks {
         for (int y = 0; y < 40; y++) for (int x = 0; x < 40; x++) check(a.threshold(x, y) == b.threshold(x, y), "mezzotint is fixed to the page");
     }
 
+    // ---- 4a'. riso, photocopy, soft dither ----
+
+    /**
+     * The three stochastic prints after Hatching (2026-10-31): each grows only darker with the grey, is the page's and the
+     * same every time (its tiles' CRCs), differs from every other print, and has no angle. Soft dither: each grey's share
+     * exactly, spread more evenly than Grain's (its 50% pattern's 8-px blocks vary far less). Riso: about the tone, clumpier
+     * than Grain, solids speckled, a roller streak lightening a band of rows now and then. Photocopy: greys snap (little ink
+     * at .25, nearly solid at .75), where the snap falls drifts across the page, specks of toner in light marks, flecks in black.
+     */
+    static void stochastic() {
+        PrintScreen grain = PrintScreen.of(screened(ink(), 4).part(BrushPart.MEDIUM));
+        int n = 256;
+        for (int s = RISO; s <= SOFT_DITHER; s++) {
+            PrintScreen p = PrintScreen.of(screened(ink(), s).part(BrushPart.MEDIUM)), q = PrintScreen.of(set(screened(wash(), s), PartDial.MIS, 3).part(BrushPart.MEDIUM));
+            boolean[] was = new boolean[n * n];
+            for (double a = .05; a < 1.001; a += .05) for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+                boolean on = p.ink(a, x, y, H);
+                check(!was[y * n + x] || on, "print " + s + ": ink at a lighter grey stays at a darker one");
+                was[y * n + x] = on;
+            }
+            for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++) check(p.threshold(x, y) == q.threshold(x, y), "print " + s + ": thresholds are the page's, not the brush's");
+            PrintScreen turned = PrintScreen.of(set(screened(ink(), s), PartDial.S_ANGLE, 20).part(BrushPart.MEDIUM));
+            for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++) check(p.threshold(x, y) == turned.threshold(x, y), "print " + s + " has no angle");
+            for (int o = 1; o <= PRINTS; o++) {
+                if (o == s) continue;
+                PrintScreen other = PrintScreen.of(screened(ink(), o).part(BrushPart.MEDIUM));
+                int d = 0;
+                for (int y = 0; y < 60; y++) for (int x = 0; x < 60; x++) if (p.ink(.5, x, y, H) != other.ink(.5, x, y, H)) d++;
+                check(d > 800, "print " + s + " differs from print " + o + " (" + d + ")");
+            }
+        }
+        // The same every time: the tiles as made (a change to how they are made shows here, and old pages' marks would move).
+        check(crc(PrintScreen.Stochastic.blue()) == 0x97cd068fL && crc(PrintScreen.Stochastic.grain()) == 0x474720c1L && crc(PrintScreen.Stochastic.toner()) == 0x53543292L,
+                "the tiles are as made: " + Long.toHexString(crc(PrintScreen.Stochastic.blue())) + " " + Long.toHexString(crc(PrintScreen.Stochastic.grain())) + " " + Long.toHexString(crc(PrintScreen.Stochastic.toner())));
+        // Soft dither: a permutation of the ranks, each grey its share, and even: 8-px blocks of its 50% pattern vary far less than Grain's.
+        float[] blue = PrintScreen.Stochastic.blue().clone();
+        Arrays.sort(blue);
+        for (int i = 0; i < blue.length; i++) check(blue[i] == (i + .5f) / blue.length, "soft dither's thresholds are each rank once");
+        PrintScreen soft = PrintScreen.of(screened(ink(), SOFT_DITHER).part(BrushPart.MEDIUM));
+        double vs = blocks(soft, .5), vg = blocks(grain, .5);
+        check(vs < vg / 4, "soft dither is even, Grain clumps: block variance " + vs + " against " + vg);
+        // Riso: about the tone, clumpier than Grain (neighbours agree more), solids speckled.
+        PrintScreen riso = PrintScreen.of(screened(ink(), RISO).part(BrushPart.MEDIUM));
+        for (double a : new double[]{.25, .5, .75}) { double f = share(riso, a, 0, 0, 512); check(Math.abs(f - a * .93) < .06, "riso inks about the tone: " + a + " " + f); }
+        check(agree(riso) > agree(grain) + .08, "riso's grain clumps more than Grain's: " + agree(riso) + " against " + agree(grain));
+        double holes = 1 - share(riso, 1, 0, 0, 512);
+        check(holes > .02 && holes < .12, "riso's solids are speckled: " + holes + " of them paper");
+        // A roller streak: some band of rows inks well under the rows round it.
+        double[] rows = new double[2048];
+        for (int y = 0; y < rows.length; y++) { int k = 0; for (int x = 0; x < 2048; x++) if (riso.ink(.6, x, y, 4096)) k++; rows[y] = k / 2048.0; }
+        int streaks = 0;
+        for (int y = 30; y < rows.length - 30; y++) if (rows[y] < (rows[y - 25] + rows[y + 25]) / 2 - .08) { streaks++; y += 20; }
+        check(streaks >= 2 && streaks <= 8, "riso: now and then a roller streak across the rows (" + streaks + " in 2048 rows)");
+        // Photocopy: snaps, drifts, specks, flecks.
+        PrintScreen copy = PrintScreen.of(screened(ink(), PHOTOCOPY).part(BrushPart.MEDIUM));
+        double light = share(copy, .25, 0, 0, 512), dark = share(copy, .75, 0, 0, 512), solid = share(copy, 1, 0, 0, 512), faint = share(copy, .2, 0, 0, 512);
+        check(light < .1 && dark > .9, "photocopy snaps greys: .25 inks " + light + ", .75 " + dark);
+        check(faint > .008 && faint < .06, "photocopy: specks of toner in a light mark: " + faint);
+        check(1 - solid > .001 && 1 - solid < .03, "photocopy: flecks in black: " + (1 - solid));
+        double lo = 1, hi = 0;
+        for (int by = 0; by < 4; by++) for (int bx = 0; bx < 4; bx++) { double f = share(copy, .5, bx * 256, by * 256, 128); lo = Math.min(lo, f); hi = Math.max(hi, f); }
+        check(hi - lo > .3, "photocopy: where greys snap drifts across the page: half grey inks " + lo + " to " + hi);
+    }
+    /**
+     * Maze, brick, basketweave, waves, honeycomb and rings (2026-11-06): at Pattern Sizes 6 and 11, Angles 45 and 20, each
+     * is seamless (neighbouring pixels' thresholds never jump: no seam at a tile's or a kept tile's edge), its ink only
+     * grows with the grey (square to the page, at 0 degrees, a straight line widens a whole pixel at a time, as Engraving's),
+     * thin and light at .1, nearly black at .9 and black at 1; Pattern Size scales it (at 0 degrees,
+     * size 12's pattern is size 6's twice as big) and Angle turns it; the same every time, whatever the brush; even over
+     * the page (no blank or black patches).
+     */
+    static void lined() {
+        int n = 192;
+        for (int s = MAZE; s <= RINGS; s++) {
+            String name = PartDial.SCREEN.choices[s];
+            for (double[] at : new double[][]{{6, 45}, {11, 20}}) {
+                ModularBrush b = set(set(screened(ink(), s), PartDial.CELL, at[0]), PartDial.S_ANGLE, at[1]);
+                PrintScreen p = PrintScreen.of(b.part(BrushPart.MEDIUM)), q = PrintScreen.of(set(set(set(screened(wash(), s), PartDial.MIS, 3), PartDial.CELL, at[0]), PartDial.S_ANGLE, at[1]).part(BrushPart.MEDIUM));
+                double jump = 0;
+                for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+                    double t = p.threshold(x, y);
+                    jump = Math.max(jump, Math.max(Math.abs(t - p.threshold(x + 1, y)), Math.abs(t - p.threshold(x, y + 1))));
+                }
+                check(jump < .4, name + " at " + at[0] + " px, " + at[1] + "°: seamless, no jump between neighbours over .4 (" + jump + ")");
+                for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++) check(p.threshold(x, y) == q.threshold(x, y), name + ": the page's, whatever the brush");
+                boolean[] was = new boolean[n * n];
+                double last = -1;
+                for (double a = .05; a < 1.001; a += .05) {
+                    int k = 0;
+                    for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+                        boolean on = p.ink(a, x, y, H);
+                        check(!was[y * n + x] || on, name + ": ink at a lighter grey stays at a darker one");
+                        was[y * n + x] = on;
+                        if (on) k++;
+                    }
+                    double f = k / (double) (n * n);
+                    check(f > last, name + ": more grey, more ink (" + f + " at " + a + ")");
+                    if (Math.abs(a - .1) < .01) check(f < .2, name + ": light at .1 (" + f + ")");
+                    if (Math.abs(a - .9) < .01) check(f > .8, name + ": dark at .9 (" + f + ")");
+                    last = f;
+                }
+                check(last == 1, name + ": black at full grey (" + last + ")");
+            }
+            // Even over the page: at .3 grey every 48-px square of a 768-px one, near and far, inks about .3 (no blank or black patches).
+            PrintScreen even = PrintScreen.of(screened(ink(), s).part(BrushPart.MEDIUM));
+            for (int by = 0; by < 16; by++) for (int bx = 0; bx < 16; bx++) { double f = share(even, .3, 48 * bx, 48 * by, 48); check(f > .18 && f < .42, name + ": even over the page, " + f + " at square " + bx + ", " + by); }
+            // Pattern Size: at 0 degrees, size 12 is size 6 twice as big.
+            PrintScreen six = PrintScreen.of(set(set(screened(ink(), s), PartDial.CELL, 6), PartDial.S_ANGLE, 0).part(BrushPart.MEDIUM)),
+                    twelve = PrintScreen.of(set(set(screened(ink(), s), PartDial.CELL, 12), PartDial.S_ANGLE, 0).part(BrushPart.MEDIUM));
+            int same = 0;
+            for (int y = 0; y < 96; y++) for (int x = 0; x < 96; x++) if (Math.abs(six.threshold(x, y) - twelve.threshold(2 * x, 2 * y)) < 1e-3) same++;
+            check(same > 96 * 96 * .98, name + ": Pattern Size scales it (" + same + " of " + 96 * 96 + ")");
+        }
+    }
+    /**
+     * Pixels and Stitches (2026-11-06): a grey a cell of a grid fixed to the page, Pattern Size px, square to the page at the
+     * default Angle and turned by it. Each pixel's darkness is the page's, whatever the brush, and only grows with the grey;
+     * Pixels steps through {@link PrintScreen#CELL_STEPS} greys, light at .1 and black at 1. Through the engine, at sizes 6
+     * and 12, square and at Angle 20: a stroke lays every cell whole or not at all, every cell it lays the same grey
+     * (seamless: no seam at a tile's edge, no soft edge), drawn again the same pixels, a lighter stroke over it nothing; a
+     * lighter swatch lighter cells, harder pressure (Pressure Dark) darker; a stitch is its cross, dark at the cell's
+     * middle, the fabric white at its edges; quick ends as drawn live.
+     */
+    static void cells() {
+        for (int s : new int[]{PIXELS, STITCHES}) {
+            String name = PartDial.SCREEN.choices[s];
+            for (double[] at : new double[][]{{6, 45}, {12, 45}, {12, 20}}) {
+                ModularBrush b = set(set(screened(ink(), s), PartDial.CELL, at[0]), PartDial.S_ANGLE, at[1]);
+                PrintScreen p = PrintScreen.of(b.part(BrushPart.MEDIUM)), q = PrintScreen.of(set(set(set(screened(wash(), s), PartDial.MIS, 3), PartDial.CELL, at[0]), PartDial.S_ANGLE, at[1]).part(BrushPart.MEDIUM));
+                String said = name + " at " + at[0] + " px, " + at[1] + "°";
+                int n = 96;
+                int[] was = new int[n * n], centre = new int[2];
+                java.util.Set<Integer> steps = new java.util.TreeSet<>();
+                for (double a = .05; a < 1.001; a += .05) {
+                    for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+                        int k = p.dark(a, x, y);
+                        check(k == q.dark(a, x, y), said + ": the page's, whatever the brush");
+                        check(k >= was[y * n + x], said + ": a pixel only darkens with the grey, at " + a);
+                        was[y * n + x] = k;
+                        if (s == PIXELS) steps.add(k);
+                    }
+                }
+                if (s == PIXELS) check(steps.size() == PrintScreen.CELL_STEPS && p.dark(.1, 5, 5) < 80 && p.dark(1, 5, 5) == 255, said + ": eight greys, light at .1, black at 1: " + steps);
+                // Through the engine: a stroke at one grey.
+                ToneDocument d = blank();
+                live(d, b, 60, .55, across(40, 440, 180));
+                int[] t = shown(d);
+                java.util.Map<Integer, Integer> cellTone = new java.util.HashMap<>();
+                java.util.Set<Integer> greys = new java.util.HashSet<>();
+                int laid = 0, split = 0;
+                for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
+                    p.centre(x, y, centre);
+                    if (centre[0] < 0 || centre[1] < 0 || centre[0] >= W || centre[1] >= H) continue;
+                    int key = centre[1] * W + centre[0], v = t[y * W + x];
+                    if (s == PIXELS) {
+                        Integer had = cellTone.putIfAbsent(key, v);
+                        if (had != null && had != v) split++;
+                        if (v != 255 && x > 140 && x < 340) greys.add(v);
+                    }
+                    if (x == centre[0] && y == centre[1] && t[key] != 255) laid++;
+                }
+                check(laid > 40, said + ": a stroke lays cells (" + laid + ")");
+                if (s == PIXELS) check(split == 0 && greys.size() == 1, said + ": every cell whole or not at all (" + split + " split) and every one past the ends the same grey, no seam, no soft edge: " + greys);
+                if (s == STITCHES && at[0] == 12 && at[1] == 45) {
+                    // The cross dark at a laid cell's middle, the fabric white at its edges' middles (at 6 px a thread's round edge reaches them).
+                    int c = (int) at[0], crosses = 0, bare = 0;
+                    for (int y = c / 2; y < H - c; y += c) for (int x = c / 2; x < W - c; x += c) {
+                        if (t[y * W + x] == 255) continue;
+                        crosses++;
+                        if (t[y * W + x - c / 2] == 255 && t[(y - c / 2) * W + x] == 255) bare++;
+                    }
+                    check(crosses > 40 && bare == crosses, said + ": each stitch a cross, the fabric white round it: " + bare + " of " + crosses);
+                }
+                ToneDocument again = blank(), over = blank();
+                live(again, b, 60, .55, across(40, 440, 180));
+                live(over, b, 60, .55, across(40, 440, 180)); live(over, b, 60, .15, across(40, 440, 180));
+                check(LegacyConversionChecks.crc(d).equals(LegacyConversionChecks.crc(again)) && LegacyConversionChecks.crc(d).equals(LegacyConversionChecks.crc(over)), said + ": drawn again the same pixels; a lighter stroke over it changes nothing");
+            }
+            // Lighter swatch, lighter cells; harder pressure, darker.
+            ModularBrush b = set(screened(ink(), s), PartDial.CELL, 10), pressing = b.copy();
+            pressing.part(BrushPart.HAND).set(PartDial.PD, 1); pressing.normalize();
+            double light = mean(drawn(b, .15)), mid = mean(drawn(b, .55)), black = mean(drawn(b, 1));
+            ToneDocument soft = blank(), hard = blank();
+            live(soft, pressing, 60, 1, pressed(180, .2)); live(hard, pressing, 60, 1, pressed(180, .9));
+            double ms = mean(soft), mh = mean(hard);
+            check(light < mid && mid < black && ms < mh, name + ": the cells darken with the grey (" + light + " < " + mid + " < " + black + ") and pressure (" + ms + " < " + mh + ")");
+            for (PartChoice life : new PartChoice[]{PartChoice.NONE, PartChoice.DRYING}) {
+                ModularBrush c = BlendChecks.life(b, life);
+                ToneDocument qd = blank(), ld = blank();
+                for (int k = 0; k < 2; k++) { BlendChecks.quick(qd, c, 60, .6, null, wave()); live(ld, c, 60, .6, wave()); }
+                check(BlendChecks.same(BlendChecks.all(qd), BlendChecks.all(ld)), name + " " + life + ": quick ends as drawn live");
+            }
+        }
+    }
+    /** The mean darkness (0 to 255) of the pixels {@code d} shows inked. */
+    static double mean(ToneDocument d) { double sum = 0; int n = 0; for (int v : shown(d)) if (v != 255) { sum += 255 - v; n++; } return n == 0 ? 0 : sum / n; }
+    static long crc(float[] t) {
+        java.util.zip.CRC32 c = new java.util.zip.CRC32();
+        for (float v : t) { int b = Float.floatToRawIntBits(v); c.update(b); c.update(b >>> 8); c.update(b >>> 16); c.update(b >>> 24); }
+        return c.getValue();
+    }
+    /** The share of a {@code side}-px square at {@code x0, y0} that {@code p} inks at darkness {@code a}. */
+    static double share(PrintScreen p, double a, int x0, int y0, int side) {
+        int k = 0;
+        for (int y = y0; y < y0 + side; y++) for (int x = x0; x < x0 + side; x++) if (p.ink(a, x, y, 4096)) k++;
+        return k / (double) (side * side);
+    }
+    /** The variance of the inked share of {@code p}'s 8-px blocks at {@code a}. */
+    static double blocks(PrintScreen p, double a) {
+        double sum = 0, sq = 0; int n = 0;
+        for (int by = 0; by < 32; by++) for (int bx = 0; bx < 32; bx++) { double f = share(p, a, bx * 8, by * 8, 8); sum += f; sq += f * f; n++; }
+        return sq / n - (sum / n) * (sum / n);
+    }
+    /** How often a pixel and its right neighbour agree at half grey. */
+    static double agree(PrintScreen p) {
+        int k = 0, n = 0;
+        for (int y = 0; y < 256; y++) for (int x = 0; x < 256; x++) { n++; if (p.ink(.5, x, y, 4096) == p.ink(.5, x + 1, y, 4096)) k++; }
+        return k / (double) n;
+    }
+
+    /**
+     * The prints before riso (Halftone to Hatching, and Screentone's patterns) are as they were before it (9a57ae48): each
+     * one's thresholds and inked pixels, at its default cell and angle and at cell 9, angle 20 with Dot Swell and Patchy Ink,
+     * by CRC.
+     */
+    static void oldKinds() {
+        long[] was = {0x36bf8fb9L, 0xf4bd555eL, 0x3f955b8L, 0x382e2879L, 0x2ecba5baL, 0xaee2e1cbL, 0xacdfc0adL, 0x76725201L, 0x23a35e4dL, 0x2a63f994L, 0xb722f1fL, 0xaa86ababL, 0x1066f9ebL, 0x7d3f92eaL,
+                0xa03e3bbdL, 0x642e5707L, 0xb62ff9b9L, 0x9586f6a1L, 0x76dafb25L, 0xc03a3d73L, 0x9d3155bL, 0x6e23afa8L, 0x5b1c00f6L, 0x167bd7adL, 0x7a50b8b7L};
+        for (int s = 1; s <= HATCHING + TONES; s++) {
+            java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+            for (int v = 0; v < 2; v++) {
+                ModularBrush c = s <= HATCHING ? screened(ink(), s) : tone(ink(), s - HATCHING - 1, .5);
+                if (v == 1) { c = set(set(c, PartDial.CELL, 9), PartDial.S_ANGLE, 20); if (s <= HATCHING) c = set(set(c, PartDial.S_GAIN, .5), PartDial.UNEVEN, .5); }
+                PrintScreen p = PrintScreen.of(c.part(BrushPart.MEDIUM));
+                for (int y = -5; y < 150; y++) for (int x = -5; x < 150; x++) {
+                    long bits = Double.doubleToRawLongBits(p.threshold(x, y));
+                    for (int k = 0; k < 8; k++) crc.update((int) (bits >>> (8 * k)));
+                    crc.update(p.ink(.37, x, y, 360) ? 1 : 0); crc.update(p.ink(.81, x, y, 360) ? 1 : 0);
+                }
+            }
+            check(crc.getValue() == was[s - 1], (s <= HATCHING ? "print " + s : "Screentone pattern " + (s - HATCHING - 1)) + " is as before riso: " + Long.toHexString(crc.getValue()));
+        }
+    }
+
     // ---- 4b. the tone it prints: the grey, the pressure, a second stroke ----
 
     static void builds() {
@@ -288,33 +552,33 @@ public final class ScreenChecks {
         }
         double[] soft = shares(pressing, 24, 1, pressed(180, .2), 1), hard = shares(pressing, 24, 1, pressed(180, .9), 1);
         check(hard[0] > soft[0] + .4, "with Pressure dark, pressing harder lays more dots: light " + pct(soft) + ", hard " + pct(hard));
+        // A light pass over a hard one never lightens it (the owner, 2026-11-06: "drawing over an area with different
+        // pressure can lighten it... a bit unintuitive"): every dot and print tone the hard pass laid stays.
+        { ToneDocument d = blank();
+          live(d, pressing, 24, 1, pressed(180, .9));
+          int[] hardShown = shown(d), hardPrint = printed(d, pressing);
+          live(d, pressing, 24, 1, pressed(180, .2));
+          int[] after = shown(d), afterPrint = printed(d, pressing);
+          int lighter = 0, dots = 0;
+          for (int i = 0; i < after.length; i++) { if (hardShown[i] == 0) dots++; if (after[i] > hardShown[i] || afterPrint[i] > hardPrint[i]) lighter++; }
+          check(lighter == 0 && dots > 1000, "a light pass over a hard one leaves it at least as dark: " + lighter + " px lighter of " + dots + " dots"); }
         // The print tone is the stroke's own tone under its tip, the darker of two strokes: here the grey's, 1 − .53.
         ToneDocument d = blank();
         for (int k = 0; k < 2; k++) live(d, ink, 24, .53, across(40, 440, 180));
         int[] p = printed(d, ink); int off = 0, n = 0;
         for (int y = 0; y < H; y++) for (int x = 80; x < 400; x++) if (p[y * W + x] < 250) { n++; if (Math.abs(p[y * W + x] - 255 * .47) > 3) off++; }
         check(n > 1000 && off < n / 20, "the print tone is the stroke's tone (" + off + " of " + n + " px off by more than 3)");
-        // A stroke over another prints its own tone (the owner, 2026-10-29: "go over that area again and make it the same
-        // pattern, but lighter"): a darker one darkens it, a lighter one lightens it; a pen line under them stays as it was.
-        ToneDocument up = blank(), down = blank(), lightOnly = blank(), darkOnly = blank();
+        // A darker stroke over a lighter one darkens it; a lighter one over a darker leaves it (the owner, 2026-11-06,
+        // undoing 2026-10-29's print over prints replacing them). A pen line under them stays as it was.
+        ToneDocument up = blank(), down = blank(), penned = blank();
         live(up, ink, 24, .31, across(40, 440, 180)); live(up, ink, 24, .8, across(40, 440, 180));
-        live(down, pen(), 4, 1, across(20, 460, 180));
-        ToneDocument.Layer penLine = KindLayersChecks.copy(KindLayersChecks.layer(down, InkWashLayers.INK).plane(ToneDocument.PLANE_PEN));
         live(down, ink, 24, .8, across(40, 440, 180)); live(down, ink, 24, .31, across(40, 440, 180));
-        live(lightOnly, ink, 24, .31, across(40, 440, 180)); live(darkOnly, ink, 24, .8, across(40, 440, 180));
-        int[] pu = printed(up, ink), pd = printed(down, ink), pl = printed(lightOnly, ink), pk = printed(darkOnly, ink), sd = shown(down), sk = shown(darkOnly);
-        int wrongUp = 0, wrongDown = 0, darkBlack = 0, downBlack = 0;
-        for (int y = 170; y <= 190; y++) for (int x = 80; x < 400; x++) {
-            int i = y * W + x;
-            if (pu[i] != pk[i]) wrongUp++;
-            if (pd[i] != pl[i]) wrongDown++;
-            if (sk[i] == 0) darkBlack++;
-            if (sd[i] == 0 && Math.abs(y - 180) > 3) downBlack++;
-        }
-        check(wrongUp == 0 && wrongDown == 0 && downBlack < darkBlack / 2, "a lighter stroke over a darker prints the lighter, a darker over a lighter the darker: "
-                + wrongUp + " and " + wrongDown + " px off, " + downBlack + " black px against " + darkBlack);
-        check(KindLayersChecks.samePlane(penLine, KindLayersChecks.layer(down, InkWashLayers.INK).plane(ToneDocument.PLANE_PEN))
-                && KindLayersChecks.layer(down, InkWashLayers.INK).plane(ToneDocument.PLANE_WASH).print != null, "the prints on the Paint plane, the pen line under them byte for byte");
+        check(java.util.Arrays.equals(printed(up, ink), printed(down, ink)) && java.util.Arrays.equals(shown(up), shown(down)), "two strokes print the darker of their tones, in either order");
+        live(penned, pen(), 4, 1, across(20, 460, 180));
+        ToneDocument.Layer penLine = KindLayersChecks.copy(KindLayersChecks.layer(penned, InkWashLayers.INK).plane(ToneDocument.PLANE_PEN));
+        live(penned, ink, 24, .8, across(40, 440, 180)); live(penned, ink, 24, .31, across(40, 440, 180));
+        check(KindLayersChecks.samePlane(penLine, KindLayersChecks.layer(penned, InkWashLayers.INK).plane(ToneDocument.PLANE_PEN))
+                && KindLayersChecks.layer(penned, InkWashLayers.INK).plane(ToneDocument.PLANE_WASH).print != null, "the prints on the Paint plane, the pen line under them byte for byte");
         // An unscreened brush neither reads nor makes a print tone.
         ToneDocument none = blank();
         live(none, ink(), 24, .53, across(40, 440, 180)); live(none, wash(), 90, .53, across(40, 440, 180));
@@ -517,7 +781,7 @@ public final class ScreenChecks {
     // ---- 7. a shaded page ----
 
     static void shaded() {
-        for (int s = 1; s <= SCREENS; s++) {
+        for (int s = 1; s <= PRINTS; s++) {
             ToneDocument d = blank();
             check(d.shadePaper(120), "the page shades");
             live(d, screened(wash(), s), 90, 1, wave());
@@ -663,9 +927,9 @@ public final class ScreenChecks {
         check(ModularWords.caption(ink).contains("halftone"), "the caption: " + ModularWords.caption(ink));
         check(ModularWords.choiceWords(screened(wash(), 3), BrushPart.MEDIUM).equals("Dithered wash") && ModularWords.choiceWords(screened(ink(), 2), BrushPart.MEDIUM).equals("Engraved ink")
                 && ModularWords.choiceWords(screened(wash(), 4), BrushPart.MEDIUM).equals("Grained wash"), "each screen names its print");
-        String[][] more = {{"5", "Rosette ink"}, {"6", "Ben-Day ink"}, {"7", "Crosshatch ink"}, {"8", "Wavy-line ink"}, {"9", "Mezzotint ink"}, {"10", "Diamond-dot"}, {"11", "Stippled ink"}, {"12", "Woodcut ink"}, {"13", "Scribbled ink"}, {"14", "Hatched ink"}};
+        String[][] more = {{"5", "Rosette ink"}, {"6", "Ben-Day ink"}, {"7", "Crosshatch ink"}, {"8", "Wavy-line ink"}, {"9", "Mezzotint ink"}, {"10", "Diamond-dot"}, {"11", "Stippled ink"}, {"12", "Woodcut ink"}, {"13", "Scribbled ink"}, {"14", "Hatched ink"}, {"15", "Riso ink"}, {"16", "Photocopied ink"}, {"17", "Soft-dithered"}, {"18", "Maze ink"}, {"19", "Brick ink"}, {"20", "Basketweave"}, {"21", "Wave ink"}, {"22", "Honeycomb ink"}, {"23", "Ringed ink"}, {"24", "Pixelated ink"}, {"25", "Stitched ink"}};
         for (String[] w : more) check(ModularWords.choiceWords(screened(ink(), Integer.parseInt(w[0])), BrushPart.MEDIUM).equals(w[1]), "print " + w[0] + " names its print: " + ModularWords.choiceWords(screened(ink(), Integer.parseInt(w[0])), BrushPart.MEDIUM));
-        check(PartDial.SCREEN.choices.length == 15 && String.join(",", java.util.Arrays.copyOfRange(PartDial.SCREEN.choices, 11, 15)).equals("Stipple,Woodcut,Scribble,Hatching")
+        check(PartDial.SCREEN.choices.length == 26 && PartDial.SCREEN.choices[24].equals("Pixels") && PartDial.SCREEN.choices[25].equals("Stitches") && String.join(",", java.util.Arrays.copyOfRange(PartDial.SCREEN.choices, 15, 24)).equals("Risograph,Photocopy,Soft Dither,Maze,Brick,Basketweave,Waves,Honeycomb,Rings") && String.join(",", java.util.Arrays.copyOfRange(PartDial.SCREEN.choices, 11, 15)).equals("Stipple,Woodcut,Scribble,Hatching")
                 && String.join(",", java.util.Arrays.copyOfRange(PartDial.PATTERN.choices, 7, 11)).equals("Stipple,Woodcut,Scribble,Hatching") && PartDial.SCREEN.choices[5].equals("Rosette") && PartDial.SCREEN.choices[6].equals("Ben-Day") && PartDial.SCREEN.choices[7].equals("Crosshatch")
                 && PartDial.SCREEN.choices[8].equals("Wavy Lines") && PartDial.SCREEN.choices[9].equals("Mezzotint") && PartDial.SCREEN.choices[10].equals("Diamond Dots") && PartDial.SCREEN.choices[4].equals("Grain"),
                 "Print Shading's six new choices, then four more, are appended (Screentone's four too), the old four unmoved");
@@ -702,12 +966,15 @@ public final class ScreenChecks {
         check(lab.dials(BrushPart.MEDIUM).containsAll(Arrays.asList(PartDial.SCREEN_DIALS)) && lab.active(PartDial.CELL) && lab.active(PartDial.S_ANGLE), "a halftone shows Cell, Angle and the newsprint dials");
         lab.choose(PartDial.SCREEN, 3);
         check(!lab.active(PartDial.CELL) && !lab.active(PartDial.S_ANGLE) && lab.active(PartDial.MIS), "a dither greys Cell and Angle");
+        lab.choose(PartDial.SCREEN, PIXELS);
+        check(lab.active(PartDial.CELL) && lab.active(PartDial.S_ANGLE) && !lab.active(PartDial.S_GAIN) && !lab.active(PartDial.UNEVEN), "Pixels: Pattern Size and Angle, no Dot Swell or Patchy Ink");
         check(lab.chips(BrushPart.MEDIUM).contains(PartChoice.TONE), "Brush Lab offers Tone among the Medium chips");
         lab.choose(BrushPart.MEDIUM, PartChoice.TONE);
-        check(lab.dials(BrushPart.MEDIUM).equals(Arrays.asList(PartDial.PATTERN, PartDial.TTONE, PartDial.CELL, PartDial.S_ANGLE)), "Tone's dials: Pattern, Tone, Cell, Angle");
+        check(lab.dials(BrushPart.MEDIUM).equals(Arrays.asList(PartDial.PATTERN, PartDial.TTONE, PartDial.CELL, PartDial.S_ANGLE, PartDial.TOOTH)), "Tone's dials: Pattern, Tone, Cell, Angle, and Paper's Texture");
         LabLayout manta = new LabLayout(LabLayoutChecks.MANTA[0], LabLayoutChecks.MANTA[1]), nomad = new LabLayout(LabLayoutChecks.NOMAD[0], LabLayoutChecks.NOMAD[1]);
         check(manta.menu(PartDial.SCREEN.choices) && nomad.menu(PartDial.SCREEN.choices), "Screen's five options are a menu button");
-        // The Nomad's open card grew with the toolbar band gone (2026-10-29): Screen now fits beside Ink's dials too.
+        // The Nomad's open card grew with the toolbar band gone (2026-10-29), and shrank again with After's row on every
+        // brush (2026-11-01), and grew back with six cards, Paper's Texture a row of Medium's: Screen fits beside Ink's dials again.
         check(manta.shows(PartChoice.INK, PartDial.MIS) && !nomad.shows(PartChoice.INK, PartDial.MIS) && nomad.shows(PartChoice.INK, PartDial.SCREEN) && nomad.shows(PartChoice.WASH, PartDial.SCREEN) && nomad.shows(PartChoice.TONE, PartDial.CELL),
                 "the Manta shows every Screen dial; the Nomad Screen alone (Ink's too), and Tone's own");
         // Its samples: a screened brush's loop is pure black and white too.

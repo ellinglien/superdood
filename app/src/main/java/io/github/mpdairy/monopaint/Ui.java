@@ -1,20 +1,15 @@
 package io.github.mpdairy.monopaint;
 
 import android.content.Context;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.DashPathEffect;
 import android.graphics.Matrix;
-import android.graphics.Paint;
 import android.graphics.drawable.GradientDrawable;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
-import android.widget.SeekBar;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
-import java.util.function.IntConsumer;
 
 /** Small view helpers shared by the app's hand-built controls. */
 final class Ui {
@@ -27,24 +22,6 @@ final class Ui {
     static int dpOf(Context context, int pixels) {
         return Math.round(pixels / context.getResources().getDisplayMetrics().density);
     }
-
-    /** How wide, in dp, the frame marking a selected layer, size or shade is. */
-    static final int SELECTED_FRAME_DP = 3;
-    private static final Paint FRAME = new Paint();
-    static { FRAME.setColor(Color.BLACK); FRAME.setStyle(Paint.Style.STROKE); }
-    /**
-     * The one selected look for the layer thumbnails and the bar's size and shade choices: a black,
-     * square-cornered frame {@link #SELECTED_FRAME_DP} wide, just outside the given rectangle.
-     */
-    static void selectedFrame(Context context, Canvas canvas, float left, float top, float right, float bottom) {
-        int line = dp(context, SELECTED_FRAME_DP);
-        FRAME.setStrokeWidth(line);
-        float half = line / 2f;
-        canvas.drawRect(Math.round(left) - half, Math.round(top) - half, Math.round(right) + half, Math.round(bottom) + half, FRAME);
-    }
-
-    /** The dashes outlining an empty place: an empty palette cell or saved brush. */
-    static DashPathEffect emptyDashes(Context context) { return new DashPathEffect(new float[]{dp(context, 4), dp(context, 3)}, 0); }
 
     /** A white panel or control background with a solid outline. */
     static GradientDrawable outline(int strokeWidth, int strokeColor, float radius) {
@@ -60,6 +37,7 @@ final class Ui {
     static boolean outside(View view, MotionEvent event) { return outside(view, event, 0); }
     /** {@link #outside(View, MotionEvent)} for the event's pointer {@code index}: raw positions of other pointers keep the first's offset. */
     static boolean outside(View view, MotionEvent event, int index) {
+        if (view.getDisplay() == null) return true;  // off the window (a panel the app left open while away): nothing lands on it
         float[] point = {event.getX(index) + event.getRawX() - event.getX(), event.getY(index) + event.getRawY() - event.getY()};
         Matrix inverse = new Matrix();
         PanelCoordinates.fromView(view).invert(inverse); inverse.mapPoints(point);
@@ -159,6 +137,18 @@ final class Ui {
         } catch (ReflectiveOperationException | RuntimeException absent) { }
         cleanWindow(root, reason + ", flashed", restore);
     }
+    /**
+     * {@link #flashWindow} when {@code flash} ({@link SystemSettings#flashes}: asked for, or Automatic Refresh on), else
+     * {@link #cleanWindow} alone: the window drawn again in the firmware's default update, no full refresh. With {@code
+     * redraw} off (Automatic Refresh off, {@link SystemSettings#flashes}) no redraw at all: only {@code restore}, which is
+     * safe to run on views already under partial grey.
+     */
+    static void flashWindow(View root, String reason, Runnable restore, boolean redraw, boolean flash) {
+        if (!redraw) restore.run(); else flashWindow(root, reason, restore, flash);
+    }
+    private static void flashWindow(View root, String reason, Runnable restore, boolean flash) {
+        if (flash) flashWindow(root, reason, restore); else cleanWindow(root, reason, restore);
+    }
     /** How long the firmware's default update of a frame runs (about 500 ms) before partial grey comes back. */
     static final long CLEAN_MS = 600;
     private static void resetEink(View view) {
@@ -166,19 +156,6 @@ final class Ui {
         try { View.class.getMethod("resetEinkUpdateMode").invoke(view); } catch (ReflectiveOperationException | RuntimeException absent) { return; }
         if (view instanceof ViewGroup)
             for (int i = 0; i < ((ViewGroup)view).getChildCount(); i++) resetEink(((ViewGroup)view).getChildAt(i));
-    }
-
-    static void setDimmed(View view, boolean enabled, float dimmed) {
-        view.setEnabled(enabled); view.setAlpha(enabled ? 1 : dimmed);
-    }
-
-    /** Reports every progress change, from the user or from code. */
-    static void onProgress(SeekBar bar, IntConsumer change) {
-        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar slider, int value, boolean user) { change.accept(value); }
-            @Override public void onStartTrackingTouch(SeekBar slider) { }
-            @Override public void onStopTrackingTouch(SeekBar slider) { }
-        });
     }
 
     /** {@code base} with all app text a fifth larger, native dialogs too, on top of the user's own font scale. */

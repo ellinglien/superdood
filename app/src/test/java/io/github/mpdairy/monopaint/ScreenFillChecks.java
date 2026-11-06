@@ -17,6 +17,12 @@ public final class ScreenFillChecks {
         StringBuilder said = new StringBuilder();
         for (ToolPresets.Preset p : ToolPresets.of(ModularStyle.named("Print"))) {
             ModularBrush b = p.brush().parts;
+            // The Brayer prints no screen: it rolls a band (NibChecks).
+            if (b.choice(BrushPart.TIP) == PartChoice.ROLLER) continue;
+            // Nor do the Photocopier and Newsprint lay one: they reprint what is there (ReprintChecks).
+            if (b.choice(BrushPart.CARRY) == PartChoice.REPRINT) continue;
+            // Nor Letterpress, a plain ink line that Later presses (LaterMediaChecks).
+            if (b.later()) continue;
             double size = ModularSizes.size(b, InkWashSizes.Preset.MEDIUM);
             boolean gradient = p.name.equals("Gradient tone");
             ToneDocument live = InkWashLayers.blank(W, H), batched = InkWashLayers.blank(W, H), again = InkWashLayers.blank(W, H);
@@ -25,7 +31,9 @@ public final class ScreenFillChecks {
             stroke(again, b, size, square(.5, size), 1);
             check(same(live, batched) && same(live, again), p.name + ": the same samples print the same pixels, live, batched and again");
             // Evenness: the inked share of each 30 px block inside the square (the gradient tone darkens down the page by design: across a row only).
-            double[] f = blocks(live);
+            // Pixels and Stitches lay greys, not black dots: any ink counts (the pressure here picks a light one).
+            int inked = PrintScreen.of(b.part(BrushPart.MEDIUM)).cells ? 255 : 128;
+            double[] f = blocks(live, inked);
             double mean = 0, lo = 1, hi = 0;
             for (double v : f) { mean += v; lo = Math.min(lo, v); hi = Math.max(hi, v); }
             mean /= f.length;
@@ -33,7 +41,14 @@ public final class ScreenFillChecks {
             // Against the screen's own unevenness at that tone (a mezzotint's dashes each their own, by design).
             double own = gradient ? 0 : ownRange(PrintScreen.of(b.part(BrushPart.MEDIUM)), mean);
             check(mean > .2 && hi - lo < .3 * (gradient ? hi : mean) + own + .02, p.name + ": the scribbled square prints evenly, " + String.format(java.util.Locale.ROOT, "%.2f to %.2f (the screen's own %.2f)", lo, hi, own));
-            int fuzz = fuzz(b, size);
+            // Maze to rings at Angle 0: Brick's and Honeycomb's courses run along the rows, so a crisp stroke's rows read light and dark as an
+            // edge's would (2026-11-06): their edge is measured turned 10°, which moves no edge.
+            ModularBrush edge = b;
+            if (b.part(BrushPart.MEDIUM).get(PartDial.SCREEN, 0) >= ScreenChecks.MAZE && b.part(BrushPart.MEDIUM).get(PartDial.S_ANGLE) == 0) {
+                edge = b.copy();
+                edge.part(BrushPart.MEDIUM).set(PartDial.S_ANGLE, 10);
+            }
+            int fuzz = fuzz(edge, size, inked);
             ResolvedBrush r = ResolvedBrush.of(b, size, 1);
             double wide = Math.max(r.inkSize, r.body != null ? r.bodySize : 0);
             check(fuzz <= Math.max(4, wide * .15), p.name + ": a stroke's edge is crisp, " + fuzz + " rows of thinning dots, " + Math.round(wide) + " px wide");
@@ -78,24 +93,25 @@ public final class ScreenFillChecks {
         }
         return f;
     }
-    static double[] blocks(ToneDocument d) {
+    /** The share of each 30 px block inside the square darker than {@code inked}. */
+    static double[] blocks(ToneDocument d, int inked) {
         double[] f = new double[64];
         for (int by = 0; by < 8; by++) for (int bx = 0; bx < 8; bx++) {
             int n = 0;
-            for (int y = 0; y < 30; y++) for (int x = 0; x < 30; x++) if (d.compositeTone(S0 + 30 + bx * 30 + x, S0 + 30 + by * 30 + y) < 128) n++;
+            for (int y = 0; y < 30; y++) for (int x = 0; x < 30; x++) if (d.compositeTone(S0 + 30 + bx * 30 + x, S0 + 30 + by * 30 + y) < inked) n++;
             f[by * 8 + bx] = n / 900.0;
         }
         return f;
     }
     /** A straight stroke across at medium pressure: the rows whose inked share is between a sixth and three quarters of the core's. */
-    static int fuzz(ModularBrush b, double size) {
+    static int fuzz(ModularBrush b, double size, int inked) {
         ToneDocument d = InkWashLayers.blank(W, H);
         List<double[]> o = new ArrayList<>();
         for (int i = 0; i <= 120; i++) o.add(new double[]{40 + 3 * i, H / 2.0, .5, 1000 + 6 * i});
         stroke(d, b, size, o, 1);
         double core = 0;
         double[] row = new double[H];
-        for (int y = 0; y < H; y++) { int n = 0; for (int x = 120; x < 320; x++) if (d.compositeTone(x, y) < 128) n++; row[y] = n / 200.0; core = Math.max(core, row[y]); }
+        for (int y = 0; y < H; y++) { int n = 0; for (int x = 120; x < 320; x++) if (d.compositeTone(x, y) < inked) n++; row[y] = n / 200.0; core = Math.max(core, row[y]); }
         // Rows: a screen's own rows of dots go light and dark; the share over a band of rows a pattern cell across.
         int band = 6, fuzzy = 0;
         for (int y = band; y < H - band; y++) {

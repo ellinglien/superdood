@@ -93,6 +93,17 @@ final class WetCanvas {
         joined = true;
         drag = drags && pts.count > 0 ? new Drag(r, pts) : null;
     }
+    /**
+     * Hold to Snap ({@link HoldSnap}), after its Undo: the stroke undone forgotten. What the Undo changed is taken up;
+     * where it left none of this layer's paint the page is dry paper again, so the clean stroke lays as onto the page
+     * before the rough one (else wet gouache mixes into wet white there); paint elsewhere moves on (Undo rests it).
+     */
+    void forget() {
+        onLayer(() -> wet.rewet(false, true));
+        // Nothing else moving: the paint rests in full, as after an Undo.
+        if (!wet.isAnimating()) rest();
+        seen();
+    }
     /** Lets the paint rest where it is (Undo: it moves again only when a Wet stroke wakes it). */
     void rest() { wet.rest(); drag = null; joined = false; }
 

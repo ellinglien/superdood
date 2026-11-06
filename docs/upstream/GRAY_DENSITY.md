@@ -1,6 +1,6 @@
 # Calibrated dot density — 0.12
 
-> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not My Bad Drawings.
+> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not Superdood.
 
 The user supplied `/tmp/gradient_us.jpeg` and `/tmp/gradient_atelier.jpeg`
 and confirmed that both gradients step through every swatch from black to

@@ -11,7 +11,7 @@ import android.graphics.drawable.Drawable;
 import android.util.TypedValue;
 
 /**
- * A toolbar slot's tile, the one look of Brush Lab's TOOLBAR row and the Tools page's ten slots (the owner's Inkwash
+ * A toolbar slot's tile, the one look of Brush Lab's TOOLBAR row and the Tools page's nine slots (the owner's Inkwash
  * Design Style): a square tile with no outline, the slot's stroke ({@link WildSample#slotTray}) at its size, filling
  * it but for a margin ({@link #inner}); when the loop is drawn narrower than the slot draws, the size in mm at its
  * bottom right. No number (the owner, 2026-10-19: "no need to have numbers by the brushes"): a slot is where it is and

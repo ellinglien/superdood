@@ -50,14 +50,12 @@ final class ShapePreview {
         if(ended)return new Rect();ended=true;java.util.Arrays.fill(next,0);
         return apply(display,logical);
     }
+    /** Inkwash: Record and Replay: the shape dragged to {@code x, y} ({@link StrokeLog.Shape}). */
+    StrokeLog.Shape logged(float x,float y) { return geometry.logged(shade,x,y); }
     /** The shape as last previewed: two intervals per row, as {@link ShapeGeometry} rasters them. */
     int[] spans() { return previous.clone(); }
     boolean finish() {
         if(ended)return false;ended=true;
-        document.begin();
-        for(int y=0;y<document.height;y++)for(int part=0;part<4;part+=2) {
-            int at=y*4+part;document.paintSpan(previous[at],previous[at+1],y,shade);
-        }
-        return document.finish();
+        return ShapeStroke.lay(document,previous,shade);
     }
 }

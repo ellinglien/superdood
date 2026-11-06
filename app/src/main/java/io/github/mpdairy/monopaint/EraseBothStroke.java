@@ -3,10 +3,11 @@ package io.github.mpdairy.monopaint;
 /**
  * The eraser, the pen's eraser end and a finger: whatever is under it goes, ink and wash
  * together, permanent paint too (the owner, 2026-10-22: "Pen isn't erased by eraser (everything)"; Erasable,
- * {@link ToneDocument.Layer#share}, no longer holds back the eraser on Everything, nor on a chosen kind). A gesture binds one layer, so ink
- * is erased as the eraser moves and the wash beneath when it lifts, finished as one undo step.
- * Meanwhile the screen can show the page as it will be wherever it went ({@link #erasedTones}),
- * which is what the page shows once it lifts. Masking fluid comes off first (the new modules spec, Resist): where the
+ * {@link ToneDocument.Layer#share}, no longer holds back the eraser on Everything, nor on a chosen kind), on every pair the
+ * screen shows: layers are hidden from the user (the owner, 2026-11-05: "proceed with the erase everything under it change").
+ * A hidden layer keeps its marks. A gesture binds one plane, so the selected pair's ink is erased as the eraser moves and
+ * the rest when it lifts, finished as one undo step. Meanwhile the screen can show the page as it will be wherever it
+ * went ({@link #erasedTones}), which is what the page shows once it lifts. Masking fluid comes off first (the new modules spec, Resist): where the
  * eraser passes over fluid it can lift, that pass takes the fluid at lift and leaves the paint under it; the next pass
  * erases as usual. Wax (the fluid's {@link ToneDocument.Layer#share}: a crayon's, a wax resist's) shields no paint from
  * the eraser, and goes with it on Everything (the owner, 2026-10-25: "Base erase should erase everything").
@@ -35,8 +36,10 @@ final class EraseBothStroke implements DrawingStroke {
     private final PenSpeed speed = new PenSpeed();
     /** Where the last sample erased, page pixels, and how wide; NaN before the first. */
     private float lastX = Float.NaN, lastY = Float.NaN, lastSize = Float.NaN;
-    /** The layer selected before, and the selected pair's halves: ink erased as it moves, wash at lift. */
-    private final int restore, inkLayer, washLayer;
+    /** The layer selected before, and the selected pair's ink: erased as it moves, every other shown layer at lift. */
+    private final int restore, inkLayer;
+    /** Vector Ink's layers ({@link VectorInk#linedMask}): their pixels are drawn again from the lines ({@link #cut}), and hold no other mark. */
+    private final int lined;
     /**
      * Inkwash: what it erases as it moves, where Tone's dots are: the ink layer's Paint plane ({@link ToneDocument#PLANE_WASH})
      * when it takes paint and the layer has one (textures are Paint since 2026-10-29), else its Pen plane ({@link
@@ -49,9 +52,13 @@ final class EraseBothStroke implements DrawingStroke {
     private final int[] ones;
     private final byte[] fresh;
     private final RoundFootprint.Span erase = this::erase;
-    /** Tone's scrape: the stroke's heading, and a salt of its own (the page's revision and where it began), so each pass scrapes afresh. */
+    /** Tone's scrape: the stroke's heading, and a salt of its own (which pass on the page, {@link ToneDocument#erasePasses}, and where it began), so each pass scrapes afresh. */
     private double headX = 1, headY = 0;
     private int scrape;
+    private final int pass;
+    /** Inkwash: its cut through the page's Vector Ink lines ({@link VectorInk.Cut}), or null where it has none. */
+    private final VectorInk.Cut cut;
+    VectorInk.Cut cut() { return cut; }
     /** Bounds of the pixels erased since {@link #takeErased}, right and bottom exclusive; empty when left >= right. */
     private int newLeft = Integer.MAX_VALUE, newTop = Integer.MAX_VALUE, newRight, newBottom;
 
@@ -65,7 +72,7 @@ final class EraseBothStroke implements DrawingStroke {
     EraseBothStroke(ToneDocument document, float diameter) { this(document, Float.NaN, diameter, 0); }
     EraseBothStroke(ToneDocument document, float diameter, int kinds) { this(document, Float.NaN, diameter, kinds); }
     private EraseBothStroke(ToneDocument document, float most, float diameter, int kinds) {
-        this.document = document; this.most = most; this.diameter = diameter; this.kinds = kinds;
+        this.document = document; this.most = most; this.diameter = diameter; this.kinds = kinds; pass = document.erasePasses++;
         takes = kinds == 0 ? ToneDocument.KIND_ALL : kinds;
         restore = document.activeLayer();
         coverage = new WashCoverage(document.width, document.height);
@@ -73,10 +80,10 @@ final class EraseBothStroke implements DrawingStroke {
         // Masking fluid is no kind of mark: an eraser limited to one leaves it (it still shields what is under it).
         lifts = masked && kinds == 0 ? new WashCoverage(document.width, document.height) : null;
         ones = new int[document.width]; java.util.Arrays.fill(ones, 1); fresh = new byte[document.width];
-        int pair = InkWashLayers.current(document);
-        inkLayer = InkWashLayers.inkOf(document, pair); washLayer = InkWashLayers.washOf(document, pair);
-        // The other pairs show through where the selected one is erased, unless masking fluid shields paint (a page
-        // whose fluid has all been lifted previews again).
+        inkLayer = InkWashLayers.inkOf(document, InkWashLayers.current(document));
+        cut = VectorInk.Cut.of(document, kinds);
+        lined = VectorInk.linedMask(document);
+        // Unless masking fluid shields paint (a page whose fluid has all been lifted previews again).
         previews = !masked;
         document.selectLayer(inkLayer);
         live = (takes & ToneDocument.KIND_PAINT) != 0 && document.hasPlane(inkLayer, ToneDocument.PLANE_WASH) ? ToneDocument.PLANE_WASH
@@ -91,9 +98,11 @@ final class EraseBothStroke implements DrawingStroke {
         float size = Float.isNaN(most) ? PenSpeed.fingerDiameter(diameter, speed.factor(PenSpeed.Effect.FINGER_ERASER))
                 : InkWashSizes.diameter(most, pressure) * speed.factor(PenSpeed.Effect.PEN_ERASER);
         if (Float.isFinite(x) && Float.isFinite(y) && Float.isFinite(size)) {
-            if (Float.isNaN(lastX)) scrape = (int) document.revision() * 0x9e3779b1 ^ Float.floatToIntBits(x) * 31 ^ Float.floatToIntBits(y);
+            // Where it began, on the half pixels a page's log keeps, and which pass on the page it is (StrokeLog: a replay counts the same).
+            if (Float.isNaN(lastX)) scrape = pass * 0x9e3779b1 ^ Math.round(x * 2) * 31 ^ Math.round(y * 2);
             else { double dx = x - lastX, dy = y - lastY, d = Math.hypot(dx, dy); if (d > .5) { headX = dx / d; headY = dy / d; } }
             lastX = x; lastY = y; lastSize = size;
+            if (cut != null) cut.to(x, y, size);
         }
         footprint.to(x, y, size, document.width, document.height, erase);
     }
@@ -138,20 +147,21 @@ final class EraseBothStroke implements DrawingStroke {
     /** How many of the prototype's blade passes one eraser pass takes, at a point. */
     private static final int SCRAPES = 3;
 
-    /** Whether the screen may show what lies under the selected pair wherever the eraser went, before the wash goes at lift. */
+    /** Whether the screen may show the page as it will be wherever the eraser went, before the rest goes at lift. */
     boolean previews() { return previews; }
     /**
      * For the {@code w} by {@code h} block at {@code left, top}, row by row into {@code out}: the tone the page
-     * will show once the eraser lifts wherever it went (the page with the selected pair at what it keeps there,
-     * {@link ToneDocument#compositeToneKept}), -1 elsewhere and on a Tone dot it left.
+     * will show once the eraser lifts wherever it went (every shown layer at what it keeps there,
+     * {@link ToneDocument#compositeTonesKept}, Vector Ink's lines gone too), -1 elsewhere and on a Tone dot it left.
      */
     void erasedTones(int left, int top, int w, int h, int[] out) {
         if (fresh.length < w) throw new IllegalArgumentException("Wider than the page");
-        int from = Math.min(washLayer, inkLayer), to = Math.max(washLayer, inkLayer);
+        int to = document.layerCount() - 1, lines = cut == null ? 0 : cut.mask();
         for (int y = 0; y < h; y++) {
             coverage.levels(left, top + y, w, 1, fresh);
             // A Tone dot the scrape left shows as it is.
-            for (int x = 0; x < w; x++) out[y * w + x] = fresh[x] == 0 || kinds == 0 && dot(left + x, top + y) ? -1 : document.compositeToneKept(left + x, top + y, from, to, takes);
+            for (int x = 0; x < w; x++) if (fresh[x] == 0 || kinds == 0 && dot(left + x, top + y)) { fresh[x] = 0; out[y * w + x] = -1; }
+            document.compositeTonesKept(left, top + y, w, 0, to, takes, lines, fresh, out, y * w);
         }
     }
     /** {left, top, right, bottom} of the pixels erased since the last call, right and bottom exclusive; null for none. */
@@ -188,9 +198,12 @@ final class EraseBothStroke implements DrawingStroke {
                 });
                 fluid = ink ? document.finishWithPrevious() : document.finish();
             }
-            // Inkwash: the pair's other planes it takes, the ink layer's then the wash layer's, base first, each a gesture
-            // of its own (a gesture binds one plane), one Undo step with the rest. A plane of another kind is left whole.
-            for (int layer : washLayer != inkLayer ? new int[]{inkLayer, washLayer} : new int[]{inkLayer}) {
+            // Inkwash: every shown layer's planes it takes, base first, each a gesture of its own (a gesture binds one
+            // plane), one Undo step with the rest. A plane of another kind is left whole, a hidden layer too (the screen
+            // doesn't show it), and Vector Ink's: the cut draws their pixels again from the lines.
+            // The cost: a pass over the pixels it went over per plane, at lift only; a blank pixel is passed by at once.
+            for (int layer = 0; layer < document.layerCount(); layer++) {
+                if (!document.layerVisible(layer) || (lined >> layer & 1) != 0) continue;
                 document.selectLayer(layer);
                 for (int p = -1; p < ToneDocument.PLANES; p++) {
                     if (layer == inkLayer && p == live || p >= 0 && (ToneDocument.PLANE_KINDS[p] & takes) == 0) continue;
@@ -210,6 +223,7 @@ final class EraseBothStroke implements DrawingStroke {
             }
             changed = ink || fluid || wash;
         } finally { document.selectLayer(restore); }
+        if (cut != null) cut.done(changed, coverage);
         // After the layer is restored: Undo puts back the layer selected with the design.
         if (kinds == 0 && document.rubs())
             changed |= document.rubDesign(CoverWear.with(document.wear(), document.width, document.height, coverage.bounds(), this::erased), coverage.bounds(), changed);

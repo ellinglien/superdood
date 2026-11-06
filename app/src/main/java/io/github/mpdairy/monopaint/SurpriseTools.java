@@ -13,8 +13,8 @@ import java.util.Random;
  * <li>PEN, always the first slot: one plain fast pen to write with (a simple ink line that dries at once);
  * <li>a range of types: LINE (a fast, simple line tool), WASH (a wash or soft brush), DRY (a dry or textured tool) and two
  * WILD (Anything goes);
- * <li>FANCY: a mischief module (Screen, Tone, Flick, Fling, Mold, Float or gravity), and three more of any kind (one
- * until the ninth and tenth slots, 2026-10-27);
+ * <li>FANCY: a mischief module (Screen, Tone, Flick, Fling, Mold, Float or gravity), and two more of any kind (one
+ * until the ninth and tenth slots, 2026-10-27; three until the tenth went, 2026-11-06);
  * <li>so at least two are fast and two simple (the PEN and the LINE), at least one fancy, and none the same as another.
  * </ul>
  * About half come from the owner's library and half are fresh rolls ({@link ModularStyle#roll}): five slots are drawn for
@@ -27,9 +27,9 @@ final class SurpriseTools {
     /** A slot's job in the mix. */
     enum Role { PEN, LINE, WASH, DRY, WILD, FANCY, ANY }
     /** The roles of the slots ({@link ToolSlots#COUNT}, checked), before they are mixed up (the pen stays first). */
-    static final Role[] PLAN = {Role.PEN, Role.LINE, Role.WASH, Role.DRY, Role.WILD, Role.WILD, Role.FANCY, Role.ANY, Role.ANY, Role.ANY};
-    /** How many slots come from the library: half. */
-    static final int FROM_LIBRARY = PLAN.length / 2;
+    static final Role[] PLAN = {Role.PEN, Role.LINE, Role.WASH, Role.DRY, Role.WILD, Role.WILD, Role.FANCY, Role.ANY, Role.ANY};
+    /** How many slots come from the library: half, rounded up (five, as with ten). */
+    static final int FROM_LIBRARY = (PLAN.length + 1) / 2;
     /** Tries at a fresh roll that fits its role before the role's own brush is made. */
     private static final int TRIES = 400;
 
@@ -70,8 +70,8 @@ final class SurpriseTools {
     /** Whether the brush has a mischief module: Screen (print shading), Tone, Flick, Fling, Mold, Float, Fading, Lemon Juice or a page-tilt (gravity) cell. */
     static boolean fancy(Brush brush) {
         ModularBrush b = brush.parts;
-        ModularBrush.Part tip = b.part(BrushPart.TIP), medium = b.part(BrushPart.MEDIUM), life = b.part(BrushPart.LIFE), hand = b.part(BrushPart.HAND);
-        if (medium.choice == PartChoice.TONE || life.choice == PartChoice.HALO || life.choice == PartChoice.FLOAT || life.choice == PartChoice.FADE || life.choice == PartChoice.LEMON) return true;
+        ModularBrush.Part tip = b.part(BrushPart.TIP), medium = b.part(BrushPart.MEDIUM), hand = b.part(BrushPart.HAND);
+        if (medium.choice == PartChoice.TONE || b.mischief() != PartChoice.LATER_OFF) return true;
         if (tip.get(PartDial.FLICK) > 0 || medium.get(PartDial.FLING) > 0 || medium.get(PartDial.SCREEN) > 0) return true;
         for (PartDial cell : PartDial.PAGE_CELLS) if (hand.get(cell) > 0) return true;
         return false;

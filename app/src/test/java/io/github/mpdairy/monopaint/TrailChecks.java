@@ -22,7 +22,7 @@ public final class TrailChecks {
         // Composing whenever the render has caught up, so it writes behind the pen many times a stroke.
         QuickStroke.composeMs = 0;
         try { same(); behind(); others(); } finally { QuickStroke.composeMs = composeMs; QuickStroke.trail = trail; }
-        System.out.println("PASS: a quick stroke's true stroke is written behind the pen while drawing (Instant, Fast-wet outside its window) and ends byte for byte as without it, every layer's tones, coverage, shares and print tones and its one Undo step, for every style Instant, Fast-wet and Drying, washes, hakes, opaque paint, pens, sticks, a halftone, Erasable paint, a Slow ink wash and a halo's; far behind the pen the page shows the true stroke before lift, near it the preview; smudges trail too, byte for byte, those with no paint of their own showing the smudge under the pen; the flag off writes nothing behind the pen");
+        System.out.println("PASS: a quick stroke's true stroke is written behind the pen while drawing (Instant, Fast-wet outside its window) and ends byte for byte as without it, every layer's tones, coverage, shares and print tones and its one Undo step, for every style Instant, Fast-wet and Drying, washes, hakes, opaque paint, pens, sticks, a halftone, Erasable paint, a Slow ink wash and a halo's; far behind the pen the page shows the true stroke before lift, near it the preview; smudges trail too, byte for byte, those with no paint of their own showing the smudge under the pen, every composeMs while the render is behind, and a stump's other half (Blend over a wash, Blur over pencil) shown on the screen before lift as the finish lays it; the flag off writes nothing behind the pen");
     }
     static void note(String s) { if (verbose) System.out.println(s); }
 
@@ -158,10 +158,88 @@ public final class TrailChecks {
             note(String.format(Locale.ROOT, "%s %.0f px: near the pen before lift %d of %d smudged pixels as they end; %d tiles written in %d writes", c[0], size, shown, moved, s.trailTiles, s.trailWrites));
             check(moved > 200 && shown * 2 > moved, c[0] + ": near the pen before lift the page shows the smudge: " + shown + " of " + moved);
         }
+        behindSmudge();
+        otherHalf();
         ToneDocument off = page(), on = page();
         draw(off, GravityChecks.preset("Soft wash"), 120, false, null);
         QuickStroke s = draw(on, GravityChecks.preset("Soft wash"), 120, false, null);
         check(s.trailTiles == 0 && same(all(off), all(on)), "trail off: nothing written behind the pen, the page as without it");
+    }
+    /**
+     * A smudge shown under the pen whose render is behind the pen (the owner, 2026-11-04: "update the area as it's being
+     * passed over"): it composes every {@link QuickStroke#composeMs} anyway, where another stroke waits until it has caught
+     * up; and drawn with the pen never pausing (composing whenever it can, behind or not), the smudge tool's Blend ends
+     * byte for byte as with the trail off.
+     */
+    static void behindSmudge() {
+        long every = QuickStroke.composeMs;
+        check(QuickStroke.composesNow(true, false, false, every) && !QuickStroke.composesNow(true, false, false, every - 1)
+                && QuickStroke.composesNow(true, false, true, 0), "a smudge under the pen composes once caught up, and every composeMs while behind");
+        check(!QuickStroke.composesNow(false, true, false, every + 1000) && !QuickStroke.composesNow(false, false, true, every)
+                && QuickStroke.composesNow(false, true, true, every), "any other stroke composes only once it has waited for samples and caught up");
+        ModularBrush b = FloatChecks.preset("Blend");
+        ToneDocument off = marked(), on = marked();
+        byte[][] found = all(on);
+        for (boolean t : new boolean[]{false, true}) {
+            QuickStroke.trail = t;
+            QuickStroke s = QuickStroke.quickly(t ? on : off, b.copy(), 200, 1, new WatercolorSession());
+            QuickStrokeChecks.draw(s, QuickStrokeChecks.path(), false, null);
+            s.finish();
+            note(String.format(Locale.ROOT, "Blend 200 px, the pen never pausing, trail %b: %d tiles written behind the pen in %d writes", t, s.trailTiles, s.trailWrites));
+        }
+        check(!same(found, all(on)) && same(all(off), all(on)), "Blend at 200 px, the pen never pausing: with the trail ends byte for byte as without it");
+    }
+    /**
+     * A stump's other half shown under the pen (the owner, 2026-11-04, a big Blur: "doesn't seem to have any effect until
+     * i lift the pen"): Blend over a wash and Blur over pencil smudge planes laid only at the finish
+     * ({@link ModularStroke#unwritten}). Before lift the page there is as found, yet what the screen shows of it
+     * ({@link DrawingStroke#unwritten}) is the smudge, within 2 tones of what the finish lays at nearly every pixel it
+     * changes, live and quick alike; and the page ends as before.
+     */
+    static void otherHalf() {
+        Object[][] cases = {{"Blend", InkWashLayers.WASH, ToneDocument.KIND_PAINT}, {"Blur", InkWashLayers.INK, ToneDocument.KIND_PENCIL}};
+        for (Object[] c : cases) for (double size : new double[]{44, 120}) {
+            ModularBrush b = FloatChecks.preset((String)c[0]);
+            ToneDocument d = InkWashLayers.blank(600, 400);
+            CarrySmudgeChecks.lay(d, (Integer)c[1], (Integer)c[2], (x, y) -> Math.floorMod(x, 10) < 5 ? 60 : 255);
+            int n = d.width * d.height;
+            int[] found = new int[n], before = new int[n], shown = new int[n], after = new int[n];
+            d.compositeTones(0, 0, d.width, d.height, found, 0, d.width);
+            WatercolorSession s = new WatercolorSession();
+            s.holding("SMUDGE");
+            ModularBrush parts = s.onWater(d, b);
+            s.settleBefore(d, parts);
+            s.dry("stroke");
+            DrawingStroke st = QuickStroke.start(d, parts, size, 1, s);
+            double[][] path = FloatChecks.line(60, 200, 540, 200, .6);
+            for (int i = 0; i < path.length; i++) {
+                st.sample((float)path[i][0], (float)path[i][1], ToolSettings.pressure((float)path[i][2]), 0, 0, (long)path[i][3]);
+                if (i % 4 == 3) st.present();
+            }
+            if (st instanceof QuickStroke) {
+                QuickStroke q = (QuickStroke)st;
+                for (int k = 0; k < 2000 && q.rendered() < q.samples(); k++) {
+                    try { Thread.sleep(1); } catch (InterruptedException e) { throw new RuntimeException(e); }
+                }
+            }
+            st.present();
+            d.compositeTones(0, 0, d.width, d.height, before, 0, d.width);
+            DrawingStroke.Unwritten u = st.unwritten();
+            check(u != null && u.take() != null, c[0] + " at " + size + " px: its other half is shown, and where");
+            u.tones(0, 0, d.width, d.height, shown);
+            st.finish();
+            d.compositeTones(0, 0, d.width, d.height, after, 0, d.width);
+            long changed = 0, close = 0, untouched = 0;
+            for (int i = 0; i < n; i++) {
+                if (before[i] == found[i]) untouched++;
+                if (Math.abs(after[i] - found[i]) < 4) continue;
+                changed++;
+                if (shown[i] >= 0 && Math.abs(shown[i] - after[i]) <= 2) close++;
+            }
+            note(String.format(Locale.ROOT, "%s %.0f px (%s): %d pixels smudged, %d shown within 2 tones before lift", c[0], size, st.getClass().getSimpleName(), changed, close));
+            check(untouched == n, c[0] + " at " + size + " px: the page holds none of its other half before lift");
+            check(changed > 5000 && close >= .95 * changed, c[0] + " at " + size + " px: before lift the screen shows the smudge: " + close + " of " + changed);
+        }
     }
     /** The checks' page with marks on both layers of its pair, for a smudge to move: ink lines, wash bands. */
     static ToneDocument marked() {

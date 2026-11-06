@@ -5,6 +5,815 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+- **Superdood 1.0** (2026-11-06): the first release under the Superdood name.
+- **Play opens clean** (play-flash, 2026-11-06, the owner: "play dropdown... impossible to read"). A menu opened from
+  another menu's row (Play, Export Page, System Settings, Mirrors or Shapes from Play) now waits a moment for the menu
+  before to leave the screen and be cleaned, then opens on clean paper, as Notebook Settings does from the menu.
+- **Zen Mode's fan: a smaller layer button, the Lasso tucked in** (zen-fan-4, 2026-11-06, the owner: "can the layers
+  picker be a bit smaller, like 85%", "move the lasso a little tighter in"). The layer button between the pickers is a
+  little smaller, and the three buttons there sit closer together, the Lasso inside where the pickers' arcs would meet.
+
+- **Opaque flat joins the oils; two lines gone** (tidy-1, 2026-11-06, the owner): Opaque flat sits under Paint with Wet oils and Loaded oils
+  (so in the tray and the Paint and Effects kit order) and has the oils' brush drawing. "Tap a slot, then a brush for it." is gone from the
+  Toolbar page and "For every notebook." from System Settings.
+- **A clean scratch pad in Brush Studio** (2026-11-06, the owner: "this bit in the brush studio scratch pad... i think we can remove it"):
+  the grey wash and black zigzag it started with are gone; it starts blank.
+- **Bar brushes start at the bar's size** (2026-11-06): Verve felt, Fude fountain, Ink wash, Watercolour wash and Rob boss, picked
+  from the tray, now start at the size and shade set for the first-launch bar.
+- **The nine first-launch tools start at the owner's sizes and shades** (sizes-2, 2026-11-06): Another pencil 6, Steady line 3, Verve felt 4, Fude fountain 11, Ink wash 85, Watercolour wash 275, Rob boss 114, Ben-Day brush 17, High lighter 34, each at the grey chosen by hand; on a first launch and when picked into a slot.
+- **Dollar Store tools start at the owner's sizes and shades** (sizes-1, 2026-11-06): Cheap ballpoint, High lighter, Ms. Sketch, Dry round, Flat brush, Cracking paint, Soft pencil, Wax crayon and Stipple pen take the size and grey chosen by hand whenever picked into a slot, and on a first launch.
+- **Pixels and Stitches, and two pens for them** (pixels, 2026-11-06, the owner: "a pixel texture brush", "maybe also a
+  cross-stitch texture"): two new Print Shadings after Rings. **Pixels** lays big square pixels on a grid fixed to the
+  page, each one grey, lighter or darker as you press; **Stitches** lays a cross-stitch in each square, the paper white
+  between. Squares fill whole or not at all, at the brush's Pattern Size and Angle. New tools under Print:
+  **Pixel pen** and **Stitch pen**.
+- **After effects start fast** (later-fast, 2026-11-06, the owner: "30s seems like a long time to wait"): every After
+  choice's time (Stitches In, Ages In, Dries In, Fades In and the rest) now goes down to 1 s and starts there; Foxing
+  starts at 10 s. Brushes saved before keep about their time, a few seconds shorter at the low end: Vanishing ink fades in
+  12 s (was 20 s); Lemon juice, Metalpoint, Letterpress and Cracking paint barely change.
+- **Four new kits, Mixed Media gone** (kits-4, 2026-11-06, the owner: "create a few kits with the remaining ones"):
+  Sketchbook, Watercolour, Paint and Effects and Print Shop follow Default Tools and Dollar Store on Load Kit. Blend and
+  Blur leave the shown tools and the tray (the smudge tool's own); slots holding them keep working.
+- **Kits load in the tray's order** (kit-order, 2026-11-06): Mixed Media and Dollar Store put their tools on the bar kind by kind, A to Z, as the tool tray lists them. Default Tools keeps the bar's first-launch order.
+- **Brush Studio from the app is Brush Lab; Brush Lab shares to the web one** (studio-local, 2026-11-06, the owner:
+  "it shouldn't be a browser, it should be the local app version.. which should be able to share to the web version").
+  The tool picker's foot no longer has Brush Studio: its Edit Brush is the app's own Brush Lab, offline and fast. Brush
+  Lab's Open sheet has a new **Brush Studio** button beside Copy (said "Share to Brush Studio"): it opens the brush in
+  the web Brush Studio (superdood.org/studio) in the tablet's browser, or says "No browser". The app sends nothing
+  itself. In the browser the picker's foot keeps its Brush Studio link, now to superdood.org/studio.
+- **Brush Lab's bar is its title alone** (2026-11-06, the owner: "remove the subhead"): "Tap a part to change it, then
+  try the brush." is gone, in the browser too.
+- **All of a part's choices at once** (2026-11-06, the owner: "all should be displayed, there's room on the page.. just
+  make the tray twice as tall"): a part with more choices than its tray holds (After's fourteen, the fourteen papers)
+  opens a tray twice as tall with every one in it, Cross-Stitch too, instead of two pages. Tiles keep their size.
+- **Library round three** (library-3, 2026-11-06, the owner's list): **Loaded oils**, **Granulating** and Backrun, now
+  **Watercolour backrun**, moved up from More Brushes. Two of the owner's own Brush Lab brushes are new tools:
+  **Opaque flat** and **Watercolour splatter**. Watercolour washy is now **Watercolour wash** (slots and codes holding
+  the old names keep working). **Fill in** and **Water** left the tool picker: Fill in is on the bar, Water in the smudge
+  tool's choices. Eleven texture tools went back to More Brushes (Basketweave, Brick, Diamond dots, Dither pencil,
+  Honeycomb, Maze, Mezzotint, Rings, Scribble, Waves, Woodcut); Engraving pen and Wavy-line pen stay, with the owner's
+  new drawings.
+- **The tool picker's foot, one row** (library-3, 2026-11-06, the owner: "put edit brush, full library, and hold opens
+  full library on the same line, and same size font... also include link to open brush studio"): **Edit Brush**, **Full
+  Library** (was Library), **Hold Opens Full Library** (was Hold Opens Library) and **Brush Studio**, which opens
+  ell.ing/brush-studio in the browser. The picker is shorter: it fits the Manta either way up and the Nomad upright
+  again; only the Nomad turned scrolls.
+- **Texture tools** (textures-kit, 2026-11-06, the owner: "all of those patterns would be awesome"): every Print
+  Shading now has a tool under Print. New texture markers **Maze**, **Brick**, **Basketweave**, **Waves**,
+  **Honeycomb**, **Rings**, **Woodcut**, **Diamond dots** and **Scribble**: a broad marker whose pattern fills in as you
+  press. **Engraving pen**, **Dither pencil**, **Wavy-line pen** and **Mezzotint** moved up from More Brushes; Mezzotint
+  now darkens with pressure too. The tool picker is longer: it scrolls on the Manta turned and the Nomad upright.
+- **Dollar Store kit** (textures-kit, 2026-11-06): Cheap ballpoint, High lighter, Ms. Sketch, Dry round, Flat brush,
+  Cracking paint, Soft pencil, Wax crayon and Stipple pen, in the tool picker's order.
+- **Brush library round** (2026-11-06, the owner's list): Cracks is now **Cracking paint** and Big sky **Flat brush**
+  (slots and codes holding the old names keep working). **Gradient tone** follows pressure: its dots go from light to
+  full as you press. **Line and wash** moved to More Brushes. **Stipple pen** and **Hatch pen** are under Print with the
+  other texture tools. New **Soft pencil** (Dry Media): a soft, dark, grainy lead, broader than Another pencil.
+- **Six new Print Shadings** (new-screens, 2026-11-06): **Maze**, **Brick**, **Basketweave**, **Waves** (Japanese wave
+  scales), **Honeycomb** and **Rings**, after Soft Dither. Each is a pattern fixed to the page whose lines thicken with the
+  grey, thin and light to nearly black, at the brush's Pattern Size and Angle.
+- **Fill in beside the stump and the eraser** (nine-slots, 2026-11-06, the owner: "i actually think the fill in pen
+  should be grouped with the stump and eraser ... so the tray would have 9 spots i guess"). The bar has nine slots, and
+  Fill in is a tool of its own over the smudge tool and the eraser, always there with its own size and grey, in Zen
+  Mode's fan and Finger Action too. A toolbar of ten keeps everything: a slot holding Fill in makes way for its new place
+  (its size and grey go with it), else the tenth brush goes to Recent. Default Tools is nine brushes.
+- **Effects, and the tool picker four wide** (tray-effects, 2026-11-06, the owner: "effect brushes should move to their
+  own section.. and make it four wide pls"). The tools that change marks already on the page (Blend, Blur, Water,
+  Newsprint and Photocopier, each "… Effect") have their own kind, **Effects**, last in the picker and a chip on the
+  Tools page. Cracks moved to Paint ("it's more of a paint"). The picker is four tools wide; where that would run off
+  the screen its drawings get a little smaller, so it fits the Manta either way up and the Nomad upright.
+- **Zen Mode's fan: roomier gaps, three buttons between the pickers** (zen-fan-3, 2026-11-06, the owner: "increase it
+  so that that space equals the width of the space from the end of the top arc on the top left to the screen edge",
+  "remove the page count and changers, as well as the eye dropper tool", "putting the layers, droplet and lasso between
+  the two wedges, with the new space"). The white between the size and grey pickers, and between them and the arc, is
+  about twice as wide, the pickers a little shorter, the tools where they were. The layer button, the droplet and the
+  Lasso sit in the gap between the pickers, out from the corner; the line under the fan is gone.
+- **Zen Mode's fan: one line of buttons** (zen-fan-2, 2026-11-06, the owner: "align the bottom icons with the dot/nib
+  preview and just have one line there... drop, lasso, and tiny layers"). Menu and Zoom left the fan. Under it, level
+  with the nib preview: the Dropper, the droplet, the Lasso and a small layer button, all one size, then the page bar's
+  ‹ page number › ("add a small < page# > line to the right of the layers").
+- **Riso follows the pen's pressure** (2026-11-06, the owner: "i adjusted riso to be pressure sensitive... use the one i just created"): Riso
+  is now the owner's pressure-sensitive version from Brush Lab, under the same name.
+- **Layer visibility** (layer-visibility, 2026-11-06, the owner: "long press should bring up the visibility options").
+  Hold the layer button for its three layers, each with Show Kinds' eye: tap an eye for Full, Half, Faint or Hidden, tap
+  a name to draw on that layer. Kept with the page, and Undo takes a change back. Drawing on a hidden layer says "Layer 1
+  is hidden". Works in Zen Mode's fan too.
+- **The page bar keeps the page centred** (strip-centred, 2026-11-06, the owner: "i am on page 14 or something... and i
+  don't see any other pages to the left"). After every turn the previews re-centre on the page drawn on, held at the ends,
+  so a preview at the strip's end is the first or last only when it really is. Riffles move as before, re-centring after.
+- **Going over a texture never lightens it** (2026-11-06, the owner: "drawing over an area with different pressure can
+  lighten it... like it's an opaque paint. i've found that to be a bit unintuitive"): a Print Shading or Screentone stroke
+  over another only darkens it again, as before 2026-10-29: a lighter grey or a lighter press leaves the darker pattern.
+  Opaque prints, opaque paint and white still cover. Textures still erase apart from pen.
+- **Wet oils' and gouache's spread covers like the stroke** (oil-spread-cover, 2026-11-06, the owner: "for the oil.. yes,
+  spread cover like the stroke"). The pale paint that spreads around a wet opaque stroke (Rob boss, the Oils and Gouache
+  wet brushes) now hides marks under it by how much paint it holds, instead of letting them show at full darkness as if
+  it lay beneath them. Watercolour and ink washes are unchanged.
+- **The tool picker by kind, and Hold Opens Library** (tray-groups, 2026-11-06, the owner: "in the tray, group
+  alphabetically but divide by type"; "make 'tools first' a checkbox"). The picker lists its tools in the Tools page's
+  kinds (Pens, Markers, Brushes, Washes, Paint, Dry Media, Print, Odd Ones), each kind A to Z, a thin grey line between.
+  Tools First is now the checkbox **Hold Opens Library**. The Fude pen left the library ("fude pen is a duplicate"):
+  Fude fountain is the same pen, and slots holding it keep it. The drawings follow the owner's list, one drawing on
+  several tools where it fits (Soft wash's on the washes, Loaded oils' on the paints, Comb's on Big sky); other tools
+  show their stroke. Six new drawings by the owner, drawn on the Manta, for the texture tools: Hatch pen, Halftone
+  brush, Ben-Day brush (redrawn "for consistency"), Rosette ink, Gradient tone and Riso.
+- **Favourites** (favourites, 2026-11-06, the owner: "tap a star on the upper right of a page preview to save it to a
+  special favourites notebook"). Inside a notebook, each page's preview in the strip has a star in its upper right
+  corner: tap it to copy the page as it is now, every layer, to the end of the Favourites notebook (made at the first
+  star, first on the shelf, never renamed or deleted); the star fills. Tap a filled star to remove that copy, after
+  asking. The notebook's bar now says Settings instead of its icon, and the "Tap a page to open it." and "Tap a notebook
+  to open it." lines are gone.
+- **Zoom always refreshes** (2026-11-06, the owner: "for zooming we should make the auto refresh happen again, force it"): a pinch, a
+  pan or the zoom button cleans the page once the fingers are still, as Refresh does, whether Automatic Refresh is on or off.
+  Automatic Refresh now covers erasing and screen changes.
+- **System Settings pops up over the drawing** (settings-popup, 2026-11-06, the owner: "it's too small it should just pop
+  up over instead of being its own page"). It opens where the menu was, in the menu's look, with all its rows; a tap
+  outside closes it, and the column no longer ghosts.
+- **Page Bar in the menu** (page-bar-menu, 2026-11-06, the owner: "a book icon to hide or show the top notebook pages
+  bar", then "we can move that to the dropdown"). The menu's Page Bar row, after Show Kinds, hides the bar along the
+  page's top or shows it again, marked while it shows; the column gives the book's room back. A fitted page is fitted
+  again to the new room and centred (upright on the Manta it is already as wide as it can be, so it stays the same
+  size), then one refresh. Zen Mode still hides the bar, and leaving it gives the bar back as Page Bar left it.
+- **A shorter column, a tidier menu** (layer-button-2, 2026-11-06, the owner: "shrink it slightly and move it right below
+  the picker", "make the strokes in the layer picker the same as the stroke on the picker", "move the timer, visibility,
+  and mischief tools to the dropdown"). The layer button sits right under the picker box, a little smaller, its diamonds
+  drawn in the picker's thin lines, and now on the Nomad too. The sand timer, Show Kinds and Play left the column for
+  the menu, now in four groups: Notebook Explorer, Notebook Settings; Export Page, Import, Show Kinds; Draw Together, Sand
+  Timer, Play; Left-Handed, System Settings. Finger Action moved to System Settings. The Manta's tray rows are full
+  height again when turned.
+- **Zen Mode's fan holds the column's buttons** (zen-fan-tools, 2026-11-06, the owner's sketch: "the x locations are where
+  we could add icons from the toolbar"). While the fan is open, Menu, Zoom and the droplet stand up its side, and the
+  Dropper, the Lasso and the layer button along its foot; each does what it does in the column, and Menu's and the
+  Lasso's menus open beside the fan. The corner circle shows the brush's nib and grey while the fan is open ("change
+  back to nib + shade preview (but only when fan is open)"). Drawing keeps the fan open, the nib's ring showing as
+  usual, strokes right beside the fan showing at once; a tap on the circle closes it ("Keep tray open when drawing -
+  press to close"), a hold still leaves Zen Mode.
+- **Three layers, a first try** (three-layers-1, 2026-11-06, the owner: "tap on the layer area to switch to another
+  layer"). A small button over Refresh shows three stacked diamonds, the layer in use filled: tap its top third for
+  layer 3, its middle for 2, its foot for 1 ("Layer 3" at the brush line's end). A page starts on layer 2; the first
+  switch adds the other two, one Undo step. Manta only for now: the Nomad has no room for it.
+- **Menu icons from Iconoir; "Open Notebook" is now "Notebook Explorer"** (menu-icons, 2026-11-06, the owner's picks). Notebook Settings (menu and
+  notebook bar) page-star, Notebook Explorer book, Export Page upload-square, Import download, Finger Action the
+  one-finger hand gesture, Draw Together internet; System Settings keeps its settings gear.
+- **Zen Mode's fan stays clean** (2026-11-06, the owner: "paint drying under the fan"). Paint drying, strokes and the
+  eraser no longer write over the open fan on the screen; closing it shows what changed under it.
+- **The column's Lasso stays chosen after an edge-strip lift** (toolbar-lasso, 2026-11-05, the owner: "regular lasso
+  selected from the toolbar had some issues with the frame options not showing up"). With a piece lifted by the edge
+  strip still floating, a tap on the Lasso now keeps it: the next loop lifts a piece with its frame and bar, instead
+  of the Lasso being put away and the loop drawn as ink.
+- **Zen Mode by a hold** (zen-circle-2, 2026-11-05, the owner). Hold the Zen Mode button to go in, and hold it again
+  to leave; a tap while off says "Hold for Zen Mode". With Zen's fan open the button stays a circle (no X), and a tap
+  closes the fan.
+- **Zen Mode's circle stays whole** (zen-circle-2, 2026-11-05, the owner: "disappears a bit"). Strokes, the eraser's
+  ring, wet paint and sharp-zoom tiles near the corner drew the page over parts of the circle; it is drawn again
+  there now, quietly, a moment after, with no flash.
+- **The Self-Portrait Prompt is cut** (pare-features, 2026-11-05, the release pare-down; in git at `pre-pare-down`).
+  Notebook Settings has no Self-Portrait Prompt row and new pages get no card. A page that was given one opens as
+  before, without its card, and its PDF no longer lists the card. The Diary Page's boxes keep the template's own times
+  (the prompts file's "Diary Page times" line is no longer read); an old prompts file is left where it is, unread.
+- **Notebooks in the browser (/app) are cut** (pare-features, 2026-11-05; in git at `pre-pare-down`), with its Send to
+  My Tablet. Draw Together (/live), Brush Studio and superdood.org work as before.
+- **Fewer things up front: Brush Lab, Page Settings and Play** (pare-features, 2026-11-05, the release pare-down).
+  Brush Lab opens from a slot's long press, its row now said **Edit Brush**; a tap on the brush's name at the foot no
+  longer opens it. Page Colour and See-Through Pages left Notebook Settings and are Page Settings' rows (hold a page);
+  See-Through Pages there still sets the whole notebook, and a long press opens its five choices. The column's Shapes
+  button went: **Play** now holds Text, Magnetic Poetry, Shapes, Spirograph (takes the Spirograph up on the slot in
+  use), Mirrors and Replay Page, and is marked while Shapes draws. The community brush library stays in Brush Studio.
+- **Fewer brushes up front, the rest on More Brushes** (pare-brushes, 2026-11-05, the release pare-down). The Tools
+  page, the tool picker and Search show 39 tools: the bar's first-launch ten and the owner's picks, family by family
+  (one Highlighter, the bar's High lighter; Another pencil is the pencil). The other 106 Basic tools, effect brushes
+  included, sit on **More Brushes**, a chip beside Search on the Tools page, kind by kind in the same cards; one picked
+  there goes on a slot as any other. Kits are down to Default Tools and a new one, Mixed Media: eight shelf brushes,
+  each its own kind of mark (2B pencil, Ballpoint, Swell brush, Chisel marker, Compressed, Wet blooms, Loaded oils,
+  Dot tone). Nothing is lost: slots, notebooks, Recent, saved brushes and share codes holding any brush keep it.
+- **Draw Together: a guest's browser catches up faster after a dropped connection** (silent-bisect, 2026-11-05). Since
+  marks keep their kind, a guest coming back laid the page again several times slower; it now draws the page about
+  ten times faster, and is back in a few seconds.
+- **Draw Together: guests see the Manta's strokes as they are drawn** (host-live, 2026-11-05, the owner: "FROM the
+  manta, it's still just on pen lift"). A guest's strokes already came to the Manta while drawn; now the Manta's go to
+  guests the same way, about eight times a second, and the page is the same on both once the pen lifts. Drawing on the
+  Manta is no slower.
+- **Zen Mode's circle stays with Automatic Refresh off** (zen-circle, 2026-11-05, the owner: "the zen circle button
+  has been disappearing a bit in zen mode"). Closing Zen's fan or a menu over the page, turning a page, or a pinch
+  drew the page over the circle and nothing put it back once Automatic Refresh was off. The circle is drawn again
+  there now, quietly, with no flash.
+- **Shapes stay sharp when zoomed** (sharp-more, 2026-11-05). Lines, boxes, ovals, circles and squares from Shapes
+  draw with clean edges zoomed in, in any grey, filled or outlined. A page holding shapes or screentone also makes its
+  PDF picture at twice the page, sharp. Text boxes and magnets still show as at 100%, scaled.
+- **Screentone stays sharp when zoomed** (sharp-more, 2026-11-05, the owner: "screentone dots are my top thing that i
+  love"). Zoomed in, Screentone's dots, lines and hatching and the Print brushes' halftone, Ben-Day, rosette, engraved
+  and wavy lines draw as clean round dots and smooth lines, the same pattern as at 100%, just finer. Where the eraser
+  scraped dots, those show as before. Riso, Photocopier, Newsprint, Brayer and Letterpress stay as they are.
+- **Send** (send-phone, 2026-11-05, the owner: "a lightweight quick share option that doesn't require server space").
+  Export Page's menu has a last row, Send: its window shows a QR code and superdood.org's four letters. A phone or
+  computer on the same Wi-Fi opens a plain page with the page's PDF, PNG (Social, Page, High Res) and Layers and the
+  notebook's PDF; a tap downloads it, made on the Manta then and sent straight over the Wi-Fi (superdood.org only passes
+  the link on, never the file). The link works while the window is open, ten minutes at most.
+- **On a desktop, the drawing page fills the window's width** (guest-zoom, 2026-11-05, the owner: "having the browser
+  be zoomed to full width (for desktop), with maybe a way to scroll down"). Draw Together's page and the browser app
+  open with the page across the window, its top showing; the wheel, a trackpad and the scroll bar scroll down it. Ctrl
+  or ⌘ with the wheel, or a trackpad pinch, zooms about the pointer, out as far as the whole page; a tap on Zoom (the
+  percentage) is the width again. A wheel turned while drawing scrolls nothing. Phones and tablets keep the whole page
+  (a phone upright already shows it across its width; one finger draws there, two pinch and pan).
+- **Show Kinds works in a Draw Together guest's browser** (guest-vis, 2026-11-05, the owner: "visibility settings
+  don't seem to affect anything on the browser, on mac ... visibility works fine on the manta tho"). The eye only faded
+  the guest's own strokes: the Manta's marks reached the browser as plain greys of no kind. Each mark now travels with
+  its kind (Pen, Paint or Dry Media), and the page a guest joins is sent a kind at a time, so hiding Pen in the browser
+  hides the Manta's pen too, and a guest's marks fade with the Manta's eye. Shapes, stamps and the Lasso's pieces still
+  come as no kind and stay. The Manta app and superdood.org/live need updating together: an older one refuses the
+  other's marks.
+- **A page turn no longer blinks the page pictures beside it** (thumb-quiet-2, 2026-11-05, the owner: the pictures
+  to the right "get darker twice.. two blinks"). Only the pages whose marks move (the one left and the one turned to)
+  and the page number are drawn again; the pictures between them and the number stay as they are.
+- **Edge Strip Hold set to Lasso keeps what it rings** (edge-lasso, 2026-11-05, the owner: "it doesn't present the
+  standard box and options... just a faint ghost"). Letting go of the strip used to put the piece down at once. Now the
+  piece, its box and its bar stay, as with the Lasso on the side column, and the tool in use comes back once the piece
+  is done (any bar choice, or the pen off it). A hold that rings nothing is put away at the lift, as before.
+- **A long eraser stroke no longer chugs** (erase-speed, 2026-11-05, the owner: "a bit sluggish with a long erase
+  stroke"). The eraser shows the page as it leaves it several times faster, so it keeps up with the pen.
+- **superdood.org** (superdood-org, 2026-11-05, the owner: "superdood can be a landing page .. but should also house
+  the drawing page for draw together and brush studio"). Superdood's own address, in place of ell.ing: its page, the launch drawing over
+  Draw Together's code box (Draw Together's window now shows "superdood.org" over the four
+  letters), the drawing page a guest joins is at superdood.org/live, and Brush Studio at superdood.org/studio. Wrong
+  codes are limited (5 a minute, 20 an hour, 300 from everyone in ten minutes) and every page is locked down
+  (superdood.org's server notes (not in this repo), Security).
+- **Back on the drawing screen, the screen is always cleaned** (2026-11-05, the owner: Page Settings left "a very
+  pronounced ghost of the top and left sidebar"): one quiet redraw, no flash, with Automatic Refresh off too.
+- **The page bar's small page pictures no longer blink after a page turn** (thumb-quiet, 2026-11-05, the owner: "the
+  tiny thumbnails blink on and off briefly"). Each picture now updates in one quiet grey pass, as the side bar does,
+  and one that didn't change isn't touched on the screen. They may keep a faint ghost until the next Refresh.
+- **The HB pencil is dark without pressing hard** (hb-dark, 2026-11-05, the owner: "HB pencil is not usable... need to
+  remove the pressure - dark adjustment"). A light or normal touch now lays the pencil's usual grey; pressing harder
+  still widens the line a little, and its grain is as before. An HB pencil already in a toolbar slot becomes the new
+  one, at its own size and grey; a renamed copy, Recent and a notebook's own toolbar keep the old one.
+- **Layers comes in three sizes, and the browser exports as the Manta does** (export-sizes, 2026-11-05, the owner's
+  decisions). Export Page's Layers (the Photoshop file) opens the same size menu as the PNG: Social, Page and High
+  Res; High Res says "large file" (about 5.5 MB for a page of handwriting, a minute or so on the Manta). At High Res
+  pencils and other dry brushes are drawn sharp in their layer and Vector ink's layer is drawn from its lines. In the
+  browser app, Export Page offers the PNG and Layers at all three sizes too, and a Draw Together guest's Export Page
+  offers the sizes for the PNG and Layers (until now a guest's PNG was always at Page). Large copies keep the browser
+  busy for a few seconds.
+- **Automatic Refresh is off at first** (2026-11-05, the owner: "it's seeming ok"): no flash or redraw on its
+  own until it is turned on in System Settings. A choice already made stays.
+- **A palm no longer counts as a two- or three-finger tap** (2026-11-05, the owner: a palm triggering Undo). A tap
+  with a palm-sized touch among its fingers does nothing. Page turns no longer flash (a trial).
+- **The eraser takes pencil under Vector ink after an Undo** (erase-hb, 2026-11-05, the owner: "I'm not able to erase
+  the HB pencil"). Undoing a Vector ink stroke left the eraser working on Vector ink's own layer, so pencil and other
+  marks drawn before it stayed, even after leaving the page and coming back. The eraser now works where those marks
+  are, and still cuts Vector ink's lines.
+- **Automatic Refresh off now means no automatic refresh at all** (refresh-off, 2026-11-05, the owner's request). Besides
+  the flashes, the clean redraws that blink (coming back to the drawing screen, opening a notebook screen or the test
+  area), the quiet grey pass after pauses, closed popups, big undos and zooms, and the cleaning of a closed popup's patch
+  are all off; only Refresh (the button, or a finger tap set to it) refreshes. On, nothing changes. The row's note now
+  reads "No flash or redraw on its own".
+- **The eraser takes everything under it, on every layer** (erase-all, 2026-11-05, the owner's decision). Layers
+  are hidden, so the eraser no longer works only on the layer last drawn on: on Everything it takes every mark under it,
+  and on a kind (Pen, Paint, Dry Media) every mark of that kind, wherever on the page it was drawn. Vector ink is still
+  cut. One Undo puts it all back. While erasing, the screen shows the page as it will be. A layer hidden in Page
+  Settings is left as it is. Erasing on a page with several layers takes a little longer at the lift. This also covers
+  erase-hb's fix (the owner: "I'm not able to erase the HB pencil"): after an Undo of a Vector ink stroke, pencil and
+  other marks drawn before it are erased too, even after leaving the page and coming back.
+
+- **No visible change: MonoPaint's hidden toolbar, header, colour bar and unused tools are gone from the code** (tidy-upstream, 2026-11-05).
+- **Pencils and pens stay sharp in PDFs** (pdf-sharp-2x, 2026-11-05, the owner's decision). A page with pencil, pen,
+  charcoal or other dry brush strokes now goes into every PDF (Export Page, Export Now, the browser's) at twice the
+  detail, those strokes drawn sharp as when zoomed in, at the same page size; Vector ink stays real lines over it.
+  Pages of washes alone are as before. A page's PDF takes longer and is bigger: about 1.8 MB against 0.6 MB, and up
+  to about 40 s on the tablet for a page of handwriting. The first Export Now after updating reads each page once.
+
+- **Export Page's PNG has three sizes: Social, Page and High Res** (png-sizes, png-sizes-2, 2026-11-05, the owner's
+  choice). Export Page, then PNG, now asks which size, each row with its size for the page: Social (1080 × 1444 for a
+  Manta page, smoothly shrunk), Page (the page's own size, as before) and High Res (twice it, 3570 × 4774, with
+  pencils, pens, charcoal and Vector ink drawn sharp as the screen shows them zoomed in). Each saves at once, with the
+  usual note. High Res takes longer: up to about a minute a page of handwriting, more for a page shaded all over. A
+  guest's Export Page in Draw Together still saves the PNG at the page's size. The old Export PNG window, which no
+  menu opened, is gone.
+- **Vector ink stays sharp in PDFs** (pdf-vector-ink, 2026-11-05). Export Page's PDF and the notebook's PDF now hold
+  Vector ink as real lines, crisp at any zoom or print size; the rest of the page is its picture as before. Lines under
+  other marks, or on a page with magnets, text boxes or a mirror, stay a picture.
+- **Layers made for Vector ink stay out of sight** (vi-autolayer-fixes, 2026-11-04). After Vector ink, a pen stroke
+  that needed a layer of its own now goes with one Undo and comes back with one Redo, and Page Settings no longer shows
+  Merge Old for the layers Vector ink made.
+- **Draw Together guests keep to Vector ink's rules** (vi-guest-guard, 2026-11-04). A guest's marks over Vector ink now
+  go under its lines, as the tablet's own pens do, so they show zoomed in and the Lasso takes them; a guest's eraser cuts
+  the lines as the tablet's eraser does, so zoomed in nothing erased comes back.
+- **Effect brushes on floating ink show their effect as you go** (effects-live-audit, 2026-11-04, the owner: "make them
+  all live if it's cheap"). Clear water, the Comb, Water and Gouache water over floating ink showed the rings too dark
+  under the pen and hid other marks nearby until the pen lifted, so the effect seemed to arrive only at the lift. They
+  now show the rings moving as they will stay. Every other effect brush already showed its effect while drawing.
+
+- **The Stamp and the Bristle brush stay sharp up close** (sharp-bristle-stamp, 2026-11-04). Zoomed in, the Stamp's
+  prints and the Bristle brush's hairs are drawn again finer, as the pencils and pens are: a print with the ink it had
+  (run dry, or carried on from the stroke before), a bristle stroke running dry into the same streaks. Every dry Basic
+  tool is now sharp up close. In the browser, the zoomed page and Brush Studio's close-up draw them sharp too.
+- **A long eraser stroke over Vector ink leaves no dashes** (vector-erase-crumbs-2, 2026-11-04, the owner: "it happened
+  again... particularly long eraser stroke", "it was after the lift that i saw the bits appear"). Scrubbing back and
+  forth with a big eraser no longer leaves dashed bits of the lines behind when the pen lifts.
+- **Erasing Vector ink leaves no crumbs** (vector-erase-crumbs, 2026-11-04, the owner: "when i erase a bunch of vector
+  ink it leaves a bit on the screen occasionally"). A line running along the eraser's edge no longer stays behind as a
+  dotted row of specks, and no tiny piece of a cut line is left.
+- **Pencils, charcoal, pastels and pens stay sharp up close** (sharp-brushes, 2026-11-04, the owner after the pencil
+  pilot: "looks good! i can even blur it?? it sharpens"). What the HB pencil does now every dry brush does: zoomed in past
+  125%, the marks of the pencils, charcoal and pastel sticks, the crayon, the fineliners, ballpoints and fountain pens, the
+  brush pens, the dip pens (split nibs, the ruling pen, the twig), the markers, Stipple and Hatch, the Spirograph and the
+  Fan brush are drawn again finer, a piece of the page at a time, as the pencil was; a brush made in Brush Lab is too when
+  its parts are a dry brush's. Not yet: Stamp and the Bristle brush. In the browser the zoomed page and Brush Studio's
+  close-up (4× and 16×) draw them sharp too, and Brush Studio's words for such a brush end "Sharp at any zoom."
+- **My Bad Drawings is now Superdood** (the owner, 2026-11-04: "yes proceed with the name"). The launcher says the new
+  name, and the loading screen is the owner's new drawing: "SUPER DOOD" in a loose oval. Draw Together's guest page
+  shows the same drawing while it loads, and its tab says Superdood. On first launch the app moves its folders for
+  you: Document/My Bad Drawings, EXPORT/My Bad Drawings and Pictures/My Bad Drawings become "Superdood" folders, and
+  your brushes, prompts, import, toolbar and stamps files take the new name. Nothing is copied or overwritten; if a
+  file with the same name is already there, both are kept. Supernote Cloud sees the moved EXPORT files as new ones.
+  Brush Studio's Procreate export is now "Superdood.brushset". Share codes, brush names and the app's id are unchanged,
+  so it updates over the old app with everything kept.
+- **Vector ink never fills up** (vector-ink-full, 2026-11-04, the owner: "after a long vector ink stroke just now i am
+  unable to make another mark"; "store maybe a fewer points, but yes, increase the limit"). A layer of Vector ink now
+  holds about eight times the lines it did: it keeps fewer points along its straighter runs (never visibly, even at
+  800%) and its limit is four times higher. When one does fill, the next stroke starts a new layer of Vector ink on top,
+  drawn sharp, erased and lassoed with the rest; only a page with four layers full says "Vector ink full". A stroke that
+  runs past the limit draws whole.
+  so it updates over the old app with everything kept. Folders beside it named for the old name come along too
+  ("Document/My Bad Drawings PDFs" becomes "Document/Superdood PDFs"), also on a tablet that already moved the rest.
+- **The HB pencil stays sharp up close** (pencil-pilot, 2026-11-04, the owner: "start the pencil pilot"). Zoomed in past
+  125%, HB pencil marks are drawn again finer, a piece of the page at a time, so their edges and the paper's tooth stay
+  crisp instead of turning into blocks; the paper's texture gets bigger and smoother as you zoom, as under a magnifier.
+  The page shows as it did until each piece is ready, then that piece updates quietly, no flash (Automatic Refresh does
+  as it always does). Nothing changes at 100%, in exports or for older versions, which see the pencil as drawn. Where
+  anything else changed a pencil mark (a smudge, a lighter pencil over it, the eraser's edge, the Lasso), that spot shows
+  as before. Only the HB pencil Basic tool for now; the browser shows the page as before when zoomed.
+- **No grey band for any effect brush** (band-rule, 2026-11-04, the owner: "if the effect is instant no need to use the
+  grey band", "make them all live if it's cheap"). Every effect brush already changes the page under the pen as it
+  goes: the Palette knife, Photocopier and Newsprint, Water and Gouache water, the Wash comb and Dirty brush, Clear
+  water and the Comb on floating ink, as well as the smudge tool. So none of them lays the grey band any more, and each
+  shows the eraser's round ring of dots while hovering, at its size.
+- **Zen Mode's fan larger again** (zen-fan-6, 2026-11-04, the owner: "fan can be another 25% larger i think. they're a
+  bit teeny for finger use"). The fan is about 4.7 cm across now, each tool about 5.6 by 11 mm to tap, the size wedge
+  true to line widths up to about 2.2 cm. It still fits the Nomad and both turns.
+- **The smudge tool draws without the grey band** (smudge-outline, 2026-11-04, the owner: "it's hard to see with the
+  preview grey.. i think it's working instantly", "just like eraser"). Now that its smudge shows under the pen, the
+  smudge tool no longer lays a grey band over the area while you draw. Hovering, it shows the eraser's ring of dots,
+  round, at the smudge tool's size. Other effect brushes (the Palette knife, Reprint, Clear water) keep their band.
+- **Blur and Blend show their smudge while you draw** (smudge-live-2, 2026-11-04, the owner: "smudge it doesn't seem to
+  have any effect until i lift the pen", Blur at a big size). Blur over pencil, charcoal or paint, and Blend over a wash
+  or paint, showed nothing until the pen lifted. Those marks sit apart from what the tool works on first, and they were
+  only changed at the lift. The screen now shows them smudging under the pen as it passes, inside the grey band. A big
+  smudge's own work also runs at a higher priority while the pen is down, so it keeps closer to the pen. The finished
+  drawing is the same as before. (Blend still leaves pen lines crisp, as it always has; Blur smudges them.)
+- **A big smudge shows its smear as you go** (smudge-live, 2026-11-04, the owner: "is there a way to update the area
+  as it's being passed over?"). The smudge tool at its bigger sizes (Blend and Blur from about 80 px, Water from about
+  200) is worked out a little behind the pen, and until now its smear appeared only when the pen paused or lifted. It
+  now appears along the way, about ten times a second, following the pen as closely as the tablet can keep up. The
+  grey band showing the area stays, and the smear shows through it. Smaller sizes already smudged right under the pen;
+  the finished smudge is the same as before.
+- **The Lasso takes Vector ink, and its eraser is quick** (vector-ink-2, 2026-11-04, the owner: "lasso not
+  recognizing that vector ink is an image", "eraser of vector ink is very slow"). The Lasso's loop now picks up Vector ink
+  lines with everything else inside it, cutting a line where the loop crosses it; move, turn or resize the piece and put
+  it down, and its lines stay sharp where they land (thicker or thinner with the piece). Delete and Cut take them,
+  Duplicate copies them, Paste and a piece carried to another page bring them, and one Undo puts it all back. Erasing
+  Vector ink is about as quick as erasing anything else: the line goes from the screen as the eraser passes, and the
+  lift no longer pauses (on a page full of lines it took seconds).
+- **Zen's circle stays after the fan closes** (zen-fan-5, 2026-11-04, the owner: "there should be a circle there in zen
+  mode, when it's on.. when i select a tool the circle disappears"). Closing Zen Mode's fan cleans the page where it
+  was, and that clean painted over the corner button too; the button is now put back right after, in the same quiet
+  update, so its circle (or the dashed circle, or the X) always shows.
+- **Vector Ink is a medium** (vector-ink-medium, 2026-11-04, the owner: "yes add it to the medium list", "in all brush
+  studio locations"). Brush Lab's Medium list has **Vector Ink** after Crayon, in the app, the browser's Brush Lab and
+  Brush Studio. Any brush with it draws as Vector ink does: sharp lines, on its own layer on top, cut by the eraser. What
+  it can't keep sharp is set aside while it is the medium: the tip is Round (its Size still works), no Affects Page, no
+  drying or After, no paper texture; those cards show no choices or dials ("Sharp at any zoom." on the Medium card).
+  Control's pressure to size and Response still work (pressed harder, wider), the rest of Control does nothing for it.
+  Randomize, Anything Goes and the variations never pick it; with Medium locked on it they change only what it draws.
+  The Vector ink Basic tool is now a brush of this medium, so a copy changed in Brush Lab stays Vector Ink; its old code
+  still reads as Vector ink.
+- **Vector ink just works** (vector-ink-medium, 2026-11-04, the owner: "Top layer only" on a page with pen marks and
+  tracing paper showing). Vector ink no longer refuses: on a page whose ink already has other marks it draws on a new
+  layer of its own on top (one Undo takes the line and the layer), and it draws with tracing
+  paper or a layer showing over the page. Other pens, Shapes and Make Ink go under it on the layer below (a new one under
+  it on a page that has only Vector ink), and the eraser cuts its lines whichever layer it erases. Only a page with four
+  layers and no room says "Layers full". Vector ink's few notes show beside the tool in use, no longer at the brush
+  line's right (the owner: that spot is for Draw Together's connection status); the new layer says nothing.
+- **Zen's button is a plain circle again; the fan a quarter larger** (zen-fan-4, 2026-11-04, the owner: "let's change
+  it back to a simple circle dotted circle thing. remove the preview", "for the fan.. i think it can be enlarged a
+  bit... maybe by 25%?"). The corner button no longer shows the brush as a dot: a dashed circle while Zen Mode is off,
+  a solid circle while it is on, the X while the fan is open. The fan is a quarter larger, about 3.75 cm across, so
+  each tool is an easier target (about 4.5 by 9 mm); the size wedge shows true line widths up to about 1.8 cm. While
+  the fan is open, the drawing under it is hidden behind white paper round the corner, so the fan reads clearly; it
+  comes back as the fan closes.
+- **Zen's corner button is the brush, always** (zen-fan-3, 2026-11-04, the owner tried the fan on the Manta). The
+  corner button now shows the tool in use as a dot of its size and grey whether Zen Mode is on or off, at its true size
+  up to about 1.1 cm across (it was capped at under half that). Off, a dashed circle round it says Zen Mode is off, as
+  the old icon did; on, a faint dot (tiny, light, or the eraser's) gets a solid circle so the corner is easy to find;
+  with the fan open, the X alone. In the fan, the size marker now sits where the white wedge is as wide as the line the
+  brush draws, so the wedge reads as the real size (sizes broader than its widest point, about 9 mm, sit past it, up
+  to the top). The pen's nib preview no longer draws over the open fan when a tool is picked, which had been wiping
+  parts of the fan away.
+- **Zen Mode's fan, tucked in and quieter** (zen-fan-2, 2026-11-04, the owner tried it: "the fan can move a little
+  more towards the corner", "some ghosting when i select different things, and the picker is slow in a weird way").
+  The fan sits about 4.5 mm nearer the corner. While it is open the corner shows only the X, no brush dot. Picking a
+  tool or setting the size or grey redraws only what changed, in the screen's quick black-and-white update, so it is
+  faster and leaves no ghosts; sliding along a wedge moves only its marker. All its lines are one width. With the
+  fan closed, a brush dot too small or too light to see (or the eraser's) gets a dashed circle round it, so the
+  corner is always easy to find.
+- **Vector ink** (vector-ink, 2026-11-04, the owner: "i just want to zoom in and have it be clean", with erasing that
+  cuts lines). A new Basic tool under Pens: a smooth pen line in the toolbar's size and grey, a little thicker pressed,
+  that stays sharp however far you zoom in. It draws on the top layer: the first Vector ink stroke on a fresh layer makes
+  that layer Vector ink's (Undo makes it plain again). A wash still goes under it on the same layer and settles along
+  its lines. The line shows as you draw and is smoothed when you lift. The eraser cuts its lines where it passes, the cut
+  ends flat; one Undo puts the cut back. Notes say what can't go there: another ink, the Lasso, Paste or a placed
+  picture on a Vector ink layer ("Vector ink only"); Vector ink on a layer with other ink ("Needs a fresh layer") or
+  under another layer ("Top layer only"); Shapes or Make Ink in Vector ink ("Not in Vector ink"); past about a page of
+  handwriting ("Vector ink full"). Hold to Snap works, its line sharp too; Mirrors don't copy it. Replay redraws it.
+  Draw Together guests, Export Page's PDF, PNG and Layers, the browser and older versions show it as it looks at 100%.
+- **Zen Mode's fan** (zen-fan, 2026-11-04, the owner's sketch). In Zen Mode the corner button shows the brush as a dot
+  in its size and grey. Tap it and a quarter-circle fan opens from the corner, about 3 cm across: the tools round its
+  arc in the toolbar's order (the slots, then Smudge and Eraser), the one in use with its bar past its tip; inside,
+  Size along the side edge (white, broader further out) and the grey along the foot (light to dark), split by a white
+  gap, each with its marker beside its edge. Tap a tool to pick it (a long press opens its menu, as on the toolbar);
+  tap or slide along a wedge to set the size or grey. The fan stays open until a tap outside it or the pen starts
+  drawing; the X where the dot was leaves Zen Mode. A long press on the corner button turns Zen Mode on or off at
+  once. Left-handed, all from the bottom-right corner. The browser's Zen button is as before.
+- **System Settings** (system-settings, 2026-11-04, the owner: "i find the frequency of screen flashes to be a bit
+  much ... can we add system settings? ... the ability to disable the automatic flashes ... customize the touch
+  controls (2 finger tap, etc)"). A new row at the foot of the menu, **System Settings**, opens a short screen:
+  **Automatic Refresh** (On, Off): off, the screen no longer flashes on its own after a page turn, zoom, erasing, an
+  effect's trail or coming back from another screen (the page is still drawn, without the flash); Refresh, the
+  column's ghost, still flashes. **Two-Finger Tap** and **Three-Finger Tap** (Undo, Redo, Refresh, Nothing) and **Edge
+  Strip Hold** (Trash, Lasso, Nothing). Everything starts as it was: On, Undo, Redo, Trash. A tap while the pen is
+  near still counts for nothing, whatever the tap is set to.
+- **The Lasso steps aside after its bar's action** (lasso-back, 2026-11-04, the owner: "after the user selects the
+  option to delete or dupe or whatever, switch back to the last used tool"). Cut and Delete from the Lasso's bar put the
+  Lasso away at once, and the tool you had before draws again. Duplicate does too, once its copy is put down (a copy
+  still floating is yours to place, so nothing is lost). Make Stamp already picks the Stamp's slot. Zoom already starts
+  locked on a fresh install; a choice made on the tablet is kept.
+- **A snapped line's end follows the pen** (snap-drag, 2026-11-04, the owner: "i'd love to be able to reposition the
+  final point, so the line can change angle from the original point, then on pen lift it's fixed"). Once a stroke
+  snaps to a line with Hold to Snap, move the pen without lifting it: the line keeps its start and its end goes where
+  the pen goes, any angle and length. While it moves it shows as a plain line in the slot's size and grey, as a Shapes
+  line does; on lift the brush draws it there, with the stroke's own pressure and tilt, one Undo step. Lift without
+  moving and the line stays as it snapped. Replay and Draw Together get the line as it was lifted. Arcs, circles,
+  boxes and the other shapes stay as they snap. On the Manta only for now; the browser snaps as before.
+- **New notebooks start on Fine** (fine-default, 2026-11-03, the owner: the pencils were tuned on Fine and look gappy
+  on Smooth). Every new notebook's Surface is Fine: the shelf's New, a PDF made into a notebook (also one sent over a
+  live page), the first notebook on a first launch, and the browser's new notebook. Notebooks made before keep Smooth,
+  as their drawings were made on it; Notebook Settings' Surface still changes either. Brush Lab's and the Tools page's
+  samples and try strip show the open page's surface, and Fine when no page has been shown yet.
+- **Reset to Default on the Tools page** (tools-reset, 2026-11-03, the owner: "reset to default on the toolbar page
+  would be good too"). For a Basic tool changed in Brush Lab, the row naming the selected slot's tool shows **Reset to
+  Default** before Edit in Brush Lab, as the tool picker's top row does; a tap puts the Basic tool back, the changed
+  one kept in Recent. In the browser the same.
+- **The Tools page's slots in one row** (tools-slots-row, 2026-11-03, the owner: "the tool slots list can be smaller,
+  all on one line .. with two rows it's not clear what that does. maybe invert it so it's dark? to make it obvious
+  it's selected. move the preview area to the bottom"). The slots are one row of small tiles across the top, each its
+  drawing as the toolbar shows it (no name under it: the row below names the selected one). The selected slot is a
+  black tile with its drawing in white, like a chosen filter chip, in place of the underline. "Draw here to try …" and
+  Clear with the try strip moved to the foot of the page, under the brushes, so the grid holds more: 32 a page on the
+  Manta upright (24 before). Turned, the slots run across the whole page too. In the browser the same.
+- **Notebook screen tweaks** (notebook-tweaks, 2026-11-03, the owner). The covers are back in the strip of pages,
+  front cover first and back cover last, scrolling with the pages instead of pinned at the left ("i just asked that
+  the cover not be sticky on the left"); a hold on the front cover opens Cover Design again, and ‹ › step through the
+  covers. The ‹ › beside the page are bigger: 72 dp wide targets with 48 dp carets ("the page turn carets should be
+  bigger"). The notebook screen and the shelf have Brush Lab's top bar: ‹ Notebooks at the left, the name centred
+  with "Tap a page to open it." under it (the shelf: "Notebooks", "Tap a notebook to open it."). On the drawing
+  screen, tapping the front cover in the page bar opens Notebook Settings ("i think that makes sense"); ‹ from page 1
+  still turns to the cover to draw on it. In the browser the same.
+- **Undo and Redo buttons in the browser** (web-undo-buttons, 2026-11-03, the owner: "i'd love to have undo and redo
+  buttons on the desktop version of the app"). On the page bar at the column's end, greyed with nothing to undo or
+  redo; a Draw Together guest's take back only its own marks, as its finger taps do. Ctrl+Y redoes too, beside Ctrl+Z
+  and Shift+Ctrl+Z (Cmd on a Mac). The Manta keeps its two- and three-finger taps, no buttons.
+- **A simpler Brush Lab** (lab-simpler, 2026-11-03, the owner's mockup: "looks good"). Fewer buttons up top: **New ▾**
+  now holds the styles (Start from ▾ is gone from the Adjust row); **Save** is one button with a small **As New** box
+  beside it (ticked, it adds a copy, as Save as New did; a brush not from the library is always added, so the box
+  shows only for one that is); **Back to** is gone (Undo takes the brush back, and Recent keeps it). The brush's
+  description hides until its picture or name is tapped (tap again to hide it). The try strip's wet drop is gone (on
+  the Tools page too): paint there dries by itself, and Clear starts afresh. The size preview sits left of the picker,
+  so the picker lies against the edge, and "Brush Lab" with its line is centred in the bar (the Tools page's
+  "Toolbar" too). In the browser the same.
+- **No grey patch left after an effect brush** (effect-trail-ghost, 2026-11-03, the owner: "after drawing with the
+  newsprint effect on the paper, there is a little grey area on where the white was ... when i flash it it's gone").
+  The grey trail an effect brush (Newsprint, Photocopier, Water, the Palette knife, every one) shows while the pen is
+  down left a ghost on the panel where it went over paper. The page now gets its clean flash once the pen is away, as
+  after erasing.
+
+- **The tool column stays after Template Visibility** (kinds-blank-column, 2026-11-03, the owner: "i adjusted the
+  template visibility and the toolbar disappeared on the manta"). Showing the page again (the Template eye, a page's
+  template or colour, a cover refresh, Replay page) blanked the whole screen's fast ink, and nothing drew the column,
+  the page bar or the Zen button back until Zen Mode. Now it blanks the page alone.
+
+- **Inside a notebook: Notebook Settings in the bar, ‹ › by the page** (notebook-preview, 2026-11-03, the owner: "the
+  cover is always visible as a page on the bottom.. that is not necessary"). The strip holds the pages and + alone;
+  **Notebook Settings** (the menus' Settings icon) sits left of Open, Use on Cover and Delete Page, and opens the settings (Cover Design and Cover
+  Picture are its Cover rows, once the front cover's hold and No Picture). ‹ and › either side of the page turn it,
+  the strip following; greyed at the first and last page, as the page bar's.
+
+- **A resting hand no longer undoes** (palm-taps, 2026-11-03, the owner: accidental Undo or Redo with the hand on the
+  screen while drawing). Two- and three-finger taps are ignored while the pen is near the screen or on it, and for
+  0.3 s after it leaves or lifts (1 s felt too long).
+- **Draw Together's relay sees no names** (live-names, 2026-11-03). Drawings were already sealed; now ell.ing (or the
+  Manta's own Wi-Fi relay) also can't tell who is in one. Each tablet and browser shows up there as a random number,
+  new each time, and only people with the link can tell which one is the Manta. A guest tab left open from before
+  shows "Host gone" until it is reloaded.
+
+- **Draw Together works on any network** (live-relay, 2026-11-03). When the Manta is online, Draw Together now goes
+  through ell.ing, so someone can join from anywhere: a phone on cell data, or a Wi-Fi that keeps devices apart. They
+  scan the QR code, or type the four-letter code at ell.ing/mbd. With no internet the Manta shares on its Wi-Fi as
+  before. Drawings stay sealed with the link's key, so ell.ing can't read them. Opening the Manta's notebooks from the
+  browser still needs the Wi-Fi way.
+- **A simpler Tools page, and Brush Lab to match** (tools-redesign, 2026-11-03, the owner: "it's not clear what to do
+  once you're there and it seems like it should just be simpler"). The page is now titled **Toolbar**, with "Tap a slot,
+  then a brush for it." under the title. The slots come first, then the selected brush's name with **Edit in Brush
+  Lab** beside it, then a slim strip, "Draw here to try Fill in", with Clear. Tabs and chips are now one row: Recent,
+  Saved, the kinds (Pens to Odd Ones) and Kits. The first visit opens on the selected brush's kind, then on the
+  last one chosen. Undo, Load Kit, Make Stamp and Back to left the page. A brush you replace is still kept in Recent,
+  and Undo on the drawing screen takes the change back. Tools First stays in the tool picker; the page shows it only
+  while it is on, since that is the only way back to it then. Brush Lab has the same bar ("Tap a part to change it,
+  then try the brush.") and the same "Draw here to try …" strip in place of Scratch Pad. Its Back from the Tools page
+  says "Toolbar". The browser works the same.
+
+- **A resting hand no longer undoes** (palm-taps, 2026-11-03, the owner: accidental Undo or Redo with the hand on the
+  screen while drawing). Two- and three-finger taps are ignored while the pen is near the screen or on it, and for
+  0.3 s after it leaves or lifts (1 s felt too long).
+
+- **Replay page plays shapes, pictures and Merge Old** (log-more, 2026-11-03). A page now also remembers Shapes, the
+  pictures Import places and Merge Old, and Replay page draws them again where they came. Fill in was remembered
+  already, as a brush. A big picture is remembered at a smaller size, so its replay is a little blocky. Older
+  versions of the app open these pages as before, without a replay.
+
+- **Replay page fixes** (log-fixes, 2026-11-03, the owner: Replay crashed, and "the initial stroke i drew, it showed up
+  with eraser marks"). Replay no longer crashes on a page with Fading or Later marks. A stroke the eraser takes later
+  now shows whole until the eraser comes. Washes that finished drying before the next stroke now replay dried, as
+  they were. Pages drawn before today's build still replay as before.
+
+- **Brush Studio: ⓘ buttons to the Guide; lock and dice on every card** (studio-info, 2026-11-03, the owner: "can we add
+  i info buttons for the different sections and sliders that links to the page on the visual demo?"). Each card and
+  each slider in Studio has a small ⓘ: tap it and the Guide opens at that part or dial, marked for a moment, with
+  **Back to** (the dial's name) to return. The cards for After, the newer tips (Brayer, Fan, Ruling Pen, Twig) and the
+  new prints now have a lock and a die like the others, and Randomize keeps After and anything locked instead of
+  turning After off. The Random tab can roll After and the newer tips too.
+
+- **Replay page plays everything** (log-everything, 2026-11-03, the owner: "record eraser and smudge strokes, and Lasso
+  edits ... anything that a brush does to affect other stuff on the page"). A page now remembers, in order, the eraser
+  (the pen's end, the Eraser and a finger, with Erase Kind), the smudge tool, strokes drawn with a finger, effect
+  brushes and prints even where they change nothing, washes left to settle between strokes, and what the Lasso does:
+  moving, turning, resizing, Duplicate, Delete, Cut and Paste. Replay page draws all of it again, so erased and moved
+  marks no longer come back. Fill, shapes, stamps, text, pictures and layer changes are not remembered yet. Older
+  versions of the app open these pages as before, without a replay.
+
+- **Undo of Clear Page works while drawing together** (live-clear-undo, 2026-11-03, the owner: "yes undo of a clear
+  page should work"). With Draw Together on, Undo after your Clear Page brings your marks back, on every layer, and
+  everyone sees them return. Marks someone else made after the clear stay. Redo clears again, around theirs. Magnets,
+  text boxes and masking fluid stay off.
+- **Brush Studio edits After, the newer tips and the new prints** (studio-after, 2026-11-03). Brush Studio now has an
+  **After** card like the other parts: pick Fading, Salt, Cracks, Tarnish, Letterpress and the rest, and set their dials.
+  The Tip card has Ruling Pen, Twig, Fan and Brayer, and Print Shading has Risograph, Photocopy and Soft Dither. Brushes
+  like Metalpoint, Riso or Fan Brush can now be changed in Studio and saved exactly as the app makes them. Studio also says
+  My Bad Drawings where it said Scribulor (the tablet's folder, the Procreate set's name).
+
+- **Rejoining a shared page is quicker on long sessions** (live-bounds, 2026-11-03). Someone joining in the browser, or
+  reconnecting after a drop, now gets the page from the last time the Manta turned to it or opened it, not every mark
+  made since Draw Together started, so the Manta holds less and sends less each time.
+
+- **Make Stamp, from the Lasso too** (stamp-flow, 2026-11-02; the owner tried the Stamp and wasn't sure how to use it).
+  Cut Stamp is now called **Make Stamp**, and the Lasso's bar over a lifted piece has it, between Duplicate and Delete:
+  tap it and what you lassoed becomes your Stamp (the Stamp in use, else the first on the bar, else the slot in use
+  turns into one; Undo takes it back), the piece goes down where it lies and the Stamp is ready to draw with. Until you
+  print your first stamp, a Stamp in use shows a hint in the bottom corner: "Lasso a shape, then Make Stamp", then
+  "Draw to print the stamp". After that first stamp it never shows again.
+
+- **Drawing together no longer flattens your layers** (live-guest-fixes, 2026-11-02). When someone in the browser
+  smudged, erased or moved wet paint over your drawing, the Manta erased every layer under the whole of their change
+  and laid it back as one flat grey, losing your layers, kinds and tones there for good. Now only the pixels their
+  change actually made lighter are erased; where it darkens, it goes on top as ink and your layers stay. Over your own
+  opaque paint their darker marks show a little lighter on the Manta than in the browser. And a change that failed to
+  reach the others is sent again, so they no longer keep marks you erased until the page turns.
+- **Redo works while drawing together** (live-redo, 2026-11-02, the owner: "i can't get three finger redo to work"). With
+  Draw Together on, Redo (three fingers, or the button) puts back what your own Undo took, on the Manta and in the
+  browser, and everyone sees it come back. It never covers a mark someone else made there since, and a new mark of
+  yours ends it, as Redo always does. A leftover test file (`live-probe.txt`) no longer makes Undo and Redo act as if
+  live when Draw Together is off.
+- **Effect brushes keep up again at big sizes** (newsprint-speed, 2026-11-02, the owner: "the newsprint effect was very
+  sluggish"): the darker trail of Newsprint, the Photocopier, Water, the Palette knife and the other effects draws
+  several times faster, so the band and the effect show as the pen moves. It looks the same.
+
+- **No more three-finger double tap for Zen Mode** (the owner, 2026-11-02: "i can't get three finger redo to work now"): a three-finger tap redoes at once again, on the Manta and in the browser. Zen Mode is its button in the corner.
+
+- **The Twig pen and Ruling pen start cleanly; nib previews as wide as the mark** (live-nib-fixes, 2026-11-02, the
+  owner: the twig pen "leaves a blob often at the beginning of the mark.. also the preview mark is much bigger than the
+  mark that is left"). The Twig pen now lands with a round start, a touch heavier than the line, not a blob; the Ruling
+  pen no longer blots where it lands. Turn up a nib's Paint Load past the middle and both blob where they land again,
+  more the fuller they are. While you draw with the Ruling pen, Twig pen or Fan brush, the plain mark shown under the pen
+  is now as wide as the mark left at lift (it was up to four times wider), and the hover ring shows each nib's own
+  shape at a light touch (the Twig pen's was eight times its mark). The hover ring of a Stamp, Hatch, Hand Hatch, Split
+  nib or Rake brush is also the size of its mark now, not of the area it may touch.
+- **Effect brushes' trail is a darker band** (test branch live-effect-trail-dark, 2026-11-02, the owner: "i see the
+  preview dots but i'd like to see a darker preview, like with the paint"). While the pen is down, the area an effect
+  brush works (the Palette knife, Water, Clear water, the smudge tool and their kin) now shows as a solid mid-grey band
+  along the pen's way, as wide as the brush works there, instead of dots along its edges. It darkens what is under it
+  rather than covering it, so you watch the smudge or the knife change the marks inside the band. It still goes when
+  the pen lifts; Undo and saved pages never hold it. Picture: docs/archive/pictures/explore/effect-trail/trail-dark.png.
+- **The browser app's notebooks: every setting, and the page's rules, clock, card, Replay and previews** (live branch
+  live-time, 2026-11-01; never released: it needs the INTERNET permission). On `/app` a notebook's settings are all
+  set as on the Manta: See-Through Pages (a long press for its five), Nib Preview, the Self-Portrait Prompt, No
+  Erasing, Lock Pages, Random From, Timed Pages, Tools with Brushes on Bar, and a page's own No Erasing, Timed Pages and
+  Show Through. The drawing screen follows them: the eraser and Undo refused under No Erasing, a page locked when its
+  time runs out under Lock Pages, the countdown in the column and Time's up with Next Page, other pages seen through,
+  no nib ring with Nib Preview off, a card for a page added, the notebook's own toolbar. Play gets **Replay Page**; the
+  page bar shows the pages' previews (tap to draw on one, hold for its Page Settings, + to add); inside a notebook a
+  swipe turns the page.
+- **Notebooks, pictures and PDFs sent up to the Manta** (live branch live-upload, 2026-11-01; never released: it needs
+  the INTERNET permission). On the Manta's shelf in the browser (Share on Wi-Fi, Menu → Open Notebook), **Import**
+  sends a notebook's file, a picture or a PDF to the Manta. Each becomes a new notebook there, never one written over:
+  a name the shelf has gets the next number ("Birds 2"), a PDF its pages as Import's New Notebook makes them, a
+  picture a notebook of one page. The browser app opened on the Manta's link (`/app#key`) gets a third Export Now
+  row, **Send to My Tablet**, which sends its notebook up the same way. Behind the link's key, at most 64 MB a file;
+  a notebook is read whole on the Manta before anything is written, then written whole and swapped in as it saves.
+- **The Manta's notebooks on an iPad or computer: download them, and draw in them** (live branch live-books,
+  2026-11-01; never released: it needs the INTERNET permission). With Share on Wi-Fi on, the live page's Menu →
+  **Open Notebook** shows the Manta's shelf, its covers and names. A notebook's hold downloads its **PDF** or its
+  **Notebook File** (the `.mpaint`), made on the Manta by its own Export Now. A tap opens that notebook on the Manta
+  and in the browser at once: one page for both, the Manta's. The page bar's ‹ 3 / 24 › turns the Manta's page, and
+  the Manta's own turns turn the browser's; what the browser draws lands in the Manta's notebook and is saved as the
+  Manta saves its own strokes (it saves first before a download, so a copy holds what its screen shows). Menu →
+  **Export Page** downloads the page shown as PDF, PNG or Layers. The Wi-Fi gone, the page says "Not connected" and
+  takes no strokes until it is back. All behind the link's key; plain HTTP on the home network (see the spec's
+  risks). No upload yet. Pictures: docs/archive/pictures/live/books-*.png.
+- **The whole page in the browser, zoom and pan, and a live page's status** (live branch live-view, 2026-11-01; never
+  released: it needs the INTERNET permission). The owner, on an iPad: "the lower part is obscured.. full canvas view on
+  the web?", "also add connection status?". In the browser (/live and /app) the page now opens whole beside the column,
+  on any screen either way up (an iPad, a phone, a desktop window, larger than 100% on a big one), with grey round it
+  where the shapes differ, and fits again after a turn or a resize. Two fingers pinch to zoom and drag to pan, with no
+  padlock: in the browser a finger is told from the pen, and the pen down or near stops them, as a palm would otherwise
+  move the page; a two-finger tap still undoes. A pinch out to the whole page, or a tap on Zoom (its percentage alone
+  now), shows the whole page again. On a computer, Ctrl or Cmd with the wheel (a trackpad's pinch) zooms about the
+  pointer and the wheel pans. A guest's brush line says, at its right while no other note shows: "Connected",
+  "Connected, 2 other guests", "Host gone" (the Manta not on the page), "Reconnecting…", then after 15 s "Connection
+  lost". The Manta, while live (the Mac's relay or Share on Wi-Fi), shows a note only when that changes: "Connected, no
+  guests", "Connected, 1 guest", "Connection lost"; Share on Wi-Fi's window has the same line under its caption. The
+  relays (relay.py and the app's own) tell who is on the page to those that ask; an older app or page never asks and
+  reads on as before. A guest who leaves is counted out within half a minute. The relay must be restarted. Pictures:
+  docs/archive/pictures/live/view-*.png.
+- **A live page's guest gets the rest of the drawing screen** (live branch live-m4, 2026-11-01; never released: it needs
+  the INTERNET permission). In the browser: **Menu** (Finger Action, what one finger does; Left-Handed, the column on
+  the right); the **smudge tool's row** over the eraser's, its long press choosing Blend or Water; **Clean Brush** on a
+  long press of a brush holding paint; the **Dropper**; the **Lasso** (draw a loop round marks: drag the piece, turn it
+  by its knob, scale it by a corner; Cut, Duplicate, Delete over it; the Lasso's tap then offers Paste); **Shapes**,
+  Filled too; **Play** with **Text** (tap the page to type a box; drag to move it or its right edge to widen it; a long
+  press for its sizes, Bold, the alignments, Make Ink and Delete) and **Mirrors** (Copy Strokes, Place Mirror,
+  Kaleidoscope, their dashed guides, Remove Mirrors); **Zen Mode** (its button in the corner, or two quick three-finger
+  taps); **Hold to Snap**; Grey Shift brushes shift their grey stroke by stroke, and a brush that keeps paint keeps its
+  own. Springy brush's drawing shows. Everything that changes the page reaches the host and the other guests, and a
+  two-finger tap takes it back. The host's tools now reach the guests whenever they change, not only when the session
+  starts; a guest's own slots, the tool it has in use and its own mirrors stay as the guest set them. Not for a guest:
+  Magnetic Poetry and Real Mirror (they live on one screen, so the host would never see them); a text box reaches the
+  host once it is made ink. Not there yet: Brush Lab's Open and its size and grey box, Grey Shift's set, the Stamp tool
+  and Cut Stamp, the page strip, Show Kinds, the sand timer, the wet indicator, Import Image, Timed Pages, Replay. The
+  Manta's menus, Mirrors' list, a text box's menu, the Lasso's Duplicate and Delete and Clean Brush read their choices
+  from the same code as the browser's, so they say and do as before. The relay must be restarted to serve m4.js and the
+  new icons. On its own (/app), the same Menu holds the notebook's Settings and Open Notebook. Pictures:
+  docs/archive/pictures/live/m4-*.png.
+- **Share on Wi-Fi: the Manta hosts a live page itself** (live branch live-host, 2026-11-01; never released: it needs
+  the INTERNET permission). Menu → Share on Wi-Fi starts the app's own relay on the Wi-Fi and shows the link to open
+  on an iPad or a computer on the same network, large and as a QR code: `http://<the Manta>:8080/live#<key>`. The
+  browser gets the live page's drawing screen from the Manta (the web app now travels inside the app, about 2.3 MB)
+  and draws with the Manta; no Mac, no USB. Every request but the web app's files needs the link's key. On only while
+  the app is open (off while it is away, back on its return with the same link); Stop Sharing in its window, or
+  closing the app, turns it off. Wi-Fi off: "Wi-Fi off". The Mac relay (`live-probe.txt`) still works while not
+  sharing. Design and next steps: docs/superpowers/specs/2026-11-01-manta-host-design.md.
+- **The browser app keeps notebooks, and copies them out** (live branch live-m3, 2026-11-01; never released: it needs
+  the INTERNET permission). Opened on its own (`/app` on the relay; a live page's `/live` is as before), the browser
+  draws in notebooks as the Manta does: a first visit draws in a new notebook at once, named as the Manta names one,
+  and every stroke is kept in that browser, there again after a reload. Menu has **Settings** and **Open Notebook**;
+  the page bar's ‹ and › turn the pages. The shelf, inside a notebook (its page, the strip with Settings first and +,
+  Open, Use on Cover, Delete Page), the settings and Page Settings are the Manta's screens with its words: Template,
+  Page Colour, Surface and the Cover set there, a page's own Template, Page Colour and Surface, its Layers and Move.
+  **Export Now** offers **PDF** and **Notebook File** (the `.mpaint` itself); Page Settings' **Export Page** offers
+  PDF, PNG and Layers; each is the same file the Manta writes, downloaded on a computer or through the share sheet on
+  an iPad (Save to Files, AirDrop). The shelf's **Import** takes a `.mpaint` from the Manta or another browser. Each
+  notebook is the same `.mpaint` file the Manta writes, in the browser's own private storage, written whole and then
+  swapped in; the browser is asked to keep it, and an iPad suggests Add to Home Screen once (Safari clears a site's
+  storage after 7 days unvisited otherwise). Not there yet: Random Template, See-Through Pages, Nib Preview,
+  Self-Portrait Prompt, No Erasing, Timed Pages, Lock Pages and Tools are shown as set but not changed here; the covers'
+  label has no words; magnets aren't in the copies; no previews on the page bar. Pictures:
+  docs/archive/pictures/live/m3-*.png.
+- **A live page's guest gets long presses, the Tools page and Brush Lab** (live branch live-m2, 2026-11-01; never
+  released: it needs the INTERNET permission). In the browser a long press is the Manta's (held half a second): on a
+  slot it opens the tool picker beside it, the owner's drawings in the same groups, the slot's tool marked; a pick
+  puts the tool in the slot and takes it up; Reset to Default for an edited Basic tool. Brush Lab and Library open the
+  lab and the Tools page; Tools First works as on the Manta. A long press on the eraser picks what it takes (no Clear
+  page: a guest's would clear the host's page); on the grey strip it opens Opacity for opaque paint. The Tools page
+  (tabs, chips, search, pages, kits with Load Kit, Undo, Back to, the scratch pad) and Brush Lab (New, Save, Save as
+  New, Back to, the modules, a part's open card and its choices, locks and dice, the Control grid, Start from,
+  Randomize and Anything Goes, a dial's double tap to reset it, the scratch pad) are laid out by the app's own layouts
+  on an iPad or a desktop window; in landscape the lab scrolls (it is portrait only on the Manta). A phone keeps the
+  drawing screen and the picker. The guest's slots, sizes, greys, saved brushes and Recent stay in that browser; the
+  host's tools still arrive when the guest joins, except in the slots the guest changed. The Manta's Brush Lab has no
+  long presses, so the browser's has none either. Not there yet: Open (the library sheet), Cut Stamp and the stamp
+  menu, Clean Brush, Grey Shift's set, the lab's size and grey box (set them on the drawing screen), Springy brush's
+  drawing (its stroke shows). The relay must be restarted to serve the icons and the parts' glyphs. Pictures:
+  docs/archive/pictures/live/m2-*.png.
+- **A live page's guest gets the Manta's drawing screen** (live branch live-m1, 2026-11-01; never released: it needs the
+  INTERNET permission). The link a browser opens (`/live` on the relay) now shows the Manta's column, laid out by the
+  app's own layout code compiled to WebAssembly, in place of the probe's row of buttons: the host's ten slots (eight on
+  a phone or a small iPad, as on the Nomad), each with its drawing or its stroke, at the host's sizes and greys, the
+  tool the host had in use, the eraser, the size slider and grey strip with the dot over them, the Zoom padlock on the
+  page bar and the brush line along the foot, in the app's own faces. The page is the host's size, in the Manta's 16
+  greys. Strokes are drawn as the Manta starts them, mirrored when the host's page has mirrors. A two-finger tap takes
+  back your own last mark only (Ctrl/Cmd+Z on a keyboard); three fingers do nothing while live, as on the Manta. Zoom
+  unlocked, two fingers pinch and pan. A hovering Apple Pencil or a mouse shows the nib's dots for a second. A
+  finger draws with the tool in use (a phone has no pen). The Manta sends its tools before its page when a session
+  starts. Not there yet: the tool picker, notebooks, the menu, Play, the smudge tool, the Dropper, the Lasso, Shapes,
+  left-handed. Pictures: docs/archive/pictures/live/m1-*.png.
+- **Effect brushes show where they work while the pen is down, on the test branch explore-effect-trail** (2026-11-01,
+  the owner: "when using the effect brushes it's not quite clear where the brush will affect... can we add a specific
+  control sensitive preview"). The Photocopier, Newsprint, the Palette knife, Water, Clear water, the smudge tool and
+  their kin leave a trail of small dots along both edges of the area they work, starting with a ring where the pen
+  lands. It follows the hand: the knife's trail widens as the pen leans, clear water's ring grows as you press. Each
+  dot has a thin white rim so it shows over dark marks. The trail goes when the pen lifts, leaving only the result;
+  Undo and saved pages never hold it. Picture: docs/archive/pictures/explore/effect-trail/trail.png.
+- **Surface: the paper belongs to the notebook** (explore-surface, 2026-11-01, the owner: "Surface moves to the
+  notebook"). Notebook settings have a **Surface** row after Page Colour: Smooth, Cold Press, Ribbed, Felt, Crumpled,
+  Canvas, Cotton, Bumpy, Unryu, Library, Kraft, Vintage, Craft or Fine, each tile a pencil shading over its tooth. A
+  page can have its own in Page Settings' **Surface** row ("Notebook's (Smooth)" puts it back). Every brush now meets
+  the page's surface: a brush keeps only its **Texture**, how much of the surface shows through it, now a dial on the
+  **Medium** card; Brush Lab drops the Surface card, so it shows six cards in three rows (Control, Tip, Medium,
+  Rework, Drying, After) and their samples are full size again. After's line says what its choices do, "fades ·
+  spreads · ages". Brush Lab's samples and test page show the open page's surface. Older brushes load and share as
+  they were and draw on the page's surface; older notebooks are Smooth, and what is drawn there stays as it is. Washes
+  follow the surface: a wet watercolour pools to a harder edge on Smooth and bleeds softly into Cotton, Felt or Unryu
+  (Cotton drinks more than before). The surfaces are new: each is as wide as a page with no repeat or seam (the old
+  ones repeated every 2 cm); Cold Press, Ribbed, Canvas, Kraft and Unryu are made from nothing, the others from their
+  photos laid as patches. A surface is made as its page opens: a first stroke straight away may wait a moment. Pictures:
+  docs/archive/pictures/explore/surface.
+- **Brush Lab's cards renamed and in the order a mark is made** (explore-names, 2026-11-01, the owner's decision):
+  **Control, Tip, Medium, Surface, Rework, Drying, After**. Paper is now **Surface** and Later **After**; Rework's Off
+  says "Moves nothing." (was "No smudge."). The smudge tool and Finger's Smudge keep their names. The **After** card now
+  shows on every brush, and it is the one place to pick Float, Mold, Fading, Lemon Juice and the rest: **Drying** offers
+  only how long the mark stays wet (Instant, Quick, Slow, Wet). Picking one that needs a certain drying (Mold, Slow)
+  sets it, as before. With the seventh card on every brush, the cards' sample pictures and the open card are a little
+  shorter (as they already were on a brush with a Later). Every brush, saved brush and share code draws and writes
+  exactly as before; an old code with Fading or Mold in Drying opens with it on After. Picture:
+  docs/archive/pictures/explore/names/brush-lab-cards.png.
+- **Riso, Letterpress and Cracks** (explore-presets, 2026-11-01): three new Basic tools, so these looks are on the
+  bar. **Riso** (Print) is a broad chisel marker printed in Risograph's grain, a little patchy and doubled.
+  **Letterpress** (Print) is a crisp pen on cotton paper whose ink, a moment after it lifts, sets as pressed type: a
+  darker rim, a mottled middle, the paper showing through here and there. **Cracks** (Gouache) is thick opaque paint
+  that dries slowly, then crazes over two minutes. A new kit, **New Print and Age**, puts them on the bar with the
+  Metalpoint.
+
+- **White chalk shows over black pen and paint** (explore-chalk, 2026-11-01, the owner's "white chalk i tried to draw
+  on black paint but it didnt"): White chalk, light pastel, crayon, a white gel pen and any light grey of a brush that
+  goes on light over dark now show over every black mark under them: pen, marker, Fill in, gouache and washes too, not
+  only charcoal and pastel. The Dry Media eraser takes the chalk off and shows the black again; erasing the black
+  (with the Pen or Paint eraser) leaves the chalk. Pen drawn over the chalk afterwards still shows over it. A
+  transparent wash still only darkens. One Undo takes the chalk back. Pages drawn before look as they did.
+- **The area an effect brush works shows, on the test branch explore-area** (2026-11-01, the owner: "for the effect
+  brushes.. its hard to see what area is going to be affected theres no preview size"). Brushes that change the marks
+  already there rather than laying their own (the Photocopier, Newsprint, the Palette knife, Water, Clear water, the
+  smudge tool's Blend and their kin) now show it: in the bar's rows, the brush line, the Tools page and Brush Lab, a
+  few dots outline the area the stroke works, where before only a sliver of it showed (the knife's nothing); the
+  readout over the size slider shows the size as an outline, as the smudge tool's always did, not a dot of the grey
+  in use, which these brushes never lay. The hover dots: Clear water's ring is now its tap's clear drop (one dot
+  before), and the Palette knife's its blade at a usual hold (twice that wide before, the blade laid flat). Picture:
+  docs/archive/pictures/explore/area/effect-previews.png.
+- **Text boxes, and Make Ink** (explore-text, an experiment for the owner to try): Play's menu has **Text**. While it
+  is on, tap the page to place a box and type, with the keyboard on screen or a Bluetooth one; lines wrap at the box's
+  width. Tap a box to type in it again, drag it to move it, drag its right edge to make it wider or narrower. A long
+  press opens its menu: **Small**, **Medium**, **Large**, **Huge**, **Bold**, **Left**, **Centre**, **Right**,
+  **Make Ink** and **Delete**. The words are iA Writer Duo in crisp black over the drawing, kept with the page and in
+  every PNG, PDF and page picture. **Make Ink** turns a box into one stroke of the brush in use, so the letters take
+  its look: a pen's clean ink, a wash's grey (with Bleed, it bleeds), Risograph or Halftone dots, the paper's grain,
+  and any Later (Letterpress, Foxing and the rest). Every change, Make Ink too, is one Undo.
+
+- **Reprint, on the test branch explore-reprint** (2026-11-01, the owner's "every look lives in a brush"): a new
+  choice on the Smudge card, now called **Rework**. Brush it over a page and the marks already there (pen, pencil and
+  washes alike) are laid again in the brush's own print: its Print Shading and its Paper. Two new Basic tools under
+  Print show it: the **Photocopier** turns what it passes over into a toner photocopy, and **Newsprint** into
+  newspaper halftone dots on library paper. Press lightly to reprint part way; going back and forth over a spot in one
+  stroke never builds it up. With no Print Shading it prints like toner: darker greys go black, lighter ones go back
+  to paper. The pen's own layer changes as you brush, the others when you lift. One Undo takes the stroke back. An
+  older version reads such a brush with Rework Off and says it is from a newer version.
+- **Three physical media, on the test branch explore-media** (2026-11-01, the owner's "useful creative tools, possibly
+  replicating physical media"): **White chalk** (Charcoal) lays white, for a toned or black Page Colour; the **Dip nib**
+  (Dip pen) pools where it starts, then its ink runs dry into scratchy streaks along the line, and a rub on a grey dips
+  it again; the **Water pencil** (Pencil) is a soft pencil the Water brush melts into a wash. Ink, Charcoal and
+  Graphite have a new **Dissolves** dial in Brush Lab (the Water pencil's), so a pen of ink that isn't waterproof can
+  bleed when watered too. Any brush whose line has a Paint Load now runs dry into streaks as it fades.
+- **Four new nibs, each another object in the hand** (explore-nibs, an overnight experiment for the owner to try): **Ruling Pen**, a draughtsman's blade with ink between its jaws: held upright a hairline, laid over a broad band (broad across the blade, thin along it), skipping and blotting as it runs dry; **Twig**, a stick dipped in ink: a blob where it lands, a gnarled line that comes and goes, then a dry scratch; **Fan**, a fan brush whose hairs leave separate lines, a light touch only the middle ones, pressing brings the outer ones down and splays it (grass, fur); **Brayer**, a printmaker's roller: a square band whose ink mottle comes round again, solider pressed, and that picks up the marks it rolls over and prints them again a turn later. Each is in Brush Lab's Tip choices and has a Basic tool: Ruling pen and Twig pen (Dip pen), Fan brush (Dry brush), Brayer (Print). Every brush you have reads and draws as before; an older version reads one of these as a Round, "Newer version".
+- **Palette knife and Wears Down** (branch explore-knife, an experiment): the **Palette knife** (Smudge's new **Scrape**) drags a flat blade through paint already there: wet paint is pushed aside into dark ridges with a lighter track, damp or settling paint scrapes back to pale paper, dry marks barely change. Hold it upright for a fine scratch, lay it over for a broad scrape; press harder to go deeper. **Wears Down**, a Round or Chisel tip's dial, lets a pencil, charcoal or pastel line grow a flat side as you draw: it starts fine and broadens on the side you lean toward, and turning the pen brings back a sharp edge. Each stroke starts sharp.
+- **Five more in Later: print, crafts and ageing** (an overnight exploration, 2026-11-01): **Letterpress** prints a mark as type pressed into paper, the ink squeezed darker at its edges, a little mottled in the middle, now and then starved where the paper dips (it follows the brush's paper); **Torn Paper** turns a mark into a torn scrap of paper glued down, a ragged white fibrous edge round it; **Cross-Stitch** turns a mark into little X stitches on a fabric grid fixed to the page, 6 to 10 px a stitch; **Cracks** opens a fine network of pale cracks over a couple of minutes, more where the paint lies darker; **Tarnish** darkens a pale line slowly and unevenly, never past a mid-dark grey. Each has one dial and its time. A new Pencil tool, **Metalpoint**: a hard, fine, pale silverpoint line on a toothed paper that tarnishes. Brush Lab's Later card now groups its choices (the mischief and paint media, then print, age and craft) in two pages.
+- **Four physical media in Later** (the owner, 2026-10-31: "not gimmicks but useful creative tools, possibly replicating physical media"): each changes a mark after you lift, the way the real technique does. **Salt** sprinkled on a wet wash opens pale starbursts as it dries; **Plastic Wrap** pressed into a wet wash leaves crinkled dark veins and paler facets; **Feathering** lets ink wick into the paper over a few seconds, along its grain (laid lines, a canvas weave, a fibrous paper's fibres show in it), more on rough or soft papers and barely on Smooth; **Foxing** creeps small grey spots in near and on the mark over minutes, like an old book. Each has one dial to push it (Grains, Crinkle, Thread Length, Spots) and its time. Salt and Plastic Wrap go with Quick or Slow drying, Feathering and Foxing with Instant, Quick or Slow. Pick one from Drying's chips in Brush Lab. They end as ordinary marks that erase as usual, and Undo takes the whole stroke back. An older version opens such a page as it was when saved, and reads such a brush without its Later.
+- **Mischief gets its own part, Later** (roadmap step 7, the owner's choice, 2026-10-31): Float, Mold, Fading and Lemon Juice move out of Drying into a seventh part, so a brush can dry one way and do mischief too: a pen that dries at once and then fades away, a slow wash that darkens in like lemon juice. In Brush Lab, Drying's choices still show the four; picking one adds a **Later** card under the others (its own lock and dice), and its Off takes it away. Float goes only with Quick and Mold only with Slow, as each is a way of drying; Fading and Lemon Juice go with Instant, Quick or Slow, never Wet (wet paint stays wet across strokes). Every brush and code you have reads, draws and is written exactly as before; a new combination's code has one more segment, which an older version reads without the mischief, saying "Newer version, some parts differ".
+- **The Tools page's chips group brushes by what they do** (the design review, 2026-10-31), as a slot's quick menu does: the Spirograph, Stamp, Fill in, Colouring pen, Lemon juice, Vanishing ink, Sumi and the other marbling and mold tools are under **Odd Ones**, any brush that prints dots or lines under **Print**, and the rest where they were.
+- **Line Spacing** (the design review, 2026-10-31): a Rake's and Hatch's dial for how far apart their lines are is now **Line Spacing**, so **Spacing** means only how far apart a Stamp's prints land. Same dial, same brushes, a clearer name.
+- **Filled Shape leaves Brush Lab's Smudge choices** (the design review, 2026-10-31): Fill in does its work. A brush that already uses it, saved or shared as a code, draws exactly as before and still shows it.
+- **Blend and Water replace the older smudges everywhere** (the design review, 2026-10-31): the Blend stump, Stump, Water brush and Damp tissue are gone from the Tools page, and Water takes the Water brush's place in a slot's quick menu, with its drawing. The Watercolour with Masking kit lifts with Water (press to lift). One already on your toolbar, the smudge tool or saved still draws as before and keeps its own words.
+- **Fill in fills loops too** (the owner, 2026-10-31: "if you draw a closed shape with that one it should fill in"; "i think merge!"): started inside a shape, Fill in floods it to its lines as before. Started on open paper, draw a loop and it closes and fills when you lift, as Filled shape did; a dot or short line stays a line. Filled shape is gone from the Basic tools; one already on your toolbar or saved still works as before. A new install's toolbar has Fill in where Filled shape was.
+- **Zen Mode is now a three-finger double tap** (the owner, 2026-10-30: "i like using the two finger undo repeatedly"): two-finger taps undo straight away again, as fast as you tap. Tap twice quickly with three fingers to hide or show the bars; a single three-finger tap still redoes, about a third of a second later.
+- **A Start Here notebook on a new install** (the owner drew it, 2026-10-30): the first time the app opens, with no notebooks yet, it opens on a nine-page hand-drawn guide, Hello There first, to the pages, tools, fingers, notebook settings, mischief and brushes. Delete it once read; it doesn't come back.
+- **The web Brush Studio names and saves brushes as Brush Lab does** (the owner, 2026-10-30: "i like how it is in the brush lab in the app... save as, new ... conditional save, rename alert, etc..."): beside the brush's name are **New**, **Open** (was Load), **Save** and **Save as New**. A brush that isn't from your Studio library shows only Save as New, in solid ink; one opened from it shows Save (update it) and Save as New (a copy). Once you change a brush, "Edited" shows under its name with "Suggested: Polite Smear": click it to use it, or click the name to type your own (the field starts with the suggestion), then Done. No two library brushes share a name, capitals aside: Save as New takes the next suggested name that's free, and a name you typed that's taken gets a number ("Polite Smear 2"). Close-up's Save as New does the same. **Share to Community** now asks for the name first (the brush's, ready to type over) and the community library numbers a name another shared brush has; Studio says the name it went in under ("Shared as Polite Smear 2.").
+- **Brush Studio has a Guide tab** (the owner, 2026-10-30): every choice and dial in the app's Brush Lab, each a small live picture of the same stroke as that one thing changes, grouped Tip, Medium, Paper, Drying, Control, Smudge, under the names the app uses (Smudge's new Press to Push and Press to Lift among them). Only what the app offers is shown. Click a picture to try that part in your brush.
+- **The smudge tool has two tools, and both feel the pen** (the owner, 2026-10-30: too many look-alike blend tools; "just TWO tools, each using pen pressure the way real media does"): a long press on the smudge tool now offers just **Blend** and **Water**. Blend, rubbed lightly, softens marks where they are, like a paper stump; press harder and it pushes the paint along the stroke, like a fingertip. Water, stroked lightly, wets the paint again so it softens and runs; press harder and it lifts the paint off, like a damp tissue. A usual press does some of each. If your smudge tool held the Blend stump or the Stump it now holds Blend, and the Water brush or the Damp tissue, Water (once; pick the old one again from the library and it stays). The older smudges and any you saved are still in the library, and your smudge tool keeps one it already held, shown first in the chooser. Brush Lab's Smudge part has a new last dial for Smear, **Press to Push**, and for Clear Water, **Press to Lift**; brushes you saved draw exactly as before. How light is light and how firm is firm still wants trying by hand on the Manta.
+
 ## 0.9 (2026-10-30): first public preview
 
 The first public build of My Bad Drawings, a sketchbook journal built on MonoPaint 0.98.3. Everything below, back

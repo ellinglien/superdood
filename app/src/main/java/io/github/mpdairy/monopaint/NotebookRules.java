@@ -72,6 +72,8 @@ final class NotebookRules {
         long step = countdownStep(remaining), s = (remaining + step - 1) / step * step / 1000;
         return s / 60 + ":" + (s % 60 < 10 ? "0" : "") + s % 60;
     }
+    /** What the countdown's row says to a screen reader: "Time left 4:50"; a timed section's "Saw, time left 1:42"; Done as it is. */
+    static String countdownSaid(String text) { return text.contains("\n") ? text.replace("\n", ", time left ") : text.equals(TimedSections.DONE) ? text : "Time left " + text; }
     /** How long until {@link #countdown} says something else, ms. */
     static long nextCountdown(long remaining) {
         if (remaining <= 0) return Long.MAX_VALUE;
@@ -94,12 +96,26 @@ final class NotebookRules {
     static boolean refuses(NotebookOptions options, int tool, Brush brush) {
         if (options == null) return false;
         if (tool == ToolSlots.ERASER) return options.noErasing;
-        if (options.brushes > 0 && (tool == ToolSlots.SMUDGE || tool == ToolSlots.STAMP || tool < ToolSlots.COUNT && tool >= options.brushes)) return true;
+        if (options.brushes > 0 && (tool == ToolSlots.SMUDGE || tool == ToolSlots.STAMP || tool == ToolSlots.FILL || tool < ToolSlots.COUNT && tool >= options.brushes)) return true;
         return options.noErasing && brush != null && erases(brush);
+    }
+    /**
+     * Why a stroke of {@code tool} holding {@code brush} may not start on a page ({@code locked}: its time ran out under Lock
+     * Pages) in a notebook with {@code options}: {@link #PAGE_LOCKED}, {@link #ERASING_OFF}; null when it may.
+     */
+    static String refusal(NotebookOptions options, boolean locked, int tool, Brush brush) {
+        return locked ? PAGE_LOCKED : refuses(options, tool, brush) ? ERASING_OFF : null;
+    }
+    /**
+     * The side column's Timed Pages countdown for a page with {@code remaining} ms of {@code seconds} (0: untimed), or null:
+     * none on a cover, nor on a page out of time (it shows as an untimed page does) unless it is {@code locked} (its 0:00).
+     */
+    static String shownCountdown(int seconds, boolean cover, boolean locked, long remaining) {
+        return seconds > 0 && !cover && (remaining > 0 || locked) ? countdown(remaining) : null;
     }
     /** Whether the eraser's tile shows disabled. */
     static boolean eraserOff(NotebookOptions options) { return options != null && options.noErasing; }
-    /** Whether the smudge tool's (or the stamp tool's) tile shows disabled: Brushes keeps to its slots, and No Erasing refuses a brush that lifts. */
+    /** Whether the smudge tool's (or the stamp tool's, or Fill in's) tile shows disabled: Brushes keeps to its slots, and No Erasing refuses a brush that lifts. */
     static boolean smudgeOff(NotebookOptions options, Brush smudge) { return options != null && (options.brushes > 0 || options.noErasing && erases(smudge)); }
 
     /**

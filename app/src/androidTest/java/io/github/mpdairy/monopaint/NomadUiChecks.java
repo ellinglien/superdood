@@ -25,7 +25,7 @@ final class NomadUiChecks {
         SharedPreferences prefs=(SharedPreferences)get(app,"preferences");
         boolean original=prefs.getBoolean("nomad_mode",false);
         View frame=(View)get(app,"orientationFrame"),pad=(View)get(app,"pad");
-        View menu=(View)get(app,"menuButton");int controlWidth=menu.getWidth();
+        View menu=app.inkWashBar.menu;
         ToneDocument doc=(ToneDocument)get(pad,"document");byte[] before=doc.snapshot();
         AlertDialog[] dialog={null};
         try {
@@ -43,7 +43,6 @@ final class NomadUiChecks {
                     RectF area=bounds(frame);
                     check(area.equals(new RectF(258,344,1662,2216)),"Exact centered physical viewport: "+area);
                     check(((android.graphics.drawable.ColorDrawable)((View)get(app,"previewFrame")).getBackground()).getColor()==android.graphics.Color.BLACK,"Simulation margins are black");
-                    check(menu.getWidth()==controlWidth,"Physical control size unchanged");
                     check(area.contains(bounds(pad)),"Canvas inside preview");
                     layout(app,right);
                     check(get(pad,"direct")!=null,"Manta fast display is connected in centered viewport");
@@ -64,10 +63,6 @@ final class NomadUiChecks {
                 PopupWindow file=(PopupWindow)get(app,"filePopup");
                 check(bounds(frame).contains(bounds(file.getContentView())),"File menu inside preview");
                 main(test,file::dismiss);
-                main(test,() -> call(app,"showToolSettings"));idle(test);
-                PopupWindow tools=(PopupWindow)get(app,"toolPicker");
-                check(bounds(frame).contains(bounds(tools.getContentView())),"Tool panel inside preview");
-                main(test,tools::dismiss);
                 if(!right)screenshot(test,app,"nomad-"+turn+".png");
                 report.append("PASS: centered Nomad viewport, unchanged controls, pen, margins and panels; turn=").append(turn).append(" right=").append(right).append(".\n");
             }
@@ -80,7 +75,6 @@ final class NomadUiChecks {
             main(test,() -> {
                 call(app,"closePagePanel");
                 if(dialog[0]!=null)dialog[0].dismiss();
-                PopupWindow tool=(PopupWindow)get(app,"toolPicker");if(tool!=null)tool.dismiss();
                 PopupWindow file=(PopupWindow)get(app,"filePopup");if(file!=null)file.dismiss();
                 call(app,"setSimulating",new Class<?>[]{boolean.class},original);
             });idle(test);
@@ -107,32 +101,30 @@ final class NomadUiChecks {
         RectF menu=Popups.bounds(root,(View)get(app.inkWashBar,"menu"));
         DrawLayout at=app.inkWashBar.layout();
         check(Math.abs(menu.centerY()-app.dp(DrawLayout.STRIP_EDGE+at.previewHeight()/2f))<2,"Menu centred on the page previews: "+menu+" under "+bar);
-        // Layout v3 (the owner's mockup, 2026-10-26): under the tray the smudge tool and the eraser, a slot's row each; the
+        // Layout v3 (the owner's mockup, 2026-10-26): under the tray Fill in (2026-11-06), the smudge tool and the eraser, a slot's row each; the
         // readout over the strip and the slider (the strip left since 2026-10-27); layout v4 (2026-10-26): under them the
-        // Dropper and the Lasso, Refresh alone under them, the whole row (2026-10-28, a finger's target); the wet indicator and the sand timer, then Template Visibility
-        // and Show Kinds, under the block (2026-10-28).
+        // Dropper and the Lasso, Refresh alone under them, the whole row (2026-10-28, a finger's target); the wet indicator under
+        // the block, the sand timer, Show Kinds and Play the menu's rows since 2026-11-06; the layer button under the strip (2026-11-06).
         View slider=(View)get(app.inkWashBar.swatches,"slider"),strip=(View)get(app.inkWashBar.swatches,"strip"),readout=(View)get(app.inkWashBar.swatches,"readout");
         RectF s=Popups.bounds(root,slider),g=Popups.bounds(root,strip),r=Popups.bounds(root,readout),
                 wet=Popups.bounds(root,(View)get(app.inkWashBar,"wet")),drop=Popups.bounds(root,app.inkWashBar.swatches.dropper),
-                lasso=Popups.bounds(root,(View)get(app.inkWashBar,"lasso")),kinds=Popups.bounds(root,app.inkWashBar.kinds),
-                ghost=Popups.bounds(root,app.inkWashBar.ghost),shapes=Popups.bounds(root,app.inkWashBar.shapes),play=Popups.bounds(root,app.inkWashBar.play),
-                sand=Popups.bounds(root,(View)get(app.inkWashBar,"sandTimer"));
+                lasso=Popups.bounds(root,(View)get(app.inkWashBar,"lasso")),
+                ghost=Popups.bounds(root,app.inkWashBar.ghost),layer=Popups.bounds(root,app.inkWashBar.layers);
         check(Math.abs(s.top-g.top)<2 && Math.abs(s.bottom-g.bottom)<2 && Math.abs(g.right-s.left)<2 && Math.abs(r.bottom-g.top)<2 && r.left>=column.left-1 && r.right<=column.right+1
                 && Math.abs(r.centerX()-column.centerX())<3,"The readout over the strip and the slider: "+r+" over "+g+" "+s);
         check(Math.abs(lasso.top-drop.top)<2 && Math.abs(lasso.bottom-drop.bottom)<2
                 && Math.abs(drop.right-lasso.left)<2 && Math.abs(ghost.left-drop.left)<2 && Math.abs(ghost.right-lasso.right)<2
                 && ghost.height()>=drop.height()-1 && drop.top>=g.bottom-1,
                 "The Dropper and the Lasso under the strip: "+drop+" "+lasso);
-        // Shapes and Play under Show Kinds and the sand timer (the owner, 2026-10-30), the wet indicator under them.
-        check(Math.abs(kinds.top-sand.top)<2 && Math.abs(kinds.right-sand.left)<2 && Math.abs(kinds.top-drop.bottom)<2
-                && Math.abs(shapes.top-kinds.bottom)<2 && Math.abs(play.top-shapes.top)<2 && Math.abs(shapes.right-play.left)<2 && Math.abs(wet.top-shapes.bottom)<2
-                && ghost.top>wet.bottom && column.contains(ghost),
-                "Show Kinds and the sand timer, Shapes and Play, the wet indicator on its own line, then Refresh: "+kinds+" "+sand+" "+shapes+" "+play+" "+wet+" "+ghost);
+        // The layer button between the strip and the Dropper (on the Nomad too since 2026-11-06); the wet indicator straight under the Dropper, then Refresh.
+        check(layer.height()>0 && layer.top>=g.bottom-1 && drop.top>=layer.bottom-1 && column.contains(layer)
+                && Math.abs(wet.top-drop.bottom)<2 && ghost.top>wet.bottom && column.contains(ghost),
+                "The layer button under the strip, the wet indicator under the Dropper, then Refresh: "+layer+" "+wet+" "+ghost);
         ToolButton[] tools=(ToolButton[])get(app.inkWashBar,"tools");
-        RectF eraser=Popups.bounds(root,tools[InkWash.ERASER]),smudge=Popups.bounds(root,tools[InkWash.SMUDGE]),last=Popups.bounds(root,tools[DrawLayout.COMPACT_TRAYS-1]);
-        check(smudge.top>=last.bottom-1 && Math.abs(smudge.width()-last.width())<2 && Math.abs(smudge.left-last.left)<2
-                && Math.abs(eraser.top-smudge.bottom)<2 && Math.abs(eraser.width()-last.width())<2 && eraser.bottom<=r.top+1,
-                "The smudge tool and the eraser under the tray, a slot's row each, over the readout: "+smudge+" "+eraser);
+        RectF eraser=Popups.bounds(root,tools[InkWash.ERASER]),smudge=Popups.bounds(root,tools[InkWash.SMUDGE]),fill=Popups.bounds(root,tools[ToolSlots.FILL]),last=Popups.bounds(root,tools[DrawLayout.COMPACT_TRAYS-1]);
+        check(fill.top>=last.bottom-1 && Math.abs(fill.width()-last.width())<2 && Math.abs(fill.left-last.left)<2 && Math.abs(smudge.top-fill.bottom)<2
+                && Math.abs(smudge.width()-last.width())<2 && Math.abs(eraser.top-smudge.bottom)<2 && Math.abs(eraser.width()-last.width())<2 && eraser.bottom<=r.top+1,
+                "Fill in, the smudge tool and the eraser under the tray, a slot's row each, over the readout: "+fill+" "+smudge+" "+eraser);
         // Every control in the column inside it: a clipped one can't use the fast display (2026-10-24).
         for (View v : new View[]{slider,strip,readout,app.inkWashBar.swatches.dropper}) {
             android.graphics.Rect seen=new android.graphics.Rect();

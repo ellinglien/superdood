@@ -116,11 +116,9 @@ final class WordsMode {
             if (popup == shown) { popup = null; bin = null; }
             host.cover(null);
             app.pad.uncovered("words", covered);
-            if (app.inkWashBar != null) app.inkWashBar.modesChanged();
         });
         host.cover(binPanel);
         Popups.show(popup, app.root, binBounds);
-        if (app.inkWashBar != null) app.inkWashBar.modesChanged();
     }
     /** Closes the bin (Done, Words again, a menu, leaving the screen), dropping a magnet the pen still holds. */
     void close() {

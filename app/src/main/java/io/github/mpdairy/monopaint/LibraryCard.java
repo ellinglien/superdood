@@ -12,10 +12,10 @@ import java.util.List;
  * left, what it is set to at the right in one line, "›" where it opens a screen ({@link CardSheet}), in three groups
  * ({@link #GROUPS}) with a grey-400 line between them (no More since 2026-10-27, the owner: "instead of a more button,
  * just include everything on that page"). The page: Template (its thumbnail and name; Template Visibility is on the
- * Template screen), Random Template (Off, or what Random draws from; its screen Random From), Page Colour (six swatches
- * in the row), See-Through Pages (Off and On in the row; a long press opens Page Transparency's five), Nib Preview (Off and
- * On in the row: the hover ring's dots, on by default), Self-Portrait Prompt (Off and On in the row, 2026-10-30: each new
- * page dealt a card, {@link DailyPrompt}; off by default). The rules: No
+ * Template screen), Random Template (Off, or what Random draws from; its screen Random From), Surface (2026-11-01: its
+ * name, its screen the surfaces), Nib Preview (Off and On in the row: the hover ring's dots, on by default). No Page
+ * Colour or See-Through Pages (the release pare-down, 2026-11-05: Page Settings' rows alone), no Self-Portrait Prompt
+ * (cut then). The rules: No
  * Erasing (Off and On), Timed Pages, Lock Pages (Off and On, greyed while nothing is timed, {@link #locksApply}), Tools (the choice and the bar's marks, Brushes on Bar on its screen). The cover:
  * Cover, Cover Picture (Use on Cover for the page drawn on, or No Picture). The foot: "Made Oct 23, 2026 · 2 pages".
  * Where the rows can't fit (the Nomad turned) the list scrolls. Not a page: never counted, exported or moved. Pure, checked on the
@@ -24,23 +24,24 @@ import java.util.List;
  * <p><b>Page Settings</b> (the owner, 2026-10-23: "long press on a page will bring up a panel to adjust the settings for
  * that page"; a hold on a page in either strip or the Pages grid) is the same list for one page ({@link #pageRows}): the
  * page's number for a name with the notebook's under it, then Template (its own, or "Notebook's (Lined)"), Page Colour
- * (Notebook's and the six swatches), Show Through (its step, and Ghost under Page Before; only while See-Through Pages
+ * (Notebook's and the six swatches), Surface (the notebook's or its own, its screen), See-Through Pages (the notebook's:
+ * Off and On, a long press Page Transparency's five), Show Through (its step, and Ghost under Page Before; only while See-Through Pages
  * is on and the page has no layers, whose steps are the side column's), No Erasing and Timed Pages (each the notebook's,
  * or Off or On for the page alone, {@link NotebookRules#forPage}; Timed Pages On with its time's slider under it), and
  * Export Page and Delete in plain words at the foot. Paper rows with 1 dp ink lines between them (the owner: e-ink greys render poorly).
  */
 final class LibraryCard {
     /** A row, or the name above them. */
-    enum Part { NAME, TEMPLATE, RANDOM_FROM, PAGE_COLOUR, TRANSPARENCY, NIB_PREVIEW, SELF_PORTRAIT, TOOLS, NO_ERASING, TIMED, LOCK_PAGES, COVER, COVER_PICTURE, SHOW_THROUGH, LAYERS, MOVE }
+    enum Part { NAME, TEMPLATE, RANDOM_FROM, PAGE_COLOUR, SURFACE, TRANSPARENCY, NIB_PREVIEW, TOOLS, NO_ERASING, TIMED, LOCK_PAGES, COVER, COVER_PICTURE, SHOW_THROUGH, LAYERS, MOVE }
     /** The strip's tile word (and the menus' row that opens it); the name's button. */
     static final String SETTINGS = "Settings", RENAME = "Rename";
     /** The rows' keys that aren't a screen's title (docs/TEXT-STYLE.md: Title Case, shown in caps). */
-    static final String PAGE_COLOUR = "Page Colour", SEE_THROUGH = "See-Through Pages", COVER = "Cover",
+    static final String PAGE_COLOUR = "Page Colour", SURFACE = "Surface", SEE_THROUGH = "See-Through Pages", COVER = "Cover",
             RANDOM_TEMPLATE = "Random Template", COVER_PICTURE = "Cover Picture", NIB_PREVIEW = "Nib Preview";
 
     /** The rows a notebook shows, in groups, a grey-400 line between them: the page, the rules, the cover. */
     static final List<List<Part>> GROUPS = java.util.Arrays.asList(
-            java.util.Arrays.asList(Part.TEMPLATE, Part.RANDOM_FROM, Part.PAGE_COLOUR, Part.TRANSPARENCY, Part.NIB_PREVIEW, Part.SELF_PORTRAIT),
+            java.util.Arrays.asList(Part.TEMPLATE, Part.RANDOM_FROM, Part.SURFACE, Part.NIB_PREVIEW),
             java.util.Arrays.asList(Part.NO_ERASING, Part.TIMED, Part.LOCK_PAGES, Part.TOOLS),
             java.util.Arrays.asList(Part.COVER, Part.COVER_PICTURE));
     /**
@@ -63,9 +64,9 @@ final class LibraryCard {
             case TEMPLATE: return NotebookLayout.TEMPLATE;
             case RANDOM_FROM: return RANDOM_TEMPLATE;
             case PAGE_COLOUR: return PAGE_COLOUR;
+            case SURFACE: return SURFACE;
             case TRANSPARENCY: return SEE_THROUGH;
             case NIB_PREVIEW: return NIB_PREVIEW;
-            case SELF_PORTRAIT: return DailyPrompt.TITLE;
             case TOOLS: return NotebookLayout.TOOLS;
             case NO_ERASING: return NotebookRules.NO_ERASING;
             case TIMED: return NotebookRules.TIMED_PAGES;
@@ -78,7 +79,7 @@ final class LibraryCard {
             default: return SETTINGS;
         }
     }
-    /** What a row says it is set to, in words; null for a row of buttons (Page Colour, See-Through Pages, Nib Preview, Self-Portrait Prompt, No Erasing, Lock Pages). */
+    /** What a row says it is set to, in words; null for a row of buttons (Page Colour, See-Through Pages, Nib Preview, No Erasing, Lock Pages). */
     static String value(Part p, NotebookOptions o, CoverDesign design) {
         switch (p) {
             case TEMPLATE: return guidesShown(o) && o.guidesShown != NotebookOptions.FULL ? o.template.label + " · " + NotebookOptions.GUIDE_STEPS[o.guidesShown] : o.template.label;
@@ -87,16 +88,21 @@ final class LibraryCard {
                 List<NotebookTemplate> set = o.template.set();
                 return set.isEmpty() ? NotebookLayout.ALL : set.size() == 1 ? set.get(0).label : set.size() + " templates";
             }
+            case SURFACE: return surface(o.surface);
             case TOOLS: return o.tools.label;
             case TIMED: return NotebookRules.timeLabel(o.seconds);
             case COVER: return design.label;
             default: return null;
         }
     }
+    /** A surface's words (the surface spec, 2026-11-01): the brushes' Paper choice's ("Smooth", "Cold Press"). */
+    static String surface(BrushTexture s) { return PartChoice.of(BrushPart.PAPER, s.ordinal()).label; }
+    /** Page Settings' Surface: the page's own, or the notebook's said with what it is ("Notebook's (Smooth)"). */
+    static String pageSurface(BrushTexture s, boolean own) { return own ? surface(s) : notebooks(surface(s)); }
     /** Whether Lock Pages applies, so its chips can be set (else greyed): a page is timed, by Timed Pages or a timed template's sections. */
     static boolean locksApply(NotebookOptions o) { return o.seconds > 0 || o.template.timed(); }
     /** Whether a row opens a screen ("›"); the rest are set in the row. */
-    static boolean opens(Part p) { return p != Part.PAGE_COLOUR && p != Part.TRANSPARENCY && p != Part.NIB_PREVIEW && p != Part.SELF_PORTRAIT && p != Part.NO_ERASING && p != Part.LOCK_PAGES && p != Part.COVER_PICTURE; }
+    static boolean opens(Part p) { return p != Part.PAGE_COLOUR && p != Part.TRANSPARENCY && p != Part.NIB_PREVIEW && p != Part.NO_ERASING && p != Part.LOCK_PAGES && p != Part.COVER_PICTURE; }
     /** Cover Picture's words: the page on the front cover ("Page 3"), or none. */
     static String coverPicture(int stack) { return stack < 0 ? NotebookCovers.NO_PICTURE_BUTTON : pageTitle(stack); }
     /**
@@ -148,13 +154,13 @@ final class LibraryCard {
     /** A setting a page takes from its notebook, said with what that is: "Notebook's (Lined)". */
     static String notebooks(String value) { return NOTEBOOKS + " (" + value + ")"; }
     /**
-     * A page's rows: Show Through only while {@code tracing} shows other pages through and the page is {@code alone} (no
+     * A page's rows: Template, Page Colour, Surface, See-Through Pages (the notebook's, 2026-11-05); Show Through only while {@code tracing} shows other pages through and the page is {@code alone} (no
      * layers); then Layers and Move (the refocus, 2026-10-24: the layers left the side column, and a hold on a page opens
      * this at once, so it no longer lifts the page to drag it).
      */
     static List<Part> pageRows(TracingPaper tracing, boolean alone) {
         List<Part> rows = new ArrayList<>();
-        rows.add(Part.TEMPLATE); rows.add(Part.PAGE_COLOUR);
+        rows.add(Part.TEMPLATE); rows.add(Part.PAGE_COLOUR); rows.add(Part.SURFACE); rows.add(Part.TRANSPARENCY);
         if (tracing.paper != TracingPaper.PLAIN && alone) rows.add(Part.SHOW_THROUGH);
         rows.add(Part.NO_ERASING); rows.add(Part.TIMED);
         rows.add(Part.LAYERS); rows.add(Part.MOVE);
@@ -204,13 +210,13 @@ final class LibraryCard {
         }
     }
     /** Whether a page's row opens a screen: Template alone; the rest are set in the row. */
-    static boolean pageOpens(Part p) { return p == Part.TEMPLATE; }
+    static boolean pageOpens(Part p) { return p == Part.TEMPLATE || p == Part.SURFACE; }
     // What a tap does
 
     /** What a tap on a row does: renames, toggles No Erasing, opens a screen. */
     enum Tap { RENAME, TOGGLE, CHOOSE, NOTHING }
     static Tap tap(Part part, NotebookOptions options) {
-        if (part == null || part == Part.PAGE_COLOUR || part == Part.COVER_PICTURE || part == Part.LOCK_PAGES || part == Part.NIB_PREVIEW || part == Part.SELF_PORTRAIT) return Tap.NOTHING;
+        if (part == null || part == Part.PAGE_COLOUR || part == Part.COVER_PICTURE || part == Part.LOCK_PAGES || part == Part.NIB_PREVIEW) return Tap.NOTHING;
         return part == Part.NAME ? Tap.RENAME : part == Part.NO_ERASING ? Tap.TOGGLE : Tap.CHOOSE;
     }
     /** The screen a row opens (See-Through Pages' by a long press). */
@@ -218,6 +224,7 @@ final class LibraryCard {
         switch (part) {
             case TEMPLATE: return CardSheet.Screen.TEMPLATE;
             case RANDOM_FROM: return CardSheet.Screen.RANDOM_FROM;
+            case SURFACE: return CardSheet.Screen.SURFACE;
             case TRANSPARENCY: return CardSheet.Screen.TRANSPARENCY;
             case TOOLS: return CardSheet.Screen.TOOLS;
             case TIMED: return CardSheet.Screen.TIMED;
@@ -236,7 +243,7 @@ final class LibraryCard {
      * rows {@link #LEAST_ROW} tall can't fit.
      */
     static final class Layout {
-        static final float MOST_WIDE = 720, ROW = 56, LEAST_ROW = 40, ROW_GAP = 2, BREAK = 12, GAP = 12, RENAME = 44, PAD = 14;
+        static final float MOST_WIDE = 720, ROW = 56, LEAST_ROW = 40, ROW_GAP = 2, BREAK = 10, GAP = 12, RENAME = 44, PAD = 14;
         /** Page Colour's swatches, dp square, apart; the thumbnail's and a mark's widths. */
         static final float SWATCH = 28, SWATCH_GAP = 6, THUMB = 24, MARK = 20, MARK_GAP = 3;
         static final int NAME_LINES = 2;

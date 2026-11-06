@@ -13,16 +13,9 @@ import java.lang.reflect.Method;
 /** Uses NomadUiChecks' disposable book and the outer suite's session restoration. */
 final class PageNavigationChecks {
     static void run(Instrumentation test,PaintActivity app,StringBuilder report)throws Exception {
-        run(test,app,report,false);
-    }
-    static void runFeedback(Instrumentation test,PaintActivity app,StringBuilder report)throws Exception {
-        run(test,app,report,true);
-    }
-    private static void run(Instrumentation test,PaintActivity app,StringBuilder report,boolean feedbackOnly)throws Exception {
-        if(!feedbackOnly) {verifyRaster(report);benchmark(test,app,report);}
-        if(feedbackOnly)return;
-        // Retired: MonoPaint's header page row, Nomad Pages popup and page overview grid. Inkwash never shows that
-        // header (PaintActivity.showInkWashBar); pages turn from its page bar (PageTurner), checked on the desktop.
+        verifyRaster(report);benchmark(test,app,report);
+        // MonoPaint's header page row, Nomad Pages popup and page overview grid went with its header; pages turn from
+        // the page bar (PageTurner), checked on the desktop.
         DrawingBook book=new DrawingBook(new ToneDocument(640,720));
         book.current().begin();for(int y=80;y<260;y++)book.current().paintSpan(70,250,y,40);book.current().finish();
         book.addPage();book.current().begin();for(int y=100;y<380;y++)book.current().paintSpan(90,400,y,160);book.current().finish();
@@ -36,6 +29,13 @@ final class PageNavigationChecks {
             });idle(test);
         }
         check(book.current().tone(70,80)==40,"Turning back keeps the first page's artwork");
+        // Another page shown stays on the drawing screen: its fast-plane blank keeps to the page, or the column, the page bar
+        // and the Zen button go white with nothing to redraw them (the owner, 2026-11-03, after the Template eye).
+        if(DirectEink.fastBinaryControls())main(test,() -> {
+            RectF blank=(RectF)get(app.pad,"blanked");blank.setEmpty();
+            app.pad.showPage(book.current());
+            check(!blank.isEmpty()&&bounds(app.pad).contains(blank),"Showing a page blanks the page's fast ink alone");
+        });idle(test);
         // The page bar's + tile (the owner, 2026-10-24): a new page at the notebook's end, turned to (the tile's tap is PaintActivity.newPage).
         main(test,() -> call(app,"newPage",new Class<?>[0]));idle(test);
         check(book.count()==3&&book.index()==2&&BlankPages.blank(book,2)&&app.pad.document==book.current(),"+ adds a page at the end and turns to it");
@@ -48,58 +48,6 @@ final class PageNavigationChecks {
         main(test,() -> call(app,"replaceBook",new Class<?>[]{DrawingBook.class},old));idle(test);
         check(old.count()==1&&old.index()==0,"Opened: the blank page at its end goes");
         report.append("PASS: Page turns select, submit and keep each page's artwork; the + tile adds a page at the end; an old notebook's blank page at its end goes on opening.\n");
-    }
-    private static void overview(Instrumentation test,PaintActivity app,DrawingBook book,boolean nomad,boolean capture)throws Exception {
-        if(nomad){main(test,() -> call(app,"showPagePanel"));idle(test);}
-        View number=(View)get(app,nomad?"popupPageNumber":"pageNumber");
-        tap(test,number);idle(test);
-        android.app.AlertDialog dialog=(android.app.AlertDialog)get(app,"pageOverview");
-        check(dialog!=null&&dialog.isShowing(),"Page number opens overview by pen touch");
-        check(get(app,"pagePanel")==null,"Overview replaces compact popup");
-        PageOverview grid=findGrid(dialog.getWindow().getDecorView());
-        check(grid!=null&&grid.getCount()==3,"Grid contains every page");
-        check(book.index()==2&&!book.current().canUndo(),"Opening previews does not select or edit a page");
-        for(int i=0;i<100;i++) {
-            android.util.LruCache<?,?> cache=(android.util.LruCache<?,?>)get(grid,"thumbnails");
-            if(cache.size()==3)break;
-            SystemClock.sleep(50);test.waitForIdleSync();
-        }
-        check(((android.util.LruCache<?,?>)get(grid,"thumbnails")).size()==3,"All visible thumbnails load");
-        @SuppressWarnings("unchecked") android.util.LruCache<Integer,android.graphics.Bitmap> previews=
-                (android.util.LruCache<Integer,android.graphics.Bitmap>)get(grid,"thumbnails");
-        check(previews.get(0).getPixel(50,60)==android.graphics.Color.rgb(40,40,40),"First thumbnail shows its saved artwork");
-        check(previews.get(1).getPixel(70,90)==android.graphics.Color.rgb(160,160,160),"Second thumbnail shows its own artwork");
-        check(previews.get(2).getPixel(50,60)==android.graphics.Color.WHITE,"Current blank page preview stays blank");
-        check(grid.getChildAt(2).isActivated(),"Current page is highlighted");
-        RectF frame=bounds((View)get(app,"orientationFrame"));
-        for(int i=0;i<grid.getChildCount();i++)check(frame.contains(bounds(grid.getChildAt(i))),"Rotated thumbnail stays inside app");
-        if(capture)screenshot(test,app,nomad?"nomad-page-overview.png":"page-overview.png");
-        tap(test,grid.getChildAt(0));idle(test);
-        check(get(app,"pageOverview")==null&&book.index()==0,"Thumbnail touch jumps to selected page and closes grid");
-        check(book.current().tone(70,80)==40,"Jump preserves selected page artwork");
-        // Dialog exit animations and focus return are asynchronous on the tablet.
-        for(int i=0;i<40&&get(get(app,"pad"),"direct")==null;i++){SystemClock.sleep(50);test.waitForIdleSync();}
-        check(get(get(app,"pad"),"direct")!=null,"Fast drawing display reconnects after selecting thumbnail; focus="+app.hasWindowFocus());
-        main(test,() -> call(app,"showPageOverview"));idle(test);
-        dialog=(android.app.AlertDialog)get(app,"pageOverview");
-        test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);idle(test);
-        check(!dialog.isShowing()&&book.index()==0,"Back closes overview without changing pages");
-    }
-    private static void overviewScroll(Instrumentation test,PaintActivity app)throws Exception {
-        DrawingBook book=new DrawingBook(new ToneDocument(48,64));
-        for(int i=1;i<DrawingBook.MAX_PAGES;i++)book.addPage();
-        main(test,() -> {call(app,"replaceBook",new Class<?>[]{DrawingBook.class},book);call(app,"showPageOverview");});idle(test);
-        PageOverview grid=findGrid(((android.app.AlertDialog)get(app,"pageOverview")).getWindow().getDecorView());
-        check(grid.getCount()==100&&grid.getLastVisiblePosition()==99,"Long overview opens scrolled to current page");
-        main(test,() -> grid.setSelection(0));idle(test);
-        tap(test,grid.getChildAt(0));idle(test);check(book.index()==0,"Can scroll and jump across a 100-page book");
-    }
-    private static PageOverview findGrid(View view) {
-        if(view instanceof PageOverview)return (PageOverview)view;
-        if(view instanceof android.view.ViewGroup)for(int i=0;i<((android.view.ViewGroup)view).getChildCount();i++) {
-            PageOverview found=findGrid(((android.view.ViewGroup)view).getChildAt(i));if(found!=null)return found;
-        }
-        return null;
     }
     private static void tap(Instrumentation test,View view) {
         RectF area=bounds(view);long down=SystemClock.uptimeMillis();
@@ -131,49 +79,6 @@ final class PageNavigationChecks {
                     .append(" ms, max=").append(times[7]).append(" ms (not physical panel latency).\n");
         }
     }
-    /** The open page menu's item named {@code name}. */
-    static View pageMenuItem(PaintActivity app,String name)throws Exception {
-        java.util.ArrayList<View> found=new java.util.ArrayList<>();
-        ((View)get(app,"pagePanel")).findViewsWithText(found,name,View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION);
-        check(found.size()==1,"Page menu has one "+name+" item");
-        return found.get(0);
-    }
-    private static void press(Instrumentation test,PaintActivity app,View button,DrawingBook book,int expected,SelectionFeedback feedback)throws Exception {
-        RectF bounds=bounds(button);long down=SystemClock.uptimeMillis();int before=book.index(),submitted=feedback.submitted;
-        int pageSubmissions=(Integer)get(get(app,"pad"),"pagePresentCount");
-        android.widget.TextView counter=(android.widget.TextView)get(app,get(app,"popupPageNumber")!=null?"popupPageNumber":"pageNumber");
-        // A page action also closes its panel, through the same fast path.
-        Object panel=get(app,"pagePanel");
-        boolean[] releasedBeforeCounter={false};
-        android.text.TextWatcher watcher=new android.text.TextWatcher() {
-            public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
-            public void onTextChanged(CharSequence s,int start,int before,int count) {
-                releasedBeforeCounter[0]=!((PageActionButton)button).press.pressed;
-            }
-            public void afterTextChanged(android.text.Editable text) {}
-        };
-        main(test,() -> counter.addTextChangedListener(watcher));
-        try {
-            check(PanelCoordinates.fullyVisible(button,new android.graphics.Rect(0,0,button.getWidth(),button.getHeight())),
-                    "Page buttons must not be clipped, including density rounding");
-            event(test,MotionEvent.ACTION_DOWN,down,bounds.centerX(),bounds.centerY());
-            main(test,() -> {
-                check((Boolean)get(get(button,"press"),"pressed"),"Press is visibly retained on pen-down");
-                check(feedback.submitted>submitted,"Press uses fast display before loading");
-                check(feedback.lastDisplayMode==(DirectEink.fastBinaryControls()?9:7),"Page arrow press uses device-specific fast mode");
-                check(book.index()==before,"Page work waits until click");
-            });
-            event(test,MotionEvent.ACTION_UP,down,bounds.centerX(),bounds.centerY());idle(test);
-            check(book.index()==expected,"Correct page after action");
-            check(releasedBeforeCounter[0],"Press clears before page-counter redraw and disabled-arrow dimming");
-            check((Integer)get(get(app,"pad"),"pagePresentCount")>pageSubmissions,"Page artwork submitted through fast display");
-            SystemClock.sleep(250);test.waitForIdleSync();
-            check(!(Boolean)get(get(button,"press"),"pressed"),"Press clears after completion");
-            boolean closed=panel!=null&&get(app,"pagePanel")==null;
-            check(feedback.submitted==submitted+(closed?3:2),"Exactly one press and one release, with no delayed repeat");
-            if(!closed)check(feedback.lastDisplayMode==(DirectEink.fastBinaryControls()?9:7),"Page arrow release uses device-specific fast mode");
-        } finally {main(test,() -> counter.removeTextChangedListener(watcher));}
-    }
     private static void verifyRaster(StringBuilder report) {
         int width=257,height=193;
         java.util.ArrayList<ToneDocument.Layer> layers=new java.util.ArrayList<>();
@@ -189,22 +94,11 @@ final class PageNavigationChecks {
             doc.render(expected,0,0,width,height);ViewportBitmap.compose(doc,bitmap,true);
             bitmap.getPixels(actual,0,width,0,0,width,height);
             check(java.util.Arrays.equals(expected,actual),"Native full-page raster matches Java for all shades, alpha and hidden layers");
-            android.graphics.Bitmap same=ViewportBitmap.dithered(doc,width,height);
-            same.getPixels(actual,0,width,0,0,width,height);same.recycle();
-            check(java.util.Arrays.equals(expected,actual),"Dithered export at page size matches the screen");
-            byte[] gray=new byte[64*48];java.util.Arrays.fill(gray,(byte)140);
-            ToneDocument flat=new ToneDocument(64,48,gray);
-            int[] dots=new int[40*30],shrunk=new int[dots.length];
-            new ToneDocument(40,30,java.util.Arrays.copyOf(gray,dots.length)).render(dots,0,0,40,30);
-            android.graphics.Bitmap scaled=ViewportBitmap.dithered(flat,40,30);
-            check(scaled.getWidth()==40 && scaled.getHeight()==30,"Dithered export takes the chosen size");
-            scaled.getPixels(shrunk,0,40,0,0,40,30);scaled.recycle();
-            check(java.util.Arrays.equals(dots,shrunk),"Scaled export dithers its shade at the new resolution");
             for(int i=0;i<8;i++)doc.setLayerVisible(i,false);
             ViewportBitmap.compose(doc,bitmap,true);bitmap.getPixels(actual,0,width,0,0,width,height);
             for(int pixel:actual)check(pixel==android.graphics.Color.WHITE,"All hidden layers leave white paper");
         } finally {bitmap.recycle();}
-        report.append("PASS: Native page raster exactly matches calibrated Java rendering across eight alpha/hidden layers, and dithered exports at page and scaled sizes.\n");
+        report.append("PASS: Native page raster exactly matches calibrated Java rendering across eight alpha/hidden layers.\n");
     }
     private static void event(Instrumentation test,int action,long down,float x,float y) {
         MotionEvent.PointerProperties properties=new MotionEvent.PointerProperties();properties.id=0;properties.toolType=MotionEvent.TOOL_TYPE_STYLUS;

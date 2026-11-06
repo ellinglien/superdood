@@ -1,0 +1,32 @@
+/* ---------- 5 · Guide (guide.js): Brush Lab Dials' tiles (dial-demo-src/view.css, before this) in the Scribbler Style ---------- */
+.guide { --g1: var(--g200); --g2: var(--g400); --g3: var(--g600); --g4: var(--g800);
+  display: flex; flex-direction: column; gap: 10px; height: var(--fit); min-height: 480px; }
+.guidebar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; flex: none; }
+.guidenav { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
+.guidebar .guidenav { flex: 0 1 auto; min-width: 0; }
+.guidebar .btn { padding: 1px 10px; font-size: 12px; }
+/* An ⓘ's entry, marked for a moment as it scrolls into view. */
+.guide .g-flash { outline: 3px solid var(--ink); outline-offset: 3px; }
+.guide .dg-tile:focus:not(.g-flash), .guide .dg-part:focus { outline: none; }
+.guidenav a { padding: 2px 10px; border: 2px solid var(--ink); color: var(--ink); text-decoration: none; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.guidenav a:hover { background: var(--g200); }
+.guidenav a.dg-here { background: var(--ink); color: var(--paper); }
+.guidenav a:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+/* The tiles scroll inside the tab, so the page still fits the window. */
+.guidebody { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
+.guide .dg-part { padding: 0 0 20px; }
+.guide .dg-part h2 { font-size: 15px; }
+.guide .dg-part-head { border-bottom-width: 3px; padding-bottom: 6px; gap: 10px; }
+.guide .dg-part-head .dg-num { min-width: 34px; height: 28px; border-width: 2px; font-size: 13px; }
+.guide .dg-blurb { font-size: 13px; margin: 8px 0 2px; }
+.guide .dg-intro { font-size: 12px; }
+.guide h3.dg-group { margin: 14px 0 8px; font-size: 12px; }
+.guide .dg-grid { grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 12px; }
+.guide .dg-tile { border-width: 2px; padding: 8px; gap: 6px; }
+.guide .dg-tile.dg-choice { border-width: 3px; }
+.guide .dg-head h4, .guide .dg-tile.dg-choice h4 { font-size: 13px; }
+.guide .dg-head .dg-val, .guide .dg-on, .guide .dg-tag { font-size: 12px; }
+.guide .dg-say { font-size: 13px; }
+@media (max-width: 1180px), (max-height: 620px) {
+  .guide { height: calc(100vh - 32px); }
+}

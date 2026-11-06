@@ -17,12 +17,32 @@ Tools:
 
 **RUN CHECKS** on the page (or `#selftest`) runs the self-test. No other folder was edited, and no repo was touched.
 
+- **Parity with the app** (2026-10-31, `bash scripts/web_parity.sh [name regex]`): every preset and the first ten drawn
+  by the app's engine and this one over the same strokes, compared at the Manta's 16 greys (`build/web-parity/report.txt`,
+  `grid.png`). Ported to match: Wet paint (`wet.js`: the app's wet canvas, `host.getWet()`; Brush Studio's test page and
+  the live probe keep it wet across strokes and move it after lift), the app's paper noise (`paperOf`), the lattice past
+  50 px (`LATTICE_PX`), the bristle swarm, Mold's limits, the crayon's noises, light over dark,
+  the round stamp, float samples, and a pen's pressure through the Manta's curve (`pointerSample`). All within 1% but
+  Mold (its scouts' paths part after a pixel or two).
+- **Planes** (2026-10-31, `planes.js`, built last: `engine-files.cjs` LAST): the app's page layers and kind planes
+  (`ToneDocument`: Wash and Ink layers, each a base and Dry media, Wash, Pen and Opaque planes, shown stacked). A stroke
+  binds its plane (`strokePlane`: the app's `layerOf` and `kinds`), so it reads and writes only that plane's page, base,
+  kept, print and dots, as the app's `strokeBaseTones`; each plane keeps a coverage (`cov`; covering writes through
+  `planeCover`, engine.js), and the page shows them stacked (`shownPage`, `showPage`). White, Invert, Behind and light over
+  dark read the page under them (`planesUnder`, the app's `ModularCompose.Under`). Water, a bath, wet paint, Halo and
+  Fading keep their plane. The eraser takes the planes of its kinds (`er.kinds`, the app's EraseKind: 0 Everything, whole;
+  undefined the lab's Erasable rule). A page that has only ever had one plane draws exactly as before. Received live
+  changes are laid as the Manta lays them (`planesLay`: on the base of the layer last drawn on, scaled to the look);
+  `planesSet` for a page's own Undo. The parity harness has four plane cases (`CASES`: print over prints over a pen
+  line, erase kinds, mixed media, a received change under later strokes). Not ported: user layers (the layers panel),
+  a stump also softening the pair's wash (`alsoBlends`), the pen's trade with Slow water on the water's plane.
+
 - **Stamp** (2026-10-19, `newmods.js`, mischief-lab-2.html's second pad): Tip choice 10, `weight spacing headTurn
   inkFade flick` (Turns is Head Follows' key, On first). A nib cut from the test area by lasso (**Cut Stamp**, beside
   Eraser, shown for a Stamp: marching ants while drawing; an empty lasso says "Nothing to cut") printed every Spacing,
   potato-stamp inked, Ink Fade's share used a print, afresh after a 1 s rest (the surface keeps what the last stamp left).
   Nibs are kept by id (`NM.nibs`, and localStorage); the code carries the id after the six (`parts.js` `nibSeg`), as the
-  app's does. Without its nib it prints a default star (the app's prints round). Never rolled, never a variation's swap.
+  app's does. Without its nib it prints a round stamp, as the app's (2026-10-31; a star until then). Never rolled, never a variation's swap.
   `stampChecks` in RUN CHECKS.
 - **Crayon** (2026-10-20, `newmods.js`, mischief-lab-2.html's fourth pad): Medium choice 7, `wax scratch` (Scratch a
   choice, Off and On). Drawn as a crisp charcoal line (Smudge off, Float as Quick) with its own line stamp (rim wobble,

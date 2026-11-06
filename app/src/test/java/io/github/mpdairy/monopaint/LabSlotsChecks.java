@@ -113,7 +113,7 @@ public final class LabSlotsChecks {
     }
     static void locks() {
         BrushLab lab = new BrushLab(BrushLabChecks.slots(), 2, new Random(8));
-        lab.pickStyle(ModularStyle.named(ModularStyle.ANYTHING_GOES));
+        lab.newBrush(ModularStyle.named(ModularStyle.ANYTHING_GOES));
         lab.toggleLock(BrushPart.TIP);
         ModularBrush.Part tip = lab.parts().part(BrushPart.TIP).copy();
         for (int i = 0; i < 20; i++) { lab.randomize(); check(lab.parts().part(BrushPart.TIP).sameAs(tip), "A locked tip stays"); }

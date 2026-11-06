@@ -89,7 +89,8 @@ public final class DryingWaterChecks {
         int[] after = tones(now);
         for (int i = 0; i < after.length; i++) check(after[i] <= before[i], "Laying it midway only darkens");
         double share = (double)(ink(now) - lift) / (ink(full) - lift);
-        check(!laid.settling() && share > .98 && share < 1.02, "Laid midway (a pause, another page, a layer change), the wash keeps the pigment it would have laid, only without the rest of its drift: " + share);
+        // Within 3% (2% until the surfaces, 2026-11-01: a whole surface's grain moves a little more of it).
+        check(!laid.settling() && share > .97 && share < 1.03, "Laid midway (a pause, another page, a layer change), the wash keeps the pigment it would have laid, only without the rest of its drift: " + share);
     }
     /** A {@code w × h} page with a wash of darkness {@code dark} on it, as a Drying stroke leaves it (its held-back share not yet laid). */
     static ToneDocument washed(int w, int h, float[] dark) {

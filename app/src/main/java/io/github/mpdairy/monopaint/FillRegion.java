@@ -70,7 +70,12 @@ final class FillRegion {
     static final class Room {
         final int x0, y0, x1, y1, width, area;
         final byte[] at;
-        Room(int x0, int y0, int x1, int y1, byte[] at, int area) { this.x0 = x0; this.y0 = y0; this.x1 = x1; this.y1 = y1; this.at = at; this.area = area; width = x1 - x0 + 1; }
+        /** Inkwash: each pixel's share of the press, 0 to 255 over the box as {@link #at} (Make Ink's letters, {@link TextBoxes#ink}); null: all of it everywhere inside. */
+        final byte[] cover;
+        Room(int x0, int y0, int x1, int y1, byte[] at, int area) { this(x0, y0, x1, y1, at, area, null); }
+        Room(int x0, int y0, int x1, int y1, byte[] at, int area, byte[] cover) { this.x0 = x0; this.y0 = y0; this.x1 = x1; this.y1 = y1; this.at = at; this.area = area; this.cover = cover; width = x1 - x0 + 1; }
+        /** Pixel {@code o}'s (an index into {@link #at}) share of the press, 0 to 1. */
+        float share(int o) { return cover == null ? 1 : (cover[o] & 255) / 255f; }
         /** The pixel's kind ({@link #OPEN} …), {@link #OUT} off the box. */
         byte kind(int x, int y) { return x < x0 || y < y0 || x > x1 || y > y1 ? OUT : at[(y - y0) * width + x - x0]; }
         boolean inside(int x, int y) { return kind(x, y) != OUT; }

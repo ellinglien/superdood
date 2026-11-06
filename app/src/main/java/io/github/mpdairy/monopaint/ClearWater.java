@@ -12,7 +12,9 @@ import static io.github.mpdairy.monopaint.StrokeMath.clamp;
  * {@link DryingWater} with the stroke's Drying, so it keeps settling for its drying time and runs downhill on a tilted
  * page ({@link GravityFlow}), as any Slow wash does; else it is laid at once. Over a wash that was still wet when the
  * stroke began ({@link WatercolorSession#stillWet}) it lifts more readily and runs further. On the water (Float) it is
- * Float's clear water ({@link #afloat}). Pure, checked on the desktop ({@code WetSmudgeChecks}).
+ * Float's clear water ({@link #afloat}). Press to Lift ({@link PartDial#PRESS}): a firm press leaves less wet and lays
+ * less of what it lifted back, so it blots as a damp tissue does. Pure, checked on the desktop ({@code WetSmudgeChecks},
+ * {@code PressSmudgeChecks}).
  *
  * <p>After MonoPaint's clear-water wet brush pen (upstream 8743286, "Hold ink between strokes" off: "it lifts what it
  * touches and lets the lifted paint run out through the wet area"), in Inkwash's own engine.
@@ -54,6 +56,7 @@ final class ClearWater {
         int cw = (x1 - x0) / q + 1, ch = (y1 - y0) / q + 1;
         float[] lifted = new float[cw * ch], wet = new float[cw * ch];
         int T = CarryPlane.SIDE;
+        boolean pressed = c.press > 0;
         // What it lifted (the darkness found less what is there, where less) and how wet it is, cell by cell, over what it touched.
         for (int ty = Math.max(0, rect[1]) / T; ty <= Math.min(H - 1, rect[3]) / T; ty++)
             for (int tx = Math.max(0, rect[0]) / T; tx <= Math.min(W - 1, rect[2]) / T; tx++) {
@@ -67,7 +70,8 @@ final class ClearWater {
                     int k = ((top + y - y0) / q) * cw + (left + x - x0) / q;
                     wet[k] += wt[i];
                     float d = found[i] - P[i];
-                    if (d > 0) lifted[k] += d;
+                    // Press to Lift: what a firm press lifted, leaving little wet, mostly stays in the brush.
+                    if (d > 0) lifted[k] += pressed ? d * wt[i] : d;
                 }
             }
         double total = 0, area = q * (double) q;

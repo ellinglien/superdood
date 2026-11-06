@@ -10,11 +10,14 @@ function legacyDiff(code, W = 420, H = 300) {
   const r = readAnyCode(code), old = decode(code);
   if (!r || !old) return { code, ok: false, why: "did not read" };
   const ink = old.kind === "ink", size = ink ? 8 : 120, pad = ink ? 22 : 70;
-  const ps = surface(W, H, 7), pts = loopPoints(W, H, pad);
+  // The same paper for both: the old engine's surface on the app's paper (modSurface's).
+  const ps = Object.assign(surface(W, H, 7), paperOf(W, H)), pts = loopPoints(W, H, pad);
   lay(ps, old, pts, size, ink ? INK_DARK[0] : PAINT_DARK[0]);
   const ms = modSurface(W, H, 7);
   // An old paint (a wash) at the darkness that lays the old black's glaze since washes reach black (the app's ModularSizes.sinceBlack).
-  layStroke(ms, r.b, pts, size, r.b.medium.k === "wash" ? GLAZE / WASH_BLACK : 1, null);
+  // On every pixel, as the old engine works (no lattice).
+  const lat = LATTICE_PX; LATTICE_PX = Infinity;
+  try { layStroke(ms, r.b, pts, size, r.b.medium.k === "wash" ? GLAZE / WASH_BLACK : 1, null); } finally { LATTICE_PX = lat; }
   let diff = 0, marked = 0;
   for (let i = 0; i < W * H; i++) {
     const a = Math.round(PAPER * (1 - ps.wash[i]) * (1 - ps.ink[i]) / 17) * 17, b = Math.round(ms.page[i] / 17) * 17;
@@ -154,12 +157,13 @@ function eraseChecks() {
   { const s = modSurface(W, H, 7), alone = modSurface(W, H, 7), white = mk("Gouache", "cover", { erase: 1 });
     layStroke(s, ink, line(40, 120, 320, 120), 6, 1, null); layStroke(alone, ink, line(40, 120, 320, 120), 6, 1, null);
     layStroke(s, white, line(40, 120, 320, 120), 60, .05, null);
-    const hidden = differ(s.page, alone.page); eraseAll(s);
-    t("erasable gouache over ink (" + hidden + " px), erased: " + differ(s.page, alone.page) + " px differ from the ink", hidden > 1000 && differ(s.page, alone.page) === 0); }
+    // The page as it shows (planes.js shownPage): the ink and the gouache are on planes of their own.
+    const hidden = differ(shownPage(s), alone.page); eraseAll(s);
+    t("erasable gouache over ink (" + hidden + " px), erased: " + differ(shownPage(s), alone.page) + " px differ from the ink", hidden > 1000 && differ(shownPage(s), alone.page) === 0); }
   // 5. A finger (Smear, Own paint 0) moves pencil, never permanent ink.
   { const finger = mk("Charcoal", "charcoal", { erase: 1 }, "smudge"); finger.carry.d.load = 0; finger.carry.d.pick = .9;
-    const moved = B => { const s = modSurface(W, H, 7); layStroke(s, B, line(180, 20, 180, 220), 8, 1, null); const was = Float32Array.from(s.page);
-      layStroke(s, finger, line(60, 120, 300, 125), 30, 1, null); let m = 0; for (let i = 0; i < was.length; i++) m += Math.abs(s.page[i] - was[i]); return m; };
+    const moved = B => { const s = modSurface(W, H, 7); layStroke(s, B, line(180, 20, 180, 220), 8, 1, null); const was = Float32Array.from(shownPage(s));
+      layStroke(s, finger, line(60, 120, 300, 125), 30, 1, null); const now = shownPage(s); let m = 0; for (let i = 0; i < was.length; i++) m += Math.abs(now[i] - was[i]); return m; };
     const mi = moved(ink), mp = moved(pencil);
     t("a finger smears pencil (" + mp.toFixed(0) + " tone) and leaves ink (" + mi.toFixed(1) + ")", mp > 2000 && mi < 1); }
   // 6. However hard it is pressed, the eraser leaves permanent ink as it was.
@@ -294,6 +298,15 @@ function nameChecks() {
     if (newMods) t("19 app codes name as in the app" + (off.length ? ": " + off.join(", ") : ""), !off.length); }
   return out;
 }
+// The Pencil reports 0 as it leaves the glass: still a pen, lightest, never a mouse's press (a blob at the line's end).
+function penChecks() {
+  const out = [], t = (what, ok) => out.push({ what, ok: !!ok }), L = {};
+  const at = (p, k) => pointerSample({ pointerType: "pen", pressure: p, timeStamp: k * 8 }, L, k * 3, 0)[2];
+  const pressed = [.1, .4, .6, .5, .2].map(at), lifting = at(0, 5);
+  t("a pen's 0 at its lift is lighter than its last press", lifting < pressed[4]);
+  t("a pen that never pressed is read as the hand's way", pointerSample({ pointerType: "pen", pressure: 0, timeStamp: 0 }, {}, 0, 0)[2] > 0);
+  return out;
+}
 function selfTest() {
   const legacy = LEGACY_CODES.map(c => legacyDiff(c));
   const trips = roundTrips();
@@ -301,6 +314,7 @@ function selfTest() {
   const float = floatChecks();
   const erase = eraseChecks();
   const names = nameChecks();
-  const ok = legacy.every(l => l.ok) && !trips.length && proto.every(p => p.ok) && float.every(f => f.ok) && erase.every(f => f.ok) && names.every(f => f.ok);
-  return { ok, legacy, trips, proto, float, erase, names };
+  const pen = penChecks();
+  const ok = legacy.every(l => l.ok) && !trips.length && proto.every(p => p.ok) && float.every(f => f.ok) && erase.every(f => f.ok) && names.every(f => f.ok) && pen.every(f => f.ok);
+  return { ok, legacy, trips, proto, float, erase, names, pen };
 }

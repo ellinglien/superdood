@@ -41,6 +41,7 @@ final class PartCard extends FrameLayout {
             case CARRY: return R.drawable.ic_part_carry;
             case PAPER: return R.drawable.ic_part_paper;
             case LIFE: return R.drawable.ic_part_life;
+            case LATER: return R.drawable.ic_part_later;
             default: return R.drawable.ic_part_hand;
         }
     }
@@ -56,14 +57,6 @@ final class PartCard extends FrameLayout {
         LinearLayout.LayoutParams after = new LinearLayout.LayoutParams(-2, -2); after.leftMargin = Ui.dp(context, 6);
         head.addView(text, after);
         return head;
-    }
-    /**
-     * {@code part}'s choice in words as its module says them: Control's strongest responses, as many as the layout names
-     * (a slim module's, {@code slim}, its one strongest); a break allowed after an arrow.
-     */
-    static String words(ModularBrush b, BrushPart part, LabLayout layout, boolean slim) {
-        String words = part == BrushPart.HAND ? ModularWords.handWords(b, slim ? 1 : layout.handResponses()) : ModularWords.choiceWords(b, part);
-        return words.replace("→", "→​");
     }
 
     private final BrushLab lab;
@@ -105,8 +98,8 @@ final class PartCard extends FrameLayout {
         if (slim) {
             choice = LabUi.text(context, "", LabLayout.DENSE_SP, 700);
             choice.setMaxLines(layout.slimLines);
-            body.setPadding(dp(6), dp(4), dp(6), dp(4));
-            LinearLayout line = head(context, part, part.label);
+            body.setPadding(dp(6), dp(layout.slimPad), dp(6), dp(layout.slimPad));
+            LinearLayout line = head(context, part, layout.slimName(part));
             LabUi.spring(line);
             line.addView(lock, new LinearLayout.LayoutParams(dp(LabLayout.LOCK), dp(LabLayout.LOCK)));
             body.addView(line, new LinearLayout.LayoutParams(-1, dp(LabLayout.LOCK)));
@@ -153,7 +146,7 @@ final class PartCard extends FrameLayout {
         int pad = Ui.dp(context, layout.modulePad);
         head.setPadding(pad, pad, pad, pad);
         LinearLayout top = LabUi.row(context);
-        TextView name = LabUi.text(context, part.label.toUpperCase(Locale.ROOT), LabLayout.NAME_SP, 700);
+        TextView name = LabUi.text(context, layout.name(part).toUpperCase(Locale.ROOT), LabLayout.NAME_SP, 700);
         name.setLetterSpacing(.08f); name.setSingleLine(true);
         top.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
         ImageView glyph = new ImageView(context);
@@ -176,7 +169,7 @@ final class PartCard extends FrameLayout {
      * {@code redraw} says this part changed ({@link BrushLab#redraw}), as a part's sample shows the whole brush.
      */
     void show(ModularBrush b, boolean picked, BrushLab.Redraw redraw) {
-        String words = words(b, part, layout, slim);
+        String words = layout.moduleWords(b, part, slim);
         if (!words.contentEquals(choice.getText())) choice.setText(words);
         setContentDescription(part.label + ": " + ModularWords.choiceWords(b, part));
         if (picked != this.picked) { this.picked = picked; invalidate(); }

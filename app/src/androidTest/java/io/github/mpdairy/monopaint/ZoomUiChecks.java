@@ -37,14 +37,14 @@ final class ZoomUiChecks {
                 check(originalLock==prefs.getBoolean("navigation_locked",true),"Navigation defaults to locked and restores saved choice");
                 prefs.edit().putBoolean("tool_visible_ZOOM",true).apply();
                 ((android.view.OrientationEventListener)get(get(activity,"rotationPrompt"),"orientationSensor")).disable();
-                call(pad,"finishStroke"); call(pad,"dryWet");
+                call(pad,"finishStroke");
                 set(activity,"drawingName",""); set(get(activity,"paint"),"gray",0); TestAccess.setMaximum(activity,16);
                 set(get(activity,"paint"),"wetCanvas",false);set(get(activity,"paint"),"transparentPaint",false);set(get(activity,"paint"),"eraseMode",false);
                 set(activity,"library",new ToolLibrary());
                 doc.begin();
                 for(int y=doc.height/2-180;y<doc.height/2+180;y++) for(int x=doc.width/2-180;x<doc.width/2+180;x++) doc.setTone(x,y,170);
                 doc.finish();
-                call(activity,"replaceBook",new Class<?>[]{DrawingBook.class},new DrawingBook(doc)); call(get(activity,"toolbar"),"rebuildTools");
+                call(activity,"replaceBook",new Class<?>[]{DrawingBook.class},new DrawingBook(doc));
             });
             for(int turn=0;turn<4;turn++) for(boolean hand:new boolean[]{false,true}) {
                 final int quarter=turn;
@@ -54,7 +54,7 @@ final class ZoomUiChecks {
                 });
                 test.waitForIdleSync(); SystemClock.sleep(300);
                 main(test,() -> {
-                    call(pad,"fitPage");set(pad,"penGuardUntil",0L);
+                    call(pad,"fitPage");set(pad,"penSeen",0L);
                     View zoom=((ZoomButton)get(get(activity,"inkWashBar"),"zoom")).button;
                     zoom.requestRectangleOnScreen(new Rect(0,0,zoom.getWidth(),zoom.getHeight()),true);
                 });
@@ -70,7 +70,6 @@ final class ZoomUiChecks {
                     zoom.performClick();
                     check(feedback.submitted>submitted,"Lock icon updates through direct e-ink feedback");
                     check(!prefs.getBoolean("navigation_locked",true),"Unlock is saved");
-                    check(get(activity,"toolPicker")==null,"Zoom tap opens no settings");
                     float x=view.getWidth()/2f,y=view.getHeight()/2f;
                     if(quarter==0&&!hand) {
                         long began=System.nanoTime();
@@ -100,7 +99,7 @@ final class ZoomUiChecks {
                     check(Arrays.equals(before,doc.snapshot()),"Pinch and pan leave all artwork unchanged");
                     check(get(pad,"viewportBitmap")!=null,"Zoom uses a clipped screen raster");
                     Matrix inverse=(Matrix)get(pad,"viewToPage");float[] page={x,y};inverse.mapPoints(page);
-                    set(pad,"penGuardUntil",0L);
+                    set(pad,"penSeen",0L);
                     touch(activity,pad,MotionEvent.ACTION_DOWN,new int[]{0},new int[]{2},new float[]{x,y});
                     Matrix during=new Matrix((Matrix)get(pad,"pageToView"));
                     touch(activity,pad,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{0,7},new int[]{2,1},new float[]{x,y,x+100,y+100});
@@ -111,7 +110,7 @@ final class ZoomUiChecks {
                     check(doc.tone((int)page[0],(int)page[1])<170,"Zoomed pen lands on the displayed document pixel");
                     check(doc.undo()&&Arrays.equals(before,doc.snapshot()),"One undo removes the complete zoomed stroke");
                     call(pad,"renderDirty");call(pad,"present");
-                    set(pad,"penGuardUntil",0L);
+                    set(pad,"penSeen",0L);
                     touch(activity,pad,MotionEvent.ACTION_DOWN,new int[]{7},new int[]{1},new float[]{x-100,y});
                     touch(activity,pad,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{7,12},new int[]{1,1},new float[]{x-100,y,x+100,y});
                     touch(activity,pad,MotionEvent.ACTION_CANCEL,new int[]{7,12},new int[]{1,1},new float[]{x-100,y,x+100,y});
@@ -150,7 +149,7 @@ final class ZoomUiChecks {
                     check(doc.undo(),"Native zoomed stroke can undo");call(pad,"renderDirty");call(pad,"present");
                     View zoom=((ZoomButton)get(get(activity,"inkWashBar"),"zoom")).button;
                     Matrix locked=new Matrix((Matrix)get(pad,"pageToView"));
-                    zoom.performClick();set(pad,"penGuardUntil",0L);
+                    zoom.performClick();set(pad,"penSeen",0L);
                     pinch(activity,pad,x,y);
                     check(locked.equals(get(pad,"pageToView")),"Lock preserves zoomed position and blocks both pinch and pan");
                     check(prefs.getBoolean("navigation_locked",false),"Lock is saved");
@@ -160,7 +159,7 @@ final class ZoomUiChecks {
                     check(doc.undo(),"Pen still draws while navigation is locked");call(pad,"renderDirty");call(pad,"present");
                     zoom.performLongClick();
                     check(locked.equals(get(pad,"pageToView")),"Holding Zoom does not reset view");
-                    zoom.performClick();set(pad,"penGuardUntil",0L);
+                    zoom.performClick();set(pad,"penSeen",0L);
                     // Pinching inward replaces the old fit-page action.
                     touch(activity,pad,MotionEvent.ACTION_DOWN,new int[]{7},new int[]{1},new float[]{x-200,y});
                     touch(activity,pad,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{7,12},new int[]{1,1},new float[]{x-200,y,x+200,y});
@@ -169,7 +168,6 @@ final class ZoomUiChecks {
                     check(((CanvasViewport)get(pad,"viewport")).percent()==100,"Pinch inward fits the whole page");
                 });
                 previewChecks(test,activity,pad,quarter,report);
-                ZoomButtonChecks.verify(test,activity);
             }
             main(test,() -> {
                 call(pad,"zoomBy",new Class<?>[]{float.class},100f);
@@ -180,7 +178,7 @@ final class ZoomUiChecks {
             report.append("PASS: default/saved navigation lock, fast corner feedback, locked pinch/pan rejection and pen drawing, no zoom settings or hold reset, pinch-to-fit, zoom percentage, pinch focus/pan, one-finger and active-pen palm rejection, cancellation, pen mapping/undo, calibrated shades, bounded native e-ink, direct strokes and fit reset in all four rotations and both hands; 800% limit and page reset.\n");
         } finally {
             main(test,() -> {
-                call(pad,"finishStroke");call(pad,"dryWet");
+                call(pad,"finishStroke");
                 set(activity,"drawingName",name);set(activity,"library",library);set(get(activity,"paint"),"gray",gray);TestAccess.setMaximum(activity,maximum);
                 set(get(activity,"paint"),"wetCanvas",wet);set(get(activity,"paint"),"transparentPaint",transparent);set(get(activity,"paint"),"eraseMode",erase);
                 SharedPreferences.Editor restore=prefs.edit().putBoolean("toolbox_right",right);
@@ -189,7 +187,7 @@ final class ZoomUiChecks {
                 restore.apply();set(activity,"navigationLocked",originalLock);
                 call(activity,"replaceBook",new Class<?>[]{DrawingBook.class},original);
                 call(activity,"requestQuarter",new Class<?>[]{int.class},rotation);call(activity,"applyToolboxSide");
-                call(activity,"refreshPaintModes");call(activity,"saveToolState");call(activity,"recoveryNow");
+                call(activity,"saveToolState");call(activity,"recoveryNow");
             });
             TestSessionSave.await(activity);
         }
@@ -207,7 +205,7 @@ final class ZoomUiChecks {
         View view=(View)pad;float x=view.getWidth()/2f,y=view.getHeight()/2f;
         int[] frames={0},draws={0};Object[] presenter={null};
         main(test,() -> {
-            set(pad,"penGuardUntil",0L);
+            set(pad,"penSeen",0L);
             touch(activity,pad,MotionEvent.ACTION_DOWN,new int[]{7},new int[]{1},new float[]{x-100,y});
             touch(activity,pad,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{7,12},new int[]{1,1},new float[]{x-100,y,x+100,y});
             // Inkwash's two fingers are a tap until they move (PinchPan): the gesture, and its presenter, start on the first move.
@@ -264,7 +262,7 @@ final class ZoomUiChecks {
             check(document.tone((int)point[0],(int)point[1])!=untouched,"Interrupting pen lands on latest view");
             touch(activity,pad,MotionEvent.ACTION_CANCEL,new int[]{0},new int[]{2},new float[]{x+80,y});
             check(document.undo()&&Arrays.equals(before,document.snapshot()),"Pen interruption is one undoable stroke");
-            call(pad,"renderDirty");call(pad,"present");set(pad,"penGuardUntil",0L);
+            call(pad,"renderDirty");call(pad,"present");set(pad,"penSeen",0L);
             touch(activity,pad,MotionEvent.ACTION_DOWN,new int[]{7},new int[]{1},new float[]{x-100,y});
             touch(activity,pad,MotionEvent.ACTION_POINTER_DOWN|(1<<8),new int[]{7,12},new int[]{1,1},new float[]{x-100,y,x+100,y});
             touch(activity,pad,MotionEvent.ACTION_MOVE,new int[]{7,12},new int[]{1,1},new float[]{x-120,y,x+120,y});

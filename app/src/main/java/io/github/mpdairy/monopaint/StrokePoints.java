@@ -30,6 +30,19 @@ final class StrokePoints {
      * Gradient ({@link GreyGradient#apply}) writes its grey's share here too, times Paint Load's when both are on.
      */
     float[] own;
+    /** Paint Load's alone, 1 less {@link #own} before Gradient's share: how far a line has run dry; null without Paint Load. */
+    float[] dry;
+    /**
+     * Wears Down ({@link PartDial#WEAR}): how fast the tip wears, 0 for none; and its facet at each sample, a vector along
+     * the lean it was worn at, as long as it is worn (0 to 1), or null. A function of the stroke's own samples alone, so
+     * the same samples wear the same (a replay, a re-lay); a new stroke starts sharp.
+     */
+    double wear;
+    float[] fx, fy;
+    /** The lean a pen without a dependable one is taken to have: a right hand's, toward the lower right. */
+    static final double HOLD_X = .6, HOLD_Y = .8;
+    /** Page px of drawing, pressed as usual, that wear the facet most of the way at Wears Down 1. */
+    static final double WEAR_PX = 250;
 
     /**
      * Adds a sample at time {@code time} (ms, or {@link PenSpeed#UNTIMED}); false when it is skipped. Speed is
@@ -64,6 +77,13 @@ final class StrokePoints {
         }
         ga[k] = Float.NaN;
         if (gx != 0 || gy != 0) { ga[k] = (float)(ux[k] * gx + uy[k] * gy); if (Float.isNaN(ga[o])) ga[o] = ga[k]; }
+        if (wear > 0) {
+            // The facet grows toward the lean the tip is held at now: held there, it flattens; turned, it starts anew.
+            if (fx == null) { fx = new float[this.x.length]; fy = new float[this.x.length]; }
+            double az = BrushDirection.azimuth(tiltX, tiltY), lx = az == az ? Math.cos(az) : HOLD_X, ly = az == az ? Math.sin(az) : HOLD_Y;
+            double g = 1 - Math.exp(-seg * (.3 + .7 * Math.max(0, p)) * wear / WEAR_PX);
+            fx[k] = (float)(fx[o] + (lx - fx[o]) * g); fy[k] = (float)(fy[o] + (ly - fy[o]) * g);
+        }
         count = k + 1;
         return true;
     }
@@ -82,6 +102,15 @@ final class StrokePoints {
     void owns() { if (own == null) own = new float[x.length]; }
     /** The paint left {@code t} of the way from sample {@code j} to {@code k} ({@link #own}): 1 for a brush that never runs out. */
     double own(int j, int k, double t) { return own == null ? 1 : own[j] + (own[k] - (double) own[j]) * t; }
+    /** How far the line has run dry {@code t} of the way from sample {@code j} to {@code k} ({@link #dry}): 0 for a brush that never runs out. */
+    double dry(int j, int k, double t) { return dry == null ? 0 : dry[j] + (dry[k] - (double) dry[j]) * t; }
+
+    /** Wears Down: how worn the tip is {@code t} of the way from sample {@code j} to {@code k}, leaning {@code ux, uy}: its facet along that lean, 0 to 1. */
+    double wornAt(int j, int k, double t, double ux, double uy) {
+        if (fx == null) return 0;
+        double x = fx[j] + (fx[k] - (double) fx[j]) * t, y = fy[j] + (fy[k] - (double) fy[j]) * t;
+        return Math.max(0, Math.min(1, x * ux + y * uy));
+    }
 
     /** Whether the stroke carries on past its lift ({@link #flickFrom}). */
     boolean flicks() { return flickFrom != Float.POSITIVE_INFINITY; }
@@ -114,5 +143,7 @@ final class StrokePoints {
         v = Arrays.copyOf(v, more); tx = Arrays.copyOf(tx, more); ty = Arrays.copyOf(ty, more); pk = Arrays.copyOf(pk, more);
         ux = Arrays.copyOf(ux, more); uy = Arrays.copyOf(uy, more); ga = Arrays.copyOf(ga, more); t = Arrays.copyOf(t, more);
         if (own != null) own = Arrays.copyOf(own, more);
+        if (dry != null) dry = Arrays.copyOf(dry, more);
+        if (fx != null) { fx = Arrays.copyOf(fx, more); fy = Arrays.copyOf(fy, more); }
     }
 }

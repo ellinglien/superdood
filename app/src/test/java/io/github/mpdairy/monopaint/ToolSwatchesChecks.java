@@ -15,12 +15,12 @@ public final class ToolSwatchesChecks {
     }
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
-        defaults(); untouched(); choose(); eraser(); picks(); slider(); stored(); fourth(); washBlack(); columnSlider(); sliderSlots(); dropper(); everyTool();
+        defaults(); untouched(); choose(); eraser(); picks(); slider(); stored(); fourth(); washBlack(); columnSlider(); sliderSlots(); dropper(); everyTool(); basicLooks();
         System.out.println("PASS: four size and four grey swatches; each tool's own size and grey (2026-10-27), set by a swatch picked or set and by the slider, kept through picks, rolls, Undo and a restart, another tool's change leaving it, a notebook's toolbar bringing its own; the eraser's no finer than twice its tip; "
                 + "each tool's own size and grey as an older build kept them still read (three swatches kept by an older build keep their values, order and marks, the fourth in the widest step until it is set); "
                 + "since washes reach black, a grey kept before draws a wash at the glaze it laid (an ink as it was), written nothing; a grey picked since is the grey bar's for every medium; "
                 + "the side column's size slider (2026-10-24) maps every size to its place and back and gives the fine sizes room; the Dropper picks the grey the page shows over every layer and plane, no guides, and sets only the tool's grey; "
-                + "a grey is the tool's alone, kept in range");
+                + "a grey is the tool's alone, kept in range; a Basic tool with a starting size and grey brings them into a slot, a brush's own kept look first, one without leaving the slot's");
     }
     static Brush style(String name, long seed) { return Brush.of(ModularStyle.named(name).roll(new Random(seed))); }
     static boolean near(double a, double b) { return Math.abs(a - b) < 1e-9; }
@@ -343,6 +343,31 @@ public final class ToolSwatchesChecks {
         check(slots.enter(own) && slots.brush(2).sameAs(own.brushes[2]) && s.look(ToolSlots.key(2), slots.brush(2)).px == 200, "A notebook's own toolbar brings its brushes and sizes");
         check(slots.leave() && s.look(ToolSlots.key(2), slots.brush(2)).px == px[2], "and leaving it brings the app's size back");
         check(s.look(ToolSwatches.ERASER_KEY, null).px == 27 && s.look(ToolSlots.SMUDGE_KEY, slots.smudge()).px == 57, "and the toolbar's coming and going leaves the eraser's and the smudge tool's");
+    }
+    /**
+     * The Basic tools' starting sizes and greys (the owner, 2026-11-02: "adjust the initial size and shade to the most
+     * usable one"; {@link ToolPresets#look}): each one parses, in range; picked into a slot it brings them (an effect its
+     * size alone); one without leaves the slot's; a brush's own kept look ({@link ToolSwatches#setLook}) comes first.
+     */
+    static void basicLooks() {
+        for (ToolPresets.Preset p : ToolPresets.all()) {
+            if (p.look == null) continue;
+            String[] parts = p.look.split(",");
+            double px = Double.parseDouble(parts[0]);
+            check(px >= ModularSizes.MIN && px <= ModularSizes.MAX && (parts.length == 1 || Double.parseDouble(parts[1]) >= 0 && Double.parseDouble(parts[1]) <= 1), p.name + "'s starting size and grey are in range");
+            check(parts.length == 2 || WildSample.reworks(p.brush().parts), p.name + " has a starting grey, or is an effect");
+        }
+        prefs = new HashMap<>();
+        ToolSlots slots = new ToolSlots(store(), new Random(3));
+        ToolSwatches s = slots.swatches;
+        String key = ToolSlots.key(1);
+        Brush brayer = ToolKits.preset("Brayer").brush(), blur = ToolKits.preset("Blur").brush(), steady = ToolKits.preset("Loaded oils").brush();
+        s.useSize(key, 3); s.useGrey(key, 1);
+        check(slots.use(1, brayer) && s.look(key, brayer).px == 72 && near(s.look(key, brayer).darkness, .7), "The Brayer picked into a slot starts at 72 px, 70%");
+        check(slots.use(1, blur) && s.look(key, blur).px == 40 && near(s.look(key, blur).darkness, .7), "Blur brings its size alone, the slot's grey staying");
+        check(slots.use(1, steady) && s.look(key, steady).px == 40, "A Basic tool without a starting size leaves the slot's");
+        s.setLook(brayer, 50, .5);
+        check(slots.use(1, brayer) && s.look(key, brayer).px == 50 && near(s.look(key, brayer).darkness, .5), "A brush's own kept look comes before its Basic tool's");
     }
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 }

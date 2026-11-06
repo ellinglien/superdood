@@ -129,6 +129,50 @@ final class LabUi {
     /** Takes up the rest of a horizontal layout. */
     static void spring(LinearLayout row) { row.addView(new View(row.getContext()), new LinearLayout.LayoutParams(0, 1, 1)); }
 
+    /**
+     * A page's bar, the Tools page's and Brush Lab's one pattern (2026-11-03, the owner: "it's not clear what to do once
+     * you're there"): Back with its word at the left ({@link LabButton#back}), then the title over a sentence-case line
+     * saying the page's job (as a Settings screen's), in the room the page's buttons leave at the right, centred across
+     * the bar (2026-11-03, the owner: "align section name 'BRUSH LAB' in the middle at the top") as far as its words let.
+     * The notebook screens' too (2026-11-03: "make it consistent across the app"); no Back where {@code back} is null (the
+     * shelf, the first screen).
+     */
+    static final class PageBar {
+        final LinearLayout view;
+        final LabButton back;
+        final TextView title, line;
+        PageBar(Context context, int side, String back, String title, String line) {
+            view = row(context);
+            view.setPadding(dp(context, side), 0, dp(context, side), 0);
+            this.back = back == null ? null : LabButton.back(context, back);
+            if (back != null) view.addView(this.back, new LinearLayout.LayoutParams(-2, dp(context, 44)));
+            LinearLayout words = column(context);
+            words.setGravity(Gravity.CENTER);
+            this.title = text(context, title, TypeStyle.HEADING);
+            // No line (null): the title alone (Brush Lab's, 2026-11-06).
+            this.line = line == null ? null : text(context, line, TypeStyle.CAPTION);
+            if (line != null) this.line.setTextColor(Theme.GREY_800);
+            for (TextView v : new TextView[]{this.title, this.line}) {
+                if (v == null) continue;
+                v.setSingleLine(true);
+                v.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                v.setGravity(Gravity.CENTER_HORIZONTAL);
+                words.addView(v, new LinearLayout.LayoutParams(-1, -2));
+            }
+            LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(0, -1, 1);
+            place.leftMargin = dp(context, LabLayout.TITLE_GAP);
+            view.addView(words, place);
+            // The words' box lies between Back and the page's buttons, which differ in width: padding on its narrower
+            // side centres the words on the bar, never so much that they no longer fit (a fixed toolbar's long note).
+            words.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                float text = Math.max(this.title.getPaint().measureText(this.title.getText().toString()), this.line == null ? 0 : this.line.getPaint().measureText(this.line.getText().toString()));
+                int most = Math.max(0, (int) (r - l - text) - 1), shift = Math.max(-most, Math.min(most, view.getWidth() - l - r));
+                int left = Math.max(0, shift), right = Math.max(0, -shift);
+                if (left != words.getPaddingLeft() || right != words.getPaddingRight()) words.post(() -> words.setPadding(left, 0, right, 0));
+            });
+        }
+    }
+
     /** Children in rows, wrapping onto a new row when the width runs out, {@code gap} pixels apart: the mockup's chip rows. */
     static final class Wrap extends ViewGroup {
         private final int gap;

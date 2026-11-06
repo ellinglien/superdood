@@ -1,0 +1,6 @@
+<!-- The owner's layer icon (2026-11-06, layer-bott.svg), redrawn stroked (2026-11-06, the owner: "make the strokes in the layer picker the same as the stroke on the picker"): three diamonds stacked, an outline each, a lower one only its front V and the stubs of its back edges, the bottom one (the part in front of the middle one) filled, the layer in use. In dp as the column draws it (DrawLayout.LAYERS_ICON tall), lines 1.5 dp as the picker box's and Iconoir's, round caps and joins. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="46dp" android:height="42dp" android:viewportWidth="46" android:viewportHeight="42">
+    <path android:pathData="M0.75,9.41 L23,0.75 L45.25,9.41 L23,18.08 Z" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M10.09,17.36 L0.75,21 L23,29.66 L45.25,21 L35.91,17.36" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M0.75,32.59 L10.09,28.95 L23,33.97 L35.91,28.95 L45.25,32.59 L23,41.25 Z" android:fillColor="#000000" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

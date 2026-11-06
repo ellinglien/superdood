@@ -384,3 +384,22 @@ It is now Clear Water (no paint of its own) with Lay Down 0, so it soaks up what
 Pick Up .5 lifts about as much as the old Lift at .8 did (a 120 wash comes up to about 215). `ToolPresetsChecks.tissue`:
 across a page half washed, live and quick, at 30 and 80 px, no pixel of paper or wash darker, the wash lifted.
 
+
+## Press: the smudge tool's two (2026-10-30, branch `smudge-two`)
+
+The owner: the smudge tool's chooser had too many look-alike blend tools; "just TWO tools, each using pen pressure the
+way real media does". Smudge has one new dial, **Press** (key `press`, 0 to 1, default 0, last of Smear's and Clear
+Water's lists, in `ModularCode.ADDED`, never rolled or varied): how far a firm press takes the brush from what its light
+touch does, `press × smoothstep(.25, .85, travel)` (`ResolvedBrush.Carry.pressed`; nothing for a light hand, all of it
+for a hard one, a usual press between). Smear's, **Press to Push**: each dab's Soften is `Soften × (1 − pressed)`
+(`Carry.pass`, the web's `carryPass`), so it works as the stump at a light touch and as the smear at a firm one.
+Clear Water's, **Press to Lift**: each dab's Lay Down Paint and the wet it marks are `× (1 − pressed)`, and at lift
+what it lifted runs out in proportion to that wet (`ClearWater.lift`), so a firm press soaks up and lays nothing back,
+the Damp tissue's blot, where a light one re-wets as the Water brush. Off, every pixel as before (the six Carry goldens
+and the two stump goldens unchanged). Basic tools **Blend** (Charcoal: the Blend stump with Press to Push 1, its code
+`_3ssll00zz000090zz_`) and **Water** (Watercolor: the Water brush with Press to Lift 1, `_4i0llzz_`). At a light touch
+Blend draws the Blend stump's page pixel for pixel, at a firm one a Smear's (`PressSmudgeChecks`); Water lifts a 130
+wash to about 172 and runs some out past it at a light touch, to about 254 with nothing run out at a firm one. The
+smudge tool offers only these two (`ToolSlots.smudgeChoices`) and moves the older ones to them once
+(`ToolSlots.smudgeTwo`). Pictures: `scripts/presssmudge_pictures.sh`. Not yet tried on the Manta: where light ends
+and firm begins (.25 and .85 travel) wants the owner's hand.

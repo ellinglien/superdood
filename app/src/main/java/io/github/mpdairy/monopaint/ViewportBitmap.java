@@ -14,6 +14,9 @@ final class ViewportBitmap {
         for(int tone=0;tone<256;tone++) for(int y=0;y<8;y++) for(int x=0;x<8;x++)
             DOTS[tone*64+y*8+x]=DotPattern.pixel(tone,x,y);
     }
+    /** Inkwash: each tone as a plain grey, no dots: the zoomed view's tones before Vector Ink's lines go over them ({@link #sharpen}). */
+    private static final int[] PLAIN=new int[256*64];
+    static { for(int i=0;i<PLAIN.length;i++) { int tone=i/64; PLAIN[i]=0xff000000|tone*0x010101; } }
     private static native void nativeRender(Bitmap source,Bitmap target,float[] inverse,int[] dots,
                                              int left,int top,int right,int bottom,boolean lines);
     private static native void nativeCompose(Bitmap target,byte[][] tones,byte[][] alpha,int[] opacity,int count,int paper,int[] dots,
@@ -55,8 +58,10 @@ final class ViewportBitmap {
      * layers and one over them (the layers above it in its stack), and its {@code layerSteps} ({@link
      * ToneDocument#visibleLayers}): the drawing screen's.
      */
-    static void compose(ToneDocument document,Bitmap target,boolean dither,Rect area,GhostPlane.Planes ghost,int layerSteps) {
-        int count=document.visibleLayers(areaTones,areaAlpha,areaOpacity,ghost==null?null:ghost.under,layerSteps,ghost==null?null:ghost.overTones,ghost==null?null:ghost.overAlpha), paper=document.paperTone();
+    static void compose(ToneDocument document,Bitmap target,boolean dither,Rect area,GhostPlane.Planes ghost,int layerSteps) { compose(document,target,dither,area,ghost,layerSteps,0); }
+    /** As above without the layers whose bits {@code without} sets (0: none): the zoomed view's page under Vector Ink's sharp lines ({@link VectorInk#sharpLayers}). */
+    static void compose(ToneDocument document,Bitmap target,boolean dither,Rect area,GhostPlane.Planes ghost,int layerSteps,int without) {
+        int count=document.visibleLayers(areaTones,areaAlpha,areaOpacity,ghost==null?null:ghost.under,layerSteps,ghost==null?null:ghost.overTones,ghost==null?null:ghost.overAlpha,without), paper=document.paperTone();
         int[] dots=dither?DOTS:null;
         try {
             int rows=area.height(),bands=Math.min(Cores.WORKERS,rows/16);
@@ -65,19 +70,6 @@ final class ViewportBitmap {
                     area.left,area.top+rows*k/bands,area.right,area.top+rows*(k+1)/bands));
         }
         finally { java.util.Arrays.fill(areaTones,null); java.util.Arrays.fill(areaAlpha,null); }
-    }
-    /** The page as a screen of that size would show it: smoothly scaled tones, then its dots. */
-    static Bitmap dithered(ToneDocument document,int width,int height) {
-        Bitmap page=Bitmap.createBitmap(document.width,document.height,Bitmap.Config.ARGB_8888);
-        boolean same=width==document.width && height==document.height;
-        compose(document,page,same);
-        if(same) return page;
-        Bitmap scaled=Bitmap.createScaledBitmap(page,width,height,true);
-        page.recycle();
-        ViewportBitmap screen=new ViewportBitmap(width,height);
-        screen.update(scaled,new Matrix(),null);
-        scaled.recycle();
-        return screen.bitmap;
     }
     final Bitmap bitmap;
     /** Inkwash: what lies beyond the page is the owner's lines ({@link CanvasViewport#backdrop}), not paper; only the drawing screen sets it, so no copy has it. */
@@ -88,7 +80,13 @@ final class ViewportBitmap {
         bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
         bitmap.setHasAlpha(false);
     }
-    Rect update(Bitmap tones, Matrix pageToView, Rect dirty) {
+    Rect update(Bitmap tones, Matrix pageToView, Rect dirty) { return update(tones,pageToView,dirty,null,pageToView,tones.getWidth(),tones.getHeight(),null,0); }
+    /** As above with Vector Ink's {@code lines} (null: none) drawn sharp at the view's scale over the page that leaves them out ({@link VectorInk#sharpLayer}). */
+    Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorLines lines) { return update(tones,pageToView,dirty,lines,pageToView,tones.getWidth(),tones.getHeight(),null,0); }
+    /** As above with sharp dry brushes' tiles ({@code view}'s at grid {@code k}; null or 0: none) where they are drawn, under the lines. */
+    Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorLines lines, SharpView view, int k) { return update(tones,pageToView,dirty,lines,pageToView,tones.getWidth(),tones.getHeight(),view,k); }
+    /** As above, the lines' page ({@code width × height}) mapped by {@code linesToView}: a bigger copy's tones are scaled already. */
+    private Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorLines lines, Matrix linesToView, int width, int height, SharpView view, int k) {
         Rect area;
         if(dirty==null) area=new Rect(0,0,bitmap.getWidth(),bitmap.getHeight());
         else {
@@ -98,8 +96,46 @@ final class ViewportBitmap {
         }
         if(!pageToView.invert(inverse)) throw new IllegalStateException("Invalid zoom transform");
         inverse.getValues(values);
-        nativeRender(tones,bitmap,values,DOTS,area.left,area.top,area.right,area.bottom,backdrop);
+        // Inkwash: where Vector Ink's lines are, the tones plain, the lines over them, then the dots (a scale and a shift alone; else the pixels).
+        float[] m=new float[9]; linesToView.getValues(m);
+        double scale=m[0], ox=m[2], oy=m[5];
+        boolean straight=m[1]==0&&m[3]==0&&scale>0&&Math.abs(m[0]-m[4])<=.001*scale;
+        double left=(area.left-ox)/scale, top=(area.top-oy)/scale, right=(area.right-ox)/scale, bottom=(area.bottom-oy)/scale;
+        boolean sharp=straight&&lines!=null&&!lines.isEmpty()&&lines.meets(left,top,right,bottom);
+        // Inkwash: sharp dry brushes' tiles drawn over this area (SharpView), the page's pixels where none is yet.
+        boolean tiled=straight&&view!=null&&k>0&&view.shows(k,(int)Math.floor(left),(int)Math.floor(top),(int)Math.ceil(right),(int)Math.ceil(bottom));
+        nativeRender(tones,bitmap,values,sharp||tiled?PLAIN:DOTS,area.left,area.top,area.right,area.bottom,backdrop);
+        if(sharp||tiled) sharpen(sharp?lines:null,tiled?view:null,k,scale,ox,oy,area,width,height);
         return area;
+    }
+    private int[] band=new int[0], inner=new int[0];
+    private byte[] cover=new byte[0];
+    /**
+     * Inkwash: {@code lines} over {@code area} of the raster (its plain greys), page point (x, y) at ({@code x * scale + ox},
+     * {@code y * scale + oy}), within the page ({@code width × height}); then the area's dots, as {@link #nativeRender}
+     * gives them. A band of rows at a time ({@code DrawingPad.bandRows}'s budget).
+     */
+    private void sharpen(VectorLines lines,SharpView view,int k,double scale,double ox,double oy,Rect area,int width,int height) {
+        int w=area.width(), rows=Math.max(1,Math.min(area.height(),(1<<18)/Math.max(1,w)));
+        if(band.length<w*rows) { band=new int[w*rows]; inner=new int[w*rows]; cover=new byte[w*rows]; }
+        // The lines stay on the page: past its edge is the backdrop.
+        int left=Math.max(area.left,(int)Math.ceil(ox)), right=Math.min(area.right,(int)Math.floor(ox+width*scale));
+        int pageTop=(int)Math.ceil(oy), pageBottom=(int)Math.floor(oy+height*scale);
+        for(int top=area.top;top<area.bottom;top+=rows) {
+            int h=Math.min(rows,area.bottom-top);
+            bitmap.getPixels(band,0,w,area.left,top,w,h);
+            int t=Math.max(top,pageTop), b=Math.min(top+h,pageBottom);
+            if(left<right&&t<b) {
+                // The page's part of the band, gathered and put back.
+                int across=right-left;
+                for(int y=t;y<b;y++) System.arraycopy(band,(y-top)*w+left-area.left,inner,(y-t)*across,across);
+                if(view!=null) view.over(k,scale,ox,oy,left,t,across,b-t,inner);
+                if(lines!=null) lines.over(scale,ox,oy,left,t,across,b-t,inner,cover);
+                for(int y=t;y<b;y++) System.arraycopy(inner,(y-t)*across,band,(y-top)*w+left-area.left,across);
+            }
+            for(int y=top,i=0;y<top+h;y++) for(int x=area.left;x<area.right;x++,i++) band[i]=DOTS[(band[i]&255)*64+(y&7)*8+(x&7)];
+            bitmap.setPixels(band,0,w,area.left,top,w,h);
+        }
     }
     void close() { bitmap.recycle(); }
 }

@@ -46,27 +46,34 @@ final class PaintPreferences {
     /** Dry brush strokes anti-alias their edges, for cleaner exports. */
     boolean smoothEdges() { return flag("smooth_edges", false); }
     void setSmoothEdges(boolean value) { setFlag("smooth_edges", value); }
+    /**
+     * System Settings' Automatic Refresh (the owner, 2026-11-04: "the goal should be to prevent having to flash more than
+     * relying on it"): whether the screen flashes on its own ({@link SystemSettings#flashes}). On at first, as before.
+     */
+    boolean autoRefresh() { return flag("auto_refresh", false); } // off at first (the owner, 2026-11-05: "it's seeming ok")
+    void setAutoRefresh(boolean value) { setFlag("auto_refresh", value); }
+    /** System Settings' Two-Finger Tap and Three-Finger Tap ({@link FingerTool.Tap}): Undo and Redo at first. */
+    FingerTool.Tap twoFingerTap() { return FingerTool.Tap.saved(store.getString(FingerTool.TWO_TAP, ""), FingerTool.TWO_FIRST); }
+    FingerTool.Tap threeFingerTap() { return FingerTool.Tap.saved(store.getString(FingerTool.THREE_TAP, ""), FingerTool.THREE_FIRST); }
+    void setFingerTap(boolean three, FingerTool.Tap tap) { store.edit().putString(three ? FingerTool.THREE_TAP : FingerTool.TWO_TAP, tap.key).apply(); }
+    /** System Settings' Edge Hold ({@link EdgeHold.Choice}): the Trash at first. */
+    EdgeHold.Choice edgeHold() { return EdgeHold.Choice.saved(store.getString(EdgeHold.KEY, "")); }
+    void setEdgeHold(EdgeHold.Choice choice) { store.edit().putString(EdgeHold.KEY, choice.key).apply(); }
     /** Draw through Android instead of MonoPaint's fast e-ink path, for firmware that breaks it. */
     boolean androidDrawing() { return flag("android_drawing", false); }
     void setAndroidDrawing(boolean value) { setFlag("android_drawing", value); }
     /** The untested firmware build the user was last told about; empty before any. */
     String untestedFirmwareNoticed() { return store.getString("untested_firmware_noticed", ""); }
     void setUntestedFirmwareNoticed(String build) { store.edit().putString("untested_firmware_noticed", build).apply(); }
+    /** Whether a stamp has ever been printed: until then a Stamp in use shows its hint (2026-11-02, {@link DrawLayout#stampHint}). */
+    boolean stampPlaced() { return flag("stamp_placed", false); }
+    void setStampPlaced(boolean value) { setFlag("stamp_placed", value); }
     /** The shared-storage folder the last imported picture came from; Document at first (Scribulor: where the Supernote keeps PDFs). */
     String importFolder() { return store.getString("import_folder", "Document"); }
     void setImportFolder(String folder) { store.edit().putString("import_folder", folder).apply(); }
     /** Whether the last imported picture went on a new layer; the current layer at first. */
     boolean importNewLayer() { return flag("import_new_layer", false); }
     void setImportNewLayer(boolean value) { setFlag("import_new_layer", value); }
-    /** Folder chosen for PNG exports, as a document-tree URI; empty means Pictures/MonoPaint. */
-    String exportFolder() { return store.getString("export_folder", ""); }
-    void setExportFolder(String uri) { store.edit().putString("export_folder", uri).apply(); }
-    /** PNG exports use the screen's black and white dots instead of smooth grays. */
-    boolean exportDithered() { return flag("export_dithered", false); }
-    void setExportDithered(boolean value) { setFlag("export_dithered", value); }
-    /** Dithered PNG size: "page", a Supernote's name to fill its screen, or "custom:" and a width. */
-    String exportSize() { return store.getString("export_size", "page"); }
-    void setExportSize(String size) { store.edit().putString("export_size", size).apply(); }
     boolean navigationLocked() { return flag("navigation_locked", true); }
     void setNavigationLocked(boolean value) { setFlag("navigation_locked", value); }
     /** Whether the user has picked a shape, so Shapes shows that shape's icon. */

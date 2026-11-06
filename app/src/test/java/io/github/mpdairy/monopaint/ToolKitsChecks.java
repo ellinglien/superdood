@@ -10,28 +10,54 @@ public final class ToolKitsChecks {
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
         data(); parsing(); tab(); loads(); bar(); fixed(); drawingUndo(); said(); notes(); layout();
-        System.out.println("PASS: tool kits: " + ToolKits.all().size() + " kits from " + ToolKits.FILE + " (Marbling first: Sumi, Clear water, Comb), every brush a Basic tool, at most ten, words in the text style; a kit fills the first slots, the first selected, and one Undo on the Tools page (and on the drawing screen) puts every slot back; a bar too small shows more (Lock Settings cut); a fixed toolbar takes nothing; a slot picked says its step; clear water with nothing floating and a brush that prints the rings get their notes; the sheet and Load Kit fit both tablets in either turn");
+        System.out.println("PASS: tool kits: " + ToolKits.all().size() + " kits from " + ToolKits.FILE + " (Default Tools, then Dollar Store, Sketchbook, Watercolour, Paint and Effects and Print Shop in the tray's order), every brush a Basic tool, at most nine (the slots), words in the text style; a kit fills the first slots, the first selected, and one Undo on the drawing screen puts every slot back; a bar too small shows more (Lock Settings cut); a fixed toolbar takes nothing; a slot picked says its step; clear water with nothing floating and a brush that prints the rings get their notes; the sheet and Load Kit fit both tablets in either turn");
     }
 
     static ToolKits.Kit kit(String name) {
         for (ToolKits.Kit k : ToolKits.all()) if (k.name.equals(name)) return k;
+        for (ToolKits.Kit k : CUT) if (k.name.equals(name)) return k;
         throw new AssertionError("No kit " + name);
     }
+    /** Kits cut in the release pare-down (2026-11-05), kept here as they were: the checks' kits of three and with an eraser step. */
+    static final List<ToolKits.Kit> CUT = ToolKits.parse(Arrays.asList(
+            "Kit: Marbling", "Intro: Drop ink and clear water in turn to grow rings, then comb them before they print.",
+            "Sumi: Drop ink", "Clear water: Drop water", "Comb: Comb rings",
+            "Kit: Sketch and Ink", "Intro: Sketch in pencil, ink over it, then erase the pencil and the ink stays.",
+            "Sketch pencil: Sketch", "Steady line: Ink over", "Eraser Dry Media: Erase pencil",
+            "Kit: Watercolour with Masking", "Intro: Mask the whites, wash over them, blot to lift paint, then rub the mask off.",
+            "Masking fluid: Mask whites", "Soft wash: Wash over", "Water: Press to lift", "Eraser Everything: Rub off mask"));
 
     static void data() {
         List<ToolKits.Kit> kits = ToolKits.all();
-        check(kits.size() >= 3 && kits.get(0).name.equals("Marbling"), "Marbling first, and the starter kits: " + kits.size());
-        ToolKits.Kit marbling = kit("Marbling");
-        check(marbling.brushes.size() == 3 && marbling.brushes.get(0).preset.equals("Sumi") && marbling.brushes.get(1).preset.equals("Clear water")
-                && marbling.brushes.get(2).preset.equals("Comb") && marbling.eraser == null, "Marbling: Sumi, Clear water, Comb, in that order");
-        check(kit("Sketch and Ink").eraser != null && EraseKind.LABELS[kit("Sketch and Ink").eraser.eraser].equals("Dry Media"), "Sketch and Ink sets the eraser to Dry Media");
-        check(kit("Watercolour with Masking").brushes.get(0).preset.equals("Masking fluid"), "Watercolour with Masking starts with the mask");
+        // The release pare-down (2026-11-05): Mixed Media dropped 2026-11-06 (the owner: "just make a well
+        // rounded group of tools that are different from each other").
+        check(kits.size() == 6 && kits.get(0).name.equals("Default Tools") && kits.get(1).name.equals("Dollar Store") && kits.get(2).name.equals("Sketchbook")
+                && kits.get(3).name.equals("Watercolour") && kits.get(4).name.equals("Paint and Effects") && kits.get(5).name.equals("Print Shop"), "Default Tools, Dollar Store, Sketchbook, Watercolour, Paint and Effects, Print Shop: " + kits.size());
+        // Every kit but Default Tools (the owner's bar, ToolSlots.FIRST) loads in the tray's order (the owner, 2026-11-06).
+        for (ToolKits.Kit k : kits) {
+            if (k.name.equals(ToolKits.KEEPS_ORDER)) continue;
+            List<ToolPresets.Preset> got = new java.util.ArrayList<>();
+            for (ToolKits.Role r : k.brushes) got.add(ToolPresets.named(r.preset));
+            List<ToolPresets.Preset> sorted = new java.util.ArrayList<>(got);
+            sorted.sort(DrawLayout::compareInTray);
+            check(got.size() >= 1 && !got.contains(null) && got.equals(sorted), k.name + ": brushes in the tray's order: " + k.brushes.size());
+        }
+        List<String> tray = new java.util.ArrayList<>();
+        for (List<ToolPresets.Preset> group : DrawLayout.pickerGroups()) for (ToolPresets.Preset p : group) tray.add(p.name);
+        List<String> store = new java.util.ArrayList<>();
+        for (ToolKits.Role r : kit("Dollar Store").brushes) store.add(r.preset);
+        List<String> byTray = new java.util.ArrayList<>(store);
+        byTray.sort(java.util.Comparator.comparingInt(tray::indexOf));
+        check(store.size() == 9 && tray.containsAll(store) && store.equals(byTray), "Dollar Store: nine shown tools in the picker's order: " + store);
+        Brush[] defaults = kit("Default Tools").tools();
+        check(defaults.length == ToolSlots.FIRST.length, "Default Tools holds the bar's first-launch brushes, all of them: " + defaults.length);
+        for (int i = 0; i < defaults.length; i++) check(defaults[i] != null && defaults[i].sameAs(ToolSlots.first(i)), "Default Tools' slot " + (i + 1) + " is the first launch's " + ToolSlots.FIRST[i][1]);
         Set<String> names = new HashSet<>();
         for (ToolKits.Kit k : kits) {
             check(names.add(k.name), "Kits have names of their own: " + k.name);
-            check(k.size() >= 1 && k.size() <= ToolSlots.COUNT, k.name + " fills one to ten slots: " + k.size());
+            check(k.size() >= 1 && k.size() <= ToolSlots.COUNT, k.name + " fills one to nine slots: " + k.size());
             for (Brush b : k.tools()) check(b != null, k.name + ": every brush is a Basic tool on the Tools page: " + k.brushes);
-            for (ToolKits.Role r : k.brushes) check(ToolPresets.find(ToolKits.preset(r.preset).brush()) != null, k.name + ": " + r.preset + " is offered, not retired");
+            for (ToolKits.Role r : k.brushes) check(ToolKits.preset(r.preset) == null || ToolPresets.find(ToolKits.preset(r.preset).brush()) != null, k.name + ": " + r.preset + " is offered, not retired");
             // This Brush's header has room for Cut Stamp or Load Kit, not both.
             for (Brush b : k.tools()) check(!b.parts.stamps(), k.name + ": no Stamp in a kit");
             VoiceChecks.readable(k.intro, k.name + "'s intro");
@@ -45,10 +71,10 @@ public final class ToolKitsChecks {
                         k.name + "'s step is a bar's words in sentence case: " + said);
             }
         }
-        check(ToolKits.of(ToolKits.preset("Clear water").brush()) == marbling, "A kit's brush offers its kit");
+        check(ToolKits.of(ToolKits.preset("Hatch pen").brush()) == kit("Sketchbook"), "A kit's brush offers its kit");
         check(ToolKits.of(ToolKits.preset("Gel pen").brush()) == null, "A brush in no kit offers none");
-        ModularBrush renamed = ToolKits.preset("Sumi").brush().parts.copy();
-        renamed.name = "My sumi";
+        ModularBrush renamed = ToolKits.preset("Hatch pen").brush().parts.copy();
+        renamed.name = "My hatch pen";
         check(ToolKits.of(Brush.of(renamed)) == null, "A Basic tool changed is no longer the kit's");
     }
 
@@ -61,25 +87,18 @@ public final class ToolKitsChecks {
         check(some.get(1).eraser == null, "An eraser kind not known is left out");
     }
 
-    /** The library's Kits tab: a card a kit, in the file's order, its first brush's stroke, "3 brushes"; no chips, whatever chip was chosen. */
+    /** The filter row's Kits, last: a card a kit, in the file's order, its first brush's stroke, "3 brushes". */
     static void tab() {
         ToolsPage page = ToolsPageChecks.open(ToolsPageChecks.fresh(), 0);
         page.layout(1000, 16);
-        page.filter(ToolsPage.Chip.DRY_MEDIA);
-        page.tab(ToolsPage.Tab.KITS);
+        page.filter(ToolsPage.Chip.KITS);
         List<ToolsPage.Card> cards = page.all();
-        check(cards.size() == ToolKits.all().size() && page.chipsShown().isEmpty() && page.pages() == 1, "Kits: a card a kit, no chips: " + cards.size());
+        ToolsPage.Chip[] chips = ToolsLayout.rowChips();
+        check(chips[chips.length - 1] == ToolsPage.Chip.KITS && cards.size() == ToolKits.all().size() && page.pages() == 1, "Kits, the row's last chip: a card a kit: " + cards.size());
         for (int i = 0; i < cards.size(); i++) {
             ToolKits.Kit k = ToolKits.all().get(i);
             check(cards.get(i).kit == k && cards.get(i).name.equals(k.name) && cards.get(i).brush.sameAs(k.tools()[0]) && cards.get(i).line.equals(k.size() + " brushes") && !page.now(cards.get(i)),
                     "A kit's card: its name, its first brush, how many it puts on the bar: " + cards.get(i).line);
-        }
-        page.tab(ToolsPage.Tab.BASIC);
-        check(page.filter() == ToolsPage.Chip.DRY_MEDIA, "The chip chosen waits for the other tabs");
-        // The tabs, Kits among them, and the pages share their row.
-        for (int[] s : DrawLayoutChecks.SCREENS) {
-            ToolsLayout t = new ToolsLayout(s[0], s[1]);
-            check(t.tabsWidth() + t.tabGap() + ToolsLayout.pagerWidth() <= t.sections, "The tabs, Kits among them, fit at " + s[0] + "x" + s[1]);
         }
     }
 
@@ -89,27 +108,20 @@ public final class ToolKitsChecks {
         Brush[] opened = new Brush[ToolSlots.COUNT];
         for (int i = 0; i < opened.length; i++) opened[i] = page.current(i);
         ToolKits.Kit marbling = kit("Marbling");
-        check(page.kit() == null, "The slot's brush (Wet gouache) is in no kit");
         page.put(ToolKits.preset("Comb").brush());
-        check(page.kit() == marbling, "Comb picked: This Brush offers the Marbling kit");
+        check(!page.together(), "A pick alone: an Undo step a slot on the drawing screen");
         check(page.loadKit(marbling), "The kit loads");
         Brush[] tools = marbling.tools();
         for (int i = 0; i < tools.length; i++) check(page.current(i).sameAs(tools[i]), "The kit fills the first slots in order: slot " + i);
         for (int i = tools.length; i < ToolSlots.COUNT; i++) check(page.current(i).sameAs(i == 5 ? ToolKits.preset("Comb").brush() : opened[i]), "The other slots keep theirs: slot " + i);
-        check(page.slot() == 0 && page.together() && page.canUndo() && page.bar() == ToolSlots.COUNT && page.barResult() == -1 && page.eraser() == -1, "Its first slot selected, one step, the bar as it was");
-        check(!page.loadKit(marbling), "Loaded again: nothing changes, no step");
-        page.undo();
-        for (int i = 0; i < ToolSlots.COUNT; i++) check(page.current(i).sameAs(i == 5 ? ToolKits.preset("Comb").brush() : opened[i]), "One Undo puts every slot back: slot " + i);
-        check(page.slot() == 5 && !page.together(), "and selects the slot selected before");
-        page.undo();
-        check(page.current(5).sameAs(opened[5]) && !page.canUndo(), "Then the pick before it");
+        check(page.slot() == 0 && page.together() && page.bar() == ToolSlots.COUNT && page.barResult() == -1 && page.eraser() == -1, "Its first slot selected, one Undo step on the drawing screen, the bar as it was");
+        check(!page.loadKit(marbling), "Loaded again: nothing changes");
         ToolKits.Kit sketch = kit("Sketch and Ink");
+        page = ToolsPageChecks.open(ToolsPageChecks.fresh(), 5);
         page.loadKit(sketch);
         check(page.eraser() == 3, "A kit's eraser step sets the eraser to its kind");
         Brush[] results = page.results();
         check(results[0] != null && results[1] != null && results[2] == null, "Back takes the kit's slots their brushes, the rest unchanged");
-        page.undo();
-        check(page.eraser() == -1 && page.results()[0] == null, "Undo takes the eraser's kind back too");
     }
 
     static void bar() {
@@ -119,8 +131,6 @@ public final class ToolKitsChecks {
         check(open.raises(marbling), "A notebook's bar of two: the kit shows its third slot");
         open.loadKit(marbling);
         check(open.bar() == 3 && open.barResult() == 3, "Brushes on Bar goes to three");
-        open.undo();
-        check(open.bar() == 2 && open.barResult() == -1, "Undo puts the count back");
         // Lock Settings is cut (2026-10-24): no bar refuses a kit, it raises the count.
         ToolsPage three = ToolsPageChecks.open(ToolsPageChecks.fresh(), 0);
         three.bar(3);
@@ -158,18 +168,19 @@ public final class ToolKitsChecks {
 
     static void said() {
         ToolSlots slots = ToolsPageChecks.fresh();
-        slots.useAll(Arrays.copyOf(kit("Marbling").tools(), ToolSlots.COUNT));
+        slots.useAll(Arrays.copyOf(kit("Sketchbook").tools(), ToolSlots.COUNT));
         Brush[] bar = new Brush[ToolSlots.COUNT];
         for (int i = 0; i < bar.length; i++) bar[i] = slots.brush(i);
-        check("1 Drop ink".equals(ToolKits.said(bar, 0)) && "3 Comb rings".equals(ToolKits.said(bar, 2)), "A slot of a loaded kit says its step: " + ToolKits.said(bar, 2));
-        check(ToolKits.said(bar, 4) == null, "A slot after the kit says its name");
+        ToolKits.Kit mixed = kit("Sketchbook");
+        check(mixed.said(0).equals(ToolKits.said(bar, 0)) && mixed.said(2).equals(ToolKits.said(bar, 2)), "A slot of a loaded kit says its step: " + ToolKits.said(bar, 2));
+        check(ToolKits.said(bar, 8) == null, "A slot after the kit says its name");
         bar[1] = ToolKits.preset("Gel pen").brush();
         check(ToolKits.said(bar, 0) == null, "A kit no longer whole says names");
     }
 
     static void notes() {
         ModularBrush sumi = ToolKits.preset("Sumi").brush().parts, water = ToolKits.preset("Clear water").brush().parts, comb = ToolKits.preset("Comb").brush().parts;
-        ModularBrush pen = ToolKits.preset("Gel pen").brush().parts, waterBrush = ToolKits.preset("Water brush").brush().parts;
+        ModularBrush pen = ToolKits.preset("Gel pen").brush().parts, waterBrush = ToolKits.preset("Water").brush().parts;
         check(ToolKits.NOTHING_FLOATING.equals(ToolKits.floatNote(water, water, false)) && ToolKits.NOTHING_FLOATING.equals(ToolKits.floatNote(comb, comb, false)), "Clear water or the comb with nothing floating: its note");
         check(ToolKits.floatNote(sumi, sumi, false) == null && ToolKits.floatNote(water, water, true) == null && ToolKits.floatNote(comb, comb, true) == null, "Sumi starts the bath; water and comb on it say nothing");
         check(ToolKits.PRINTED.equals(ToolKits.floatNote(pen, pen, true)) && ToolKits.PRINTED.equals(ToolKits.floatNote(null, null, true)), "Another brush, or the eraser, prints the rings: its note");

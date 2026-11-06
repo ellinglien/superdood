@@ -56,7 +56,7 @@ final class GreyGradient {
     static boolean takes(ModularBrush b) {
         PartChoice m = b.choice(BrushPart.MEDIUM);
         return (m == PartChoice.INK || m == PartChoice.WASH || m == PartChoice.CHARCOAL || m == PartChoice.GRAPHITE || m == PartChoice.CRAYON)
-                && b.choice(BrushPart.LIFE) != PartChoice.FLOAT;
+                && !b.floats();
     }
     /** Whether {@code b}'s grey changes along its strokes: Gradient on, in a medium that takes it. */
     static boolean on(ModularBrush b) { return rule(b) != OFF && takes(b); }

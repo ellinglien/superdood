@@ -249,7 +249,7 @@ public final class HaloChecks {
     static void grow(ToneDocument d, WatercolorSession s, int ticks) { for (int t = 0; t < ticks && s.settling(); t++) s.tickDrying(d); }
     static void codes() {
         ModularBrush b = brush(PRESET);
-        check(b.choice(BrushPart.LIFE) == PartChoice.HALO && ModularCode.encode(b).equals(PRESET) && PRESET.contains("_4jsjsll_"), "The lab's Halo ink reads as Halo and writes back: Drying choice 4, then its three dials");
+        check(b.mischief() == PartChoice.LATER_MOLD && ModularCode.encode(b).equals(PRESET) && PRESET.contains("_4jsjsll_"), "The lab's Halo ink reads as Halo and writes back: Drying choice 4, then its three dials");
         check(PartChoice.HALO.key.equals("halo") && PartChoice.HALO.label.equals("Mold") && PartChoice.HALO.index() == 4 && PartChoice.HALO.macro == PartDial.H_REACH
                 && PartChoice.HALO.words[0].equals("short") && PartChoice.HALO.words[1].equals("long"), "Its key is the codes' halo, shown as Mold; its slider Mold Length, short to long");
         ModularBrush slow = BlendChecks.life(brush(PLAIN_INK), PartChoice.DRYING);
@@ -264,7 +264,7 @@ public final class HaloChecks {
                 "White and Invert grow no veins (veins only darken); Behind's only where the page was blank");
         // A Halo stroke lays as the same brush in Slow with Settle 0 lays it, layer for layer.
         ToneDocument a = bars(), c = bars();
-        CarrySmudgeChecks.live(a, ResolvedBrush.asSlow(b), 12, 1, null, line(120));
+        CarrySmudgeChecks.live(a, LaterChecks.withoutLater(b), 12, 1, null, line(120));
         WatercolorSession s = new WatercolorSession();
         CarrySmudgeChecks.live(c, b, 12, 1, s, line(120));
         check(BlendChecks.same(BlendChecks.all(a), BlendChecks.all(c)) && s.halos().size() == 1, "A Halo stroke lays as Slow lays it, then its halo grows");
@@ -413,7 +413,7 @@ public final class HaloChecks {
     /** The owner's limits: Reach within three tip widths (the lab's where it is less), at most 20 s. */
     static void limits() {
         ModularBrush b = brush(INK);
-        b.part(BrushPart.LIFE).set(PartDial.H_REACH, 1);
+        b.part(BrushPart.LATER).set(PartDial.H_REACH, 1);
         b.part(BrushPart.LIFE).set(PartDial.DRYING, 1);
         for (double size : new double[]{2, 6, 12, 40, 80, 200}) {
             ResolvedBrush r = ResolvedBrush.of(b, size, 1);
@@ -447,16 +447,16 @@ public final class HaloChecks {
             ModularStyle.haloRolls = false;
             try { without = s.roll(new Random(9100L * (s.index + 1) + i)); } finally { ModularStyle.haloRolls = true; }
             n++;
-            if (with.choice(BrushPart.LIFE) != PartChoice.HALO) { if (!ModularCode.encode(with).equals(ModularCode.encode(without))) other++; continue; }
-            check(s.haloOdds() > 0 && without.choice(BrushPart.LIFE) != PartChoice.FLOAT, s.name + " rolls Halo only with odds, never from Float");
+            if (with.mischief() != PartChoice.LATER_MOLD) { if (!ModularCode.encode(with).equals(ModularCode.encode(without))) other++; continue; }
+            check(s.haloOdds() > 0 && without.mischief() != PartChoice.LATER_FLOAT, s.name + " rolls Halo only with odds, never from Float");
             halos++;
-            for (BrushPart p : BrushPart.values()) if (p != BrushPart.LIFE) check(with.part(p).sameAs(without.part(p)), "a roll that becomes Halo keeps every other part: " + p);
+            for (BrushPart p : BrushPart.values()) if (p != BrushPart.LIFE && p != BrushPart.LATER) check(with.part(p).sameAs(without.part(p)), "a roll that becomes Halo keeps every other part: " + p);
         }
         note("rolls: " + halos + " Halo of " + n);
         check(other == 0 && halos >= 600 * (2.0 / 30 + 1.0 / 50) / 3 && halos <= 600 * (2.0 / 30 + 1.0 / 50) * 3, "Halo rolls rarely (" + halos + " of " + n + "), every other roll as before (" + other + " differ)");
         ModularBrush plain = ModularStyle.named("Ink wash").roll(new Random(12));
         for (int i = 0; i < 50; i++) for (ModularVariations.Made m : ModularVariations.make(plain, new ModularLocks(), new Random(i)))
-            check(m.brush.choice(BrushPart.LIFE) != PartChoice.HALO, "a variation never swaps to Halo");
+            check(m.brush.mischief() != PartChoice.LATER_MOLD, "a variation never swaps to Halo");
     }
     /**
      * The lab's words (halo_goldens.cjs words.tsv), for rolled brushes of every style made Halo: the Drying card and the
@@ -471,8 +471,10 @@ public final class HaloChecks {
             String[] w = row.split("\t");
             ModularBrush b = brush(w[0]), quick = BlendChecks.life(b, PartChoice.FAST_WET);
             check(ModularCode.encode(b).equals(w[0]), "reads and writes back: " + w[0]);
-            check(ModularWords.choiceWords(b, BrushPart.LIFE).equals(w[1]), "Drying's card says \"" + w[1] + "\": " + ModularWords.choiceWords(b, BrushPart.LIFE));
-            check(ModularWords.swapNote(b, BrushPart.LIFE).equals(w[4]), "swap note " + w[4] + ": " + ModularWords.swapNote(b, BrushPart.LIFE));
+            // Mold's words are on the Later card now (LaterChecks), as they were on Drying's.
+            BrushPart card = b.later() ? BrushPart.LATER : BrushPart.LIFE;
+            check(ModularWords.choiceWords(b, card).equals(w[1]), "its card says \"" + w[1] + "\": " + ModularWords.choiceWords(b, card));
+            check(ModularWords.swapNote(b, card).equals(w[4]), "swap note " + w[4] + ": " + ModularWords.swapNote(b, card));
             List<String> cap = new ArrayList<>(ModularWords.caption(b)), lab = java.util.Arrays.asList(w[2].split("\\|"));
             check(cap.indexOf("mold") == lab.indexOf("mold") && cap.remove("mold") && cap.equals(ModularWords.caption(quick)), w[0] + ": caption " + w[2] + ", the app's " + ModularWords.caption(b));
             String app = ModularWords.plainWords(b), mold = "Veins bridge nearby marks for " + w[1].substring(5, w[1].length() - 2) + " s.";
@@ -490,7 +492,7 @@ public final class HaloChecks {
         for (ToolPresets.Preset q : ToolPresets.all()) if (q.name.equals("Mold ink")) p = q;
         check(p != null && p.style.name.equals("Ink wash") && ModularCode.settings(brush(p.code)).equals(ModularCode.settings(brush(MOLD))), "Mold ink: the lab's Halo ink, its Growth full and Drying 5.5 s");
         ModularBrush lab = brush(PRESET), mold = brush(MOLD);
-        check(mold.part(BrushPart.LIFE).get(PartDial.GROWTH, 0) == 1 && PartDial.DRYING.shown(mold.part(BrushPart.LIFE).get(PartDial.DRYING, 0)).equals("5.5 s")
+        check(mold.part(BrushPart.LATER).get(PartDial.GROWTH, 0) == 1 && PartDial.DRYING.shown(mold.part(BrushPart.LIFE).get(PartDial.DRYING, 0)).equals("5.5 s")
                 && PartDial.DRYING.shown(lab.part(BrushPart.LIFE).get(PartDial.DRYING, 0)).equals("6.6 s"), "Growth full, Drying 5.5 s (the lab's 6.6 s)");
         long t0 = System.nanoTime();
         int[] tile = WildSample.modular(brush(p.code), 1, WildSample.Shape.LOOP, 240, 120, false);

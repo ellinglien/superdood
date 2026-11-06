@@ -17,7 +17,8 @@ import java.util.List;
  * sketch, 2026-10-17: the module on the left, its choices next to it; {@link BrushLabActivity} shows it in a popup), as
  * wide as the test area and as tall as its tiles, which are sized as the old strip's under the test page
  * ({@link LabLayout#swapCell}). A tap puts that choice in (an Undo step) and closes it, as do Done and a tap outside it.
- * No hint text. Only what changed is drawn again. More tiles than {@link LabLayout#SWAP_MOST} turn in pages, as the
+ * No hint text. Only what changed is drawn again. More tiles than {@link LabLayout#SWAP_MOST} (Later's: {@link LabLayout#LATER_MOST}) take the
+ * tall tray, twice as tall ({@link LabLayout#tallSwap}, 2026-11-06); more than it holds turn in pages, as the
  * library's ({@link LabPages}: the head's ‹ 1/2 ›), each page's grid the same size; it opens at the current choice's.
  */
 @SuppressLint("ViewConstructor")
@@ -54,14 +55,14 @@ final class SwapStrip extends LinearLayout {
      */
     void render(BrushPart part) {
         List<BrushLab.Swap> all = lab.swaps(part);
-        int perPage = LabLayout.swapPerPage(all.size()), pages = LabPages.pages(all.size(), perPage);
+        int perPage = LabLayout.swapPerPage(part, all.size()), pages = LabPages.pages(all.size(), perPage);
         if (part != this.part) { page = 0; for (int i = 0; i < all.size(); i++) if (all.get(i).now) page = LabPages.of(i, perPage); }
         page = LabPages.clamp(page, all.size(), perPage);
         List<BrushLab.Swap> swaps = all.subList(page * perPage, Math.min(all.size(), (page + 1) * perPage));
         List<List<String>> captions = new ArrayList<>();
         StringBuilder now = new StringBuilder(part.name()).append(' ').append(page);
         for (BrushLab.Swap swap : swaps) {
-            captions.add(caption(swap, part));
+            captions.add(swap.caption());
             now.append(' ').append(swap.choice);
         }
         boolean samples = part != this.part || !now.toString().equals(shown);
@@ -71,7 +72,7 @@ final class SwapStrip extends LinearLayout {
         if (!now.toString().equals(shown)) {
             shown = now.toString();
             while (getChildCount() > 1) removeViewAt(1);
-            renderTiles(captions, perPage);
+            renderTiles(captions, part, perPage);
         }
         ModularBrush b = lab.parts();
         BrushLab.Redraw redraw = BrushLab.redraw(samplesShown, b);
@@ -118,9 +119,9 @@ final class SwapStrip extends LinearLayout {
      * taller than wide (Life's three would be, on the Manta); a page laid out for {@code slots} tiles, so every page is
      * the same size. The panel ends under them.
      */
-    private void renderTiles(List<List<String>> captions, int slots) {
+    private void renderTiles(List<List<String>> captions, BrushPart part, int slots) {
         tiles.clear();
-        int n = captions.size(), columns = layout.swapColumns(slots), rows = (slots + columns - 1) / columns, height = dp(layout.swapCell(slots)[1]);
+        int n = captions.size(), columns = layout.swapColumns(part, slots), rows = (slots + columns - 1) / columns, height = dp(layout.swapCell(part, slots)[1]);
         LinearLayout grid = LabUi.column(getContext());
         for (int r = 0; r < rows; r++) {
             LinearLayout row = LabUi.row(getContext());
@@ -148,14 +149,6 @@ final class SwapStrip extends LinearLayout {
         grid.setBackgroundColor(Theme.INK);
         grid.setPadding(0, dp(Theme.FINE), 0, 0);
         addView(grid, new LayoutParams(-1, -2));
-    }
-    /** A tile's caption: the choice, then its note ({@link ModularWords#swapNote}) when it has one. */
-    private static List<String> caption(BrushLab.Swap swap, BrushPart part) {
-        List<String> caption = new ArrayList<>();
-        caption.add(ModularWords.tileLabel(swap.choice));
-        String note = ModularWords.swapNote(swap.brush.parts, part);
-        if (!note.isEmpty()) caption.add(note);
-        return caption;
     }
     /** {@code swap} on {@code tile}: its caption, its sample if {@code sample} (the swap's brush is a copy of its own), its tab, and its tap. */
     private void show(LoopCard tile, BrushLab.Swap swap, List<String> caption, boolean sample) {

@@ -2,7 +2,7 @@ package io.github.mpdairy.monopaint;
 
 /**
  * A mark's footprint swept from sample to sample, as the stampers' own geometry lays it ({@link LineStamper#nib},
- * {@link BodyStamper#shape}, the hake's head, a pattern's band, the hairs' wall, a smudge's dab): its shape at each
+ * {@link BodyStamper#shape}, the hake's head, a nib's own footprint, a pattern's band, the hairs' wall, a smudge's dab): its shape at each
  * sample as a convex polygon (an ellipse; the hake's thin head), the hull of the last two swept. Only what the last
  * shape didn't cover is new (a sliver ahead, and behind where the mark grows), so each pixel is reached about once;
  * each page row's new pixels gather into at most two spans ({@link #lo}..{@link #hi}, {@link #lo2}..{@link #hi2}),
@@ -105,6 +105,15 @@ abstract class FootprintSweep {
     }
     /** {@link #ellipseAt}'s answer, reused. */
     private final double[] at = new double[4];
+    /** A nib's mark at a sample (Ruling Pen, Twig, Fan: their stampers' {@code footprint}) into {@code e}; false for any other pattern (a Brayer's band is its size). */
+    private static boolean nib(ResolvedBrush.Pattern P, double size, double pr, double tx, double ty, double flick, double[] e) {
+        switch (P.kind) {
+            case RULING: RulingPen.footprint(size, pr, tx, ty, flick, e); return true;
+            case TWIG: TwigStick.footprint(size, pr, tx, ty, flick, e); return true;
+            case FAN: FanBrush.footprint(P, size, pr, tx, ty, flick, e); return true;
+            default: return false;
+        }
+    }
     /** Sample {@code k}'s shape, an ellipse round the sample: its half-axes a and b, turned to cos, sin. */
     double[] ellipseAt(int k) {
         int j = Math.max(0, k - 1);
@@ -115,6 +124,10 @@ abstract class FootprintSweep {
         ResolvedBrush.Swarm swarm = isLine ? r.lineSwarm : r.bodyTip == ResolvedBrush.BodyTip.BRISTLES ? r.bodySwarm : null;
         if (smudge) {
             a = b = Math.max(1, r.carry.stumpR()); c = 1; s = 0;
+        } else if (r.pattern != null && nib(r.pattern, isLine ? r.inkSize : r.bodySize, pts.p[k], pts.tx[k], pts.ty[k], pts.flickWidth(d), at)) {
+            // A ruling pen's blade, a twig's end, a fan's hairs: as the nib lays them, not its reach (the owner, 2026-11-02:
+            // the twig's "preview mark is much bigger than the mark that is left").
+            a = Math.max(.6, at[0]); b = Math.max(.6, at[1]); c = at[2]; s = at[3];
         } else if (r.pattern != null) {
             // Stipple, Hatch and Stamp: the band their dots, lines or prints fill, pressure narrowing it as it does them.
             double hs = r.pattern.stamp() ? r.pattern.size : isLine ? r.inkSize : r.bodySize, pr = pts.p[k];
@@ -141,6 +154,7 @@ abstract class FootprintSweep {
             double big = StrokeMath.inkBig(r.inkSize), lens = StrokeMath.taperLens(pen.taperIn, pen.taperOut, r.inkSize)[0];
             LineStamper.nib(nib, pen, paper, pts, r.inkSize, big, Math.sqrt(big), lens, 0, pts.total(), false, null, pen.tilts(), j, k, 1, x, y, d, dirx, diry, width, height);
             a = nib.a; b = nib.bb; c = nib.cosA; s = nib.sinA;
+            // shortcut: a worn tip's oval is swept about its point, not shifted toward the lean (LineStamper's nib.ox, oy); shift it if a worn stick ever joins wet paint.
         } else {
             ResolvedBrush.Body bd = r.body;
             double tX = pts.tx[k], tY = pts.ty[k], lean = 0, azimuth = Double.NaN;
@@ -166,19 +180,47 @@ abstract class FootprintSweep {
      * a smudge's dab as the preview's; the body's): {a, b, cos, sin}. Pure.
      */
     static double[][] atRest(ResolvedBrush r) {
-        if (flat == null) { byte[] grey = new byte[PaperGrain.SIDE * PaperGrain.SIDE]; java.util.Arrays.fill(grey, (byte) 128); flat = new StrokePaper(PaperGrain.scan(grey)); }
-        StrokePoints pts = new StrokePoints();
-        float p = (float) HoverNib.TYPICAL;
-        pts.add(-PAST, 0, p, PenSpeed.UNTIMED, 0, 0);
-        pts.add(0, 0, p, PenSpeed.UNTIMED, 0, 0);
         boolean line = r.line || r.body == null && r.carry != null && r.carry.moves;
         double[][] marks = new double[(line ? 1 : 0) + (r.body != null ? 1 : 0)][];
         int n = 0;
         for (boolean isLine : new boolean[]{true, false}) {
             if (isLine ? !line : r.body == null) continue;
-            marks[n++] = new FootprintSweep(r, pts, 1, 1, isLine, flat, false) { @Override void write(int y) {} }.ellipseAt(1).clone();
+            marks[n++] = atRest(r, isLine, HoverNib.TYPICAL, 0);
         }
         return marks;
+    }
+    /** {@code r}'s line ({@code isLine}) or body at rest as {@link #atRest(ResolvedBrush)}, at pressure travel {@code p}, the pen tilted {@code tiltX}° toward the page's right: {a, b, cos, sin}. */
+    static double[] atRest(ResolvedBrush r, boolean isLine, double p, double tiltX) {
+        return new FootprintSweep(r, rest(p, tiltX), 1, 1, isLine, flat(), false) { @Override void write(int y) {} }.ellipseAt(1).clone();
+    }
+    /**
+     * How far across a stroke {@code r}'s placed lines (a split nib's, a rake's) lie at rest as {@link #atRest(ResolvedBrush)},
+     * at pressure travel {@code p}, page px: from one outer line's far edge to the other's, where {@link Placement} lays
+     * them (the hover ring's; 0 where none is laid).
+     */
+    static double placedAcross(ResolvedBrush r, double p) {
+        Placement.Geometry g = new Placement.Geometry(flat(), r.pen, r.placeBody, rest(p, 0), r.inkSize, r.placeSize, false, null, 1, 1);
+        g.steps(1);
+        if (!g.at(1, 1)) return 0;
+        double lo = Double.POSITIVE_INFINITY, hi = Double.NEGATIVE_INFINITY;
+        for (int j = 0; j < g.n; j++) {
+            if (!g.line(j)) continue;
+            // The stroke runs along x: the line's ellipse's half-height.
+            double half = Math.hypot(g.a * g.sinA, g.bb * g.cosA);
+            lo = Math.min(lo, g.cy - half); hi = Math.max(hi, g.cy + half);
+        }
+        return hi > lo ? hi - lo : 0;
+    }
+    /** The pen at rest at the origin at pressure travel {@code p}, tilted {@code tiltX}°: two samples, the first {@link #PAST} before. */
+    private static StrokePoints rest(double p, double tiltX) {
+        StrokePoints pts = new StrokePoints();
+        pts.add(-PAST, 0, (float) p, PenSpeed.UNTIMED, (float) tiltX, 0);
+        pts.add(0, 0, (float) p, PenSpeed.UNTIMED, (float) tiltX, 0);
+        return pts;
+    }
+    private static StrokePaper flat() {
+        if (flat == null) { byte[] grey = new byte[PaperGrain.SIDE * PaperGrain.SIDE]; java.util.Arrays.fill(grey, (byte) 128); flat = new StrokePaper(PaperGrain.scan(grey)); }
+        return flat;
     }
     /** An ellipse round {@code x, y}, half-axes {@code a, b} turned to {@code c, s} (cos, sin), as {@link #SIDES} corners into {@code xs, ys}. */
     static void ellipse(double x, double y, double a, double b, double c, double s, double[] xs, double[] ys) {

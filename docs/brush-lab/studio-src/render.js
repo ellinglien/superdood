@@ -10,9 +10,42 @@
 //     at size px, or at a sample's size when size is 0; under: a grey band and an ink line behind it (bare: only those).
 // ===================================================================================================================
 const STUDIO_SURFS = new Map();
+// The app's engine (web/engine: its Java compiled to WebAssembly), once this page or worker has loaded it; else, or for
+// a brush the app doesn't read, the lab's JS copy. On it a picture is a page of the app's: the bands are laid as marks
+// under the first stroke (on that brush's own layer and kind, as the parity harness lays them), each stroke goes in by
+// its code, and whatever settles (wet paint, a Slow wash, a bath, halos) is ticked to rest.
+let STUDIO_WASM = null, studioOnWasm = false, studioWasmPage = null;
+// A code the lab's model can't hold all of (a newer tip, After, a print) is kept on its brush (app; app0 the model's own
+// code for it), so what the model can't show isn't lost: unedited, the brush's code is the app's; edited, the app's
+// engine keeps what the edit left alone (WebEngine.keptCode). Every code Studio reads or writes goes through these two.
+function appRead(code) {
+  const r = readAnyCode(code);
+  if (r && r.from === "M") { const app = writtenCode(code), own = encodeM(r.b); if (own !== app) { r.b.app = app; r.b.app0 = own; } }
+  return r;
+}
+function appCode(B) {
+  const own = encodeM(B);
+  if (!B.app) return own;
+  if (own === B.app0) return B.app;
+  return STUDIO_WASM ? STUDIO_WASM.T.keptCode(B.app, B.app0, own) : own;
+}
+// The parts as the app's model has them (WebEngine.studioParts): what the lab's model can't show (After, a newer tip or
+// print) is shown and edited there. appEdit: B with part's choice k, or else its dial key at v, as the app's Brush Lab
+// switches and slides them (WebEngine.studioEdit), read back as Studio's brush. Both need the app's engine.
+const appParts = B => STUDIO_WASM ? JSON.parse(STUDIO_WASM.T.studioParts(appCode(B), encodeM(B))) : null;
+function appEdit(B, part, k, key, v) {
+  const r = appRead(STUDIO_WASM.T.studioEdit(appCode(B), part, k || "", key || "", +v || 0));
+  r.b.name = B.name;
+  return r.b;
+}
+const studioNotApp =code => Object.assign(new Error("the app doesn't read " + code), { notApp: true });
 // A white brush (newmods.js Blend White) draws on a dark ground, as the lab's samples: on paper it would show nothing.
 const studioWhite = B => !!B && B.medium.k !== "resist" && (B.medium.d.blend | 0) === 1;
 function studioSurf(w, h, B) {
+  if (studioOnWasm) {
+    studioWasmPage = STUDIO_WASM.page(w, h);
+    return { w, h, page: new Uint8Array(w * h).fill(studioWhite(B) ? 68 : 255), wasm: studioWasmPage, grounded: false };
+  }
   const key = w + "x" + h;
   let s = STUDIO_SURFS.get(key);
   if (!s) { if (STUDIO_SURFS.size > 16) STUDIO_SURFS.clear(); s = modSurface(w, h, 7); STUDIO_SURFS.set(key, s); }
@@ -20,6 +53,23 @@ function studioSurf(w, h, B) {
   if (studioWhite(B)) { s.page.fill(68); s.base.set(s.page); }
   return s;
 }
+// A stroke along pts ({x, y, p, t, tx, ty}), three samples an event: the JS copy's layStroke, or on the app's engine.
+function studioLay(s, B, pts, size, shade, host) {
+  if (!s.wasm) return layStroke(s, B, pts, size, shade, host);
+  const st = studioWasmStroke(s, B, size, shade);
+  for (let i = 0; i < pts.length; i += 3) st.add(pts.slice(i, i + 3).map(p => [p.x, p.y, p.p, p.t, p.tx, p.ty]));
+  st.end();
+  studioSettle(s);
+}
+function studioWasmStroke(s, B, size, shade) {
+  const code = appCode(B);
+  if (!s.grounded) { s.grounded = true; if (s.page.some(v => v !== 255)) s.wasm.ground(code, size, shade, 0, 0, s.w, s.h, s.page); }
+  const st = s.wasm.stroke(code, size, shade);
+  if (!st) throw studioNotApp(code);
+  return st;
+}
+// Ticked to rest, as the parity harness leaves each stroke (bounded: a bath floats its time out).
+function studioSettle(s) { let k = 0; do s.wasm.tick(); while (s.wasm.settling && ++k < 20000); }
 // The lab's sample geometry (ui.js wavePath, loopPath, sampleSize), so a Studio tile reads as the lab's and the app's.
 function studioWave(w, h, pad, amp, opts = {}) {
   const pts = [], x0 = pad, x1 = w - pad, n = Math.max(30, Math.ceil((x1 - x0) / 2.5));
@@ -56,6 +106,7 @@ function studioHost(s, B) {
 }
 // Whatever still moves is finished for a picture: a Slow wash dried, a Halo grown (newmods.js, when the lab has it).
 function studioFinish(host, s) {
+  if (s && s.wasm) { s.wasm.dry(); return; }
   if (host && host.water) host.water.dryAll();
   if (s && s.halos && s.halos.length && typeof haloDryAll === "function") haloDryAll(s);
 }
@@ -67,15 +118,23 @@ function studioFloat(s, B, pts, size, shade, ref, keep) {
   cw.carry = switchChoice("carry", B.carry, "smudge"); cw.carry.d.load = 0; normBrush(cw);
   const own = isClearWater(B) ? (() => { const c = cloneBrush(B); c.carry = freshPart("carry", "off"); return normBrush(c); })() : B;
   const small = Math.max(2, Math.min(size, ref / 9));
-  if (!isClearWater(B)) layStroke(s, B, pts, size, shade, host);
+  if (!isClearWater(B)) studioLay(s, B, pts, size, shade, host);
   const cx = s.w / 2, cy = s.h / 2;
   let last = 0;
   for (let i = 0; i < 5; i++) for (const [b, hold] of [[own, 260 + 90 * i], [cw, 160]]) {
     last = 1000 * i + hold;
+    if (s.wasm) {
+      // A held pen, as the Manta's: its sample again every 50 ms.
+      const st = studioWasmStroke(s, b, small, i === 2 ? shade * .5 : shade);
+      for (let t = 0; t <= hold; t += 50) st.add([[cx, cy, .8, 1000 * i + t, NaN, NaN]]);
+      st.end();
+      continue;
+    }
     const st = new Stroke(s, b, small, i === 2 ? shade * .5 : shade, host);
     st.add([[cx, cy, .8, 1000 * i, NaN, NaN]]); for (let t = 50; t <= hold; t += 50) st.holdTick(1000 * i + t); st.end();
   }
-  if (!keep && host.bath && host.bath.wet) host.bath.print();
+  if (s.wasm) studioSettle(s);
+  else if (!keep && host.bath && host.bath.wet) host.bath.print();
   return last;
 }
 function studioBand(s, x0f, x1f, tone) {
@@ -103,11 +162,11 @@ function studioSample(m) {
   else pts = studioWave(w, h, pad, amp);
   if (B.life.k === "float" && (role === "life" || m.drops || isClearWater(B))) { studioFloat(s, B, pts, size, shade, ref); return s; }
   const host = (role === "life" || role === "medium" || looped) ? studioHost(s, B) : null;
-  layStroke(s, B, pts, size, shade, host);
+  studioLay(s, B, pts, size, shade, host);
   if (host && host.water && (B.life.d.takes | 0) && role === "life") {
     const n = 40, line = [];
     for (let i = 0; i <= n; i++) { const u = i / n; line.push({ x: w * (.38 + .24 * u), y: h / 2 + ref * (-.42 + .84 * u), p: .7, t: i * 10, tx: NaN, ty: NaN }); }
-    layStroke(s, studioCross(), line, Math.max(2, ref / 45), 1, host);
+    studioLay(s, studioCross(), line, Math.max(2, ref / 45), 1, host);
   }
   studioFinish(host, s);
   return s;
@@ -120,13 +179,13 @@ function studioPath(m) {
     studioBand(s, .42, .58, 150);
     const zig = [], n = 60;
     for (let i = 0; i <= n; i++) { const u = i / n; zig.push({ x: w * (.2 + .06 * u), y: h * (.1 + .8 * u), p: .7, t: i * 6, tx: NaN, ty: NaN }); }
-    layStroke(s, studioCross(), zig, Math.max(2, h / 60), 1, null);
+    studioLay(s, studioCross(), zig, Math.max(2, h / 60), 1, null);
   }
   if (m.bare) return s;
   const pts = studioPathPts(path, studioFit(path, w, h, size));
   if (B.life.k === "float" && isClearWater(B)) { studioFloat(s, B, pts, size, shade, ref); return s; }
   const host = studioHost(s, B);
-  layStroke(s, B, pts, size, shade, host);
+  studioLay(s, B, pts, size, shade, host);
   studioFinish(host, s);
   return s;
 }
@@ -151,10 +210,31 @@ function studioPathPts(path, f) {
   });
 }
 function studioJob(m) {
-  const t0 = performance.now();
-  const s = m.k === "path" ? studioPath(m) : studioSample(m), n = s.w * s.h, gray = new Uint8Array(n), page = s.page;
+  const t0 = performance.now(), draw = () => m.k === "path" ? studioPath(m) : studioSample(m);
+  let s = null;
+  // A tile as the app's cards draw it (WildSample): the loop, or a part's wave. The sweep's tilt and drops are Studio's own.
+  if (STUDIO_WASM && m.k === "sample" && !m.tilt && !m.drops) {
+    const argb = STUDIO_WASM.T.studioSample(appCode(m.B), m.role, m.w, m.h, m.shade ?? 1);
+    if (argb) {
+      const gray = new Uint8Array(argb.length);
+      for (let i = 0; i < argb.length; i++) gray[i] = Math.round((argb[i] & 255) / 17) * 17;
+      return { id: m.id, w: m.w, h: m.h, gray, ms: performance.now() - t0, wasm: true };
+    }
+  }
+  if (STUDIO_WASM) {
+    studioOnWasm = true;
+    try {
+      const w = draw();
+      s = { w: w.w, h: w.h, page: w.wasm.tones(0, 0, w.w, w.h), wasm: true };
+      // Sharp dry brushes: the close-up's part drawn m.sharp.k points a pixel (WebEngine.sharpArea), −1 where the page shows.
+      if (m.sharp) { const q = m.sharp; s.sharp = { k: q.k, x: q.x, y: q.y, w: q.w, h: q.h, gray: Int16Array.from(w.wasm.sharp(q.k, q.x, q.y, q.w, q.h)) }; }
+    } catch (e) { if (!e.notApp) throw e; }
+    finally { studioOnWasm = false; if (studioWasmPage) studioWasmPage.free(); studioWasmPage = null; }
+  }
+  if (!s) s = draw();
+  const n = s.w * s.h, gray = new Uint8Array(n), page = s.page;
   // The page as the screen shows it: with a resist hatched over it when the lab has one (newmods.js pageGrays).
   if (s.resist && typeof pageGrays === "function") { const g = pageGrays(s, true); for (let i = 0; i < n; i++) gray[i] = Math.round(g[i] * 255); }
   else for (let i = 0; i < n; i++) { const v = Math.round(page[i] / 17) * 17; gray[i] = v < 0 ? 0 : v > 255 ? 255 : v; }
-  return { id: m.id, w: s.w, h: s.h, gray, ms: performance.now() - t0 };
+  return { id: m.id, w: s.w, h: s.h, gray, ms: performance.now() - t0, wasm: !!s.wasm, sharp: s.sharp || null };
 }

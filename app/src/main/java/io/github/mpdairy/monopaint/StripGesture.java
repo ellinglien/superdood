@@ -72,14 +72,16 @@ final class StripGesture {
     /** The place at tile {@code tile}; {@link DrawingBook#NONE} for the + tile. */
     static int placeAt(int tile, int count) { return tile == 0 ? DrawingBook.FRONT : tile == count + 2 ? DrawingBook.BACK : tile == count + 1 ? DrawingBook.NONE : tile - 1; }
     /**
-     * Whether a window of {@code shown} slots from tile {@code start} shows tile {@code tile} of a notebook of {@code count}
-     * pages: inside it and not under the + tile, pinned in its last slot when its own tile is out of the window.
+     * The + tile's slot in a window of {@code shown} slots from tile {@code start}: its own tile, right after the last page
+     * and before the back cover, where the window has it; else pinned in the window's last slot (it takes that tile's
+     * place), so a page can always be added.
      */
-    static boolean shows(int start, int tile, int count, int shown) {
-        int k = tile - start, plus = count + 1 - start;
-        boolean pinned = plus < 0 || plus >= shown;
-        return start >= 0 && start <= Math.max(0, count + 3 - shown) && k >= 0 && k < shown && !(pinned && k == shown - 1);
-    }
+    static int plusSlot(int start, int shown, int count) { int k = count + 1 - start; return k >= 0 && k < shown ? k : shown - 1; }
+    /**
+     * The window's first tile: place {@code here} centred, held at the ends so the tiles fill it (the owner, 2026-11-06), so
+     * a tile at either end is the first or the last only where the window is held there.
+     */
+    static int round(int here, int count, int shown) { return NotebookLayout.window(tileOf(here, count), count + 3, shown); }
     /** Where a lifted page lands over place {@code over}: that page's place; over a cover, the nearest end (covers stay). */
     static int landing(int over, int count) { return over == DrawingBook.FRONT ? 0 : over == DrawingBook.BACK ? count - 1 : over; }
 }

@@ -48,8 +48,11 @@ public final class VoiceChecks {
         Set<String> names = new HashSet<>();
         for (ToolPresets.Preset p : ToolPresets.all()) check(names.add(p.name), "Basic tools have names of their own: " + p.name);
         check(!all.isEmpty() && all.size() < ToolPresets.all().size() / 3, "Only the special tools have their own words: " + all.size());
+        // A retired one keeps its words: a slot or the library holding it says what it did (the four older smudges, 2026-10-31).
+        Set<String> retired = new HashSet<>();
+        for (ToolPresets.Preset p : ToolPresets.retired()) retired.add(p.name);
         for (Map.Entry<String, String> e : all.entrySet()) {
-            check(names.contains(e.getKey()), BrushVoice.PERSONALITIES + " names a Basic tool: " + e.getKey());
+            check(names.contains(e.getKey()) || retired.contains(e.getKey()), BrushVoice.PERSONALITIES + " names a Basic tool or a retired one: " + e.getKey());
             readable(e.getValue(), e.getKey() + "'s own words");
             List<String> sentences = ModularWords.sentences(e.getValue());
             check(sentences.size() <= BrushVoice.PERSONALITY_SENTENCES, e.getKey() + "'s own words are one or two sentences: " + e.getValue());
@@ -114,7 +117,7 @@ public final class VoiceChecks {
         BrushVoice.MISSED.clear();
         int n = 0;
         for (ModularStyle style : ModularStyle.all()) {
-            lab.pickStyle(style);
+            lab.newBrush(style);
             for (int i = 0; i < 300; i++) {
                 lab.randomize();
                 ModularBrush b = lab.parts();
@@ -138,7 +141,7 @@ public final class VoiceChecks {
         String gouache = BrushVoice.about(preset("Wet gouache"));
         check(gouache.contains("gouache") && gouache.contains("wet until you dry it") && !gouache.contains("It stays wet until you tap"), "Wet gouache says it stays wet once: " + gouache);
         String tissue = BrushVoice.about(preset("Damp tissue"));
-        check(tissue.startsWith("Blot paint back up"), "Damp tissue keeps its own words: " + tissue);
+        check(tissue.startsWith("Blot paint back up"), "Damp tissue, retired, keeps its own words: " + tissue);
         // The opener: what it is and what stands out, in the brush's own shape; the same brush the same words.
         String dust = BrushVoice.opener("Vine charcoal. Sheds dust when tilted.", new ArrayList<>());
         check(dust.toLowerCase(java.util.Locale.ROOT).contains("stick of vine charcoal") && dust.matches(".*(leaves|leaving) dust in its wake\\."), "A charcoal stick leaves dust in its wake: " + dust);
@@ -160,7 +163,7 @@ public final class VoiceChecks {
         check(BrushVoice.say("Ink line. Wet for 5.6 s.", false).equals("It stays wet for about 6 seconds.") && BrushVoice.say("Ink line. Floats 16 s.", false).equals("It floats on the water for 16 seconds."), "Times in seconds");
     }
     static ModularBrush preset(String name) {
-        for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals(name)) return p.brush().parts;
+        for (ToolPresets.Preset p : ToolPresets.withRetired()) if (p.name.equals(name)) return p.brush().parts;
         throw new AssertionError("no preset " + name);
     }
 
@@ -182,7 +185,7 @@ public final class VoiceChecks {
         Map<String, String> store = new HashMap<>();
         BrushLibrary.Store s = new BrushLibrary.Store() { public String get(String k) { return store.get(k); } public void put(String k, String v) { if (v == null) store.remove(k); else store.put(k, v); } };
         BrushLab lab = new BrushLab(new ToolSlots(s, new Random(1)), 2, new Random(23));
-        for (int i = 0; i < 1500; i++) { lab.pickStyle(ModularStyle.all().get(i % ModularStyle.all().size())); lab.randomize(); brushes.add(new String[]{ModularWords.plainWords(lab.parts()), ""}); }
+        for (int i = 0; i < 1500; i++) { lab.newBrush(ModularStyle.all().get(i % ModularStyle.all().size())); lab.randomize(); brushes.add(new String[]{ModularWords.plainWords(lab.parts()), ""}); }
         StringBuilder in = new StringBuilder();
         for (String[] b : brushes) in.append(b[0]).append('\t').append(b[1]).append('\n');
         List<String> said;

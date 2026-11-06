@@ -4,7 +4,7 @@ import java.util.function.IntFunction;
 
 /**
  * What one finger does on the page, chosen from the main menu's Finger row and kept: nothing, the eraser
- * (what a finger always did, sized by the fingertip), the smudge tool, or a slot's brush at the slot's size and grey. Two and
+ * (what a finger always did, sized by the fingertip), the smudge tool, Fill in, or a slot's brush at the slot's size and grey. Two and
  * three fingers keep their taps (Undo, Redo). And when a finger may draw at all: never while the pen is down or near
  * (a palm resting with the pen), never a palm-sized contact, and only once it moves, so a two- or three-finger tap's
  * first finger lays nothing; a second finger, the pen arriving or a contact swelling to a palm's takes back what it
@@ -30,12 +30,12 @@ final class FingerTool {
      * by its tray stroke beside it.
      */
     enum Choice {
-        NOTHING("nothing", "Nothing"), ERASER("eraser", "Eraser"), SMUDGE("smudge", "Smudge"),
+        NOTHING("nothing", "Nothing"), ERASER("eraser", "Eraser"), SMUDGE("smudge", "Smudge"), FILL("fill", ToolSlots.FILL_TOOL),
         SLOT_1("slot1", null), SLOT_2("slot2", null), SLOT_3("slot3", null),
         SLOT_4("slot4", null), SLOT_5("slot5", null), SLOT_6("slot6", null), SLOT_7("slot7", null), SLOT_8("slot8", null),
-        SLOT_9("slot9", null), SLOT_10("slot10", null);
+        SLOT_9("slot9", null);
         final String key;
-        /** Nothing's, Eraser's and Smudge's label; null for a slot. */
+        /** Nothing's, Eraser's, Smudge's and Fill in's label; null for a slot. */
         private final String label;
         Choice(String key, String label) { this.key = key; this.label = label; }
         /** Whether it draws with a slot's brush. */
@@ -44,14 +44,20 @@ final class FingerTool {
         String label(IntFunction<String> brushName) { return slot() ? brushName.apply(tool()) : label; }
         /** What Finger Action says, and its menu row: "Finger Action: Eraser", "Finger Action: Brush pen" ("Finger" until the owner, 2026-10-29). */
         String row(IntFunction<String> brushName) { return "Finger Action: " + label(brushName); }
-        /** The bar's tool the finger draws with ({@link ToolSlots#ERASER}, {@link ToolSlots#SMUDGE} or a slot); -1 for nothing. */
+        /** The bar's tool the finger draws with ({@link ToolSlots#ERASER}, {@link ToolSlots#SMUDGE}, {@link ToolSlots#FILL} or a slot); -1 for nothing. */
         int tool() {
             switch (this) {
                 case NOTHING: return -1;
                 case ERASER: return ToolSlots.ERASER;
                 case SMUDGE: return ToolSlots.SMUDGE;
+                case FILL: return ToolSlots.FILL;
                 default: return ordinal() - SLOT_1.ordinal();
             }
+        }
+        /** The choice that draws with the bar's tool {@code tool} (a slot, the eraser or the smudge tool); Nothing for any other. */
+        static Choice of(int tool) {
+            for (Choice c : values()) if (c != NOTHING && c.tool() == tool) return c;
+            return NOTHING;
         }
         /** The choice kept as {@code key}; the eraser (what a finger always did) for none or one that doesn't read. */
         static Choice saved(String key) {
@@ -84,6 +90,34 @@ final class FingerTool {
      */
     static boolean keepsOnCancel(long heldMs) { return heldMs >= KEEP_MS; }
     static final long KEEP_MS = 400;
+    /**
+     * Whether a two- or three-finger tap (Undo, Redo) at {@code now} counts: not while the pen is down, nor within
+     * {@link #PEN_PALM_MS} of {@code penSeen}, when the pen was last seen hovering, touching or lifting; then it is the
+     * hand resting as it draws (the owner, 2026-11-03: palm landings undoing and redoing).
+     */
+    static boolean tapCounts(long now, long penSeen, boolean penDown) { return !penDown && now - penSeen >= PEN_PALM_MS; }
+    /**
+     * What a two- or three-finger tap does, chosen in System Settings (the owner, 2026-11-04: "customize the touch
+     * controls (2 finger tap, etc)"): the app's own Undo, Redo and Refresh, or Nothing. Keys are kept: never change them.
+     */
+    enum Tap {
+        UNDO("undo", "Undo"), REDO("redo", "Redo"), REFRESH("refresh", DrawLayout.REFRESH), NOTHING("nothing", "Nothing");
+        final String key, label;
+        Tap(String key, String label) { this.key = key; this.label = label; }
+        /** The tap kept as {@code key}; {@code fallback} for none or one that doesn't read. */
+        static Tap saved(String key, Tap fallback) {
+            for (Tap t : values()) if (t.key.equals(key)) return t;
+            return fallback;
+        }
+    }
+    /** Where the taps' choices are kept, and what they do at first (Undo and Redo, as always). */
+    static final String TWO_TAP = "two_finger_tap", THREE_TAP = "three_finger_tap";
+    static final Tap TWO_FIRST = Tap.UNDO, THREE_FIRST = Tap.REDO;
+    /** What a tap of {@code fingers} does, {@code two} and {@code three} the choices; Nothing for any other count. */
+    static Tap tap(int fingers, Tap two, Tap three) { return fingers == 2 ? two : fingers == 3 ? three : Tap.NOTHING; }
+    static final long PEN_PALM_MS = 300;
+    /** A contact this wide, px, is a palm: the Manta's panel reads a finger 96-128 and a palm 240 (getevent, 2026-11-05). */
+    static final float PALM_MAJOR = 192;
     /** Whether a finger {@code movedDp} from where it landed starts drawing. */
     static boolean starts(float movedDp) { return movedDp > SLOP_DP; }
 }

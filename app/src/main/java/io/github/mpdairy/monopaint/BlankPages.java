@@ -127,7 +127,7 @@ final class BlankPages {
     static boolean opened(DrawingBook book) throws IOException {
         int last = book.count() - 1;
         if (last < 1 || last == book.index() || book.linked(last) || book.cover() == last || book.ownTemplate(last)
-                || book.pageRules(last) != 0 || book.pageSeconds(last) != 0) return false;
+                || book.pageRules(last) != 0 || book.pageSeconds(last) != 0 || book.ownSurface(last) != 0) return false;
         TracingPaper tracing = book.tracing();
         if (tracing.ghost == last || tracing.stepBits(last) != 0 || !blank(book, last)) return false;
         book.dropUnchanged(last);

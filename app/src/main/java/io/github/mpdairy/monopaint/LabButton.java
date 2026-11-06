@@ -139,6 +139,12 @@ final class LabButton extends TextView {
         super.onDraw(canvas);
         canvas.restore();
     }
+    /** As a checkbox (Brush Lab's As New, 2026-11-03; Hold Opens Full Library): Phosphor's square before the label, ticked while {@code on}, said ", on" or ", off". */
+    LabButton ticked(boolean on) {
+        setIcon(on ? R.drawable.ic_ph_check_square : R.drawable.ic_ph_square, 18);
+        setContentDescription(getText() + (on ? ", on" : ", off"));
+        return this;
+    }
     /** Turned on or off; drawn again only when that changes (e-ink). */
     void setOn(boolean on) { if (on != this.on) { this.on = on; refresh(); } }
     boolean on() { return on; }

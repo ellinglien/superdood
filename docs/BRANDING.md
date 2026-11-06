@@ -1,4 +1,4 @@
-# My Bad Drawings icon
+# Superdood icon
 
 The launcher icon is the owner's hand-drawn notebook with an eye on its cover
 (icons 6 sheet, 2026-10-26), black on white, traced with potrace. It replaced
@@ -27,6 +27,11 @@ centre it; white shapes are separate white fills drawn after the black. The PNG
 was rendered from that vector with headless Chrome. Change them together.
 At 48 px the eye reads as a white almond with a dot.
 
-The loading screen (`drawable/splash.xml`) shows the same foreground (the notebook
-about 305 dp tall) with the name at 48 sp under it;
-`scripts/java/SplashName.java` makes `splash_name.xml` at that size.
+The loading screen (`drawable/splash.xml`) is the owner's drawing of the name, `drawable-nodpi/splash_drawing.png`
+(since 2026-10-29; "SUPER DOOD" in an oval since 2026-11-04, notebook page 18), centred on white at the Manta's
+pixels; the guest page (Draw Together, `scripts/live-probe/live.html`) shows the same picture while it loads. It is
+made from the notebook with `scripts/java/SplashPage.java`: the page's layers only (no template guides, no tracing
+paper), as the Manta's dots, 1-bit, cropped to the drawing with a 24 px margin:
+`java -cp <desktop classes> io.github.mpdairy.monopaint.SplashPage book.mpaint 18 splash_drawing.png 24`
+(the classes: `scripts/test_inkwash.sh`'s sources). Before that the notebook icon with the name under it
+(`scripts/java/SplashName.java` made `splash_name.xml`).

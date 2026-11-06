@@ -62,6 +62,25 @@ final class Theme {
         if (heavy) bold = face; else regular = face;
         return face;
     }
+    private static Typeface textRegular, textBold;
+    /**
+     * Text boxes' face ({@link TextBoxes}, {@link TextType}): iA Writer Duo itself, 400 or 700 (res/font, SIL OFL 1.1), whose
+     * advances {@link TextBoxes#advance} lays the lines by; the system's monospace if the font can't be read.
+     */
+    /**
+     * Whether {@code face} is {@link #textFace}'s: text set in iA Writer Duo on purpose (Draw Together's addresses and
+     * codes), which the dialogs' restyling ({@link #restyle}, {@link SettingsForm#style}) leaves in its face and size.
+     */
+    static synchronized boolean isTextFace(Typeface face) { return face != null && (face == textRegular || face == textBold); }
+    static synchronized Typeface textFace(boolean bold) {
+        Typeface face = bold ? textBold : textRegular;
+        if (face != null) return face;
+        try { if (resources != null) face = resources.getFont(bold ? R.font.ia_writer_duo_bold : R.font.ia_writer_duo_regular); }
+        catch (RuntimeException e) { face = null; }
+        if (face == null) face = Typeface.create(Typeface.MONOSPACE, bold ? Typeface.BOLD : Typeface.NORMAL);
+        if (bold) textBold = face; else textRegular = face;
+        return face;
+    }
     private static Typeface magnet;
     /**
      * The fridge magnets' words, and nothing else: Roboto Mono Bold, Paintmageddon's tile face (res/font, SIL OFL 1.1;
@@ -197,8 +216,9 @@ final class Theme {
         if (view instanceof LabButton) return; // styles itself: its chosen chip is on-ink, which this would paint ink again
         if (view instanceof TextView) {
             TextView text = (TextView)view;
-            boolean button = text instanceof android.widget.Button, bold = text.getTypeface() != null && text.getTypeface().isBold();
-            text.setTypeface(face(text instanceof EditText ? 400 : button || bold ? 700 : 400));
+            Typeface was = text.getTypeface();
+            boolean button = text instanceof android.widget.Button, bold = was != null && was.isBold();
+            if (!isTextFace(was)) text.setTypeface(face(text instanceof EditText ? 400 : button || bold ? 700 : 400));
             text.setTextColor(INK);
             if (button) { text.setAllCaps(true); text.setLetterSpacing(TypeStyle.LABEL.tracking); }
         }

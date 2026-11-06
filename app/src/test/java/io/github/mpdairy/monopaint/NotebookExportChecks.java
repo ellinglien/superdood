@@ -56,7 +56,7 @@ public final class NotebookExportChecks {
         for (int i = 0; i < 3; i++) { ToneDocument p = page(40 + i, 30, i); pages.add(p); pngs.add(NotebookExport.read(NotebookExport.png(p.layerSnapshot(), i))); }
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         List<NotebookPdf.Sheet> sheets = new ArrayList<>();
-        for (int i = 0; i < 3; i++) sheets.add(new NotebookPdf.Sheet(i, 20750, 20750, false, "", "", Collections.emptyList()));
+        for (int i = 0; i < 3; i++) sheets.add(new NotebookPdf.Sheet(i, 20750, 20750, false, "", Collections.emptyList()));
         NotebookPdf.write(out, "T", "T", "", sheets, pngs::get);
         byte[] pdf = out.toByteArray();
         String text = new String(pdf, StandardCharsets.ISO_8859_1);
@@ -119,7 +119,7 @@ public final class NotebookExportChecks {
                 check(NotebookExport.read(Files.readAllBytes(new File(folder, "Oct notebook/" + NotebookExport.pageName(i)).toPath())).crc == c.getValue(), "PNG " + (i + 1) + " is its page");
             }
             String[] left = new File(folder, "Oct notebook").list();
-            check(left.length == 5, "Nothing left over but what the PDF said: " + Arrays.toString(left));
+            check(left.length == 6, "Nothing left over but what the PDF and its lines said: " + Arrays.toString(left));
             NotebookExport.rename(folder, "Oct notebook", "Harbour");
             check(new File(folder, "Harbour/001.png").isFile() && new File(folder, "Harbour.pdf").isFile() && !new File(folder, "Oct notebook.pdf").exists(), "Renamed: its copies follow");
             NotebookExport.delete(folder, "Harbour");

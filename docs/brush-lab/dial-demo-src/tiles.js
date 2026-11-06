@@ -78,6 +78,8 @@ const SETUP = {
   "carry.pload": { base: { carry: ["drag", { load: 1 }] }, shade: .6 },
   "carry.pmin": { base: { carry: ["drag", { load: 1, pload: .3 }] }, shade: .6 },
   "carry.flood": { box: true, shade: .5 },
+  // Press to Push takes Soften away under a firm press: drawn on an all-stump Smear.
+  "carry.press": { base: { carry: ["smudge", { soften: 1 }] } },
   "carry:stayin": { box: true, shade: .5 },
   "life.window": { at: .8, base: { medium: ["wash", { wet: .9, pool: .5, bloom: .5 }] } },
   "life.drying": { after: AFTER, base: SLOW },
@@ -198,6 +200,8 @@ const DIAL_SAY = {
   "carry.pmin": "How full each stroke starts.",
   "carry.soften": "Softens like a blending stump rather than pushing paint.",
   "carry.flood": "How far the paint floods on inside the lines.",
+  "carry.press.smudge": "A light touch softens in place, a firm press pushes paint along.",
+  "carry.press.water": "A light touch wets the paint so it runs, a firm press blots it off.",
   "paper.tooth": "Smooth to rough: breaks up the edge of a line and brings out granulation.",
   "life.window": "How far behind the nib the mark stays wet. Shown with the pen still down.",
   "life.drying": "How long the wash stays wet after lift.",
@@ -266,7 +270,7 @@ function valueName(part, k, key, v) {
   const s = DIALS[part][key];
   return s.choices ? optLabel(part, k, key, v | 0) : fmtDial(part, key, v);
 }
-function sweepValues(part, k, key, n) {
+function tileSweepValues(part, k, key, n) {
   const s = DIALS[part][key];
   if (s.choices) return (optOf(part, k, key)).map((_, i) => i);
   const [lo, hi] = rangeOf(part, k, key);
@@ -279,21 +283,29 @@ const optOf = (part, k, key) => (choiceOf(part, k).opts || {})[key] || DIALS[par
 // A tile: { id, part, k, key, title, say, also, sweep, values, names, ends, setup, jobs(i) } where sweep is "range"
 // (low to high), "options" (each in turn), "time" (the stroke as it happens and after), "after" (each setting over time
 // after lift) or "still".
-function demoTiles() {
+// app (optional): only what the app's Brush Lab offers, with its labels ({ part: { choices: { k: { label, dials: { key:
+// label } } } } }, Brush Studio's Guide: docs/brush-lab/app-features.json); without it, every choice and dial of the lab.
+function demoTiles(app) {
   const tiles = [];
   for (const part of DEMO_PARTS) {
-    const P = PART_SETUP[part];
-    for (const c of CHOICES[part]) tiles.push(choiceTile(part, c, P));
+    const P = PART_SETUP[part], A = app && app[part];
+    if (app && !A) continue;  // a part the app's Brush Lab doesn't show (Paper, its Texture on Medium's card since 2026-11-01)
+    const choices = CHOICES[part].filter(c => !A || A.choices[c.k]);
+    const name = c => A ? A.choices[c.k].label : c.label, dialName = (c, key) => A ? A.choices[c.k].dials[key] : dialLabel(part, c.k, key);
+    for (const c of choices) tiles.push(choiceTile(part, c, P, name(c), c.macro && dialName(c, c.macro)));
     const seen = new Map();
-    for (const c of CHOICES[part]) for (const key of c.dials) {
-      if (DIALS[part][key].hide) continue;
-      const label = dialLabel(part, c.k, key), id = key + "|" + label;
+    for (const c of choices) for (const key of c.dials) {
+      if (DIALS[part][key].hide || (A && !(key in A.choices[c.k].dials))) continue;
+      const label = dialName(c, key), id = key + "|" + label;
       if (!seen.has(id)) seen.set(id, { key, label, on: [] });
       seen.get(id).on.push(c);
     }
-    for (const { key, label, on } of seen.values()) tiles.push(dialTile(part, key, label, on, P));
+    for (const { key, label, on } of seen.values()) tiles.push(dialTile(part, key, label, on, P, on.length === choices.length ? null : on.map(name)));
   }
-  tiles.forEach((t, i) => { t.id = i; });
+  // A stable anchor each (Studio's ⓘ buttons link to it): part-choice, or part.dial, with its first choice where the
+  // dial has a second label on other choices (Smudge's Press to Push and Press to Lift).
+  const twice = t => tiles.filter(u => !u.choice && u.part === t.part && u.key === t.key).length > 1;
+  tiles.forEach((t, i) => { t.id = i; t.anchor = t.part + (t.choice ? "-" + t.k : "." + t.key + (twice(t) ? "." + t.on[0] : "")); });
   return tiles;
 }
 function tileBrush(part, k, P, S) {
@@ -301,22 +313,22 @@ function tileBrush(part, k, P, S) {
   parts[part] = [k, mine && mine[0] === k ? mine[1] : null];
   return demoBrush(parts);
 }
-function choiceTile(part, c, P) {
+function choiceTile(part, c, P, title, macroName) {
   const S = Object.assign({}, SETUP[part + ":" + c.k]);
   const B0 = tileBrush(part, c.k, P, S);
   if (part === "hand") B0.hand = normPart("hand", freshPart("hand", c.k));
   const life = part === "life" && c.k !== "none" && c.k !== "wetpaint";
-  const t = { part, k: c.k, key: null, title: c.label, choice: true, S, P, B0,
+  const t = { part, k: c.k, key: null, title, choice: true, S, P, B0,
     say: S.say || c.blurb || (part === "paper" ? PAPER_SAY[c.k] || capital(PAPER_WORDS[c.k] || c.label) + "." : part === "hand" ? capital(handWords(B0)) + "." : "") };
   if (part === "life") { t.sweep = life ? "time" : "still"; t.values = [null]; t.names = [""]; }
   else if (c.macro && !S.still) {
-    t.dialKey = c.macro; t.sweep = "range"; t.values = sweepValues(part, c.k, c.macro, 9);
+    t.dialKey = c.macro; t.sweep = "range"; t.values = tileSweepValues(part, c.k, c.macro, 9);
     t.names = t.values.map(v => valueName(part, c.k, c.macro, v)); t.ends = c.words || [t.names[0], t.names[t.names.length - 1]];
-    t.sub = "Basic slider: " + dialLabel(part, c.k, c.macro);
+    t.sub = "Basic slider: " + (macroName || dialLabel(part, c.k, c.macro));
   } else { t.sweep = "still"; t.values = [null]; t.names = [""]; }
   return t;
 }
-function dialTile(part, key, label, on, P) {
+function dialTile(part, key, label, on, P, also) {
   // Drawn on the choice the setup names, or whose part the setup gives, else the first that has the dial.
   const S0 = SETUP[part + "." + key] || {}, want = S0.on || (S0.base && S0.base[part] && S0.base[part][0]);
   const c = on.find(x => x.k === want) || on[0], S = setupOf(part, key, c.k);
@@ -325,9 +337,9 @@ function dialTile(part, key, label, on, P) {
   if (part === "hand" && !(S.base && S.base.hand)) B0.hand = normPart("hand", freshPart("hand", "steady"));
   const s = DIALS[part][key], after = !!S.after;
   const t = { part, k: c.k, key, dialKey: key, title: label, choice: false, S, P, B0, say: sayOf(part, key, c.k),
-    also: on.length === CHOICES[part].length ? null : on.map(x => x.label) };
+    also, on: on.map(x => x.k) };
   t.sweep = after ? "after" : s.choices ? "options" : "range";
-  t.values = sweepValues(part, c.k, key, after ? 3 : 9);
+  t.values = tileSweepValues(part, c.k, key, after ? 3 : 9);
   t.names = t.values.map(v => valueName(part, c.k, key, v));
   t.ends = [t.names[0], t.names[t.names.length - 1]];
   return t;

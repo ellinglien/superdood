@@ -216,7 +216,7 @@ const greyText = shade => Math.round(shade * 100) + "% grey";
 // The code under the name typed (a code carries its name as a slug: "Blackwing 602" reads back as "blackwing").
 function codeNamed(B, name) { const C = cloneBrush(B); if (name.trim()) C.name = name.trim(); return encodeM(C); }
 // Brush Studio opens the brush its link's # names (a share code: letters, digits, ".", "_" and "-" pass the host).
-const STUDIO = "https://claude.ai/artifact/7UUw39J6FrpKLFqspxr7QF";
+const STUDIO = "https://superdood.org/studio/";
 function nameCode() {
   if (!S.res) return;
   $("code").value = codeNamed(S.res.B, $("tool-name").value);

@@ -6,7 +6,7 @@ import java.util.Objects;
 
 /**
  * A six-part brush: a name, a 32-bit seed (read unsigned), a style, and per part one choice and its dials
- * (parts.js 134–168, 386–390). Treat a Brush's as a value; change a copy. Pure, checked on the desktop.
+ * (parts.js 134–168, 386–390), Later's Off when it has none. Treat a Brush's as a value; change a copy. Pure, checked on the desktop.
  */
 final class ModularBrush {
     /** One part: a choice and its dials' values, in the choice's dial order. */
@@ -83,6 +83,20 @@ final class ModularBrush {
         if (part.choice.part != p) throw new IllegalArgumentException(part.choice + " isn't a " + p + " choice");
         parts[p.ordinal()] = part;
     }
+    /**
+     * This brush as it draws on {@code surface} (the surface spec, 2026-11-01: "every brush follows the page's surface"):
+     * its Paper part that surface, at its own Texture, how much of it shows through; the rest as it is. Its own code,
+     * paper and all, is kept unchanged ({@code this} is never changed). Null, or the paper it has: this brush.
+     */
+    ModularBrush onSurface(BrushTexture surface) {
+        Part paper = part(BrushPart.PAPER);
+        if (surface == null || paper.choice.texture() == surface) return this;
+        Part on = new Part(PartChoice.of(BrushPart.PAPER, surface.ordinal()));
+        on.set(PartDial.TOOTH, paper.get(PartDial.TOOTH));
+        ModularBrush b = copy();
+        b.set(BrushPart.PAPER, on);
+        return b;
+    }
 
     /**
      * Whether {@code life} moves with the page's tilt while wet: Slow with a gravity dial up. Such a brush dries over the
@@ -109,13 +123,80 @@ final class ModularBrush {
 
     /**
      * Smudge's Own paint ({@code carry}, the brush's Smudge part): the share of its own paint the brush lays. 1 for Off,
-     * 0 for Clear Water, which lays only water; else the dial (parts.js ownPaint).
+     * 0 for Clear Water, which lays only water, Scrape, a blade, and Reprint, which lays marks there again; else the dial (parts.js ownPaint).
      */
     static double ownPaint(Part carry) {
-        return carry.choice == PartChoice.OFF ? 1 : carry.choice == PartChoice.CLEAR_WATER ? 0 : carry.get(PartDial.LOAD, 1);
+        return carry.choice == PartChoice.OFF ? 1 : carry.choice == PartChoice.CLEAR_WATER || carry.choice == PartChoice.SCRAPE || carry.choice == PartChoice.REPRINT ? 0 : carry.get(PartDial.LOAD, 1);
     }
-    /** parts.js normBrush: every part normalized. Returns this. */
-    ModularBrush normalize() { for (Part p : parts) p.normalize(); return this; }
+    /**
+     * parts.js normBrush: a retired Drying mischief split ({@link #split}), every part normalized, and a Later that doesn't
+     * go with Drying ({@link PartChoice#goesWith}: a part locked or rolled apart) given its own drying, keeping what it
+     * can. Returns this.
+     */
+    ModularBrush normalize() {
+        split();
+        for (Part p : parts) p.normalize();
+        PartChoice later = choice(BrushPart.LATER);
+        if (!later.goesWith(choice(BrushPart.LIFE))) set(BrushPart.LIFE, switchTo(part(BrushPart.LIFE), later.drying()).normalize());
+        // Vector Ink: what it can't draw sharp set aside, whatever made the brush (a roll, a swap, a code).
+        VectorInk.tidy(this);
+        return this;
+    }
+
+    /** Whether it has a Later: anything but Off. */
+    boolean later() { return choice(BrushPart.LATER) != PartChoice.LATER_OFF; }
+    /** Whether its paint floats (Float), its Later's or (not yet split, {@link #split}) its retired Drying's. */
+    boolean floats() { return choice(BrushPart.LATER) == PartChoice.LATER_FLOAT || choice(BrushPart.LIFE) == PartChoice.FLOAT; }
+    /** Its Later, or a retired Drying mischief's (not yet split): what changes the page after the pen lifts. */
+    PartChoice mischief() { PartChoice retired = choice(BrushPart.LIFE).later(); return retired != null ? retired : choice(BrushPart.LATER); }
+    /**
+     * A retired Drying mischief (an old code's, a roll's) as Drying and Later, as the engine laid it: Float, Fading and
+     * Lemon Juice on a fresh Quick, Mold on Slow at its drying time with no settling of its own; their other dials
+     * Later's (Float's floating time its Floating Time). Returns this.
+     */
+    ModularBrush split() {
+        Part life = part(BrushPart.LIFE);
+        PartChoice later = life.choice.later();
+        if (later == null) return this;
+        Part l = new Part(later), dry = new Part(later.drying());
+        for (PartDial d : later.dials) if (life.has(d)) l.set(d, life.get(d));
+        if (later == PartChoice.LATER_FLOAT) l.set(PartDial.FLOAT_TIME, life.get(PartDial.DRYING));
+        if (later == PartChoice.LATER_MOLD) { dry.set(PartDial.DRYING, life.get(PartDial.DRYING)); dry.set(PartDial.SETTLE, 0); }
+        set(BrushPart.LIFE, dry);
+        set(BrushPart.LATER, l);
+        return this;
+    }
+    /**
+     * Its Later as the retired Drying choice that holds it (Float, Mold on Slow's drying time, Fading, Lemon Juice), its
+     * dials Later's; null without a Later. What the engine lays for Float and Mold, which are ways of drying.
+     */
+    Part retired() {
+        Part later = part(BrushPart.LATER);
+        PartChoice old = later.choice.retired();
+        if (old == null) return null;
+        Part j = new Part(old);
+        for (PartDial d : old.dials) if (later.has(d)) j.set(d, later.get(d));
+        if (old == PartChoice.FLOAT) j.set(PartDial.DRYING, later.get(PartDial.FLOAT_TIME));
+        if (old == PartChoice.HALO) j.set(PartDial.DRYING, part(BrushPart.LIFE).get(PartDial.DRYING, old.defaultOf(PartDial.DRYING)));
+        return j;
+    }
+    /**
+     * The brush as a version before Later holds it, on a copy: its Later in Drying as the retired choice ({@link
+     * #retired}), when splitting that gives this brush back exactly; itself with no Later, and null when a version before
+     * Later can't hold it (a Fading on Slow, a Quick with its own Wet Edge under Float). Codes are written so
+     * ({@link ModularCode#settings}), so every brush older versions had keeps its code and an older version reads it.
+     * Null for Later's media too, never Drying's.
+     */
+    ModularBrush joined() {
+        if (!later()) return this;
+        Part retired = retired();
+        if (retired == null) return null;
+        ModularBrush j = copy();
+        j.set(BrushPart.LIFE, retired);
+        j.set(BrushPart.LATER, new Part(PartChoice.LATER_OFF));
+        ModularBrush back = j.copy().split();
+        return back.part(BrushPart.LIFE).sameAs(part(BrushPart.LIFE)) && back.part(BrushPart.LATER).sameAs(part(BrushPart.LATER)) ? j : null;
+    }
     ModularBrush copy() { return copy(seed); }
     /** A copy with another seed. */
     ModularBrush copy(long seed) {

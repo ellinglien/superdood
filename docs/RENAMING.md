@@ -7,23 +7,24 @@ and file name in the code builds on it.
 
 ## Steps
 
-1. In `AppName.java`: put the old name first in `FORMER` (`{"Inkwash"}` when Inkwash became Scribulor,
-   2026-10-24), then change `NAME`. Keep `NAME` on one line as it is (Gradle parses it; `AppRenameChecks` guards that).
+1. In `AppName.java`: put the old name first in `FORMER` (`{"My Bad Drawings", "Scribulor", "Inkwash"}` when My Bad Drawings became Superdood,
+   2026-11-04), then change `NAME`. Keep `NAME` on one line as it is (Gradle parses it; `AppRenameChecks` guards that).
 2. The loading screen is the owner's drawing of the name (`drawable-nodpi/splash_drawing.png`, since the rename to
-   My Bad Drawings, 2026-10-29): ask for a new drawing. (Until then a vector of the name was made with
+   My Bad Drawings, 2026-10-29; Superdood's, 2026-11-04): ask for a new drawing and render it from the notebook with
+   `scripts/java/SplashPage.java` (docs/BRANDING.md); the guest page (`scripts/live-probe/live.html`) shows the same file. (Until then a vector of the name was made with
    `scripts/java/SplashName.java`; `AppRenameChecks` checks it only while `drawable/splash_name.xml` exists.)
 3. Run `scripts/test_inkwash.sh`, build, and check the label:
    `aapt dump badging app/build/outputs/apk/release/app-release.apk | grep application-label`.
 4. Outside the app:
    - README.md (title, icon alt text), CHANGELOG.md, any store/release notes.
    - GitHub repo name (`ellinglien/inkwash`; GitHub redirects the old URL) and the local remote. Still `inkwash`
-     after the Scribulor rename: the owner's call.
+     after the Scribulor rename: the owner's call. (Superdood, 2026-11-04: the public repo `ellinglien/my-bad-drawings` left as it is.)
    - docs/BRANDING.md (icon), docs/TEXT-STYLE.md (its examples say "EXPORT/Scribulor", "Scribulor's text").
    - Web tools' titles and text: docs/wild-slots/roll-tester.html ("Scribulor Roll Tester"), docs/brush-lab
      (web-lab, studio, studio-src, match-lab, dial-demo) where they say Scribulor.
    - THIRD_PARTY_NOTICES.md / app/src/main/assets/THIRD_PARTY_NOTICES.txt, if a heading names the app.
    - app/src/main/assets/words/default.txt (a comment names Document/Scribulor).
-   - Wording in CLAUDE.md and docs (`grep -rn Scribulor --exclude-dir=build .`). Device scripts
+   - Wording in CLAUDE.md and docs (`grep -rn "<old name>" --exclude-dir=build .`; CHANGELOG's past entries and docs/superpowers stay as written). Device scripts
      use the app id (`ing.ell.mybaddrawings`), which stays.
 
 ## What the renamed app does by itself
@@ -34,11 +35,14 @@ On its first launch with shared storage allowed (`DrawingStorage.carryOver`, `Ap
   or `AppName.NAME` (e.g. a Documents/<name>/ folder for PDFs: its new name follows; what is in the old one stays
   unless it is added to `DrawingStorage.carryOver`'s parents).
 - Moves Document/Old, EXPORT/Old and Pictures/Old into Document/New, EXPORT/New and Pictures/New
-  (and the bench/checks variants' "Old bench" folders likewise). A whole folder is renamed when
-  the new one isn't there; otherwise entries merge one by one.
+  (and the bench/checks variants' "Old bench" folders likewise), and every folder beside them named "Old …"
+  ("Document/Old PDFs" to "Document/New PDFs"; not another build's "Old bench …", `AppRename.VARIANTS`). A whole
+  folder is renamed when the new one isn't there; otherwise entries merge one by one. The rules have a round
+  (`DrawingStorage.CARRIED`, "New/2"): a new rule runs once more on a tablet that finished the last round.
 - Never overwrites: a clash keeps both, the incoming file as "name (2).ext".
-- Renames "Old brushes.txt", "Old prompts.txt", "Old import.txt", "Old import (added).txt" and the
-  "Old stamps" folder to the new name, unless a new one is already there (then the old one stays,
+- Renames "Old brushes.txt", "Old prompts.txt", "Old import.txt", "Old import (added).txt", "Old toolbar.txt" and the
+  "Old stamps" folder to the new name (`AppRename.OWN`; everything else the app keeps, the notebooks, their PDFs,
+  word packs, live-probe.txt and .handover, is inside Document/Old and moves with it), unless a new one is already there (then the old one stays,
   untouched, beside it).
 - Still imports "*.old.txt" and "Old import.txt" brush files.
 - Only renames, never copies and deletes; removes a folder only once empty. What fails to move stays
@@ -55,7 +59,7 @@ On its first launch with shared storage allowed (`DrawingStorage.carryOver`, `Ap
   preferences, a second icon).
   It changed once, on 2026-10-30, from `app.helpyy.inkwash` (named for the owner's private project) for the
   public release. The old app can't pass its private files to a new id, so one last build under the old id and key
-  (`./gradlew -PlegacyId :app:assembleRelease`) leaves them in `Document/My Bad Drawings/.handover/`, and the new app
+  (`./gradlew -PlegacyId :app:assembleRelease`) leaves them in `Document/<name>/.handover/` (then `Document/My Bad Drawings`), and the new app
   takes them on its first launch with shared storage (`HandOver`, `DrawingStorage.takeHandOver`). Don't do it again
   without the same handover.
 - The Java package `io.github.mpdairy.monopaint`.

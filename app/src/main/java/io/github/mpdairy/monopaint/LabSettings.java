@@ -6,7 +6,6 @@ import android.graphics.Paint;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
-import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -25,8 +24,8 @@ import java.util.function.Supplier;
 
 /**
  * Brush Lab's settings column, <b>Adjust</b>, which never scrolls (the design pass, docs/archive/design-pass-2026-10-23.md):
- * its head row, as tall as the scratch pad's so the two start level (ADJUST, the one header style, and at its right
- * Start from ▾: the styles in a menu over the column, a pick a new brush in that style), then the brush's {@link
+ * its head row, as tall as the scratch pad's so the two start level (ADJUST, the one header style; Start from ▾ at its
+ * right until 2026-11-03, now New ▾'s styles, {@link #newMenu}), then the brush's {@link
  * PartCard} modules, two to a row in {@link BrushPart#SHOWN}'s order, one slider each (their end words kept: fine and
  * broad, dry and wet), with their locks and dice (always what Advanced showed, 2026-10-29: "let's just have it advanced");
  * tapping a module opens that part (the part {@code picked}, whose swap panel opens beside it): the six become slim
@@ -62,9 +61,7 @@ final class LabSettings {
     private LinearLayout column;
     private BrushPart picked;
     // The views, built once per kind of brush (and per open part) and then updated in place (e-ink), and what they show.
-    private String built, styleShown;
-    private LabButton styleButton;
-    private View flyout;
+    private String built;
     private final Map<BrushPart, PartCard> cards = new EnumMap<>(BrushPart.class);
     /** The six-part brush the modules last showed (a copy: the lab changes its own in place), to draw again only the parts that changed. */
     private ModularBrush partsShown;
@@ -94,7 +91,7 @@ final class LabSettings {
     void render(BrushPart picked) {
         this.picked = picked;
         ModularBrush parts = lab.parts();
-        String kind = picked != null ? "open " + picked : "parts";
+        String kind = (picked != null ? "open " + picked : "parts") + " " + layout.rows;
         if (!kind.equals(built)) { built = kind; build(parts); }
         show(parts);
     }
@@ -102,28 +99,26 @@ final class LabSettings {
     View card(BrushPart part) { return cards.get(part); }
 
     /**
-     * The head row (ADJUST, Start from ▾), then the six modules; or, a part open, the six slim and the open card. Each as
-     * tall as the layout says.
+     * The head row (ADJUST), then the six modules and After's alone in a fourth row; or, a part open, the same slim and the open card. Each as tall as the layout says.
      */
     private void build(ModularBrush parts) {
         box.removeAllViews();
         cards.clear();
-        styleButton = null; flyout = null; styleShown = null;
         openBody = null; partsShown = null; rowsShown = null; live.clear();
         column = LabUi.column(context);
         box.addView(column, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout head = LabUi.header(context, "Adjust");
-        LinearLayout.LayoutParams stylePlace = new LinearLayout.LayoutParams(0, -1, 1); stylePlace.leftMargin = dp(8);
-        head.addView(styleButton(), stylePlace);
         column.addView(head, new LinearLayout.LayoutParams(-1, dp(layout.headRow)));
         // ui.js 324: a part open, the six slim and the open card under them, across the column's padding.
         boolean open = picked != null;
-        for (int row = 0; row < 3; row++) {
+        for (int row = 0; row < layout.rows; row++) {
             LinearLayout pair = LabUi.row(context);
             for (int i = 0; i < 2; i++) {
                 LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(0, -1, 1);
                 if (i > 0) place.leftMargin = dp(layout.moduleGap);
-                pair.addView(card(BrushPart.SHOWN.get(row * 2 + i), open, row), place);
+                // Later alone in the fourth row, a module's width.
+                List<BrushPart> inRow = LabLayout.row(row);
+                pair.addView(i < inRow.size() ? card(inRow.get(i), open, row) : new View(context), place);
             }
             LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(-1, dp(open ? layout.slim : layout.module));
             place.topMargin = dp(row == 0 ? layout.gap : layout.moduleGap);
@@ -140,42 +135,29 @@ final class LabSettings {
         return card;
     }
     private void show(ModularBrush parts) {
-        ModularStyle style = parts.style;
-        String styleNow = style.name;
-        if (!styleNow.equals(styleShown)) {
-            styleShown = styleNow;
-            if (styleButton != null) { styleButton.setText(LabLayout.START_FROM + style.label + " ▾"); styleButton.setContentDescription(LabLayout.START_FROM + style.label); }
-        }
         BrushLab.Redraw redraw = BrushLab.redraw(partsShown, parts);
         if (!cards.isEmpty()) partsShown = parts.copy();
         for (Map.Entry<BrushPart, PartCard> card : cards.entrySet()) card.getValue().show(parts, card.getKey() == picked, redraw);
         if (openBody != null) showOpen(parts);
     }
 
-    // Start from and Randomize
+    // New's styles and Randomize
 
-    /** "Start from Watercolour ▾" in the head row: it opens the styles over the column; a pick makes a new brush in it. */
-    private View styleButton() {
-        styleButton = new LabButton(context, 0, LabLayout.START_FROM, false);
-        styleButton.setMinHeight(0); styleButton.setMinimumHeight(0);
-        styleButton.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        styleButton.setEllipsize(TextUtils.TruncateAt.END);
-        styleButton.setOnClickListener(v -> showFlyout(flyout == null));
-        return styleButton;
-    }
-    /** The 15 style chips in a menu's panel over the column, under its head row (ui.js 314); a pick closes it. */
-    private void showFlyout(boolean open) {
-        if (flyout != null) { box.removeView(flyout); flyout = null; }
-        if (!open) return;
+    /**
+     * New ▾'s menu ({@link Beside}, opened from {@code anchor}): the style chips under "Start From", the brush's own
+     * marked (Start from ▾'s over the column until 2026-11-03); a pick makes a new brush in it ({@link BrushLab#newBrush}).
+     */
+    void newMenu(View anchor) {
         LabUi.Wrap chips = new LabUi.Wrap(context, dp(6));
         ModularBrush parts = lab.parts();
         for (ModularStyle style : ModularStyle.shown()) {
-            LabButton chip = styleChip(LabButton.chip(context, style.label), style);
+            LabButton chip = LabButton.chip(context, style.label);
             chip.setMinHeight(dp(44)); chip.setMinimumHeight(dp(44));
             chip.setOn(style == parts.style);
+            chip.setOnClickListener(v -> { beside.close(); lab.newBrush(style); changed.run(); });
             chips.addView(chip);
         }
-        sheet("Start From", chips);
+        beside.open(anchor, panel(LabLayout.START_FROM, chips));
     }
     /**
      * A choice dial as a menu button ({@link LabLayout#menu}: its options don't fit its row, and the card has no room to
@@ -190,7 +172,6 @@ final class LabSettings {
         button.setMinHeight(0); button.setMinimumHeight(0);
         button.setEnabled(!locked);
         button.setOnClickListener(v -> {
-            showFlyout(false);
             LabUi.Wrap chips = new LabUi.Wrap(context, dp(6));
             for (int option = 0; option < options.length; option++) {
                 int chosen = option;
@@ -204,16 +185,7 @@ final class LabSettings {
         });
         return button;
     }
-    /** The flyout: {@code title} and {@code chips} in a 2 dp ink frame over the column, under its head row. */
-    private void sheet(String title, View chips) {
-        if (flyout != null) { box.removeView(flyout); flyout = null; }
-        View sheet = panel(title, chips);
-        FrameLayout.LayoutParams place = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
-        place.setMargins(0, dp(layout.headRow), 0, 0);
-        flyout = sheet;
-        box.addView(sheet, place);
-    }
-    /** {@code title} and {@code chips} in a menu's panel ({@link Theme#menu}): the style flyout's, and a menu button's. */
+    /** {@code title} and {@code chips} in a menu's panel ({@link Theme#menu}): New's styles', and a menu button's. */
     private View panel(String title, View chips) {
         LinearLayout sheet = LabUi.column(context);
         sheet.setBackground(Theme.menu(context));
@@ -223,11 +195,6 @@ final class LabSettings {
         LinearLayout.LayoutParams under = new LinearLayout.LayoutParams(-1, -2); under.topMargin = dp(6);
         sheet.addView(chips, under);
         return sheet;
-    }
-    /** {@code chip} for {@code style}: a tap makes a new six-part brush in it (nothing for the brush's own style). */
-    private LabButton styleChip(LabButton chip, ModularStyle style) {
-        chip.setOnClickListener(v -> { showFlyout(false); lab.pickStyle(style); changed.run(); });
-        return chip;
     }
     /**
      * Randomize, big and ink-filled across the lab's foot (the owner, 2026-10-23: "make RANDOMIZE a black button, align dice
@@ -304,11 +271,10 @@ final class LabSettings {
             List<PartDial> under = layout.handRows(parts);
             int rows = under.size(), row = layout.handRow(rows);
             openBody.addView(new HandGrid(context, lab, layout.handName, layout.handCell(rows), changed, () -> render(picked)), new LinearLayout.LayoutParams(-1, -2));
-            for (PartDial d : under) openBody.addView(d != null ? dialRow(d) : greySet(parts), new LinearLayout.LayoutParams(-1, dp(row)));
+            for (PartDial d : under) openBody.addView(d != null ? dialRow(d) : greySet(), new LinearLayout.LayoutParams(-1, dp(row)));
             return;
         }
-        List<PartDial> dials = new java.util.ArrayList<>(lab.dials(part));
-        dials.removeIf(d -> !layout.shows(parts.choice(part), d));
+        List<PartDial> dials = layout.openDials(lab, part);
         if (dials.isEmpty()) {
             // A choice with no dials (Drying's Instant, Smudge's Off) says what it means, as its module does.
             TextView means = LabUi.text(context, ModularWords.noMacro(parts.choice(part)), TypeStyle.CAPTION);
@@ -322,17 +288,8 @@ final class LabSettings {
         for (PartDial dial : dials) openBody.addView(dialRow(dial), new LinearLayout.LayoutParams(-1, dp(stacked(dial) ? LabLayout.stackedRow() : height)));
     }
     /** Grey Shift's set: the brush's greys as it lays them, each taken in or left out by a tap ({@link GreySet}). */
-    private View greySet(ModularBrush parts) {
-        int n = SwatchPicker.size(SwatchPicker.palette(parts));
-        int[] tones = new int[n];
-        double[] darkness = new double[n];
-        boolean[] in = new boolean[n];
-        for (int k = 0; k < n; k++) {
-            darkness[k] = SwatchPicker.darkness(parts, lab.slots.swatches, k);
-            tones[k] = ModularSizes.swatch(parts, darkness[k]);
-            in[k] = SwatchPicker.in(parts, k);
-        }
-        View set = new GreySet(context, tones, darkness, in, !lab.locked(PartDial.SHIFT), k -> { if (lab.toggleGrey(k)) changed.run(); });
+    private View greySet() {
+        View set = new GreySet(context, lab.greys(), !lab.locked(PartDial.SHIFT), k -> { if (lab.toggleGrey(k)) changed.run(); });
         return row(null, set, null, PartDial.SHIFT_GREYS.label, false, null, null);
     }
     /** Whether {@code dial}'s segments lie under its label, not beside it (LabLayout.segmentsBeside). */
@@ -375,12 +332,13 @@ final class LabSettings {
         String name = p.choice.labelOf(dial);
         double value = p.get(dial);
         Runnable lock = lab.locked(dial.part) ? null : () -> lab.toggleLock(dial), roll = () -> lab.roll(dial);
-        // Erasable moves only by hand (no roll changes it, ModularStyle.keepErasable): no die, so no lock either. Resist's is wax or fluid, and rolls.
-        if (dial == PartDial.ERASABLE && p.choice != PartChoice.RESIST) { lock = null; roll = null; }
-        if (dial == PartDial.DIR) return row(null, fastSwitch((int) value == 1, locked, lab::flipFast), null, name, locked, lock, roll);
-        if (dial.choice() && dial != PartDial.DIR && layout.menu(dial, options(dial)))
+        // Erasable moves only by hand: no die, so no lock either (LabLayout.rolls).
+        if (!LabLayout.rolls(p.choice, dial)) { lock = null; roll = null; }
+        LabLayout.RowKind kind = layout.rowKind(dial, options(dial));
+        if (kind == LabLayout.RowKind.SWITCH) return row(null, fastSwitch((int) value == 1, locked, lab::flipFast), null, name, locked, lock, roll);
+        if (kind == LabLayout.RowKind.MENU)
             return row(label(LabLayout.rowLabel(p.choice, dial), active, locked), menuButton(dial, name, options(dial), (int) value, locked), null, name, locked, lock, roll);
-        if (dial.choice() && stacked(dial)) {
+        if (kind == LabLayout.RowKind.STACKED) {
             // Its label on a line of its own, the segments under it with the lock and die: they don't fit beside it at 12 sp.
             LinearLayout both = LabUi.column(context);
             TextView label = label(name, active, locked);
@@ -390,7 +348,7 @@ final class LabSettings {
                     new LinearLayout.LayoutParams(-1, dp(LabLayout.SEGMENT + LabLayout.ROW_RULE)));
             return both;
         }
-        if (dial.choice()) return row(label(name, active, locked), segments(p.choice.optionsOf(dial), (int) value, locked, option -> lab.choose(dial, option)), null, name, locked, lock, roll);
+        if (kind == LabLayout.RowKind.SEGMENTS) return row(label(name, active, locked), segments(p.choice.optionsOf(dial), (int) value, locked, option -> lab.choose(dial, option)), null, name, locked, lock, roll);
         double[] range = p.choice.range(dial);
         TextView shown = value(dial.shown(value, lab.parts().part(dial.part)), active);
         BandSlider slider = slider(new BandSlider(context, range[0], range[1], value, active ? b.style.band(p.choice, dial) : null), locked, shown,

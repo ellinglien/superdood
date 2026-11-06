@@ -51,7 +51,7 @@ public final class CrayonChecks {
     }
 
     static void codes() {
-        check(PartChoice.CRAYON.index() == 7 && PartChoice.of(BrushPart.MEDIUM, 7) == PartChoice.CRAYON && PartChoice.of(BrushPart.MEDIUM, 8) == null
+        check(PartChoice.CRAYON.index() == 7 && PartChoice.of(BrushPart.MEDIUM, 7) == PartChoice.CRAYON && PartChoice.of(BrushPart.MEDIUM, 8) == PartChoice.VECTOR && PartChoice.of(BrushPart.MEDIUM, 9) == null
                 && PartChoice.CRAYON.key.equals("crayon") && PartChoice.CRAYON.label.equals("Crayon"), "Crayon is Medium choice 7");
         check(PartModelChecks.dials(PartChoice.CRAYON).equals("wax scratch") && PartChoice.CRAYON.defaultOf(PartDial.WAX) == .6 && PartChoice.CRAYON.defaultOf(PartDial.SCRATCH) == 0
                 && String.join(",", PartChoice.CRAYON.optionsOf(PartDial.SCRATCH)).equals("Off,On") && PartChoice.CRAYON.macro == PartDial.WAX

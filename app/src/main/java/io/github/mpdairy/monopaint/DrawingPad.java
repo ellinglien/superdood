@@ -21,12 +21,10 @@ import android.view.View;
  *
  * <p>Pen input runs one of these gestures at a time:
  * <ul>
- * <li>a {@link DrawingStroke} for ordinary tools ({@link ToolStrokes});</li>
  * <li>a live {@link ShapePreview} for Shapes, committed at pen-up;</li>
- * <li>a Lasso loop, which lifts a {@link FloatingSelection}; while one floats, pen drags move,
- * scale and turn it, and it is placed when the pen lands elsewhere or another action begins;</li>
- * <li>a fill: tap for a flood fill, or drag a gradient axis and then pick its second color;</li>
- * <li>eyedropper sampling while the color picker is active.</li>
+ * <li>while a {@link FloatingSelection} floats, pen drags move, scale and turn it, and it is placed
+ * when the pen lands elsewhere or another action begins;</li>
+ * <li>the Dropper's sampling while it is taken up.</li>
  * </ul>
  * Two fingers pinch and pan when navigation is unlocked. Wet paint keeps blending in
  * idle time between input events, except under a watercolor brush, which waits for pen-up.
@@ -78,6 +76,8 @@ final class DrawingPad extends View {
     /** Panel area closed controls left stale (their fast ink, or a popup over the page), presented again through {@link #direct}; see {@link #eraseFastInk} and {@link #uncovered}. */
     private final RectF fastInk = new RectF();
     private int fastInkRefreshes;
+    /** The last area {@link #eraseFastInk} blanked, panel pixels (PageNavigationChecks). */
+    private final RectF blanked = new RectF();
     private final NativePen input;
     private int pointer = -1, retries;
     private final StrokeTiming timing = new StrokeTiming();
@@ -121,22 +121,8 @@ final class DrawingPad extends View {
     /** Cut Stamp: the slot (or the stamp tool, {@link InkWash#STAMP}) whose Stamp the lasso cuts a nib for. */
     int cutting;
 
-    // Wet paint
-    WetWatercolor wet;
-    private boolean wetChanged, wetScheduled;
     /** A six-part Drying wash settling after lift; made with the first stroke that needs it. */
     private DryingTicker drying;
-    private final WetWorkBudget wetBudget = new WetWorkBudget();
-    private final android.os.MessageQueue wetQueue = android.os.Looper.getMainLooper().getQueue();
-    private final android.os.MessageQueue.IdleHandler wetIdle = () -> { advanceWet(); return false; };
-    private final Runnable wetStep = () -> wetQueue.addIdleHandler(wetIdle);
-    private long lastWetComputeNanos, lastWetRenderNanos, lastWetPresentNanos, wetMaxSliceNanos;
-    /** When running wet paint last reached the panel; flowing water shows itself at most every {@link #WET_SHOW_MS}. */
-    private long lastWetShown;
-    private static final int WET_SHOW_MS = 120;
-    /** When the wet paint's current frame began, to pace flowing water. */
-    private long wetFrameStarted;
-    private int wetSliceCount;
 
     // Shapes
     private ShapePreview shapeStroke;
@@ -149,13 +135,8 @@ final class DrawingPad extends View {
      */
     boolean shapesOn;
     ToolSettings shapes = ToolSettings.defaults(ToolSettings.Tool.SHAPES);
-    /** This gesture's shape or flat fill is laid as a watercolor wash: see {@link WatercolorWash}. */
-    private boolean washing;
 
     // The lasso and floating selections
-    /** The lasso's loop so far, page x, y pairs, of which {@link #lassoShown} points are drawn; empty between loops. */
-    private float[] lasso = new float[512];
-    private int lassoCount, lassoShown;
     /** A piece floating over the page until it is placed, or null; see {@link #placeSelection}. */
     private FloatingSelection selection;
     /** Page pixels the piece covered when last shown; empty before its first showing, which shows its hole too. */
@@ -169,6 +150,11 @@ final class DrawingPad extends View {
      * the edge strip is held ({@link EdgeHold}; the side column's Trash button's too until 2026-10-28).
      */
     boolean lassoDeletes;
+    /**
+     * Inkwash: the Lasso's bar did Cut, Delete or Duplicate (the owner, 2026-11-04: "switch back to the last used tool"): the
+     * Lasso is put away, the tool in use drawing again, as soon as no piece floats, so a duplicate is first placed.
+     */
+    private boolean lassoBack;
     /** Inkwash: the piece last cut or copied (the Lasso's menu), lifted from nowhere, to paste on any page of its size; null before. */
     private FloatingSelection kept;
     /**
@@ -183,27 +169,16 @@ final class DrawingPad extends View {
     private int selectionHandle = FloatingSelection.NONE;
     private float grabX, grabY, dragX, dragY;
 
-    // Moving previews: a shape, the gradient guide, the lasso or a selection, drawn once per display frame
+    // Moving previews: a shape or a selection, drawn once per display frame
     private boolean previewFrameScheduled;
     private long lastPreviewFrame;
     private int previewFrameCount;
     private final Runnable previewFrame = this::drawPreviewFrame;
 
-    // Fills, gradients and the eyedropper
-    FloodFill fill;
-    private FloodFill gradientFill;
-    boolean fillGesture, gradientWaiting, gradientCommit;
-    private boolean gradientReady;
-    private int gradientShade, gradientPassShade, pickPointer = -1;
-    /** The composite before a gradient preview, so the eyedropper never samples the preview itself. */
-    private byte[] gradientSample;
-    private float fillStartX, fillStartY, fillEndX, fillEndY;
-    private int fillShade, fillOriginalGray, fillTolerance;
-    private ToolSettings.Gradient fillGradient = ToolSettings.Gradient.LINEAR;
-    /** The gradient's direction, the lasso's loop or a selection's frame, whichever is shown. */
+    // The Dropper's pen
+    private int pickPointer = -1;
+    /** A selection's frame, when shown. */
     private final CanvasGuide guide;
-    private final Runnable gradientStep = this::advanceGradient;
-    private final Runnable fillStep = this::advanceFill;
 
     // Finger taps and pinch/pan
     private final MultiFingerTap fingerTaps = new MultiFingerTap();
@@ -214,13 +189,15 @@ final class DrawingPad extends View {
     private long lastNavigationFrame, lastNavigationRasterNanos, lastNavigationPresentNanos;
     private int navigationFrameCount;
     private final Runnable navigationFrame = this::drawNavigationFrame;
-    /** Fingers are ignored until this time after the pen was last near the screen. */
-    private long penGuardUntil;
+    /** When the pen was last near the screen or on it (uptime ms): fingers are ignored 250 ms after, a two- or three-finger tap {@link FingerTool#PEN_PALM_MS}. */
+    private long penSeen;
 
     /** Inkwash: the fridge magnets over the page, and the Words bin's pen ({@link WordsMode}). */
     final WordsMode words;
     /** Inkwash: a picture being placed on the page (Import Image, {@link PicturePlacer}). */
     final PicturePlacer placer;
+    /** Inkwash: the Text tool and the page's text boxes over it ({@link TextMode}). */
+    final TextMode text;
     /** The panel area Words' bin covers, which the canvas never presents over; empty when it's closed. */
     private final RectF coveredPanel = new RectF();
 
@@ -240,6 +217,7 @@ final class DrawingPad extends View {
         };
         words = new WordsMode(app, host);
         placer = new PicturePlacer(app, host);
+        text = new TextMode(app, host);
         setContentDescription("Painting canvas; use the pen to paint. Unlock Zoom to pinch and pan with two fingers.");
         input = new NativePen(this, (bitmap, region) -> bitmap.recycle());
         guide = new CanvasGuide(dp(2), dp(5), dp(48));
@@ -262,7 +240,7 @@ final class DrawingPad extends View {
         if (w <= 0 || h <= 0) return;
         if (!app.loading && document == null) {
             document = blankPage();
-            app.book = new DrawingBook(document); app.updatePages();
+            newBook(); app.updatePages();
         }
         ensureDisplay(); updateViewport();
         renderAll();
@@ -305,9 +283,11 @@ final class DrawingPad extends View {
         // pinch or pan took the readout to 100%, though the page still left room). shortcut: the unscaled raster (100%,
         // no pan) has none, its room stays paper; give it lines if a page narrower than the screen shows there.
         if (viewportBitmap != null) viewportBitmap.backdrop = true;
-        if (wasScaled != scaled) renderAll();
-        else if (viewportBitmap != null) { viewportBitmap.update(display, pageToView, null); redrawGuide(); }
-        pending.clear(); app.toolbar.refreshZoom();
+        // Inkwash: Vector Ink's lines sharp or not (a pinch shows the page's pixels, as before; sharp again at its end).
+        if (wasScaled != scaled || sharp() != composedSharp) renderAll();
+        else if (viewportBitmap != null) { viewportBitmap.update(display, pageToView, null, sharpLines(), sharpTiles, sharpStep()); redrawGuide(); }
+        pending.clear();
+        wantSharpSoon();
         if (app.inkWashBar != null) app.inkWashBar.zoom.refresh();
     }
     private void place(Matrix transform, float scale, float x, float y) {
@@ -326,6 +306,8 @@ final class DrawingPad extends View {
         return new RectF(-pad.left, -pad.top, app.root.getWidth() - pad.left, app.root.getHeight() - pad.top);
     }
     private void viewportChanged() {
+        // A zoom always refreshes, whatever Automatic Refresh says (the owner, 2026-11-06: "force it").
+        ghosted = unrefreshed = asked = true;
         disconnectDisplay(); updateViewport(); invalidate();
         if (!navigating) post(this::connectDisplay);
     }
@@ -337,6 +319,8 @@ final class DrawingPad extends View {
     void fitPage() { endNavigation(); viewport.reset(); viewportChanged(); }
     /** Reset scale and pan together, returning the artwork to where the page began (MonoPaint's Expand canvas). */
     void actualSize() { endNavigation(); viewport.actualSize(app.prefs.toolboxRight()); viewportChanged(); }
+    /** A new notebook on the page shown ({@link DrawingBook#fresh}), Brush Lab's samples on its surface. */
+    private void newBook() { app.book = DrawingBook.fresh(document); WildSample.show(document.surface); }
     /** Starts a new book from this page, or from a blank page when null. */
     void replace(ToneDocument replacement) {
         // Inkwash: a floating piece goes down on the page it floats over before another notebook shows.
@@ -347,9 +331,10 @@ final class DrawingPad extends View {
         document = replacement; ghost = mirrorShow.ghost = null; layerSteps = 0;
         if (document == null && getWidth() > 0 && getHeight() > 0) document = blankPage();
         fadeToNow();
-        app.book = document == null ? null : new DrawingBook(document); app.updatePages();
+        if (document == null) app.book = null; else newBook();
+        app.updatePages();
         ensureDisplay(); updateViewport();
-        renderAll(); invalidate(); post(this::connectDisplay); post(app.fullscreen::pageChanged);
+        renderAll(); invalidate(); post(this::connectDisplay);
     }
     /**
      * A page just shown: its marks fading or darkening by the clock (Fading, Lemon Juice) as the clock has them now,
@@ -363,10 +348,12 @@ final class DrawingPad extends View {
     /** Shows another page of the current book, presenting it directly when possible. */
     void showPage(ToneDocument page) {
         // A two-finger tap's Undo still waiting is the page shown until now's.
-        if (page != document) undoNow();
+        if (page != document) { layLiveNow(); app.live.shown(page); }
+        // Inkwash: the page's surface, Brush Lab's samples' too (the surface spec, 2026-11-01).
+        WildSample.show(page.surface);
         // Inkwash: a Lasso piece floats on over the next page.
         FloatingSelection carried = carrySelection(page);
-        suspend();
+        suspend(true);
         // Inkwash: a mirror waiting to be placed was this page's, as were the sections shown (the next look shows the new page's).
         placing = Placing.NONE;
         sectionRects = null; sectionActive = -1; sectionFlash = null;
@@ -386,7 +373,7 @@ final class DrawingPad extends View {
             if (carried != null) { selection = carried; selectionShown.set(pageRect(carried.bounds())); }
             fadeToNow(); viewport.reset(); ensureDisplay(); updateViewport(); renderAll(); lassoBar();
             if (turn != null) {
-                try { presented = turn.present(presented()); }
+                try { if (presented = turn.present(presented())) wrote(new Rect(0, 0, presented().getWidth(), presented().getHeight())); }
                 catch (RuntimeException error) { Log.w(ProbeActivity.TAG, "Page update uses Android display", error); }
             }
         } finally { if (turn != null) turn.close(); }
@@ -435,19 +422,41 @@ final class DrawingPad extends View {
             // Inkwash: the page's own pixels on the cores, as a changed area renders (no snapshot, so the next stroke
             // doesn't copy whole layers).
             Rect page = new Rect(0, 0, document.width, document.height);
-            ViewportBitmap.compose(document, display, viewportBitmap == null, page, ghost, layerSteps);
+            composedSharp = sharp();
+            ViewportBitmap.compose(document, display, viewportBitmap == null, page, ghost, layerSteps, composedSharp);
             drawMask(page);
             mirrorShow.page(document.width, document.height); mirrorShow.show(document.mirrors()); mirrorShow.take(null, null);
-            drawMirrors(page);
+            drawMirrors(page, null);
             drawSections(page);
+            text.draw(display, page);
             words.drawAll(display);
             placer.drawAll();
             document.clearDirty(); document.takeMagnetAreas();
         }
         pending.clear();
         if (selection != null) showErased(selectionTones(), selectionArea());
-        if (viewportBitmap != null) viewportBitmap.update(display, pageToView, null);
+        // Inkwash: sharp dry brushes' tiles go with what the page was; drawn again as wanted.
+        sharpTiles.clear();
+        if (viewportBitmap != null) viewportBitmap.update(display, pageToView, null, sharpLines(), sharpTiles, sharpStep());
         redrawGuide();
+        wantSharpSoon();
+    }
+    /**
+     * Inkwash: the layers whose Vector Ink lines the zoomed view draws sharp, as bits ({@link VectorInk#sharpLayers}), left out of
+     * {@link #display}; 0 at 100% (the page's pixels are the lines there), while a pinch or pan moves the view (each frame
+     * would draw them again). Over the layers shown above the page too (tracing paper), the owner's call, 2026-11-04.
+     */
+    private int sharp() {
+        return viewportBitmap == null || navigating || document == null ? 0 : VectorInk.sharpLayers(document, layerSteps, own(stroke));
+    }
+    /** What {@link #display} was composed without: when {@link #sharp} says otherwise, the whole page renders again. */
+    private int composedSharp = 0;
+    /** The lines drawn sharp over the zoomed view: the sharp layer's, as the stroke in progress shows them; null for none. */
+    private VectorLines sharpLines() {
+        int layers = sharp();
+        if (layers == 0) return null;
+        // A Lasso piece floating: its lines where it lies (LassoPlanes.shownLines).
+        return selection != null && selection.planes != null ? selection.planes.shownLines(selection, document, layers, own(stroke)) : VectorInk.shown(document, layers, own(stroke));
     }
     /** Draws the masking fluid's hatching over the freshly composed {@code area} of the page. */
     private void drawMask(Rect area) { drawMask(document, display, area); }
@@ -468,14 +477,24 @@ final class DrawingPad extends View {
         disconnectDisplay(); ensureDisplay(); updateViewport(); renderAll(); invalidate(); post(this::connectDisplay);
     }
     boolean blocksFingerGesture() { return pointer!=-1 || blocksTap(); }
-    /** Anything but a stroke that keeps fingers off the page: the eyedropper, a fill or gradient, or the pen nearby. */
+    /** Anything but a stroke that keeps fingers off the page: the Dropper, or the pen nearby. */
     private boolean blocksTap() {
-        return pickPointer!=-1 || fillGesture || hasGradient() || SystemClock.uptimeMillis()<penGuardUntil;
+        return pickPointer!=-1 || SystemClock.uptimeMillis()<penSeen+250;
     }
     /** Re-renders the document's changed area and queues it for presentation, with what an eraser newly went over. */
     void renderDirty() {
         EraseBothStroke eraser = erasePreview();
-        renderDirty(eraser == null ? null : eraser.takeErased());
+        int[] also = eraser == null ? null : eraser.takeErased();
+        // Inkwash: where a stump's other half changed, not yet on the page (DrawingStroke#unwritten).
+        DrawingStroke.Unwritten shown = unwritten();
+        int[] moved = shown == null ? null : shown.take();
+        if (moved != null) also = around(also, moved);
+        renderDirty(also);
+    }
+    /** {@code a} ({left, top, right, bottom}, exclusive; or null) grown to hold {@code inclusive} ({left, top, right, bottom}, inclusive). */
+    private static int[] around(int[] a, int[] inclusive) {
+        int[] b = {inclusive[0], inclusive[1], inclusive[2] + 1, inclusive[3] + 1};
+        return a == null ? b : new int[]{Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])};
     }
     /** {@link #renderDirty()}, re-rendering {@code also} ({left, top, right, bottom}, or null) as well. */
     private void renderDirty(int[] also) { renderDirty(also, null); }
@@ -488,6 +507,10 @@ final class DrawingPad extends View {
         renderedArea = 0;
         if (document == null || display == null) return;
         int[] bounds = document.dirty();
+        // Inkwash: Vector Ink's lines turned sharp or back (the zoomed view, a first stroke, Undo): the whole page, without
+        // their layer or with it.
+        int sharp = sharp();
+        if (sharp != composedSharp) { composedSharp = sharp; bounds = new int[]{0, 0, document.width, document.height}; }
         if (also != null) bounds = bounds == null ? also : new int[]{Math.min(bounds[0], also[0]), Math.min(bounds[1], also[1]),
                 Math.max(bounds[2], also[2]), Math.max(bounds[3], also[3])};
         // Inkwash: where the magnets changed (an Undo, a magnet laid), apart from the paint's area.
@@ -499,7 +522,7 @@ final class DrawingPad extends View {
         // The guide's saved background must not cover the newly rendered artwork.
         // Overlays come off in reverse drawing order: each saved background predates the ones drawn over it.
         boolean guided = !guide.isEmpty();
-        eraseOutline(); eraseGuide(); placer.overlayOff(); words.overlayOff();
+        eraseOutline(); eraseGuide(); placer.overlayOff(); text.overlayOff(); words.overlayOff();
         // Apart only while they hold all that changed: anything past their box (nothing else draws while a stroke
         // lifts, but should it) renders the one box round it all.
         if (bounds != null && apart != null) {
@@ -517,35 +540,69 @@ final class DrawingPad extends View {
             if (dirty.intersect(0, 0, display.getWidth(), display.getHeight())) {
                 renderedArea += (long)dirty.width() * dirty.height();
                 render(dirty);
+                sharpTiles.changed(new int[]{dirty.left, dirty.top, dirty.right, dirty.bottom});
                 queue(dirty);
                 unrefreshed = true;
             }
         }
         document.clearDirty();
         words.overlayOn();
+        text.overlayOn();
         placer.overlayOn();
         if (guided) drawGuide();
         drawOutline();
+        wantSharpSoon();
     }
     /** Queues page pixels that are already up to date in {@link #display}. */
     private void queue(Rect pageArea) {
-        queueView(viewportBitmap == null ? pageArea : viewportBitmap.update(display, pageToView, pageArea));
+        queueView(viewportBitmap == null ? pageArea : viewportBitmap.update(display, pageToView, pageArea, sharpLines(), sharpTiles, sharpStep()));
+    }
+    /**
+     * Inkwash: sharp dry brushes (the HB pencil pilot, {@link SharpView}): zoomed in, the tiles of the page shown are drawn
+     * finer off this thread, the page's pixels shown meanwhile, each tile shown as it is ready ({@link #sharpReady}) in
+     * the panel's usual update, no flash of its own (Automatic Refresh does as it does).
+     */
+    private final SharpView sharpTiles = new SharpView(rect -> post(() -> sharpReady(rect)));
+    /** The grid the zoomed view draws sharp tiles at ({@link SharpView#stepFor}); 0 at 100%, while a pinch or pan moves the view. */
+    private int sharpStep() { return viewportBitmap == null || navigating || document == null ? 0 : SharpView.stepFor(viewport.scale()); }
+    /** {@link #wantSharp} once what is under way is done (a stroke's end logs it first). */
+    private void wantSharpSoon() { if (!sharpSoon) { sharpSoon = true; post(() -> { sharpSoon = false; wantSharp(); }); } }
+    private boolean sharpSoon;
+    /** Asks for the sharp tiles of the page the view shows; none while a stroke is drawn (they would be drawn again as it goes). */
+    private void wantSharp() {
+        int k = sharpStep();
+        if (k == 0 || stroke != null || display == null) { sharpTiles.want(document, 0, 0, 0, 0, 0, null, 0, 0, null); return; }
+        RectF seen = new RectF(0, 0, getWidth(), getHeight());
+        viewToPage.mapRect(seen);
+        sharpTiles.want(document, k, (int) Math.floor(seen.left), (int) Math.floor(seen.top), (int) Math.ceil(seen.right), (int) Math.ceil(seen.bottom),
+                ghost, layerSteps, composedSharp, (x, y, w, h, out) -> { display.getPixels(out, 0, w, x, y, w, h); for (int i = 0; i < out.length; i++) out[i] &= 255; });
+    }
+    /** A sharp tile over page {@code rect} is ready: shown, if the view still draws them. */
+    private void sharpReady(int[] rect) {
+        if (sharpStep() == 0 || document == null) return;
+        queue(new Rect(rect[0], rect[1], rect[2], rect[3]));
+        unrefreshed = true;
+        flush(true);
     }
     /**
      * Renders the page's {@code dirty} area into {@link #display}: natively, as {@link ToneDocument#render}
      * would (dots, or plain tones for the zoomed raster to scale), then any masking-fluid hatching, then
-     * what lies beneath the selected pair wherever an eraser in progress went.
+     * the page as an eraser in progress will leave it wherever it went.
      */
     private void render(Rect dirty) {
-        ViewportBitmap.compose(document, display, viewportBitmap == null, dirty, ghost, layerSteps);
+        ViewportBitmap.compose(document, display, viewportBitmap == null, dirty, ghost, layerSteps, composedSharp);
         drawMask(dirty);
         EraseBothStroke eraser = erasePreview();
         if (eraser != null) showErased(eraser::erasedTones, new Rect(dirty));
         // Inkwash: a Lasso piece floating over it, and the hole it was lifted from.
         if (selection != null) showErased(selectionTones(), new Rect(dirty));
-        drawMirrors(dirty);
+        // Inkwash: a stump's other half as smudged so far, not yet on the page; a live copy darkens it as shown.
+        MirrorShow.Marks shown = shownOnce(unwritten(), dirty);
+        if (shown != null) showErased(shown, new Rect(dirty));
+        drawMirrors(dirty, shown);
         drawSections(dirty);
-        // Inkwash: the fridge magnets over it all.
+        // Inkwash: the text boxes, then the fridge magnets over it all.
+        text.draw(display, dirty);
         words.draw(display, dirty);
     }
     /** Inkwash: the page's timed sections as shown ({@link TimedSections#draw}): their boxes, the running one (−1: none), the box flashing (or null). */
@@ -589,24 +646,73 @@ final class DrawingPad extends View {
     /** How long a section's flash shows, ms. */
     private static final long FLASH_MS = 500;
     /** The mirrors over the page's {@code area} of {@link #display}: Real Mirror's reflection, live copies, a placing stroke, the guides ({@link MirrorShow}). */
-    private void drawMirrors(Rect area) { renderPixels = drawShow(mirrorShow, document, display, area, viewportBitmap == null, renderPixels); }
+    /** {@link #shownOnce}'s tones, and the box ({left, top, right, bottom}, inclusive) they cover. */
+    private int[] shownTones = new int[0];
+    private final int[] shownBox = new int[4];
+    /**
+     * {@code shown}'s tones over {@code area} where the stroke changed anything ({@link DrawingStroke.Unwritten#all}),
+     * worked out once for the page and a live copy over it (each would read them); null for none, or nothing there.
+     * Past {@link #BAND_PIXELS} (a whole page drawn again mid-stroke) read as they are asked for instead.
+     */
+    private MirrorShow.Marks shownOnce(DrawingStroke.Unwritten shown, Rect area) {
+        int[] all = shown == null ? null : shown.all();
+        if (all == null) return null;
+        int x0 = Math.max(area.left, all[0]), y0 = Math.max(area.top, all[1]), x1 = Math.min(area.right - 1, all[2]), y1 = Math.min(area.bottom - 1, all[3]);
+        if (x0 > x1 || y0 > y1) return null;
+        int w = x1 - x0 + 1, h = y1 - y0 + 1;
+        if ((long) w * h > BAND_PIXELS) return shown;
+        if (shownTones.length < w * h) shownTones = new int[w * h];
+        int[] t = shownTones, box = shownBox;
+        shown.tones(x0, y0, w, h, t);
+        box[0] = x0; box[1] = y0; box[2] = x1; box[3] = y1;
+        return (x, y, bw, bh, out) -> {
+            for (int row = 0; row < bh; row++) for (int col = 0; col < bw; col++) {
+                int px = x + col, py = y + row;
+                out[row * bw + col] = px < box[0] || px > box[2] || py < box[1] || py > box[3] ? -1 : t[(py - box[1]) * w + px - box[0]];
+            }
+        };
+    }
+    private void drawMirrors(Rect area, MirrorShow.Marks shown) {
+        Mirrors.Tones page = MirrorShow.tones(document);
+        if (shown != null) {
+            Mirrors.Tones found = page;
+            page = new Mirrors.Tones() {
+                private final int[] one = new int[1];
+                private int[] row = new int[0];
+                @Override public int tone(int x, int y) { shown.tones(x, y, 1, 1, one); return one[0] >= 0 ? one[0] : found.tone(x, y); }
+                @Override public void tones(int x, int y, int w, int[] out) {
+                    found.tones(x, y, w, out);
+                    if (row.length < w) row = new int[w];
+                    shown.tones(x, y, w, 1, row);
+                    for (int i = 0; i < w; i++) if (row[i] >= 0) out[i] = row[i];
+                }
+            };
+        }
+        renderPixels = drawShow(mirrorShow, document, page, display, area, viewportBitmap == null, renderPixels);
+    }
+    /** The stroke's changes not yet on the page, shown over it ({@link DrawingStroke#unwritten}); null for none. */
+    private DrawingStroke.Unwritten unwritten() { return stroke == null ? null : stroke.unwritten(); }
     /**
      * What {@code show} shows over {@code page}'s {@code area} of {@code display}, in dots (or plain greys), through
      * {@code pixels} (made bigger if need be; returned): the drawing screen's mirrors and Brush Lab's lasso.
      */
     static int[] drawShow(MirrorShow show, ToneDocument page, Bitmap display, Rect area, boolean dots, int[] pixels) {
+        return drawShow(show, page, MirrorShow.tones(page), display, area, dots, pixels);
+    }
+    /** As above, the page's tones read from {@code tones}. */
+    static int[] drawShow(MirrorShow show, ToneDocument page, Mirrors.Tones tones, Bitmap display, Rect area, boolean dots, int[] pixels) {
         if (!show.touches(area.left, area.top, area.right, area.bottom)) return pixels;
         int w = area.width(), rows = bandRows(area);
         if (pixels.length < w * rows) pixels = new int[w * rows];
         for (int top = area.top; top < area.bottom; top += rows) {
             int h = Math.min(rows, area.bottom - top);
             display.getPixels(pixels, 0, w, area.left, top, w, h);
-            if (show.draw(pixels, area.left, top, w, h, dots, page::compositeTone, page.paperTone()))
+            if (show.draw(pixels, area.left, top, w, h, dots, tones, page.paperTone()))
                 display.setPixels(pixels, 0, w, area.left, top, w, h);
         }
         return pixels;
     }
-    /** The eraser in progress, when the screen shows what lies beneath wherever it went (see {@link EraseBothStroke#previews}); otherwise null. */
+    /** The eraser in progress, when the screen shows the page as it will leave it wherever it went (see {@link EraseBothStroke#previews}); otherwise null. */
     private EraseBothStroke erasePreview() {
         DrawingStroke own = own(stroke);
         return own instanceof EraseBothStroke && ((EraseBothStroke)own).previews() ? (EraseBothStroke)own : null;
@@ -622,9 +728,9 @@ final class DrawingPad extends View {
         return document::gestureTones;
     }
     /**
-     * Shows what lies beneath the selected pair (in either raster: dots, or plain greys for the zoomed one)
-     * wherever {@code eraser} went in {@code area}, ink and wash alike, though the wash is erased only when
-     * it lifts. The lift's render then shows the same pixels from the page.
+     * Shows the page as {@code eraser} will leave it (in either raster: dots, or plain greys for the zoomed one)
+     * wherever it went in {@code area}, every pair alike, though most is erased only when it lifts. The lift's
+     * render then shows the same pixels from the page.
      */
     private void showErased(MirrorShow.Marks eraser, Rect area) {
         if (!area.intersect(0, 0, display.getWidth(), display.getHeight())) return;
@@ -644,7 +750,7 @@ final class DrawingPad extends View {
         boolean dots = viewportBitmap == null;
         for (int i = first; i < count; i++) {
             int tone = erasedTones[i];
-            // Inkwash: what lies beneath shows on the ghost, as the lift's render will show it.
+            // Inkwash: what is left shows on the ghost, as the lift's render will show it.
             if (tone >= 0 && ghost != null) tone = GhostPlane.over(tone, ghost, (area.top + i / w) * document.width + area.left + i % w);
             if (tone >= 0) renderPixels[i] = dots ? DotPattern.pixel(tone, area.left + i % w, area.top + i / w) : 0xff000000 | tone * 0x010101;
         }
@@ -665,33 +771,21 @@ final class DrawingPad extends View {
         if (viewportBitmap != null) canvas.drawBitmap(viewportBitmap.bitmap, 0, 0, null);
         else if (display != null) canvas.drawBitmap(display, pageToView, null);
     }
-    private boolean showsGradientGuide() { return (fillGesture && fillGradient != ToolSettings.Gradient.FLAT) || gradientWaiting; }
     /** Page points as presented: the unzoomed page raster is only rotated (never scaled) relative to the view. */
     private float[] presentedPoints(float[] page, int count) {
         float[] points = java.util.Arrays.copyOf(page, 2 * count);
         if (viewportBitmap != null) pageToView.mapPoints(points);
         return points;
     }
-    /** Draws the gradient's direction line in place of whatever guide was shown. */
-    private void drawGradientGuide() {
-        eraseGuide();
-        if (presented() == null) return;
-        float[] axis = presentedPoints(new float[]{fillStartX, fillStartY, fillEndX, fillEndY}, 2);
-        guide.add(presented(), axis, 2, false, axis, dp(4), this::queueView);
-    }
     /** Draws the guide the current gesture shows, if any, in place of whatever was shown. */
     private void drawGuide() {
-        if (showsGradientGuide()) drawGradientGuide();
-        else if (lassoCount > 0) { eraseGuide(); lassoShown = 0; drawLasso(); }
-        else if (selection != null) drawSelectionFrame();
+        if (selection != null) drawSelectionFrame();
         else eraseGuide();
     }
     /** Restores the pixels under the guide and queues them. */
     private void eraseGuide() { if (presented() != null) guide.erase(presented(), this::queueView); }
     /** Draws the guide again after a re-render replaced the raster under it. */
     private void redrawGuide() { guide.forget(); drawGuide(); }
-    /** Removes the guide from the screen. */
-    private void clearGradientGuide() { eraseGuide(); flush(true); }
 
     // The nib's outline
 
@@ -707,7 +801,7 @@ final class DrawingPad extends View {
      * those tiles reach the panel. Black and white, for the panel's fast path.
      */
     /** The ticks' side, in raster pixels (the Dropper's rings' width too), and how many round the ring. */
-    private static final float OUTLINE_WIDTH = 2;
+    private static final float OUTLINE_WIDTH = HoverNib.TICK_SIDE;
     /** Hover redraws the ring at most once a frame, and only once it moved or resized by more than {@link #OUTLINE_STEP} px. */
     private static final int OUTLINE_FRAME_MS = 16;
     private static final float OUTLINE_STEP = 2;
@@ -729,7 +823,7 @@ final class DrawingPad extends View {
      * little bug on the screen demanding my attention"; it followed the pen the whole hover until then). The pen arrives
      * once it has been away {@link #PEN_AWAY_MS}, or with a new tool or size; a stroke's lift isn't an arrival.
      */
-    static final long NIB_SHOWN_MS = 1000;
+    static final long NIB_SHOWN_MS = HoverNib.SHOWN_MS;
     private boolean penArrives = true;
     private long nibShownUntil;
     private final Runnable nibShown = () -> { if (stroke == null && !dropperOn) hideOutline(); };
@@ -839,6 +933,7 @@ final class DrawingPad extends View {
     }
     /** The pen hovering over the page: the ring of the nib it would lay there, at a typical touch, if a stroke would start. */
     private void hoverOutline(MotionEvent event) {
+        // Zen Mode's fan open (it stays open while drawing): the ring still shows, kept off the fan as the paint is (covered).
         // A finger erasing keeps its own ring.
         if (stroke != null || app.inkWash == null) return;
         int action = event.getActionMasked(), tool = eraserEnd(event, 0) ? InkWash.ERASER : app.inkWash.selected;
@@ -850,9 +945,9 @@ final class DrawingPad extends View {
             else dropAt(event.getX(), event.getY());
             return;
         }
-        // A shade being picked, a gradient, a placing stroke or Words take the pen: no nib lands. Nib Preview off: no ring.
-        if (action == MotionEvent.ACTION_HOVER_EXIT || words.open() || document == null || display == null || app.popupOpen() || app.canvasCovered()
-                || app.pickingShade || hasGradient() || placing != Placing.NONE || lassoOn || !app.rules().nibPreview || stroke != null) { hideOutline(); return; }
+        // A placing stroke or Words take the pen: no nib lands. Nib Preview off: no ring.
+        if (action == MotionEvent.ACTION_HOVER_EXIT || words.open() || text.on() || document == null || display == null || app.popupOpen() || app.canvasCovered()
+                || placing != Placing.NONE || lassoOn || !app.rules().nibPreview || stroke != null) { hideOutline(); return; }
         if (tool != hoverTool) {
             HoverNib was = hoverNib; hoverTool = tool; hoverNib = hoverNib(tool);
             // A new tool or size shows its ring again, as an arrival (the owner, 2026-10-29); the same nib after a lift doesn't.
@@ -869,7 +964,9 @@ final class DrawingPad extends View {
         Brush brush = app.inkWash.brush(tool);
         if (app.pageLocked() || NotebookRules.refuses(app.rules(), tool, brush)) return null;
         ToolSwatches.Look look = app.inkWash.look(tool);
-        return brush == null ? HoverNib.eraser(look.px) : HoverNib.of(ResolvedBrush.of(brush.parts, look.px, look.darkness));
+        // An effect brush rings as the eraser does, at its own size: its change shows under the pen as it goes (the owner,
+        // 2026-11-04, the smudge tool: "just like eraser"; "if the effect is instant no need to use the grey band").
+        return brush == null || WildSample.reworks(brush.parts) ? HoverNib.eraser(look.px) : HoverNib.of(ResolvedBrush.of(brush.parts, look.px, look.darkness));
     }
     /**
      * While a finger erases: the ring follows it, at its live size, where the finger hides the page. Never the pen's: no
@@ -888,7 +985,6 @@ final class DrawingPad extends View {
 
     /** Starts direct presentation and native pen input once nothing covers the canvas. */
     void connectDisplay() {
-        scheduleWet();
         if (app.canvasCovered() || !app.resumed || !hasWindowFocus() || app.loading || display == null || direct != null) return;
         // Standard Android drawing leaves the firmware pen and e-ink interfaces untouched.
         if (DirectEink.androidDrawing()) return;
@@ -908,9 +1004,10 @@ final class DrawingPad extends View {
                     if (direct != null) input.partialGrey();
                     app.inkWashBar.partialGrey();
                 };
-                if (ghosted) Ui.flashWindow(app.previewFrame.getRootView(), "back on the drawing screen", restore);
-                else Ui.cleanWindow(app.previewFrame.getRootView(), "back on the drawing screen", restore);
-                unrefreshed = ghosted = false;
+                // Always the clean redraw, its blink and no flash, even with Automatic Refresh off: a screen over this one (Page
+                // Settings) otherwise leaves the column and the top bar ghosted (the owner, 2026-11-05: "a spot for an auto refresh").
+                Ui.flashWindow(app.previewFrame.getRootView(), "back on the drawing screen", restore, true, ghosted && flashes());
+                unrefreshed = ghosted = asked = false;
             }
             refreshFastInk();
             // A refresh the page was owed while fast display was paused.
@@ -935,7 +1032,6 @@ final class DrawingPad extends View {
     void disconnectDisplay() {
         // Off the panel while it can still be presented; it never outlives the display it was drawn for.
         hideOutline();
-        cancelWetCallback();
         removeCallbacks(retry); removeCallbacks(reconnect); recovery.restart();
         if (previewDirect != null) { previewDirect.close(); previewDirect = null; previewArea.setEmpty(); }
         if (endingFast != null) { endingFast.close(); endingFast = null; endingArea.setEmpty(); }
@@ -951,6 +1047,7 @@ final class DrawingPad extends View {
      */
     void eraseFastInk(RectF panelArea) {
         if (panelArea.isEmpty()) return;
+        blanked.set(panelArea);
         // Only a panel with a fast pen plane (mode 9, the Nomad's) has one to blank; elsewhere the refresh below is all.
         if (DirectEink.fastBinaryControls()) {
             Rect area = new Rect(); panelArea.roundOut(area);
@@ -973,10 +1070,8 @@ final class DrawingPad extends View {
     }
     private void refreshFastInk() {
         if (fastInk.isEmpty() || direct == null) return;
-        Matrix toPanel = new Matrix(viewportBitmap == null ? pageToView : new Matrix());
-        toPanel.postConcat(PanelCoordinates.fromView(this));
         Matrix fromPanel = new Matrix();
-        if (!toPanel.invert(fromPanel)) return;
+        if (!rasterToPanel().invert(fromPanel)) return;
         RectF mapped = new RectF(fastInk); fromPanel.mapRect(mapped);
         Rect area = new Rect(); mapped.roundOut(area);
         Bitmap source = presented();
@@ -984,10 +1079,11 @@ final class DrawingPad extends View {
         flush(true);
         // Forced: the software pixels are unchanged, only the panel's are stale.
         if (direct.refresh(source, area) < 0) { postDelayed(this::refreshFastInk, 8); return; }
+        wrote(area);
         fastInk.setEmpty(); fastInkRefreshes++;
     }
     /**
-     * Presents a moving preview (a shape or the gradient guide) through the Nomad's fast
+     * Presents a moving preview (a shape) through the Nomad's fast
      * black/white pen path, like the color bar. Gray-mode frames queue on the Nomad, so a
      * preview there trails the pen and leaves copies behind. The canvas raster is binary
      * dots throughout. Fast pixels do not survive a panel refresh, so
@@ -1001,7 +1097,7 @@ final class DrawingPad extends View {
     }
     /** A pen stroke shows through {@link StrokePanel}'s fast update while the pen is down; {@link #endStrokePreview} ends it. */
     private void beginStrokePreview() {
-        if (direct == null || previewDirect != null) return;
+        if (direct == null || previewDirect != null || quietPanel) return;
         flush(true);
         previewDirect = StrokePanel.open(this, presented(), viewportBitmap == null ? pageToView : new Matrix());
     }
@@ -1038,7 +1134,7 @@ final class DrawingPad extends View {
         pace.last = SystemClock.uptimeMillis();
         if (result < 0 && ++retries < 120) { postDelayed(retry, 8); return; }
         // Still busy: shown as any change, the rest left to the next refresh.
-        if (result < 0) queueView(endingArea);
+        if (result < 0) queueView(endingArea); else wrote(endingArea);
         retries = 0;
         endingFast.close(); endingFast = null; endingArea.setEmpty();
         if (!pending.isEmpty()) flush(true);
@@ -1054,16 +1150,31 @@ final class DrawingPad extends View {
         queueView(previewArea); previewArea.setEmpty();
     }
     /**
-     * Finishes the gesture, sets wet paint, lays a Drying wash still settling and releases the panel, e.g. before a
+     * Finishes the gesture, lays a Drying wash still settling and releases the panel, e.g. before a
      * panel covers the canvas or the app pauses.
      */
-    void suspend() {
-        undoNow();
-        words.cancel(); placer.cancel(); finishStroke(); dryWet(); settleDrying();
+    void suspend() { suspend(false); }
+    /**
+     * {@code staying}: another page on the drawing screen ({@link #showPage}), so only the page's fast ink goes blank. The
+     * whole window blanked left the column, the page bar and the Zen button white, as nothing redraws them unless a page
+     * turn's flash follows (the owner, 2026-11-03, after the Template eye: "the toolbar disappeared").
+     */
+    private void suspend(boolean staying) {
+        layLiveNow();
+        words.cancel(); placer.cancel(); text.cancel(); finishStroke(); settleDrying();
         // Leaving the drawing screen: the fast pen plane (mode 9) survives the next screen's redraws, so it goes blank first.
         // Not yet on screen (a first start straight to the shelf): nothing to blank, and no display to map it with.
-        if (DirectEink.fastBinaryControls() && app.previewFrame.isAttachedToWindow()) eraseFastInk(windowArea());
+        // Going to sleep: no blank, or the sleep screen keeps a washed-out page (the owner, 2026-11-02: "much lighter... as if
+        // there was a flash"); waking, connectDisplay blanks and redraws the whole window anyway.
+        boolean sleeping = !app.getSystemService(android.os.PowerManager.class).isInteractive();
+        if (DirectEink.fastBinaryControls() && app.previewFrame.isAttachedToWindow() && !sleeping) eraseFastInk(staying ? pageArea() : windowArea());
         disconnectDisplay();
+    }
+    /** This view, the page's room, in panel pixels. */
+    private RectF pageArea() {
+        RectF page = new RectF(0, 0, getWidth(), getHeight());
+        PanelCoordinates.fromView(this).mapRect(page);
+        return page;
     }
     /** The whole window in panel pixels. */
     private RectF windowArea() {
@@ -1072,6 +1183,7 @@ final class DrawingPad extends View {
         return all;
     }
     private void flush(boolean force) {
+        if (quietPanel) return;
         if (endingFast != null && direct != null) { removeCallbacks(retry); endFast(); return; }
         if (pending.isEmpty()) return;
         long wait = pace.wait(stroke != null, SystemClock.uptimeMillis());
@@ -1087,7 +1199,7 @@ final class DrawingPad extends View {
         if (direct == null) { invalidate(); pending.clear(); return; }
         DirectEink target = previewDirect != null ? previewDirect : direct;
         try {
-            int[] covered = covered();
+            java.util.List<int[]> covered = covered();
             while (!pending.isEmpty()) {
                 // Inkwash: never under Words' bin, which Android draws over the canvas.
                 for (int[] patch : MagnetDrag.minus(pending.first(), covered)) {
@@ -1103,6 +1215,7 @@ final class DrawingPad extends View {
                         throw new IllegalStateException("Display remained busy");
                     }
                     if (target == previewDirect) previewArea.union(presenting);
+                    wrote(presenting);
                 }
                 pending.removeFirst(); recovery.shown();
             }
@@ -1144,18 +1257,53 @@ final class DrawingPad extends View {
                 if (tries < 120) postDelayed(() -> refreshArea(reason, pageArea, tries + 1), 8);
                 return;
             }
+        wrote(area);
         Log.i(ProbeActivity.TAG, "Area refresh (" + reason + "): " + area);
     }
-    /** Inkwash: what Words' bin covers in the presented raster, {left, top, right, bottom}, or null. */
-    private int[] covered() {
-        if (coveredPanel.isEmpty()) return null;
+    /** Inkwash: what Words' bin and Zen's open fan cover in the presented raster, {left, top, right, bottom} each, or null. */
+    private java.util.List<int[]> covered() {
+        // The fast display writes under Android's views: off Zen's open fan too, its shape in steps, so strokes beside it
+        // still show (drying paint took bits of it); closing it shows what it covered.
+        java.util.List<RectF> panel = new java.util.ArrayList<>();
+        if (!coveredPanel.isEmpty()) panel.add(new RectF(coveredPanel));
+        java.util.List<RectF> fan = app.zenFanMask();
+        if (fan != null) panel.addAll(fan);
+        if (panel.isEmpty()) return null;
+        Matrix fromPanel = new Matrix();
+        if (!rasterToPanel().invert(fromPanel)) return null;
+        java.util.List<int[]> covered = new java.util.ArrayList<>();
+        for (RectF mapped : panel) {
+            fromPanel.mapRect(mapped);
+            Rect area = new Rect(); mapped.roundOut(area);
+            covered.add(new int[]{area.left, area.top, area.right, area.bottom});
+        }
+        return covered;
+    }
+    /** The presented raster's pixels to panel pixels. */
+    private Matrix rasterToPanel() {
         Matrix toPanel = new Matrix(viewportBitmap == null ? pageToView : new Matrix());
         toPanel.postConcat(PanelCoordinates.fromView(this));
-        Matrix fromPanel = new Matrix();
-        if (!toPanel.invert(fromPanel)) return null;
-        RectF mapped = new RectF(coveredPanel); fromPanel.mapRect(mapped);
-        Rect area = new Rect(); mapped.roundOut(area);
-        return new int[]{area.left, area.top, area.right, area.bottom};
+        return toPanel;
+    }
+    /** Panel pixels the page wrote since Zen's button was last put back ({@link #zenBack}). */
+    private final RectF zenWritten = new RectF();
+    private final Runnable zenBack = this::zenBack;
+    /**
+     * Every write of the page's pixels to the panel ({@code area}, presented raster) comes here: in Zen Mode the button lies
+     * over the page and the fast display writes under Android's views, so a stroke, the eraser's ring, wet paint, a sharp
+     * tile or a cleaned popup took bits of the circle (the owner, 2026-11-05: "disappears a bit"). It is put back shortly.
+     */
+    private void wrote(Rect area) {
+        if (!app.zen) return;
+        RectF panel = new RectF(area); rasterToPanel().mapRect(panel);
+        if (zenWritten.isEmpty()) postDelayed(zenBack, CLOSED_MS);
+        zenWritten.union(panel);
+    }
+    /** Zen's button drawn again where the page wrote ({@link PaintActivity#redrawZen}: no flash); not under the pen's stroke or a popup, so later. */
+    private void zenBack() {
+        if (zenWritten.isEmpty()) return;
+        if (stroke != null || previewDirect != null || endingFast != null || app.popupOpen()) { postDelayed(zenBack, CLOSED_MS); return; }
+        app.redrawZen(zenWritten); zenWritten.setEmpty();
     }
     private void reconnectLater() {
         long delay = recovery.failed();
@@ -1188,7 +1336,7 @@ final class DrawingPad extends View {
      * refreshFastInk does for stale fast ink), plus an Android invalidate of the bar.
      */
     /** How long the pen stays out of hover range before the page refreshes. */
-    static final long PEN_AWAY_MS = 2000;
+    static final long PEN_AWAY_MS = HoverNib.AWAY_MS;
     /** How long after a popup closes the page refreshes, once Android has redrawn under it. */
     static final long CLOSED_MS = 300;
     /** An undo or redo re-rendering at least this share of the page refreshes it. */
@@ -1219,12 +1367,19 @@ final class DrawingPad extends View {
     };
     private Runnable pendingRefresh;
     /**
-     * Another page shown (turned to, added, opened): it finishes with one flash ({@link Ui#flashWindow}) once drawn, the
-     * auto-refresh the page change may ask for anyway (the owner, 2026-10-26: "Flash on page change").
+     * Another page shown (turned to, added, opened): the forced grey pass once drawn, no flash, as with Automatic Refresh
+     * off (the owner, 2026-11-05, trying it: flashes "remind you that you're using a piece of tech"; was "Flash on page
+     * change", 2026-10-26). A page ghosted before the turn (the eraser, a pinch) still flashes. Refresh clears the rest.
      */
-    void pageTurned() { flashSoon("page changed"); }
+    void pageTurned() { unrefreshed = true; refreshSoon("page changed"); }
     /** One flash ({@link Ui#flashWindow}) once the page is drawn again: a page change, Zen Mode on or off. */
     void flashSoon(String reason) { ghosted = unrefreshed = true; refreshSoon(reason); }
+    /** As {@link #flashSoon}, asked for (Refresh, or a finger tap set to it): it flashes with Automatic Refresh off too. */
+    void refreshAsked(String reason) { asked = true; flashSoon(reason); }
+    /** A flash asked for and not yet made. */
+    private boolean asked;
+    /** Whether the flash due may be made ({@link SystemSettings#flashes}): asked for, or Automatic Refresh on. */
+    private boolean flashes() { return SystemSettings.flashes(asked, app.prefs.autoRefresh()); }
 
     /**
      * The pen hovering over the window or leaving it: every hover event restarts the pen-away wait,
@@ -1254,7 +1409,10 @@ final class DrawingPad extends View {
         RectF area = new RectF(panelArea);
         postDelayed(() -> {
             if (app.popupOpen()) return;
+            // The page's pixels go over Zen's button there too: wrote() puts it back, whatever Automatic Refresh is.
             if (direct != null) eraseFastInk(area); else refreshFastInk();
+            // Automatic Refresh off (System Settings): the closed popup's patches are not cleaned either.
+            if (!SystemSettings.flashes(false, app.prefs.autoRefresh())) return;
             cleanOffPage(area);
         }, CLOSED_MS);
     }
@@ -1268,9 +1426,7 @@ final class DrawingPad extends View {
         View window = app.previewFrame;
         Matrix fromPanel = new Matrix();
         if (!PanelCoordinates.fromView(window).invert(fromPanel)) return;
-        RectF page = new RectF(0, 0, getWidth(), getHeight());
-        PanelCoordinates.fromView(this).mapRect(page);
-        Rect area = new Rect(), shown = new Rect(); panelArea.roundOut(area); page.roundOut(shown);
+        Rect area = new Rect(), shown = new Rect(); panelArea.roundOut(area); pageArea().roundOut(shown);
         int[] covered = direct != null ? new int[]{shown.left, shown.top, shown.right, shown.bottom} : null;
         for (int[] part : MagnetDrag.minus(new int[]{area.left, area.top, area.right, area.bottom}, covered)) {
             RectF inRoot = new RectF(part[0], part[1], part[2], part[3]);
@@ -1293,9 +1449,12 @@ final class DrawingPad extends View {
     /** One full, clean refresh of the page and the bar, if the page changed since the last one. */
     private void autoRefresh(String reason) {
         // Never under the pen, mid-pinch, under an open popup or a dialog: the change stays pending for the next pause.
-        if (!unrefreshed || pointer != -1 || stroke != null || words.dragging() || placer.dragging() || navigating || display == null || app.popupOpen() || !hasWindowFocus()) {
+        if (!unrefreshed || pointer != -1 || stroke != null || words.dragging() || placer.dragging() || text.dragging() || navigating || display == null || app.popupOpen() || !hasWindowFocus()) {
             refreshRetries = 0; return;
         }
+        // Automatic Refresh off (System Settings) and not asked for: no refresh of any kind, not even the forced grey pass.
+        // Zen's button still put back: a page turn or a pinch presented the page's pixels over it (no refresh follows to redraw it).
+        if (!flashes()) { refreshRetries = 0; unrefreshed = ghosted = false; app.redrawZen(pageArea()); return; }
         flush(true);
         // Fast display paused (a panel over the canvas, the app resuming): an Android redraw would not reach
         // the panel, so keep the refresh pending; connectDisplay asks for it again once fast display is back.
@@ -1322,7 +1481,7 @@ final class DrawingPad extends View {
             // The whole page is current on the panel, closed popups' areas too.
             fastInk.setEmpty();
         } else invalidate();
-        refreshRetries = 0; unrefreshed = ghosted = false;
+        refreshRetries = 0; unrefreshed = ghosted = asked = false;
         app.inkWashBar.invalidate(); app.invalidateZen();
         Log.i(ProbeActivity.TAG, "Auto-refresh (" + reason + "): " + (clean ? "clean update of the page" : direct != null ? "forced mode 7 over the whole page" : "Android redraw") + " and the bar");
     }
@@ -1333,22 +1492,24 @@ final class DrawingPad extends View {
         // A replay plays on its own copy of the page; the pen or a finger landing ends it and puts the page back, a resting
         // hand doesn't (PageReplay.ends).
         if (app.replay.running()) { if (PageReplay.ends(event)) app.replay.stop(); return true; }
-        if (app.loading || document == null || fill != null || gradientCommit
+        if (app.loading || document == null
                 || !app.resumed || !hasWindowFocus()) return true;
         // Inkwash: a picture being placed (Import Image) takes every touch, the pen's and the fingers', until Place or Cancel.
         if (placer.touch(event)) return true;
-        if (undoWaiting && event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) undoNow();
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) layLiveNow();
+        // The pen on the page, landing or lifting: seen now (navigation, finger taps and the finger tool wait on it).
+        if (!Ui.fingersOnly(event)) penSeen = SystemClock.uptimeMillis();
         if (historyTap(event)) return true;
+        // Inkwash: with the Text tool taken up, the pen works the text boxes and draws nothing.
+        if (text.touch(event)) return true;
         // Inkwash: the pen landing on a magnet moves it; with Words open the pen works only the magnets, and fingers draw nothing.
-        if (words.touch(event, pointer == -1 && pickPointer == -1 && !app.pickingShade && !dropperOn && !hasGradient() && !fillGesture && shapeStroke == null)) return true;
+        if (words.touch(event, pointer == -1 && pickPointer == -1 && !dropperOn && shapeStroke == null)) return true;
         // One finger is the finger tool's; a second takes back what it drew, then two may pinch and pan (Zoom unlocked).
         boolean finger = fingerStroke(event);
         if (navigationGesture(event) || finger) return true;
-        if (app.pickingShade || dropperOn || pickPointer != -1) { sampleShadeGesture(event); return true; }
-        if (hasGradient()) return true;
-        if (fillGesture) { continueFillGesture(event); return true; }
+        if (dropperOn || pickPointer != -1) { sampleShadeGesture(event); return true; }
         if (shapeStroke != null) { continueShape(event); return true; }
-        if (lassoCount > 0 || selectionHandle != FloatingSelection.NONE) { continueSelection(event); return true; }
+        if (selectionHandle != FloatingSelection.NONE) { continueSelection(event); return true; }
         long inputStart = System.nanoTime();
         long eventAge = Math.max(0, SystemClock.uptimeMillis() - event.getEventTime());
         boolean drawingInput = false;
@@ -1365,6 +1526,7 @@ final class DrawingPad extends View {
                 drawingInput = true;
                 for (int h = 0; h < event.getHistorySize(); h++) sampleEvent(event, p, h);
                 if (action == MotionEvent.ACTION_MOVE) sampleEvent(event, p, -1);
+                else app.live.lifted = event.getEventTime();
             }
         }
         if (drawingInput && batching()) {
@@ -1373,10 +1535,9 @@ final class DrawingPad extends View {
             if (!batchPosted) { batchPosted = true; post(drawBatch); }
         } else {
             presentInput(drawingInput, eventAge);
-            if (drawingInput) wetBudget.input(System.nanoTime() - inputStart, eventAge, SystemClock.uptimeMillis());
             if (drawingInput && app.inkWash != null) app.inkWash.session.input(System.nanoTime() - inputStart, eventAge);
+            if (drawingInput) app.live.drawing();
         }
-        scheduleWet();
         if (action == MotionEvent.ACTION_CANCEL || pointerUp(event, pointer) && !liftQuick()) finishStroke();
         return true;
     }
@@ -1404,6 +1565,101 @@ final class DrawingPad extends View {
         if (heldPen.due(stroke, now)) { flushBatch(); heldPen.resend(stroke, now); presentInput(false, -1); }
         postDelayed(heldTick, HeldPen.TICK_MS);
     }
+    /** Hold to Snap ({@link HoldSnap}): the pen's slot stroke, watched for a hold at its end; null for a stroke that doesn't snap. */
+    private HoldSnap holdSnap;
+    /** The slot whose stroke {@link #holdSnap} watches. */
+    private int snapTool;
+    /** The stroke snapped: the rest of the touch draws nothing more, and the lift finishes the clean stroke. */
+    private boolean snapped;
+    /** A snapped line whose end the pen moved off ({@link #dragSnap}): the Shapes preview shows it, the lift draws it ({@link #liftSnapLine}). */
+    private HoldSnap snapLine;
+    /** While a snap draws again, nothing goes to the panel: the rough stroke's end and Undo and the clean stroke show as one update. */
+    private boolean quietPanel;
+    private final Runnable snapTick = this::snapTick;
+    /**
+     * Whether the pen's stroke just begun may snap: a slot's brush or Fill in's, the pen's tip, a plain stroke (not a mirror being
+     * placed, the lasso, a Spiro's ring or a refused touch), and not one whose hold already means something (Build-up).
+     */
+    private boolean snaps(boolean eraserEnd) {
+        int tool = app.inkWash.selected;
+        return !eraserEnd && (tool < ToolSlots.COUNT || tool == ToolSlots.FILL) && app.inkWash.brush(tool) != null && ringPrefix == null && stroke != null
+                && stroke != REFUSED && !(stroke instanceof RingSetup) && !(stroke instanceof MirrorShow.Place) && !stroke.buildsWhileHeld();
+    }
+    /** While the pen is down on a stroke that may snap: held still {@link HoldSnap#HOLD_MS} over a clean shape, it snaps. */
+    private void snapTick() {
+        if (holdSnap == null || stroke == null || pointer == -1) return;
+        double[][] clean = holdSnap.due(SystemClock.uptimeMillis()) ? holdSnap.snap() : null;
+        if (clean == null) { postDelayed(snapTick, HoldSnap.TICK_MS); return; }
+        snapTo(clean);
+    }
+    /**
+     * The rough stroke given back and drawn again along {@code clean} with the same slot: finished, then undone, as a
+     * finger's stroke is taken back ({@link #cancelFingerStroke}: a quick render or wet paint can't be dropped mid-way),
+     * the wet paint forgetting it ({@link WatercolorSession#takeBack}), so the page keeps one Undo step, the clean
+     * shape's. The pen stays down; its lift finishes the clean stroke as any. The panel sees one update, at the end.
+     */
+    private void snapTo(double[][] clean) {
+        int id = pointer, tool = snapTool;
+        HoldSnap snap = holdSnap;
+        quietPanel = true;
+        try {
+            takeBackStroke();
+            drawAgain(clean, tool, id);
+        } finally { quietPanel = false; }
+        flush(true);
+        snapped = true;
+        // A line's end may yet follow the pen (dragSnap).
+        holdSnap = snap;
+    }
+    /** The pen's stroke finished and taken back ({@link WatercolorSession#takeBack}), the page shown without it on the next update. */
+    private void takeBackStroke() {
+        finishStroke();
+        if (finishedChanged) app.inkWash.session.takeBack(document);
+        renderDirty();
+    }
+    /** {@code clean} ({@link HoldSnap}'s rows) drawn by slot {@code tool}'s brush under pointer {@code id}, the stroke left open for the lift. */
+    private void drawAgain(double[][] clean, int tool, int id) {
+        // Where the stroke began, which was allowed (a locked section's box is checked at the stroke's start).
+        samplePoint[0] = (float) clean[0][0]; samplePoint[1] = (float) clean[0][1];
+        beginInkStroke(tool, false, id, "pen");
+        inkPen = true;
+        for (double[] c : clean) feed((float) c[0], (float) c[1], (float) c[2], (float) c[3], (float) c[4], (long) c[5]);
+        flushBatch();
+        presentInput(false, -1);
+    }
+    /**
+     * The pen moved off a snapped line's end, still down: the brush's line is taken back as the rough stroke was, and
+     * the line from its start to the pen shows as a Shapes line does ({@link ShapePreview}, the panel's fast update, the
+     * slot's size and grey), its end following the pen ({@link #continueShape}). Redrawing the brush at every move is
+     * too slow for the panel (a wet brush's whole stroke each time); the lift draws it once ({@link #liftSnapLine}).
+     */
+    private void dragSnap() {
+        HoldSnap line = holdSnap;
+        int id = pointer, tool = snapTool;
+        float x = samplePoint[0], y = samplePoint[1];
+        quietPanel = true;
+        try { takeBackStroke(); } finally { quietPanel = false; }
+        snapLine = line; pointer = id;
+        getParent().requestDisallowInterceptTouchEvent(true);
+        double[] start = line.to(x, y)[0];
+        ToolSwatches.Look look = app.inkWash.look(tool);
+        samplePoint[0] = x; samplePoint[1] = y;
+        beginShape(DrawLayout.shapeOutline(shapes.shape(ToolSettings.Shape.LINE), look.px), ToolSwatches.tone(look.darkness), (float) start[0], (float) start[1]);
+    }
+    /** The pen lifted from a dragged snapped line ({@link #dragSnap}): the preview gone and the line drawn by the brush to where it lifted, one update and one Undo step, as a snap. */
+    private void liftSnapLine() {
+        HoldSnap line = snapLine;
+        int id = pointer;
+        snapLine = null;
+        quietPanel = true;
+        try {
+            endFastPreview();
+            renderShape(shapeStroke.cancel(display, viewportBitmap != null)); shapeStroke = null;
+            renderShapeShown();
+            drawAgain(line.to(shapeX, shapeY), snapTool, id);
+        } finally { quietPanel = false; }
+        if (!liftQuick()) finishStroke();
+    }
     /** Whether the pen stroke in progress gathers its samples in {@link #penBatch}: Inkwash's. */
     private boolean batching() { return penBatching && inkPen && stroke != null; }
     /**
@@ -1418,9 +1674,9 @@ final class DrawingPad extends View {
         if (timing.active()) timing.samples(n, System.nanoTime() - start);
         presentInput(true, -1);
         if (timing.active()) timing.batch(n, Math.max(0, SystemClock.uptimeMillis() - oldest));
-        // How late the pen's input is drawn, and how long drawing took: what paces settling (MonoPaint's work budget too).
-        wetBudget.input(System.nanoTime() - start, age, SystemClock.uptimeMillis());
+        // How late the pen's input is drawn, and how long drawing took: what paces settling.
         app.inkWash.session.input(System.nanoTime() - start, age);
+        app.live.drawing();  // Live pages: the stroke so far to the guests, every LiveChange.PART_MS; after the timing that paces settling
     }
     /** Hands every gathered sample to the stroke before it finishes or another gesture needs the page. */
     private void flushBatch() {
@@ -1461,62 +1717,28 @@ final class DrawingPad extends View {
         if (samplePoint[0] < 0 || samplePoint[1] < 0
                 || samplePoint[0] >= document.width || samplePoint[1] >= document.height) return false;
         if (shapesOn && app.inkWash != null && app.inkWash.selected < ToolSlots.COUNT && placing == Placing.NONE && !lassoOn && !eraserEnd(event, index)) return inkShape(event.getPointerId(index));
-        if (app.inkWash != null) {
-            boolean end = eraserEnd(event, index);
-            beginInkStroke(end ? InkWash.ERASER : app.inkWash.selected, end, event.getPointerId(index), "pen");
-            timing.down(event.getEventTime());
-            inkPen = true;
-            // A ring set up is shown already.
-            boolean set = ringPrefix != null;
-            sampleEvent(event, index, -1);
-            if (!set) ringGuide(penSample.pressure, penSample.tiltX, penSample.tiltY);
-            if (stroke.buildsWhileHeld()) { removeCallbacks(heldTick); postDelayed(heldTick, HeldPen.TICK_MS); }
-            return true;
-        }
-        PaintState paint = app.paint;
-        // Masking fluid lies over every layer, hidden ones too.
-        boolean fluid = paint.maskingFluid;
-        if (!fluid && !document.layerVisible(document.activeLayer())) {
-            app.message("This layer is hidden. Open Layers to show it or select another layer."); return false;
-        }
-        // A stylus's eraser end, or a stroke begun with its side button held, erases with
-        // the Eraser tool, whatever tool is selected.
-        boolean penEraser = eraserEnd(event, index);
-        ToolSettings settings = penEraser ? app.library.builtin(ToolSettings.Tool.ERASER) : app.library.current();
-        if (settings.tool == ToolSettings.Tool.LASSO) { beginLasso(event, index); return true; }
-        boolean erasing = paint.eraseMode && settings.supportsEraseMode();
-        // Brushes paint into a wet canvas; the brush pens, and brushes, shapes and fills in
-        // watercolor mode, bring their own water, which on a dry canvas wets only where it lands.
-        // Masking fluid is laid dry, opaque and in full.
-        boolean watercolor = !erasing && !fluid && paint.transparentPaint && paint.watercolor;
-        washing = watercolor && (settings.tool == ToolSettings.Tool.SHAPES || settings.tool == ToolSettings.Tool.FILL);
-        boolean wets = !erasing && !fluid && (settings.tool.water || washing
-                || settings.isBrush() && (paint.wetCanvas || watercolor));
-        if (!wets || wet != null && wet.coversCanvas() != paint.wetCanvas) dryWet();
-        if (wets) wetPaint();
-        document.paintMaskingFluid(fluid);
-        pointer = event.getPointerId(index);
-        getParent().requestDisallowInterceptTouchEvent(true);
-        int gray = fluid ? 0 : paint.gray, shade = erasing ? ToneDocument.ERASE : gray;
-        if (settings.tool == ToolSettings.Tool.SHAPES) { beginShape(settings, shade); return true; }
-        if (settings.tool == ToolSettings.Tool.FILL) { beginFill(settings, shade); return true; }
-        cancelWetCallback();
-        recording = null;
-        // With opaque paint the wet brush pen keeps the selected ink: each stroke starts dipped in it again.
-        if (settings.holdsInk() && !paint.transparentPaint && !erasing) paint.brushInk.load(gray);
-        stroke = ToolStrokes.create(document, settings, gray, wet, paint.transparentPaint && !fluid, erasing, app.prefs.smoothEdges(),
-                settings.tool.flowing ? (settings.holdsInk() ? paint.brushInk : null) : watercolor ? paint.brushLoad : null);
-        // Supernote encodes signed X degrees in ORIENTATION, Y in TILT.
+        boolean end = eraserEnd(event, index);
+        beginInkStroke(end ? InkWash.ERASER : app.inkWash.selected, end, event.getPointerId(index), "pen");
+        timing.down(event.getEventTime());
+        inkPen = true;
+        holdSnap = snaps(end) ? new HoldSnap(viewport.scale()) : null; snapTool = app.inkWash.selected;
+        if (holdSnap != null) { removeCallbacks(snapTick); postDelayed(snapTick, HoldSnap.TICK_MS); }
+        // A ring set up is shown already.
+        boolean set = ringPrefix != null;
         sampleEvent(event, index, -1);
+        if (!set) ringGuide(penSample.pressure, penSample.tiltX, penSample.tiltY);
+        if (stroke.buildsWhileHeld()) { removeCallbacks(heldTick); postDelayed(heldTick, HeldPen.TICK_MS); }
         return true;
     }
-    /** Record and Replay ({@link StrokeLog}): the samples of the pen's brush stroke being drawn, or null. */
+    /** Record and Replay ({@link StrokeLog}): the samples of the stroke being drawn (the pen's or a finger's, a brush's or the eraser's), or null. */
     private StrokeLog.Recorder recording;
+    /** The stroke being drawn's log entry so far; null for none (Live pages: its parts' kind, LiveProbe.drawing). */
+    StrokeLog.Recorder recording() { return recording; }
     /** Shows what a replayed stroke changed ({@link PageReplay}), at once. */
     void replayShow() { renderDirty(); flush(true); }
     /** Starts tool {@code tool}'s stroke (a slot, the eraser or the smudge tool) under pointer {@code id}, the pen ({@code eraserEnd}: its eraser end) or a finger ({@code kind}, for the timing log). */
     private void beginInkStroke(int tool, boolean eraserEnd, int id, String kind) {
-        undoNow();
+        layLiveNow();
         // A stroke still working after lift finishes first.
         if (stroke != null) finishStroke();
         recording = null;
@@ -1526,7 +1748,7 @@ final class DrawingPad extends View {
         if (!app.allowStroke(tool)) { refuse(id); return; }
         // No ring while the pen touches; a finger's eraser follows it from its first sample (followEraser).
         hideOutline();
-        dryWet(); document.paintMaskingFluid(false);
+        document.paintMaskingFluid(false);
         pointer = id;
         getParent().requestDisallowInterceptTouchEvent(true);
         long created = System.nanoTime();
@@ -1555,7 +1777,7 @@ final class DrawingPad extends View {
         ringPrefix = set;
         // The finger's brush keeps paint of its own (Keeps Paint).
         stroke = app.inkWash.stroke(document, tool, "finger".equals(kind));
-        recording = "pen".equals(kind) ? app.inkWash.recorder : null;
+        recording = app.inkWash.recorder;
         // Copy Strokes: the copies shown live from the stroke (the smudge tool's only at lift: it moves what is there).
         // A Filled Shape's big fill shows flat at once, before it is laid.
         if (stroke instanceof FilledShape) ((FilledShape) stroke).preview = this::previewFill;
@@ -1563,6 +1785,7 @@ final class DrawingPad extends View {
             mirrorShow.beginCopies(document.mirrors().group(), !(own(stroke) instanceof EraseBothStroke));
         // Zoomed in, the pen's speed is still the hand's on the glass (sizes stay page pixels).
         stroke.zoom(viewport.scale());
+        if (recording != null) recording.zoom = viewport.scale();
         timing.created(System.nanoTime() - created);
         // The stroke shows through the panel's fastest black-and-white update while it is drawn (StrokePanel), as
         // shapes' previews do: the page's dots are black or white already. Its end shows it all again through the
@@ -1693,13 +1916,21 @@ final class DrawingPad extends View {
     }
     @Override public boolean onHoverEvent(MotionEvent event) {
         if (isPen(event, 0)) {
-            penGuardUntil = SystemClock.uptimeMillis()+250;
+            penSeen = SystemClock.uptimeMillis();
             if (navigating) { touchBlocked = true; endNavigation(); }
             hoverOutline(event);
         }
         return true;
     }
     private void sampleEvent(MotionEvent event, int pointerIndex, int history) {
+        // Snapped: the pen held on draws nothing more; moved off a line's end, the end follows it (dragSnap).
+        if (snapped) {
+            if (history < 0 && holdSnap != null && holdSnap.line()) {
+                pagePoint(event.getX(pointerIndex), event.getY(pointerIndex));
+                if (holdSnap.moved(samplePoint[0], samplePoint[1])) dragSnap();
+            }
+            return;
+        }
         penSample.read(event, app.physicalPenEvent, pointerIndex, history, landscapeTilt);
         // Positions come in the canvas's axes and are mapped; Supernote's signed tilt degrees stay the panel's, so they turn with the app.
         pagePoint(penSample.x, penSample.y);
@@ -1708,6 +1939,7 @@ final class DrawingPad extends View {
             penSample.tiltX = tilt[0]; penSample.tiltY = tilt[1];
         }
         heldPen.sampled(samplePoint[0], samplePoint[1], penSample.pressure, penSample.tiltX, penSample.tiltY, penSample.time);
+        if (holdSnap != null) holdSnap.sample(samplePoint[0], samplePoint[1], penSample.pressure, penSample.tiltX, penSample.tiltY, penSample.time);
         feed(samplePoint[0], samplePoint[1], penSample.pressure, penSample.tiltX, penSample.tiltY, penSample.time);
     }
     /**
@@ -1723,51 +1955,36 @@ final class DrawingPad extends View {
             feed(set.x, set.y, 0, tiltX, tiltY, timed ? time - StrokeLog.MOST_PAUSE : time);
         }
         if (recording != null) recording.add(x, y, pressure, tiltX, tiltY, time);
+        // Inkwash: a stroke kept sharp draws the sample as the log keeps it, so drawn again it draws the same (SharpStrokes).
+        if (recording != null && recording.keeps) {
+            recording.kept(keptSample, keptTime);
+            x = keptSample[0]; y = keptSample[1]; pressure = keptSample[2]; tiltX = keptSample[3]; tiltY = keptSample[4]; time = keptTime[0];
+        }
         if (batching()) { penBatch.add(x, y, pressure, tiltX, tiltY, time); return; }
         long start = timing.active() ? System.nanoTime() : 0;
         stroke.sample(x, y, pressure, tiltX, tiltY, time);
         if (timing.active()) timing.sample(System.nanoTime() - start);
     }
 
+    private final float[] keptSample = new float[5];
+    private final long[] keptTime = new long[1];
+
     /** Ends or cancels whatever gesture is running, committing finished work. */
     void finishStroke() {
+        holdSnap = null; snapLine = null; snapped = false; removeCallbacks(snapTick);
         // The pen lifted, a tool or size changed, or a panel opens: hovering brings the ring back, worked out again.
         hideOutline(); hoverTool = -1;
         if (navigating) touchBlocked = true;
         endNavigation();
-        if (lassoCount > 0) { lassoCount = 0; endPenPreview(); eraseGuide(); flush(true); }
-        if (selectionHandle != FloatingSelection.NONE) releaseSelection();
         // Inkwash: a floating piece stays up through menus, dialogs and the app pausing (the page is untouched until it is
         // put down); the pen landing off it, another tool, a page turn ({@link #carrySelection}) or Undo end it.
-        if (app.inkWash == null) placeSelection();
+        if (selectionHandle != FloatingSelection.NONE) releaseSelection();
         if (shapeStroke != null) {
             removeCallbacks(previewFrame); previewFrameScheduled = false;
             renderShape(shapeStroke.cancel(display, viewportBitmap != null)); shapeStroke = null; pointer = -1;
             renderShapeShown(); endFastPreview(); getParent().requestDisallowInterceptTouchEvent(false);
         }
-        if (pickPointer != -1) {
-            pickPointer = -1; getParent().requestDisallowInterceptTouchEvent(false);
-            int original = app.pickOriginalShade;
-            app.updateColorBar(() -> app.paint.gray = original);
-            app.setPickingShade(false);
-        }
-        // Pen-up already accepted this fill. Complete it before a lifecycle save.
-        if (gradientCommit && gradientFill != null) {
-            removeCallbacks(gradientStep);
-            gradientFill.secondShade(gradientShade);
-            while (!gradientFill.advance(8192)) { }
-            renderDirty(); flush(true); gradientReady = true; applyGradient();
-        }
-        if (fillGesture) {
-            removeCallbacks(previewFrame); previewFrameScheduled = false;
-            fillGesture = false; pointer = -1; clearGradientGuide(); endFastPreview();
-            getParent().requestDisallowInterceptTouchEvent(false);
-        }
-        cancelGradient();
-        if (fill != null) {
-            removeCallbacks(fillStep); fill.cancel(); fill = null;
-            renderDirty(); flush(true); app.toolbar.operationStatus.setText("");
-        }
+        if (pickPointer != -1) { pickPointer = -1; getParent().requestDisallowInterceptTouchEvent(false); }
         // No stroke to end: a tool or page change, a panel, Undo. A Spiro's ring set up goes.
         if (stroke == null) { dropRing(); return; }
         quickLift.stop();
@@ -1775,17 +1992,22 @@ final class DrawingPad extends View {
         // A finger drawing when something else ends its stroke must not start again from where it landed.
         if (drawFinger != -1 && pointer == drawFinger) fingerRefused = true;
         boolean timed = timing.active();
-        // An eraser showed what lies beneath where it went; the page shows it now, the wash erased too.
+        // An eraser showed what it leaves where it went; the page shows it now, the rest erased too.
         EraseBothStroke eraser = erasePreview();
         // Or a big fill's flat preview showed where it went: rendered again, the fill or not.
-        int[] erased = eraser == null ? fillShown : eraser.erasedBounds();
+        int[] shownFirst = eraser == null ? fillShown : eraser.erasedBounds();
         fillShown = null;
+        // A stump's other half shown over the page: drawn again from the page once the finish has laid it.
+        DrawingStroke.Unwritten shown = stroke.unwritten();
+        int[] smudged = shown == null ? null : shown.all();
+        int[] erased = smudged == null ? shownFirst : around(shownFirst, smudged);
         long finishStart = System.nanoTime();
         DrawingStroke ended = stroke;
         boolean changed = finishedChanged = stroke.finish(); stroke = null; pointer = -1;
         if (own(ended) instanceof EraseBothStroke) ghosted = true;
-        // Record and Replay: the pen's stroke, kept with the page.
-        if (changed && recording != null) document.logStroke(recording);
+        // Record and Replay: the stroke, kept with the page; one that changed nothing too (what it laid or picked up counts).
+        if (recording != null && recording.keeps) recording.plane = document.selectedAddress();
+        if (recording != null) document.logStroke(recording, changed);
         recording = null;
         // Inkwash: the live copies give way to the copies drawn; a placing stroke places. A Spiro's ring set up stays shown.
         RingSetup setup = ended instanceof RingSetup ? (RingSetup) ended : null;
@@ -1804,24 +2026,54 @@ final class DrawingPad extends View {
         endStrokePreview(() -> { renderDirty(erased, apart); rendered[0] = System.nanoTime(); });
         long flushed = System.nanoTime();
         if (timed) Log.i(ProbeActivity.TAG, timing.end(flushed, finished - finishStart, rendered[0] - finished, flushed - rendered[0]));
-        app.showBrushInk();
         // A smudge brush that keeps paint may now hold some, or none.
         if (app.inkWashBar != null) app.inkWashBar.heldChanged();
         getParent().requestDisallowInterceptTouchEvent(false);
-        if (changed) drawn();
-        scheduleWet();
+        if (changed) { drawn(); if (app.inkWashBar != null) app.inkWashBar.laid(); }
         if (app.inkWash != null) dryingTicker().start();
         // Drawing ended: the page refreshes once the pen has been away a while. Hovering cancels this.
         removeCallbacks(penAwayRefresh); postDelayed(penAwayRefresh, PEN_AWAY_MS);
         if (setup != null && setup.tap()) tapRing(setup);
         // No View invalidation or toolbar update at pen-up on the direct path.
     }
+    /**
+     * Inkwash: Make Ink ({@link TextMode}): text box {@code i} laid by the brush in use (the eraser's or the smudge tool's
+     * turn: the first slot's) as one stroke, its letters a fill's room ({@link TextBoxes#ink}, {@link FillTool#print}),
+     * the box gone with it: one Undo step that brings the box back. Finished as a stroke is, so a Slow wash dries on and a
+     * Later starts its clock.
+     */
+    void makeInk(int i) {
+        if (document == null || i < 0 || i >= document.texts().size()) return;
+        if (app.pageLocked()) { app.note(NotebookRules.PAGE_LOCKED); return; }
+        int slot = app.inkWash.selected < ToolSlots.COUNT ? app.inkWash.selected : 0;
+        if (app.inkWash.brush(slot) == null || !app.allowStroke(slot)) return;
+        String vector = VectorInk.shapeRefusal(document, app.inkWash.brush(slot));
+        if (vector != null) { app.sayVector(vector); return; }
+        finishStroke(); settleDrying();
+        VectorInk.under(document, app.inkWash.brush(slot));
+        FillRegion.Room letters = TextBoxes.ink(document.texts().get(i), document.width, document.height);
+        if (letters == null) return;
+        ToneDocument page = document;
+        Object mark = page.lastStep();
+        page.setTexts(page.texts().without(i));
+        ModularStroke laid = app.inkWash.ink(page, slot, letters);
+        stroke = new DrawingStroke() {
+            @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY) { }
+            @Override public void present() { laid.present(); }
+            @Override public boolean finish() { laid.finish(); page.linkSince(mark); return true; }
+        };
+        stroke.present();
+        finishStroke();
+    }
     private DryingTicker dryingTicker() {
         if (drying == null) drying = new DryingTicker(this, app.inkWash.session, new DryingTicker.Host() {
             @Override public ToneDocument page() { return document; }
-            // As the wet paint's animation (advanceWet): never under the pen, mid-pinch, paused or without the window.
-            @Override public boolean busy() { return stroke != null || !app.resumed || app.loading || navigating || !hasWindowFocus(); }
-            @Override public void show() { renderDirty(); flush(true); }
+            // Never under the pen, mid-pinch, paused or without the window; nor
+            // while a replay plays its copy, a stroke of it open (2026-11-03: a fade's tick there crashed, "Finish the
+            // current gesture first"): it plays with a session of its own, the page's ticks wait for the page.
+            @Override public boolean busy() { return stroke != null || shapeStroke != null || !app.resumed || app.loading || navigating || !hasWindowFocus() || app.replay.running(); }
+            // What a tick changed goes to a live page's guests too, batched (LiveProbe.ticked); settled sends the rest at once.
+            @Override public void show() { renderDirty(); flush(true); app.live.ticked(); }
             @Override public void settled() { drySettled(); }
         });
         return drying;
@@ -1844,8 +2096,11 @@ final class DrawingPad extends View {
     void resumeDrying() { if (drying != null) drying.start(); }
     /** Paused: nothing ticks, not even a fading mark (the clock catches it up at {@link #resumeDrying}). */
     void pauseDrying() { if (drying != null) drying.stop(); }
-    /** The page changed by drawing: kept for recovery, and the layers' thumbnails follow. */
-    private void drawn() { app.recovery(); if (app.inkWashBar != null) app.inkWashBar.pageChanged(); }
+    /**
+     * The page changed by drawing: kept for recovery, and the layers' thumbnails follow. Not while a snap draws again
+     * ({@link #quietPanel}): a Draw Together guest is sent the clean stroke alone, at the lift.
+     */
+    private void drawn() { if (quietPanel) return; app.recovery(); if (app.inkWashBar != null) app.inkWashBar.pageChanged(); }
 
     // Shapes
 
@@ -1853,17 +2108,21 @@ final class DrawingPad extends View {
     private boolean inkShape(int id) {
         if (document.fenced(samplePoint[0], samplePoint[1])) { app.note(TimedSections.LOCKED); refuse(id); return true; }
         if (!app.allowStroke(app.inkWash.selected)) { refuse(id); return true; }
-        hideOutline(); dryWet(); document.paintMaskingFluid(false);
+        // Vector Ink: no shapes of it, nor pixels on its layer.
+        String vector = VectorInk.shapeRefusal(document, app.inkWash.brush(app.inkWash.selected));
+        if (vector != null) { app.sayVector(vector); refuse(id); return true; }
+        hideOutline(); document.paintMaskingFluid(false);
         ToolSwatches.Look look = app.inkWash.shape(document);
         pointer = id;
         getParent().requestDisallowInterceptTouchEvent(true);
-        beginShape(DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness));
+        beginShape(DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness), samplePoint[0], samplePoint[1]);
         return true;
     }
-    private void beginShape(ToolSettings settings, int shade) {
+    /** A shape from {@code x, y} to the pen ({@link #samplePoint}), shown until the lift. */
+    private void beginShape(ToolSettings settings, int shade, float x, float y) {
         renderDirty(); shapeShown.setEmpty();
         shapeX = samplePoint[0]; shapeY = samplePoint[1];
-        shapeStroke = new ShapePreview(document, settings, shade, shapeX, shapeY);
+        shapeStroke = new ShapePreview(document, settings, shade, x, y);
         beginFastPreview(); drawPreviewFrame();
     }
     private void continueShape(MotionEvent event) {
@@ -1876,15 +2135,14 @@ final class DrawingPad extends View {
             if (!up) schedulePreviewFrame();
         }
         if (!up) return;
-        drawPreviewFrame(); endFastPreview();
-        if (washing) {
-            int[] spans = shapeStroke.spans();
-            renderShape(shapeStroke.cancel(display, viewportBitmap != null)); shapeStroke = null; pointer = -1;
-            getParent().requestDisallowInterceptTouchEvent(false);
-            wash(() -> WatercolorWash.spans(wet, spans, document.width, document.height, app.paint.gray));
-            return;
-        }
+        drawPreviewFrame();
+        if (snapLine != null) { liftSnapLine(); return; }
+        endFastPreview();
+        StrokeLog.Shape logged = shapeStroke.logged(shapeX, shapeY);
         boolean changed = shapeStroke.finish(); shapeStroke = null; pointer = -1;
+        // Record and Replay: a slot's shape (inkShape), on the layer its brush's strokes go to.
+        // Kept sharp on the plane it was laid on (SharpView draws it finer when zoomed).
+        if (app.inkWash != null && app.inkWash.shapeCode != null) document.logMade(StrokeLog.Entry.shape(0, app.inkWash.shapeCode, logged).sharp(document.selectedAddress(), 1, 1), changed);
         // All the preview went over drawn again from the page: its paper, guides, masking fluid and what lies over the layers.
         document.clearDirty(); renderShapeShown(); flush(true);
         getParent().requestDisallowInterceptTouchEvent(false);
@@ -1901,8 +2159,6 @@ final class DrawingPad extends View {
         // Budget from frame start; rendering time must not add another full-frame delay.
         lastPreviewFrame = SystemClock.uptimeMillis();
         if (shapeStroke != null) renderShape(shapeStroke.preview(shapeX, shapeY, display, viewportBitmap != null));
-        else if (showsGradientGuide()) drawGradientGuide();
-        else if (lassoCount > 0) drawLasso();
         else if (selectionHandle != FloatingSelection.NONE) {
             selection.drag(selectionHandle, grabX, grabY, dragX, dragY); showSelection();
         } else return;
@@ -1936,33 +2192,10 @@ final class DrawingPad extends View {
         visible.inset(Math.min(margin, visible.width() / 2), Math.min(margin, visible.height() / 2));
         return selection.knob(up[0], up[1], dp(40) / pageScale(), new float[]{visible.left, visible.top, visible.right, visible.bottom});
     }
-    /** Ends the pen's hold on the canvas after a lasso loop or selection drag. */
+    /** Ends the pen's hold on the canvas after a selection drag. */
     private void endPenPreview() {
         removeCallbacks(previewFrame); previewFrameScheduled = false;
         pointer = -1; endFastPreview(); getParent().requestDisallowInterceptTouchEvent(false);
-    }
-    private void beginLasso(MotionEvent event, int index) {
-        // Wet paint would go on changing the layer under the piece.
-        dryWet();
-        pointer = event.getPointerId(index);
-        getParent().requestDisallowInterceptTouchEvent(true);
-        lassoCount = lassoShown = 0; addLassoPoint();
-        beginFastPreview();
-    }
-    /** Adds {@link #samplePoint} to the loop, skipping points too close to the last to show. */
-    private void addLassoPoint() {
-        float x = samplePoint[0], y = samplePoint[1];
-        if (lassoCount > 0 && Math.hypot(x - lasso[2*lassoCount-2], y - lasso[2*lassoCount-1]) < dp(3) / pageScale()) return;
-        if (2 * lassoCount + 2 > lasso.length) lasso = java.util.Arrays.copyOf(lasso, 2 * lasso.length);
-        lasso[2*lassoCount] = x; lasso[2*lassoCount+1] = y; lassoCount++;
-    }
-    /** Draws the loop's points not yet shown, joined to those that are. */
-    private void drawLasso() {
-        int from = Math.max(0, lassoShown - 1), count = lassoCount - from;
-        if (count < 2 || presented() == null) return;
-        float[] points = presentedPoints(java.util.Arrays.copyOfRange(lasso, 2 * from, 2 * lassoCount), count);
-        guide.add(presented(), points, count, false, null, 0, this::queueView);
-        lassoShown = lassoCount;
     }
     private void grabSelection(MotionEvent event, int index, int handle) {
         pointer = event.getPointerId(index);
@@ -1971,33 +2204,20 @@ final class DrawingPad extends View {
         selection.grab(handle); lassoBar();
         beginFastPreview();
     }
-    /** Follows the pen drawing a loop or dragging the selection. */
+    /** Follows the pen dragging the selection. */
     private void continueSelection(MotionEvent event) {
         int action = event.getActionMasked(), index = event.findPointerIndex(pointer);
-        if (action == MotionEvent.ACTION_CANCEL || index < 0) {
-            // Keep the piece where it got to; an unfinished loop lifts nothing.
-            if (lassoCount > 0) { lassoCount = 0; endPenPreview(); eraseGuide(); flush(true); }
-            else releaseSelection();
-            return;
-        }
+        // Keep the piece where it got to.
+        if (action == MotionEvent.ACTION_CANCEL || index < 0) { releaseSelection(); return; }
         boolean up = pointerUp(event, pointer);
         if (action == MotionEvent.ACTION_MOVE || up) {
-            if (lassoCount > 0) for (int h = 0; h < event.getHistorySize(); h++) {
-                pagePoint(event.getHistoricalX(index, h), event.getHistoricalY(index, h)); addLassoPoint();
-            }
             pagePoint(event.getX(index), event.getY(index));
-            if (lassoCount > 0) addLassoPoint(); else { dragX = samplePoint[0]; dragY = samplePoint[1]; }
+            dragX = samplePoint[0]; dragY = samplePoint[1];
             if (!up) schedulePreviewFrame();
         }
         if (!up) return;
         drawPreviewFrame();
-        if (selectionHandle != FloatingSelection.NONE) { releaseSelection(); return; }
-        // A tap, such as one that placed the last piece, draws no loop.
-        boolean loop = lassoCount >= 3;
-        FloatingSelection lifted = loop ? LassoPlanes.lift(document, lasso, lassoCount) : null;
-        lassoCount = 0; endPenPreview(); eraseGuide();
-        if (lifted == null) { flush(true); if (loop) app.message("Nothing on this layer inside the loop."); return; }
-        floatSelection(lifted);
+        releaseSelection();
     }
     /** Ends a selection drag, leaving the piece floating where it got to. */
     private void releaseSelection() {
@@ -2007,7 +2227,7 @@ final class DrawingPad extends View {
     }
     /** Floats {@code piece} over the page, placing any piece already floating first. */
     void floatSelection(FloatingSelection piece) {
-        finishStroke(); dryWet();
+        finishStroke();
         selection = piece; selectionLaid = piece.lifted ? piece.copy() : null;
         showSelection(); flush(true); lassoBar();
     }
@@ -2086,14 +2306,23 @@ final class DrawingPad extends View {
         eraseGuide();
         Rect area = selectionArea();
         selection = null; selectionLaid = null; selectionShown.setEmpty(); lassoBar();
+        if (lassoBack) { lassoBack = false; lasso(false); if (app.inkWashBar != null) app.inkWashBar.lassoChanged(); }
         return area;
     }
     /** Inkwash: the Lasso taken up or put away (the side column's button, another tool chosen); put away, a floating piece is put down. */
     void lasso(boolean on) {
+        lassoBack = false;
         if (!on) placeSelection();
         lassoOn = on;
         if (on) hideOutline();
     }
+    /**
+     * Inkwash: the edge strip's Lasso let go with a piece floating (the owner, 2026-11-05): the piece and its bar stay, as the
+     * side column's do, and the Lasso is put away once the piece is done ({@link #lassoBack}); false when none floats.
+     */
+    boolean lassoBackWhenDone() { return lassoBack = selection != null && lassoOn && !lassoDeletes; }
+    /** Inkwash: the Lasso chosen by hand (the column's button): it stays once the piece floating is done, whatever set {@link #lassoBack}. */
+    void keepLasso() { lassoBack = false; }
     /**
      * Inkwash: the Lasso's loop drawn ({@link Placing}'s marching ants): what the selected pair holds inside it floats
      * as a piece. A tap, as the one that put the last piece down, lifts nothing.
@@ -2105,7 +2334,7 @@ final class DrawingPad extends View {
         FloatingSelection piece = LassoPlanes.lift(document, points, loop.count());
         if (piece == null) { app.note(lassoDeletes ? DrawLayout.LASSO_NOTHING_DELETED : DrawLayout.LASSO_NOTHING); return; }
         // The way that deletes: what the loop rings goes at once, as Delete takes a piece, never floating.
-        if (lassoDeletes) { if (app.pageLocked()) app.note(NotebookRules.PAGE_LOCKED); else { dryWet(); erase(piece, pageRect(piece.cutBounds())); } return; }
+        if (lassoDeletes) { if (app.pageLocked()) app.note(NotebookRules.PAGE_LOCKED); else erase(piece, pageRect(piece.cutBounds())); return; }
         floatSelection(piece);
     }
     /** Inkwash: Cut (the Lasso's menu): kept to paste, then deleted as Delete does, one Undo step. */
@@ -2120,11 +2349,14 @@ final class DrawingPad extends View {
      */
     void duplicateSelection() {
         if (selection == null || document == null) return;
-        FloatingSelection copy = selection.copy();
+        FloatingSelection copy = LassoPieces.duplicated(selection);
+        lassoBack = false;  // the piece going down is not the last: the Lasso stays for the copy
         placeSelection();
-        copy.centerX += DrawLayout.DUPLICATE_OFFSET; copy.centerY += DrawLayout.DUPLICATE_OFFSET;
         floatSelection(copy);
+        lassoBack = lassoOn && !lassoDeletes;
     }
+    /** Inkwash: Make Stamp (the Lasso's bar, 2026-11-02): the piece's ink a Stamp's nib ({@link PaintActivity#makeStamp}). */
+    void stampSelection() { if (selection != null && document != null) app.makeStamp(selection); }
     /** Inkwash: something cut or copied to paste ({@link #pasteSelection}). */
     boolean hasKept() { return kept != null; }
     /**
@@ -2142,16 +2374,15 @@ final class DrawingPad extends View {
         FloatingSelection piece = selection;
         if (piece == null || document == null) return false;
         if (app.pageLocked()) { app.note(NotebookRules.PAGE_LOCKED); return false; }
+        lassoBack = lassoOn && !lassoDeletes;
         erase(piece, endSelection());
         return true;
     }
     /** Takes what {@code piece} was lifted from off the page, one Undo step, and shows {@code area} again. */
     private void erase(FloatingSelection piece, Rect area) {
         boolean changed = false;
-        if (piece.lifted && piece.planes != null) {
-            try { changed = piece.planes.place(document, piece, false, true); }
-            catch (IllegalStateException error) { app.message(error.getMessage()); }
-        }
+        try { changed = LassoPieces.erase(document, piece); }
+        catch (IllegalStateException error) { app.message(error.getMessage()); }
         renderArea(area); renderDirty(); flush(true);
         if (changed) app.recovery();
     }
@@ -2174,125 +2405,7 @@ final class DrawingPad extends View {
         if (area.intersect(0, 0, display.getWidth(), display.getHeight())) { render(area); queue(area); }
     }
 
-    // Fills and gradients
-
-    private void beginFill(ToolSettings settings, int shade) {
-        fillGesture = true;
-        fillStartX = fillEndX = samplePoint[0]; fillStartY = fillEndY = samplePoint[1];
-        // Masking fluid has one shade, so it fills flat.
-        fillGradient = app.paint.maskingFluid ? ToolSettings.Gradient.FLAT : settings.gradient;
-        fillOriginalGray = app.paint.gray; fillShade = shade;
-        fillTolerance = fillGradient == ToolSettings.Gradient.FLAT ? 0 : settings.tolerance;
-        if (!showsGradientGuide()) return;
-        beginFastPreview(); drawPreviewFrame();
-    }
-    private void continueFillGesture(MotionEvent event) {
-        int action = event.getActionMasked(), p = event.findPointerIndex(pointer);
-        if (action == MotionEvent.ACTION_CANCEL) { finishStroke(); return; }
-        if (p < 0) return;
-        boolean up = pointerUp(event, pointer);
-        if (action != MotionEvent.ACTION_MOVE && !up) return;
-        pagePoint(event.getX(p), event.getY(p));
-        fillEndX = samplePoint[0]; fillEndY = samplePoint[1];
-        if (!up) { schedulePreviewFrame(); return; }
-        drawPreviewFrame();
-        fillGesture = false; pointer = -1; getParent().requestDisallowInterceptTouchEvent(false);
-        float[] axis = {fillStartX, fillStartY, fillEndX, fillEndY}; pageToView.mapPoints(axis);
-        if (fillGradient == ToolSettings.Gradient.FLAT || Math.hypot(axis[2]-axis[0], axis[3]-axis[1]) < dp(8)) {
-            if (fillGradient != ToolSettings.Gradient.FLAT) clearGradientGuide();
-            fill = washing ? FloodFill.region(document, (int)fillStartX, (int)fillStartY, fillTolerance)
-                    : new FloodFill(document, (int)fillStartX, (int)fillStartY, fillShade, fillTolerance);
-            app.toolbar.operationStatus.setText("Filling…"); post(fillStep);
-        } else {
-            // Keep only the direction guide until the second color gesture begins.
-            gradientWaiting = true; gradientReady = false; gradientCommit = false;
-            app.scheduleGradientHint();
-        }
-        // A waiting guide must outlast a panel refresh; a cleared one is already gone.
-        endFastPreview();
-    }
-    private void advanceFill() {
-        if (fill == null) return;
-        if (!advanceFor5ms(fill)) { postDelayed(fillStep, 1); return; }
-        boolean changed = fill.finish();
-        java.util.BitSet region = fill.region(); fill = null;
-        app.toolbar.operationStatus.setText("");
-        if (region != null) { wash(() -> WatercolorWash.pixels(wet, region, document.width, document.height, fillShade)); return; }
-        renderDirty(); flush(true);
-        if (changed) app.recovery();
-    }
-    /**
-     * Lays a shape's or flat fill's wash as one stroke of the wet paint, shown at once as a
-     * glaze, as a watercolor brush's is, and run once there is time.
-     */
-    private void wash(Runnable queue) {
-        wetPaint(); document.begin(); wet.beginStroke();
-        queue.run();
-        boolean changed = wet.finishStroke();
-        renderDirty(); flush(true);
-        if (changed) drawn();
-        scheduleWet();
-    }
-    /** Runs a fill for one 5 ms slice; true when it has finished. */
-    private static boolean advanceFor5ms(FloodFill fill) {
-        long deadline = System.nanoTime()+5_000_000L;
-        boolean done;
-        do { done = fill.advance(1024); } while (!done && System.nanoTime() < deadline);
-        return done;
-    }
-    /** A gradient axis is drawn and waiting for, or previewing, its second color. */
-    boolean hasGradient() { return gradientWaiting || gradientFill != null; }
-    /** Previews the pending gradient with {@code shade} as its second color. */
-    void previewGradient(int shade) {
-        if (!hasGradient()) return;
-        app.hideGradientHint();
-        if (gradientWaiting) {
-            gradientSample = document.snapshot();
-            gradientShade = gradientPassShade = shade;
-            gradientFill = new FloodFill(document, (int)fillStartX, (int)fillStartY, fillShade, fillTolerance,
-                    fillStartX, fillStartY, fillEndX, fillEndY, shade, fillGradient);
-            gradientWaiting = false; gradientReady = false;
-            clearGradientGuide(); post(gradientStep); return;
-        }
-        gradientShade = shade;
-        // Finish the current preview pass before starting the latest shade. Rapid
-        // moves must not continually restart a large fill and starve its display.
-        if (gradientReady && gradientPassShade != shade) {
-            gradientFill.secondShade(shade); gradientPassShade = shade; gradientReady = false;
-            post(gradientStep);
-        }
-    }
-    private void advanceGradient() {
-        if (gradientFill == null) return;
-        if (!advanceFor5ms(gradientFill)) { postDelayed(gradientStep, 1); return; }
-        renderDirty(); flush(true); gradientReady = true;
-        if (gradientPassShade != gradientShade) previewGradient(gradientShade);
-        else if (gradientCommit) applyGradient();
-    }
-    /** Commits the previewed gradient, once its latest pass is complete. */
-    void applyGradient() {
-        if (gradientFill == null) return;
-        gradientCommit = true;
-        if (!gradientReady) return;
-        boolean changed = gradientFill.finish(); gradientFill = null; gradientSample = null; gradientCommit = false;
-        app.toolbar.operationStatus.setText("");
-        if (changed) app.recovery();
-    }
-    /** Discards a pending gradient and restores the color chosen before it. */
-    void cancelGradient() {
-        app.hideGradientHint(); removeCallbacks(gradientStep);
-        if (!hasGradient()) return;
-        if (gradientFill != null) gradientFill.cancel();
-        if (gradientWaiting) { gradientWaiting = false; clearGradientGuide(); }
-        gradientFill = null; gradientSample = null; gradientReady = false; gradientCommit = false;
-        app.toolbar.operationStatus.setText(""); renderDirty(); flush(true);
-        int original = fillOriginalGray;
-        app.updateColorBar(() -> app.paint.gray = original);
-        app.setEraseMode(fillShade == ToneDocument.ERASE);
-        app.saveToolState();
-    }
-
-    // Eyedropper
+    // The Dropper
 
     private void sampleShadeGesture(MotionEvent event) {
         int action = event.getActionMasked(), index = event.getActionIndex();
@@ -2307,28 +2420,12 @@ final class DrawingPad extends View {
         boolean up = pointerUp(event, pickPointer);
         // Inkwash: the Dropper picks the grey the page shows, set on the lift ({@link InkWashBar#dropped}), then is put down.
         if (dropperOn && (down || action == MotionEvent.ACTION_MOVE || up)) dropTone = dropAt(event.getX(p), event.getY(p));
-        else if (down || action == MotionEvent.ACTION_MOVE || up) {
-            pagePoint(event.getX(p), event.getY(p));
-            if (samplePoint[0] >= 0 && samplePoint[1] >= 0 && samplePoint[0] < document.width && samplePoint[1] < document.height) {
-                int x = (int)samplePoint[0], y = (int)samplePoint[1];
-                // The unmodified composite prevents sampling the gradient's own preview.
-                int shade = gradientSample == null ? document.compositeTone(x, y) : gradientSample[y*document.width+x]&255;
-                if (app.paint.gray != shade || !app.pickedShade)
-                    app.updateColorBar(() -> { app.paint.gray = shade; app.pickedShade = true; });
-                previewGradient(shade);
-            }
-        }
         if (up) {
             pickPointer = -1; getParent().requestDisallowInterceptTouchEvent(false);
             if (dropperOn) {
                 int tone = dropTone;
                 dropper(false);
                 if (tone >= 0) app.inkWashBar.dropped(tone); else app.inkWashBar.lassoChanged();
-                return;
-            }
-            if (app.pickedShade) {
-                app.setEraseMode(false); app.setMaskingFluid(false); app.setPickingShade(false); applyGradient();
-                app.loadInk(app.paint.gray); app.saveToolState();
             }
         }
     }
@@ -2336,34 +2433,30 @@ final class DrawingPad extends View {
     // Finger taps
 
     /**
-     * A two-finger double tap turns Zen Mode on or off (the owner, 2026-10-30, as MonoPaint's fullscreen): two two-finger
-     * taps, the second lifting within {@link #ZEN_TAP_MS} of the first. So a two-finger tap's Undo waits that long for
-     * a second tap; the pen landing or a finger starting a stroke meanwhile undoes at once, first.
+     * A live change still drawing itself on, laid now ({@link LiveProbe#layNow}), before anything else changes the page.
+     * (A three-finger double tap was Zen Mode from 2026-10-30, its tap's Redo waiting for a second tap; gone 2026-11-02,
+     * the owner: "remove the three finger double to zen mode .. i can't get three finger redo to work".)
      */
-    static final long ZEN_TAP_MS = 350;
-    private boolean undoWaiting;
-    private final Runnable waitingUndo = this::waitedUndo;
-    private void waitedUndo() { undoWaiting = false; app.undo(); }
-    /** The two-finger tap's Undo still waiting for a second tap, done now (before anything else changes the page). */
-    private void undoNow() {
-        if (!undoWaiting) return;
-        removeCallbacks(waitingUndo);
-        waitingUndo.run();
-    }
+    private void layLiveNow() { app.live.layNow(); }
 
-    /** A two-finger tap undoes and a three-finger tap redoes, like the header buttons; a two-finger double tap is Zen Mode. */
+    /** A two-finger tap undoes and a three-finger tap redoes (at first: System Settings may set either to Refresh or Nothing), at once, like the header buttons. */
     private boolean historyTap(MotionEvent event) {
         // A finger's stroke may yet be a tap's first finger: the next finger takes back what it drew.
         if ((fingerDrawing() ? blocksTap() : blocksFingerGesture()) || !Ui.fingersOnly(event) || app.busy()) { fingerTaps.reset(); return false; }
         int count = event.getPointerCount();
+        // A palm among the contacts: the hand, not a tap (the owner, 2026-11-05: a palm triggering Undo).
+        for (int i = 0; i < count; i++) if (event.getTouchMajor(i) >= FingerTool.PALM_MAJOR) { fingerTaps.reset(); return false; }
         float[] x = new float[count], y = new float[count]; int[] ids = new int[count];
         for (int i = 0; i < count; i++) { x[i] = event.getX(i); y[i] = event.getY(i); ids[i] = event.getPointerId(i); }
         int fingers = fingerTaps.event(event.getActionMasked(), event.getEventTime(), ids, x, y, dp(PinchPan.SLOP_DP));
-        if (fingers == 0) return false;
+        // A palm landing and lifting as the pen draws passes for a tap: ignored while the pen is near and a second after.
+        if (fingers == 0 || !FingerTool.tapCounts(SystemClock.uptimeMillis(), penSeen, pointer != -1)) return false;
+        // What the tap does: System Settings' choice (Undo and Redo at first).
+        FingerTool.Tap tap = FingerTool.tap(fingers, app.prefs.twoFingerTap(), app.prefs.threeFingerTap());
+        if (tap == FingerTool.Tap.NOTHING) return false;
         endNavigation();
-        if (fingers == 2 && undoWaiting) { removeCallbacks(waitingUndo); undoWaiting = false; app.setZen(!app.zen); }
-        else if (fingers == 2) { undoWaiting = true; postDelayed(waitingUndo, ZEN_TAP_MS); }
-        else { undoNow(); app.redo(); }
+        layLiveNow();
+        if (tap == FingerTool.Tap.UNDO) app.undo(); else if (tap == FingerTool.Tap.REDO) app.redo(); else refreshAsked(tap.label + " tap");
         return true;
     }
 
@@ -2438,10 +2531,10 @@ final class DrawingPad extends View {
                 float diameter = InkWashSizes.fingerEraser(page);
                 Log.d(ProbeActivity.TAG, "finger erase starts, touchMajor=" + contact + "px = "
                         + contact / getResources().getDisplayMetrics().density + "dp, diameter=" + diameter + " page px");
-                undoNow();
+                layLiveNow();
                 long created = System.nanoTime();
                 timing.begin("kind=finger tool=ERASER diameter=" + Math.round(diameter), created);
-                stroke = app.inkWash.fingerEraser(document, diameter);
+                stroke = app.inkWash.fingerEraser(document, diameter); recording = app.inkWash.recorder;
                 nibShownUntil = SystemClock.uptimeMillis() + NIB_SHOWN_MS;
                 stroke.zoom(viewport.scale());
                 if (stroke instanceof MirrorStroke && document.mirrors().copies()) mirrorShow.beginCopies(document.mirrors().group(), false);
@@ -2491,7 +2584,9 @@ final class DrawingPad extends View {
         // A fingertip has no pressure or tilt: a brush draws at a medium press. The finger eraser's size is fixed when it
         // starts; pressure and tilt do not change it, speed does.
         long start = timing.active() ? System.nanoTime() : 0;
-        stroke.sample(samplePoint[0], samplePoint[1], ToolSettings.pressure(FingerTool.PRESSURE_TRAVEL), Float.NaN, Float.NaN, time);
+        float pressure = ToolSettings.pressure(FingerTool.PRESSURE_TRAVEL);
+        stroke.sample(samplePoint[0], samplePoint[1], pressure, Float.NaN, Float.NaN, time);
+        if (recording != null) recording.add(samplePoint[0], samplePoint[1], pressure, Float.NaN, Float.NaN, time);
         if (timing.active()) timing.sample(System.nanoTime() - start);
     }
     /**
@@ -2530,10 +2625,9 @@ final class DrawingPad extends View {
         boolean pen = false;
         for (int i = 0; i < event.getPointerCount(); i++)
             if (isPen(event, i)) pen = true;
-        if (pen || pointer != -1 && pointer != drawFinger || pickPointer != -1 || fillGesture || hasGradient()
-                || SystemClock.uptimeMillis() < penGuardUntil) {
+        if (pen || pointer != -1 && pointer != drawFinger || pickPointer != -1
+                || SystemClock.uptimeMillis() < penSeen + 250) {
             touchBlocked = true; endNavigation();
-            if (pen) penGuardUntil = SystemClock.uptimeMillis()+250;
             return false;
         }
         if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP) { endNavigation(); return true; }
@@ -2585,12 +2679,14 @@ final class DrawingPad extends View {
         if (navigationFrameScheduled) drawNavigationFrame();
         navigating = false; getParent().requestDisallowInterceptTouchEvent(false);
         // Lifted or cancelled alike (the firmware cancels many two-finger touches): the frames' grey updates overlapped,
-        // so the page gets its clean update once the fingers have been still a moment.
-        ghosted = unrefreshed = true; refreshSoon("pinch or pan ended", NAVIGATED_MS);
+        // so the page gets its clean update once the fingers have been still a moment, Automatic Refresh on or off.
+        ghosted = unrefreshed = asked = true; refreshSoon("pinch or pan ended", NAVIGATED_MS);
         if (viewport.zoom == 1 && viewport.scale() == 1) {
             disconnectDisplay(); updateViewport(); invalidate();
         }
-        if (direct == null) post(this::connectDisplay); else scheduleWet();
+        // Inkwash: Vector Ink's lines, left out while the view moved, sharp again.
+        else if (sharp() != composedSharp) { updateViewport(); pending.clear(); pending.add(0, 0, getWidth(), getHeight()); flush(true); }
+        if (direct == null) post(this::connectDisplay);
     }
     private void drawNavigationFrame() {
         removeCallbacks(navigationFrame); navigationFrameScheduled = false;
@@ -2608,99 +2704,11 @@ final class DrawingPad extends View {
         navigationFrameCount++;
     }
 
-    // Wet paint
-
-    private void scheduleWet() {
-        // Yield between slices; input queued during the last slice runs
-        // before the next idle callback. Only completed sweeps wait a frame;
-        // flowing water runs ahead, except a small wash's slowing tail.
-        if (wet != null && wet.framePending()) scheduleWet(1);
-        else if (wet != null && wet.flowing())
-            scheduleWet((int)Math.max(1, wet.flowFrameMillis() - (SystemClock.uptimeMillis() - wetFrameStarted)));
-        else scheduleWet(WetWatercolor.FRAME_MS);
-    }
-    private void scheduleWet(int delayMillis) {
-        if (wet != null && wet.isAnimating() && !wetHeld() && app.resumed && hasWindowFocus() && !app.loading && !navigating) {
-            // Start reading the tilt now, so it is ready when the paint first moves.
-            app.canvasGravity.listen(true);
-            if (!wetScheduled) { wetScheduled = true; postDelayed(wetStep, delayMillis); }
-            if (wet.running()) app.wetDroplet.start();
-        }
-    }
-    /** The wet paint, started on the canvas the wet canvas setting asks for if there is none. */
-    private void wetPaint() {
-        if (wet == null) wet = app.paint.wetCanvas ? new WetWatercolor(document, app.paint.wetness) : new WetWatercolor(document);
-    }
-    /** The stroke being drawn keeps wet paint still until it is finished. */
-    private boolean wetHeld() { return stroke != null && stroke.holdsWetPaint(); }
-    /** About how much wet paint is left to move, or 0 when it isn't moving. */
-    int wetWork() { return wetScheduled && wet != null ? Math.max(1, wet.remainingWork()) : 0; }
-    private void cancelWetCallback() {
-        removeCallbacks(wetStep); wetQueue.removeIdleHandler(wetIdle); wetScheduled = false;
-    }
-    private void advanceWet() {
-        wetScheduled = false;
-        if (wet == null || wetHeld() || !app.resumed || !hasWindowFocus() || app.loading || navigating) {
-            app.canvasGravity.listen(false); return;
-        }
-        boolean drawing = stroke != null;
-        long budget = wetBudget.nanos(drawing, wet.strokePixels(), wet.activePixels(), SystemClock.uptimeMillis());
-        // Submit the pen's outstanding pixels before adding more display work.
-        if (budget == 0 || !pending.isEmpty()) { scheduleWet(16); return; }
-        long start = System.nanoTime();
-        app.canvasGravity.apply(wet);
-        int frame = wet.frame();
-        long sliceStarted = SystemClock.uptimeMillis();
-        wetChanged |= wet.advance(drawing, wetBudget.tiles(budget, drawing), budget / 2, drawing ? 96 : 192);
-        long computed = System.nanoTime();
-        if (wet.frame() != frame) wetFrameStarted = sliceStarted;
-        // Presenting every slice of fast-running water would cost more than working it out.
-        // While drawing, each slice still shows its own changes, or the pen's next event
-        // would have to render all the water's held-back ones.
-        long now = SystemClock.uptimeMillis();
-        boolean show = drawing || !wet.flowing() || now - lastWetShown >= WET_SHOW_MS;
-        if (show) { renderDirty(); lastWetShown = now; }
-        long rendered = System.nanoTime();
-        if (show) flush(true);
-        long finished = System.nanoTime();
-        lastWetComputeNanos = computed - start;
-        lastWetRenderNanos = rendered - computed;
-        lastWetPresentNanos = finished - rendered;
-        wetMaxSliceNanos = Math.max(wetMaxSliceNanos, finished - start);
-        wetSliceCount++;
-        wetBudget.completed(finished - start, wet.advancedTiles(), drawing, SystemClock.uptimeMillis());
-        if (wet.isAnimating()) scheduleWet();
-        else {
-            app.canvasGravity.listen(false);
-            if (wetChanged && stroke == null) { wetChanged = false; app.recovery(); }
-        }
-    }
-    boolean stroking() { return stroke != null && !quickLift.running(); }
-    /** Inkwash: whether a stroke, shape, fill or gradient is under way or still finishing after lift (the recovery save waits). */
-    boolean drawingNow() { return stroke != null || shapeStroke != null || fill != null || hasGradient() || fillGesture; }
-    /**
-     * Lays in full the brush dabs so far shown only as a glaze, e.g. before the brush's ink
-     * changes outside a stroke: they trade ink with it in order. False if there were none.
-     */
-    boolean layQueuedPaint() {
-        if (wet == null || wet.queuedDabs() == 0) return false;
-        wetChanged |= wet.layQueued(stroke != null);
-        renderDirty(); flush(true);
-        return true;
-    }
-    /** Stops wet blending, leaving the paint as it is. */
-    void dryWet() {
-        cancelWetCallback();
-        boolean laid = layQueuedPaint();
-        // Running water's last changes may not have reached the panel yet.
-        if (!laid && wet != null && wet.flowing()) { renderDirty(); flush(true); }
-        app.canvasGravity.listen(false);
-        wet = null; if (app.wetDroplet != null) app.wetDroplet.dried();
-        if (wetChanged) { wetChanged = false; app.recovery(); }
-    }
-
+    boolean stroking() { return (stroke != null && !quickLift.running()) || shapeStroke != null; }
+    /** Inkwash: whether a stroke or shape is under way or still finishing after lift (the recovery save waits). */
+    boolean drawingNow() { return stroke != null || shapeStroke != null; }
     void close() {
-        finishStroke(); dryWet(); if (drying != null) drying.stop(); disconnectDisplay(); input.close();
+        finishStroke(); if (drying != null) drying.stop(); disconnectDisplay(); input.close();
         if (display != null) display.recycle();
         if (viewportBitmap != null) { viewportBitmap.close(); viewportBitmap = null; }
         display = null; renderPixels = new int[0]; document = null;

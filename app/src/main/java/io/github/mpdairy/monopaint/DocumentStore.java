@@ -124,7 +124,12 @@ final class DocumentStore {
         IO.execute(() -> {
             try {
                 AtomicFile atomic = new AtomicFile(recovery);
-                if (!exists(atomic.getBaseFile())) { result.complete(null, null); return; }
+                if (!exists(atomic.getBaseFile())) {
+                    String given = startHere; startHere = null;
+                    File file = given == null ? null : drawingFile(given);
+                    result.complete(file == null || !file.isFile() ? null : new RecoveryCodec.Recovered(BookCodec.open(readable(file)), given, false), null);
+                    return;
+                }
                 RecoveryCodec.Recovered read;
                 try (FileInputStream input = atomic.openRead()) { read = RecoveryCodec.read(input, this::drawingFile); }
                 catch (RecoveryCodec.FileChanged changed) { read = fileChanged(atomic, changed.path); }
@@ -142,6 +147,28 @@ final class DocumentStore {
         if (!atomic.getBaseFile().renameTo(aside)) throw new IOException("Couldn't set the recovery aside");
         File file = drawingFile(path);
         return file == null || !file.isFile() ? null : new RecoveryCodec.Recovered(BookCodec.open(readable(file)), path, false);
+    }
+    /** The owner's drawn guide to the app (2026-10-30), bundled: a fresh library's first notebook. */
+    static final String START_HERE = "start-here.mpaint";
+    /** The Start Here notebook just given, which {@link #recover} opens in place of a blank page; only on {@link #IO}. */
+    private String startHere;
+    /**
+     * A library with no drawings gets {@link #START_HERE}, made today, as "Start Here", opened by the next {@link #recover}
+     * with nothing to recover (the owner: "start the app on first load from the canvas view"); true when it did. Never over a drawing, nor
+     * with one to recover.
+     */
+    void startHere(Result<Boolean> result) {
+        IO.execute(() -> {
+            try {
+                // A fresh install only: nothing in the library and no working drawing to recover.
+                if (files.drawingCount() > 0 || exists(recovery)) { result.complete(false, null); return; }
+                byte[] bytes = Assets.bytes(START_HERE);
+                String path = java.time.LocalDate.now() + "_Start Here";
+                write(new AtomicFile(files.drawing(path)), output -> output.write(bytes));
+                startHere = path;
+                result.complete(true, null);
+            } catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
+        });
     }
     void list(String folder, Result<DrawingFiles.Entry[]> result) {
         IO.execute(() -> {
@@ -181,6 +208,23 @@ final class DocumentStore {
             try { new AtomicFile(recovery).delete(); result.complete(null, null); }
             catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
         });
+    }
+    /**
+     * The library to a browser on the Wi-Fi (Share on Wi-Fi, {@link LiveBooks}): each read on {@link #IO}, after the saves
+     * queued before it, and waited for (a server's thread, never the main one).
+     */
+    LiveBooks.Library liveLibrary() {
+        return new LiveBooks.Library() {
+            @Override public java.util.List<DrawingFiles.Entry> notebooks() throws IOException { return onIo(() -> LiveBooks.folder(files).notebooks()); }
+            @Override public BookPictures.Cover cover(String path) throws IOException { return onIo(() -> LiveBooks.folder(files).cover(path)); }
+            @Override public byte[] file(String path) throws IOException { return onIo(() -> LiveBooks.folder(files).file(path)); }
+            @Override public String add(String name, byte[] file) throws IOException { return onIo(() -> created(name, out -> out.write(file))); }
+        };
+    }
+    private static <T> T onIo(java.util.concurrent.Callable<T> job) throws IOException {
+        try { return IO.submit(job).get(); }
+        catch (java.util.concurrent.ExecutionException e) { throw e.getCause() instanceof IOException ? (IOException) e.getCause() : new IOException(e.getCause()); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new java.io.InterruptedIOException(); }
     }
     /** A notebook on the shelf: its path, when it last changed, its pages and cover as its file says ({@link BookPictures#readCover}). */
     static final class Notebook {
@@ -237,22 +281,71 @@ final class DocumentStore {
      * Inkwash: a saved notebook's covers' design made {@code design}, after any queued saves: its file opened, the design
      * set and saved again, its pages copied from the old file as they are.
      */
-    void plainTracing(String path, Result<Void> result) { rewrite(path, book -> book.setTracing(book.tracing().plainView()), result); }
-    void design(String path, CoverDesign design, Result<Void> result) { rewrite(path, book -> book.setDesign(design), result); }
+    void plainTracing(String path, Result<Void> result) { rewrite(path, book -> { book.setTracing(book.tracing().plainView()); return true; }, result); }
+    void design(String path, CoverDesign design, Result<Void> result) { rewrite(path, book -> { book.setDesign(design); return true; }, result); }
+    /** A change {@link #rewrite} makes to a saved notebook: false when the notebook goes instead of being saved again. */
+    private interface Change { boolean apply(DrawingBook book) throws IOException; }
     /** A saved notebook opened after any queued saves, {@code change}d and saved again, its pages copied from the old file as they are. */
-    private void rewrite(String path, java.util.function.Consumer<DrawingBook> change, Result<Void> result) {
+    private void rewrite(String path, Change change, Result<Void> result) {
+        IO.execute(() -> {
+            try { rewritten(path, change); result.complete(null, null); }
+            catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
+        });
+    }
+    /** {@link #rewrite}'s work, on {@link #IO}. */
+    private void rewritten(String path, Change change) throws IOException {
+        java.util.Set<PackedPage.Source> open = new java.util.HashSet<>();
+        try {
+            DrawingBook book = BookCodec.open(readable(file(path)));
+            boolean kept = change.apply(book);
+            Snapshot snapshot = new Snapshot(book, path);
+            sources(snapshot.book.pages, open);
+            if (!kept) { for (PackedPage.Source source : open) source.close(); open.clear(); files.delete(path); return; }
+            write(path, snapshot);
+            sources(snapshot.book.written, open);
+        } finally { for (PackedPage.Source source : open) source.close(); }
+    }
+    /**
+     * Favourites (the owner, 2026-11-06): {@code stack} ({@link DrawingBook#copyStack}) added after the Favourites
+     * notebook's last page, marked {@code fave}, after any queued saves; the notebook made, the copy its one page, when
+     * there is none yet.
+     */
+    void favourite(java.util.List<DrawingBook.Taken> stack, int fave, int width, int height, Result<Void> result) {
+        String path = NotebookStrip.FAVOURITES;
+        IO.execute(() -> {
+            try {
+                if (exists(file(path))) rewritten(path, book -> { book.append(stack, fave); return true; });
+                else {
+                    // A new notebook's blank first page, there only until the copy follows it.
+                    DrawingBook book = DrawingBook.fresh(new ToneDocument(width, height));
+                    book.append(stack, fave);
+                    NotebookStrip.deleteStack(book, 0);
+                    write(path, new Snapshot(book, path));
+                }
+                result.complete(null, null);
+            } catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
+        });
+    }
+    /** Favourites: the marks its pages carry, read from its file's options block, nothing decoded (none without Favourites), after any queued saves. */
+    void favouriteMarks(Result<java.util.Set<Integer>> result) {
         IO.execute(() -> {
             java.util.Set<PackedPage.Source> open = new java.util.HashSet<>();
             try {
-                DrawingBook book = BookCodec.open(readable(file(path)));
-                change.accept(book);
-                Snapshot snapshot = new Snapshot(book, path);
-                sources(snapshot.book.pages, open);
-                write(path, snapshot);
-                sources(snapshot.book.written, open);
-                result.complete(null, null);
+                File file = file(NotebookStrip.FAVOURITES);
+                if (!exists(file)) { result.complete(NotebookStrip.marks(null), null); return; }
+                BookCodec.Pages pages = BookCodec.openPages(readable(file));
+                sources(pages.pages, open);
+                result.complete(NotebookStrip.marks(pages.covers.pageFaves), null);
             } catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
             finally { for (PackedPage.Source source : open) source.close(); }
+        });
+    }
+    /** Favourites: the copy marked {@code fave} deleted from the Favourites notebook, after any queued saves; the notebook too when it was all it held. */
+    void unfavourite(int fave, Result<Void> result) {
+        String path = NotebookStrip.FAVOURITES;
+        IO.execute(() -> {
+            try { if (exists(file(path))) rewritten(path, book -> NotebookStrip.unstar(book, fave)); result.complete(null, null); }
+            catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
         });
     }
     private static void sources(java.util.List<PackedPage> pages, java.util.Set<PackedPage.Source> into) {
@@ -267,15 +360,18 @@ final class DocumentStore {
      */
     void create(String name, Book book, Result<String> result) {
         IO.execute(() -> {
-            try {
-                String path = files.unusedName("", name);
-                write(new AtomicFile(files.drawing(path)), output -> {
-                    java.io.BufferedOutputStream buffered = new java.io.BufferedOutputStream(output, 1 << 20);
-                    book.write(buffered); buffered.flush();
-                });
-                result.complete(path, null);
-            } catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
+            try { result.complete(created(name, book), null); }
+            catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
         });
+    }
+    /** {@link #create}'s work, on {@link #IO}. */
+    private String created(String name, Book book) throws IOException {
+        String path = files.unusedName("", name);
+        write(new AtomicFile(files.drawing(path)), output -> {
+            java.io.BufferedOutputStream buffered = new java.io.BufferedOutputStream(output, 1 << 20);
+            book.write(buffered); buffered.flush();
+        });
+        return path;
     }
     /** Renames a drawing after any queued saves; reports its new path. */
     void rename(String path, String name, Result<String> result) {

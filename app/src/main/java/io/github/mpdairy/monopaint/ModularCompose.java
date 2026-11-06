@@ -109,8 +109,6 @@ final class ModularCompose {
      * {@link ToneDocument#smearTones} with the plane's coverage as the floor.
      */
     private CarryPlane plane;
-    /** The line and body this compose reads (a print over prints reads a pixel's neighbours: {@link #edge}). */
-    private FloatTiles nowLine, nowBody;
     /** The page under a Behind or Invert stroke as found ({@link #under(Under)}), or null. */
     private Under under;
     /**
@@ -287,8 +285,7 @@ final class ModularCompose {
             if (shownFrom == null) { shownPhase = phase; shownFrom = body; }
             else if (phase != shownPhase || body != shownFrom) mixed = true;
         }
-        // A print over prints reads its neighbours ({@link #edge}): every pixel composed again, so none keeps a neighbour's old reach.
-        return skipUnchanged && !mixed && !r.replaces();
+        return skipUnchanged && !mixed;
     }
     /**
      * Whether a pixel's (or lattice point's) body moving from {@code was} to {@code now} since last composed can change
@@ -313,9 +310,9 @@ final class ModularCompose {
     void compose(FloatTiles line, FloatTiles bodies, FloatTiles relief, int[] rect, Phase phase) {
         if (ghosts != null) rect = misregistered(rect);
         FloatTiles l = ghosts != null ? ghost(line, rect) : line, body = ghosts != null ? ghost(bodies, rect) : bodies;
+        if (r.screen != null && r.screen.cells) { composeCells(l, body, rect, phase); return; }
         int x0 = Math.max(0, rect[0]), y0 = Math.max(0, rect[1]), x1 = Math.min(width - 1, rect[2]), y1 = Math.min(height - 1, rect[3]);
         if (x1 < x0 || y1 < y0) return;
-        nowLine = l; nowBody = body;
         boolean preview = phase == Phase.PREVIEW;
         FloatTiles rel = !preview && r.look.impasto > 0 ? relief : null;
         // Relief can change where the body hasn't, so impasto composes every pixel.
@@ -345,9 +342,9 @@ final class ModularCompose {
     void composeLattice(FloatTiles line, FloatTiles bodies, FloatTiles relief, int[] rect, Phase phase) {
         if (ghosts != null) rect = misregistered(rect);
         FloatTiles l = ghosts != null ? ghost(line, rect) : line, body = ghosts != null ? ghost(bodies, rect) : bodies;
+        if (r.screen != null && r.screen.cells) { composeCells(l, body, rect, phase); return; }
         int x0 = Math.max(0, rect[0]), y0 = Math.max(0, rect[1]), x1 = Math.min(width - 1, rect[2]), y1 = Math.min(height - 1, rect[3]);
         if (x1 < x0 || y1 < y0) return;
-        nowLine = l; nowBody = body;
         boolean preview = phase == Phase.PREVIEW;
         FloatTiles rel = !preview && r.look.impasto > 0 ? relief : null;
         // A smudge changes what lies under the stroke where line and body haven't: with a plane, a pixel is composed too
@@ -411,6 +408,68 @@ final class ModularCompose {
             Prof.count(Prof.TONED_PX, toned);
         });
     }
+
+    /**
+     * Pixels and Stitches ({@link PrintScreen#cells}): {@code rect} grown to the cells it touches, each pixel composed
+     * from the line and body at its cell's centre ({@link PrintScreen#centre}), so a cell whose middle the
+     * mark reaches is laid whole and one it doesn't is left as found: the grid's edges, not the tip's. Page-sized buffers
+     * or a lattice's, read at the point holding the centre. Impasto's relief isn't read (shortcut: no screened medium has it).
+     */
+    private void composeCells(FloatTiles l, FloatTiles body, int[] rect, Phase phase) {
+        PrintScreen s = r.screen;
+        int grow = cellGrow();
+        int x0 = Math.max(0, rect[0] - grow), y0 = Math.max(0, rect[1] - grow), x1 = Math.min(width - 1, rect[2] + grow), y1 = Math.min(height - 1, rect[3] + grow);
+        if (x1 < x0 || y1 < y0) return;
+        // As pageRow: a pixel whose cell reads as when it was last composed is left as it is (its own shown line and body, page-sized).
+        boolean skip = tracks(body, phase) && plane == null && (shownLine == null || shownLine.shift == 0);
+        if (!skip) release();
+        else if (shownLine == null) { shownLine = new FloatTiles(width, height, 0); shownBody = new FloatTiles(width, height, 0); }
+        FloatTiles shownL = shownLine, shownB = shownBody;
+        boolean preview = phase == Phase.PREVIEW, flat = flatPreview(phase);
+        bands(y0, y1, (long)(x1 - x0 + 1) * (y1 - y0 + 1), (ya, yb, worker) -> {
+            Rows w = rows(worker);
+            int[] at = new int[2];
+            long toned = 0;
+            for (int y = ya; y <= yb; y++) {
+                // A row's pixels run along a cell: its centre read once.
+                int lastX = Integer.MIN_VALUE, lastY = 0;
+                float c = 0, d = 0;
+                for (int x = x0; x <= x1; x++) {
+                    s.centre(x, y, at);
+                    int cx = Math.max(0, Math.min(width - 1, at[0])), cy = Math.max(0, Math.min(height - 1, at[1])), o = x - x0;
+                    if (cx != lastX || cy != lastY) { c = atCentre(l, cx, cy); d = atCentre(body, cx, cy); lastX = cx; lastY = cy; }
+                    if (skip) {
+                        float sc = shownL.get(x, y), sd = shownB.get(x, y);
+                        if (c == sc && !bodyMoved(d, sd, flat)) { w.want[o] = false; continue; }
+                        shownL.set(x, y, c); shownB.set(x, y, d);
+                    }
+                    w.want[o] = true; w.c[o] = c; w.d[o] = d;
+                }
+                toned += tones(w, preview, false, x0, x1, x0, x1, y);
+            }
+            Prof.count(Prof.TONED_PX, toned);
+        });
+    }
+
+    /**
+     * A cell's line or body from {@code f} at its centre {@code x, y}: the strongest within {@link #CENTRE_REACH} px, if the
+     * centre has half of it (the mark covers about half the cell), else none; so a cell on the tip's soft rim is laid at
+     * the mark's grey or not at all, never paler.
+     */
+    private float atCentre(FloatTiles f, int x, int y) {
+        int k = CENTRE_REACH, xa = Math.max(0, x - k), xb = Math.min(width - 1, x + k), ya = Math.max(0, y - k), yb = Math.min(height - 1, y + k);
+        float v = f.get(x, y), most = Math.max(Math.max(v, f.get(xa, y)), Math.max(f.get(xb, y), Math.max(f.get(x, ya), f.get(x, yb))));
+        return v >= .5f * most ? most : 0;
+    }
+    private static final int CENTRE_REACH = 2;
+    /** How far past its rectangle {@link #composeCells} writes: a turned cell's farthest pixel from its centre, under its diagonal. */
+    private int cellGrow() { return (int) Math.ceil(r.screen.cell * .75) + 1; }
+    /**
+     * How far from a rectangle a compose of it writes and reads (Pixels and Stitches: the pixels round it, and their cells'
+     * centres round those); 0 for any other brush. A fill composed in strips ({@code ModularStroke}) keeps that far from
+     * rows not laid yet or let go.
+     */
+    int cellReach() { return r.screen != null && r.screen.cells ? 2 * cellGrow() + CENTRE_REACH : 0; }
 
     /** The first lattice point of {@code m0..m1} whose pixels (from {@code 2m − 1}, on the page) start at or after {@code p0}. */
     private static int firstWithin(int p0, int m0, int m1) {
@@ -524,8 +583,6 @@ final class ModularCompose {
         boolean litBody = light && screen == null && r.rule == ResolvedBrush.Rule.INK;
         // Filled Shape's fill (keepDarker): the darker of what is there and the mark alone.
         boolean keep = darker && mode == ResolvedBrush.BlendMode.OWN && !r.resist && !waxMask && screen == null;
-        // A print over prints (ResolvedBrush.replaces): its own plane under its footprint is its pattern alone, lighter too.
-        boolean replaces = r.replaces();
         boolean alone0 = owns != null || mode != ResolvedBrush.BlendMode.OWN || r.resist || waxMask || screen != null || keep, stick = r.rule == ResolvedBrush.Rule.CHARCOAL || r.rule == ResolvedBrush.Rule.CRAYON;
         // Screen's print tone (ResolvedBrush.prints): what the screened marks here would show unscreened, as the gesture
         // found it and as this stroke leaves it; the screen inks the second, so strokes over strokes print darker.
@@ -665,28 +722,23 @@ final class ModularCompose {
                     double a = r.screenTone(c, d);
                     if (prints != null) {
                         int v = printFound[x - xs];
-                        double p;
-                        if (replaces) {
-                            // Its tone replaces the print tone found, but at its anti-aliased edge, which keeps that much of
-                            // what was there: a stroke over one of the same tone prints the same dots, no seam along its edge.
-                            double full = edge(x, y, c, d);
-                            p = v + (255 * (1 - full) - v) * (full > 0 ? a / full : 1);
-                        } else p = PrintScreen.printed(v, a, cover > 0 ? Math.max(0, coverages[o]) / 255.0 : 0);
+                        double p = PrintScreen.printed(v, a, cover > 0 ? Math.max(0, coverages[o]) / 255.0 : 0);
                         prints[o] = (int) Math.max(0, Math.min(255, Math.round(p)));
                         // Inked by the print tone as kept, to the grey step, so a second stroke at the same tone (the
                         // darker of the two, kept) inks exactly the dots the first did.
                         a = 1 - prints[o] / 255.0;
                     }
-                    if (screen.ink(a, x, y, height)) {
-                        if (screen.tone) { tone = Math.min(u, PrintScreen.DOT_TONE); coverages[o] = PrintScreen.DOT_COVERAGE; covers = true; }
+                    // On a fine grid its threshold read at the point (a kept stroke drawn finer: StrokePaper.indexX).
+                    // Pixels and Stitches: the cell's grey there (its mark read at its centre, composeCells), never lightening
+                    // (shortcut: a light one over darker marks lays nothing, not its grey over them; give cells laysLight if asked).
+                    int dark = screen.cells ? screen.dark(a, x, y) : 0;
+                    if (screen.cells ? dark > 0 : screen.ink(a, paper.indexX(x), paper.indexY(y), paper.pageHeight(height))) {
+                        if (screen.cells) { tone = lays ? u + (toward - u) * dark / 255.0 : Math.min(u, 255 - dark); if (lays) coverages[o] = dark; }
+                        else if (screen.tone) { tone = Math.min(u, PrintScreen.DOT_TONE); coverages[o] = PrintScreen.DOT_COVERAGE; covers = true; }
                         else if (lays) { tone = toward; coverages[o] = 255; }
                         else tone = 0;
-                        alone = 0;
-                    } else if (replaces && (!screen.tone || a >= .95 * edge(x, y, c, d))) {
-                        // Between its dots: clear, so a lighter print over a darker one leaves the lighter one, the marks
-                        // under its plane showing. Tone keeps no print tone: at its anti-aliased edge its plane stays as found.
-                        tone = 255; coverages[o] = 0; alone = 255;
-                    } else if (light && paint > pageUnder[x - xs] && screen.white((paint - pageUnder[x - xs]) / (255.0 - pageUnder[x - xs]) * r.screenReach(c, d), x, y)) {
+                        alone = screen.cells ? 255 - dark : 0;
+                    } else if (light && !screen.cells && paint > pageUnder[x - xs] && screen.white((paint - pageUnder[x - xs]) / (255.0 - pageUnder[x - xs]) * r.screenReach(c, d), x, y)) {
                         // A light print over darker marks (ResolvedBrush.laysLight): white where the screen's thresholds are
                         // highest, its dots' complement, the share that leaves the page at the print's grey on average,
                         // crisp as its black dots; its black dots, and any print's under it, ink first.
@@ -712,26 +764,11 @@ final class ModularCompose {
         if (lo < 0) return 0;
         int n = hi - lo + 1;
         if (lo > 0) { System.arraycopy(tones, lo, tones, 0, n); System.arraycopy(coverages, lo, coverages, 0, n); if (owns != null) System.arraycopy(owns, lo, owns, 0, n); }
-        if (plane != null || replaces) page.smearTones(x0 + lo, y, n, 1, tones, coverages, owns);
+        if (plane != null) page.smearTones(x0 + lo, y, n, 1, tones, coverages, owns);
         else if (covers) page.coverTones(x0 + lo, y, n, 1, tones, coverages, owns);
         else page.setTones(x0 + lo, y, n, 1, tones, owns);
         if (prints != null) { if (lo > 0) System.arraycopy(prints, lo, prints, 0, n); page.setPrints(x0 + lo, y, n, prints); }
         return n;
-    }
-
-    /**
-     * A screened mark's darkness at page pixel {@code x, y} as if wholly under its tip ({@link ResolvedBrush#screenTone}
-     * of the strongest line {@code c} and body {@code d} there and at its four neighbours): over it, the pixel's own is
-     * the share its anti-aliased edge lays.
-     */
-    private double edge(int x, int y, float c, float d) {
-        FloatTiles l = nowLine, b = nowBody;
-        for (int k = 0; k < 4; k++) {
-            int nx = x + (k == 0 ? -1 : k == 1 ? 1 : 0), ny = y + (k == 2 ? -1 : k == 3 ? 1 : 0);
-            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-            c = Math.max(c, l.get(nx, ny)); d = Math.max(d, b.get(nx, ny));
-        }
-        return r.screenTone(c, d);
     }
 
     /** How much of a stick's line (charcoal, pastels, soft graphite) its grain and soft edge leave inked, about: its quick preview's ink. */
@@ -791,13 +828,13 @@ final class ModularCompose {
         if (rule == ResolvedBrush.Rule.INK) return tooth > 0 ? clamp((c - (0.5 + tooth * 0.9 * (height(x, y) - 0.5))) * 4 + 0.5) : c;
         if (rule == ResolvedBrush.Rule.CRAYON) {
             // Crayon: wax on the tooth (the paper's too, by its Texture), lifted by what is already there; Scratch, its blade.
-            if (r.scratch) return c * Crayon.scrape(x, y);
-            return Crayon.wax(c, lerp(Crayon.tooth(x, y), height(x, y), .3 * tooth), 1 - u / 255, r.wax);
+            if (r.scratch) return c * Crayon.scrape(paper.pageX(x), paper.pageY(y));
+            return Crayon.wax(c, lerp(Crayon.tooth(paper.pageX(x), paper.pageY(y)), height(x, y), .3 * tooth), 1 - u / 255, r.wax);
         }
         if (rule == ResolvedBrush.Rule.CHARCOAL) {
             // The contact rule: the stick touches the high points first; pressure, a firmer binder (Hold) and
             // charcoal already there reach into the valleys. The stick's own grain, the paper's by its tooth.
-            return contact.ink(c, u, grain.fine(x, y) * .65 + grain.mid(x, y) * .35, height(x, y));
+            return contact.ink(c, u, paper.stick(grain, 0, x, y) * .65 + paper.stick(grain, 1, x, y) * .35, height(x, y));
         }
         // Graphite, with no Fill plane: the tooth holds nothing yet.
         double grade = r.grade;
@@ -833,6 +870,5 @@ final class ModularCompose {
         }
     }
 
-    /** The paper's height at {@code x, y}, 0 to 1: its fine and mid noises, as the line rules read it. */
-    private double height(int x, int y) { return paper.fine(x, y) * .65 + paper.mid(x, y) * .35; }
+    private double height(int x, int y) { return paper.height(x, y); }
 }

@@ -9,6 +9,17 @@ final class CanvasViewport {
      * "zen mode... we need to [limit] the min zoom so that no background will show"; both ways up).
      */
     boolean cover;
+    /**
+     * The browser (the owner, 2026-11-01, on an iPad: "the lower part is obscured.. full canvas view on the web?"): the
+     * whole page fitted to any screen, either way up, past 100% on a large one, and a pinch out stops at that fit.
+     */
+    boolean whole;
+    /**
+     * The browser on a desktop (the owner, 2026-11-05: "having the browser be zoomed to full width (for desktop), with
+     * maybe a way to scroll down"): with {@link #whole}, a window wider than tall fills its width, its top showing, as
+     * sideways on the Manta; a pinch out still reaches the whole page.
+     */
+    boolean wide;
     private float width, height, pageWidth, pageHeight;
 
     void configure(float width, float height, float pageWidth, float pageHeight) {
@@ -18,8 +29,8 @@ final class CanvasViewport {
         // Turned sideways, an upright page fills the width, its top showing, a finger pans down (the owner, 2026-10-28: "if
         // it's horizontal i want the top part of the page to show... and vertical it should fit perfectly"), past 100% if
         // that's what fills it ("that % should be the max percent, whatever it is").
-        filled=cover || fillsWidth(width,height,pageWidth,pageHeight);
-        fitScale=cover ? Math.max(width/pageWidth,height/pageHeight) : filled ? width/pageWidth : Math.min(1,Math.min(width/pageWidth,height/pageHeight));
+        filled=cover || (!whole || wide) && fillsWidth(width,height,pageWidth,pageHeight);
+        fitScale=cover ? Math.max(width/pageWidth,height/pageHeight) : filled ? width/pageWidth : Math.min(whole ? Float.MAX_VALUE : 1,Math.min(width/pageWidth,height/pageHeight));
         // Fitted (the owner, 2026-10-26: "let's make it fit neatly in both"): the whole page, centred in this view, the
         // room the bars leave, fitted again whenever that room changes (Zen Mode, a turn) until a pinch or pan.
         if(untouched) { zoom=1; x=Math.round((width-pageWidth*fitScale)/2); y=filled ? 0 : Math.round((height-pageHeight*fitScale)/2); return; }
@@ -32,9 +43,10 @@ final class CanvasViewport {
     static boolean fillsWidth(float width, float height, float pageWidth, float pageHeight) { return width>height && pageHeight>pageWidth; }
     /**
      * A pinch never goes below 100% (the fitted view of a page bigger than the screen may: it shows the whole page), nor
-     * below the width filled sideways (the owner, 2026-10-29: "you cant go LOWER % zoom than 136 on horizontal").
+     * below the width filled sideways (the owner, 2026-10-29: "you cant go LOWER % zoom than 136 on horizontal"); in
+     * the browser ({@link #whole}), not below the whole page (filling the width there too, {@link #wide}).
      */
-    float minZoom() { return filled ? 1 : 1/fitScale; }
+    float minZoom() { return whole && filled ? Math.min(1,height*pageWidth/(width*pageHeight)) : filled || whole ? 1 : 1/fitScale; }
     int percent() { return Math.round(scale()*100); }
     /** Back to the fitted view ({@link #configure}). */
     void reset() { heldLayout=false; zoom=1; x=y=0; untouched=true; }
@@ -54,10 +66,18 @@ final class CanvasViewport {
         // A hidden bar may leave a previously fitted page below the new fit scale.
         // Panning must not unexpectedly magnify it; pinch out or reset to adopt the new fit.
         float next=Math.max(Math.min(minZoom(),zoom),Math.min(8/fitScale,zoom*factor));
+        // The browser: a pinch out to the whole page is the whole page again, centred and kept through a turn.
+        if(whole && !filled && !heldLayout && next<=1) { reset(); configure(width,height,pageWidth,pageHeight); return; }
         heldLayout=next<minZoom(); untouched=false;
         float ratio=next/zoom;
         x=newX-(oldX-x)*ratio; y=newY-(oldY-y)*ratio; zoom=next;
         clamp();
+        // A desktop zoomed out past its width: the page centred whichever way it is smaller than the window.
+        if(whole && filled) {
+            float w=pageWidth*scale(), h=pageHeight*scale();
+            if(w<width)x=Math.round((width-w)/2);
+            if(h<height)y=Math.round((height-h)/2);
+        }
     }
     private void clamp() {
         x=Math.max(Math.min(0,width-pageWidth*scale()),Math.min(Math.max(0,width-pageWidth*scale()),x));

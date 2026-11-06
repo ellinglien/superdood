@@ -145,6 +145,9 @@ final class StippleStamper {
 
     /** newmods.js nmDot: a round dot of radius {@code r}, its edge antialiased over a pixel, at darkness {@code val}. */
     static void dot(FloatTiles into, FloatTiles wetD, double cx, double cy, double r, double val, double d, int[] rect) {
+        // On a fine grid (sharp dry brushes): the dot in the grid's points, its edge a point wide.
+        FineGrid g = into.grid;
+        if (g != null) { cx = g.gridX(cx); cy = g.gridY(cy); r *= g.k; }
         int w = into.width, h = into.height;
         int x0 = Math.max(0, (int)Math.floor(cx - r - 1)), x1 = Math.min(w - 1, (int)Math.ceil(cx + r + 1));
         int y0 = Math.max(0, (int)Math.floor(cy - r - 1)), y1 = Math.min(h - 1, (int)Math.ceil(cy + r + 1));

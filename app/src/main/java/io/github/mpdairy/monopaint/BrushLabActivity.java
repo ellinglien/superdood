@@ -29,13 +29,16 @@ import java.util.Random;
  * Brush Lab, where brushes are made, tested, named, saved and shared (docs/archive/superpowers/specs/2026-10-15-lab-screen-design.md;
  * the design pass, docs/archive/design-pass-2026-10-23.md, "Brush Lab"). It works on the slot that was selected when it
  * opened (the owner, 2026-10-29: "whatever toolbar slot was selected at the beginning should flow through"; no slots
- * strip), on a copy of the toolbar's ten, and Back returns them. The bar: <b>Back</b> ("‹ Tools" when the Tools page
- * opened it, and it goes back there), "Brush Lab", Undo at the right. Then a band (paper in a fine ink frame, no grey:
- * e-ink): <b>About This Brush</b> (its header: the brush's actions, {@link #ACTIONS}: New, Open, Save, the one ink
- * button, Save as New, Back to the slot's first brush, Cut Stamp for a Stamp; its paper block: the loop, the name with
- * its pencil, the Edited mark and a suggested name, the words, the drawing screen's picker box lying across ({@link
- * PickerBox}), a note's line), then <b>Adjust</b> ({@link LabSettings}, always what Advanced was) beside <b>Scratch
- * Pad</b> (Clear, the wet drop, the test page that gets the room), and <b>Randomize</b> across the foot. Open's sheet
+ * strip), on a copy of the toolbar's ten, and Back returns them. The bar, the Tools page's pattern ({@link
+ * LabUi.PageBar}): <b>Back</b> ("‹ Toolbar" when the Tools page opened it, and it goes back there), "Brush Lab" alone
+ * (its job line under it went 2026-11-06, the owner: "remove the subhead"), Undo at the right. Then a band (paper in a fine ink frame, no grey:
+ * e-ink): <b>About This Brush</b> (its header: the brush's actions, {@link #ACTIONS}: New ▾ with the styles, Open, Save,
+ * the one ink button, with its As New box beside it, Cut Stamp for a Stamp; no Back to or Save as New since 2026-11-03;
+ * its paper block: the loop, the name with its pencil, the Edited mark and a suggested name, the words shown while the
+ * brush is tapped, the readout and the drawing screen's picker box lying across against the edge ({@link PickerBox}), a
+ * note's line), then <b>Adjust</b> ({@link LabSettings}, always what Advanced was) beside the <b>try strip</b> ({@link
+ * TestArea#strip}, the Tools page's: "Draw here to try Polite Smear", Clear, the test page that gets the room; Scratch
+ * Pad until 2026-11-03), and <b>Randomize</b> across the foot. Open's sheet
  * lies under the header: the library's brushes, or a pasted code; Cancel or Open again closes it. No status line: what
  * the lab did shows where it happened. Every size is {@link LabLayout}'s, from the screen, so nothing scrolls on the
  * Manta or the Nomad. Scribbler Style ({@link Theme}). Everything it does is {@link BrushLab}'s; this shows it and calls
@@ -43,14 +46,14 @@ import java.util.Random;
  */
 public final class BrushLabActivity extends Activity {
     /**
-     * Extras: the slot the lab opens on, and the one selected when it returns; the ten slots' brushes it returns,
+     * Extras: the slot the lab opens on, and the one selected when it returns; the nine slots' brushes it returns,
      * each as {@link Brush#write} writes it; and, opened from the Tools page, the slots' start there ({@link
      * ToolSlots.Start#write}), returned so the Tools page opens again with it.
      */
     static final String SLOT = "slot", BRUSHES = "brushes", START = "start";
     /** The brush's actions in About This Brush's header, in order (the owner's New, Open and Save, 2026-10-29: kept in one list, so their order is one line). */
-    enum Action { NEW, OPEN, SAVE, SAVE_AS_NEW, BACK_TO, CUT }
-    static final Action[] ACTIONS = {Action.NEW, Action.OPEN, Action.SAVE, Action.SAVE_AS_NEW, Action.BACK_TO, Action.CUT};
+    enum Action { NEW, OPEN, SAVE, AS_NEW, CUT }
+    static final Action[] ACTIONS = {Action.NEW, Action.OPEN, Action.SAVE, Action.AS_NEW, Action.CUT};
 
     private BrushLab lab;
     /** Opened from the Tools page: its Back goes there ("‹ Tools"). */
@@ -74,6 +77,8 @@ public final class BrushLabActivity extends Activity {
     private EditText paste;
     private LabButton undo;
     private boolean renaming, sheetOpen, building;
+    /** Save's As New box, ticked (Save adds a copy: Save as New until 2026-11-03); the brush's words shown (a tap on its loop or name, again hides them). */
+    private boolean asNew, wordsOpen;
     private LabSettings settings;
     /**
      * The part whose choices are open in the swap panel beside its module (a popup, the owner's "modal"), or null; the
@@ -140,10 +145,8 @@ public final class BrushLabActivity extends Activity {
         FrameLayout columnBox = new FrameLayout(this);
         row.addView(columnBox, new LinearLayout.LayoutParams(dp(layout.column), -1));
         this.columnBox = columnBox;
-        LinearLayout right = LabUi.column(this);
-        right.addView(testHeader(), new LinearLayout.LayoutParams(-1, dp(layout.headRow)));
-        LinearLayout.LayoutParams testPlace = new LinearLayout.LayoutParams(-1, 0, 1); testPlace.topMargin = dp(layout.gap);
-        right.addView(test.frame(layout.testWidth), testPlace);
+        // The try strip, the Tools page's too: its head row as tall as the column's, so the test page and the modules start level.
+        View right = test.strip(layout.headRow, layout.gap, layout.clearPad);
         dropSwap();
         strip = new SwapStrip(this, lab, samples, layout, pad::finishStroke, this::closeSwap);
         LinearLayout.LayoutParams rightPlace = new LinearLayout.LayoutParams(0, -1, 1); rightPlace.leftMargin = dp(layout.split);
@@ -190,11 +193,12 @@ public final class BrushLabActivity extends Activity {
         if (pad.cutting() && (lab.parts() == null || !lab.parts().stamps())) pad.cutNext(null);
         // The Open sheet, the rename keyboard, the swap panel or a dial's menu lies over the test page: presenting it straight to the panel would paint over them.
         pad.setCovered(renaming || sheetOpen || swapping != null || menuPopup != null);
-        String nameNow = lab.brush().name() + "\n" + renaming;
+        String nameNow = lab.brush().shownName() + "\n" + renaming;
         if (!nameNow.equals(nameShown)) { nameShown = nameNow; renderName(); }
+        test.label(lab.brush().shownName());
         BrushLibrary.Entry entry = lab.savedEntry();
         String actionsNow = lab.saved() + "\n" + sheetOpen + "\n" + lab.parts().stamps() + "\n" + pad.cutting() + "\n" + cutSaid + "\n" + saveSaid
-                + "\n" + lab.changed(lab.selected()) + "\n" + lab.started().name() + "\n" + (entry == null ? "" : entry.brush.name());
+                + "\n" + asNew + "\n" + (entry == null ? "" : entry.brush.name());
         if (!actionsNow.equals(actionsShown)) { actionsShown = actionsNow; renderActions(entry); }
         String suggestion = lab.suggestion(), markNow = lab.edited() + "\n" + suggestion;
         if (!markNow.equals(markShown)) { markShown = markNow; renderMark(suggestion); }
@@ -204,6 +208,7 @@ public final class BrushLabActivity extends Activity {
             words.setText(ToolsLayout.fitWords(about, layout.wordsWidth, layout.wordsLines));
             words.setContentDescription(about);
         }
+        words.setVisibility(wordsOpen ? View.VISIBLE : View.INVISIBLE);
         String kept = lab.note();
         if (kept != null) sayNote(kept);
         if (undo.isEnabled() != lab.canUndo()) undo.setEnabled(lab.canUndo());
@@ -243,14 +248,14 @@ public final class BrushLabActivity extends Activity {
     /**
      * A choice dial's menu ({@link LabSettings.Beside}): {@code panel} in a popup beside the dial's button, as a part's
      * swap panel opens beside its module ({@link #besideColumn}): just right of the column, level with the button, as wide
-     * as the column. A pick, a tap outside it or Back closes it; the test page is covered while it's open.
+     * as the column; New's styles under New. A pick, a tap outside it or Back closes it; the test page is covered while it's open.
      */
     private void showMenu(View anchor, View panel) {
         closeMenu();
         dropSwap();
         PopupWindow popup = Popups.create(panel, 0, true, Theme.PAPER);
-        int width = dp(layout.column);
-        RectF at = besideColumn(anchor, width, Popups.measuredHeight(panel, width, 0));
+        int width = dp(layout.column), height = Popups.measuredHeight(panel, width, 0);
+        RectF at = anchor.getParent() == actions ? under(anchor, width, height) : besideColumn(anchor, width, height);
         popup.setOnDismissListener(() -> { feedback.cleanAfterClose(root, at); if (menuPopup == popup) { menuPopup = null; render(); } });
         menuPopup = popup;
         pad.setCovered(true);
@@ -273,7 +278,8 @@ public final class BrushLabActivity extends Activity {
      * tall as its tiles and inside the screen.
      */
     private void showSwap() {
-        if (swapping == null) return;
+        // A part with nothing to swap to (Paper: the page's surface is the notebook's) opens its card alone.
+        if (swapping == null || lab.chips(swapping).isEmpty()) return;
         strip.render(swapping);
         if (swapPopup != null) return;
         // The last popup's frame may still hold it.
@@ -303,9 +309,15 @@ public final class BrushLabActivity extends Activity {
         });
     }
 
+    /** Where a panel {@code width × height} px opens under {@code anchor} in About This Brush's header, its left edge's. */
+    private RectF under(View anchor, int width, int height) {
+        RectF area = new RectF(dp(layout.side), dp(LabLayout.BAR), root.getWidth() - dp(layout.side), root.getHeight() - dp(layout.bottom));
+        return Popups.besideAnchor(Popups.bounds(root, anchor), area, width, height, true, 0);
+    }
+
     /** The part whose module lies under {@code event} (the screen's), or null. */
     private BrushPart partAt(MotionEvent event) {
-        for (BrushPart part : BrushPart.SHOWN) {
+        for (BrushPart part : BrushPart.SHOWN_LATER) {
             View card = settings.card(part);
             if (card != null && card.isShown() && !Ui.outside(card, event)) return part;
         }
@@ -328,25 +340,21 @@ public final class BrushLabActivity extends Activity {
 
     // The bar
 
-    /** Back ("‹ Tools" when the Tools page opened the lab), the title, and Undo at the right (plain words, greyed with nothing to undo; its arrow alone on the Nomad). */
+    /**
+     * The page's bar, the Tools page's pattern ({@link LabUi.PageBar}): Back ("‹ Toolbar" when the Tools page opened the
+     * lab), the title, and Undo at the right (plain words, greyed with nothing to undo; its arrow alone
+     * on the Nomad).
+     */
     private View bar() {
-        LinearLayout bar = LabUi.row(this);
-        bar.setPadding(dp(layout.side), 0, dp(layout.side), 0);
         // Back, labelled, always first at the left (the owner: "back button should be clearly visible").
-        LabButton back = LabButton.back(this, fromTools ? ToolsLayout.TITLE : "Back");
-        back.setOnClickListener(v -> back());
-        bar.addView(back, new LinearLayout.LayoutParams(-2, dp(44)));
-        TextView title = LabUi.text(this, LabLayout.TITLE, TypeStyle.HEADING);
-        title.setSingleLine(true);
-        title.setGravity(Gravity.CENTER_VERTICAL);
-        bar.addView(title, LabUi.after(this, -2, 44, 10));
-        LabUi.spring(bar);
+        LabUi.PageBar bar = new LabUi.PageBar(this, layout.side, fromTools ? ToolsLayout.TITLE : "Back", LabLayout.TITLE, null);
+        bar.back.setOnClickListener(v -> back());
         undo = new LabButton(this, R.drawable.ic_ph_undo, layout.compact ? null : "Undo", false);
         undo.setContentDescription("Undo");
         undo.setEnabled(lab.canUndo());
         undo.setOnClickListener(v -> { pad.finishStroke(); lab.undo(); render(); });
-        bar.addView(undo, LabUi.after(this, layout.compact ? dp(44) : -2, 44, 12));
-        return bar;
+        bar.view.addView(undo, LabUi.after(this, layout.compact ? dp(44) : -2, 44, 12));
+        return bar.view;
     }
 
     // About This Brush
@@ -366,7 +374,9 @@ public final class BrushLabActivity extends Activity {
         block.setGravity(Gravity.TOP);
         int pad = dp(layout.pad);
         block.setPadding(pad, pad, pad, pad);
-        block.addView(test.blockLoop(new LinearLayout.LayoutParams(dp(layout.loopWidth), -1)));
+        View loop = test.blockLoop(new LinearLayout.LayoutParams(dp(layout.loopWidth), -1));
+        loop.setOnClickListener(v -> toggleWords());
+        block.addView(loop);
         LinearLayout named = LabUi.column(this);
         nameBox = LabUi.row(this);
         named.addView(nameBox, new LinearLayout.LayoutParams(-1, dp(layout.nameHeight())));
@@ -379,9 +389,10 @@ public final class BrushLabActivity extends Activity {
         block.addView(named, namedPlace);
         LinearLayout swatches = LabUi.column(this);
         LinearLayout across = LabUi.row(this);
-        across.addView(picker(), new LinearLayout.LayoutParams(dp(layout.picker), dp(layout.pickerThick)));
+        // The readout at the picker's left, the picker against the edge (the owner, 2026-11-03).
         readout = new SwatchReadout(this);
-        across.addView(readout, LabUi.after(this, dp(layout.readout), layout.readout, layout.gap));
+        across.addView(readout, new LinearLayout.LayoutParams(dp(layout.readout), dp(layout.readout)));
+        across.addView(picker(), LabUi.after(this, dp(layout.picker), layout.pickerThick, layout.gap));
         swatches.addView(across, new LinearLayout.LayoutParams(-1, dp(layout.pickerThick)));
         said = LabUi.text(this, "", TypeStyle.CAPTION);
         said.setTextColor(Theme.GREY_800);
@@ -397,13 +408,14 @@ public final class BrushLabActivity extends Activity {
         nameBox.removeAllViews();
         name = null;
         if (!renaming) {
-            String text = lab.brush().name();
+            String text = lab.brush().shownName();
             name = LabUi.text(this, text, TypeStyle.HEADING);
             boolean two = !layout.compact && LabText.width(text, TypeStyle.HEADING.sp, 0) > layout.nameWidth;
             if (two) name.setTextSize(TWO_LINE_SP);
             name.setSingleLine(false); name.setMaxLines(two ? 2 : 1); name.setEllipsize(TextUtils.TruncateAt.END); name.setLineSpacing(0, .95f);
             name.setGravity(Gravity.CENTER_VERTICAL);
             name.setMaxWidth(dp(layout.nameWidth));
+            name.setOnClickListener(v -> toggleWords());
             nameBox.addView(name, new LinearLayout.LayoutParams(-2, -1));
             LabButton pencil = new LabButton(this, R.drawable.ic_ph_pencil_simple, null, false);
             pencil.setContentDescription("Rename");
@@ -428,6 +440,8 @@ public final class BrushLabActivity extends Activity {
         InputMethodManager keyboard = (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
         if (keyboard != null) keyboard.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT);
     }
+    /** The brush's words shown, or hidden again (their room kept, so nothing moves): a tap on its loop or name. */
+    private void toggleWords() { wordsOpen = !wordsOpen; render(); }
     /** The line under the name: "Edited" once the brush changed since it was opened or saved, and a suggested name to tap. */
     private View mark() {
         LinearLayout row = LabUi.row(this);
@@ -452,10 +466,11 @@ public final class BrushLabActivity extends Activity {
         suggested.setClickable(suggestion != null);
     }
     /**
-     * About This Brush's buttons, in {@link #ACTIONS}' order: New, Open (on while its sheet is open), Save (ink; "Saved"
-     * with its check while the brush is saved as it is; for a moment after a tap what Save did; said "Save over" the
-     * entry it writes over), Save as New, Back to the slot's first brush (its name cut to fit), and a Stamp's Cut Stamp
-     * (on while it waits). {@code entry}: the library entry Save writes over, or null.
+     * About This Brush's buttons, in {@link #ACTIONS}' order: New ▾ (the styles, {@link LabSettings#newMenu}), Open (on
+     * while its sheet is open), Save (ink; "Saved" with its check while the brush is saved as it is; for a moment after a
+     * tap what Save did; said "Save over" the entry it writes over), its As New box (only for a brush from the library:
+     * any other is added anyway, {@link BrushLab#save(boolean)}), and a Stamp's Cut Stamp (on while it waits). {@code
+     * entry}: the library entry Save writes over, or null.
      */
     private void renderActions(BrushLibrary.Entry entry) {
         actions.removeAllViews();
@@ -465,43 +480,32 @@ public final class BrushLabActivity extends Activity {
             LabButton button;
             switch (action) {
                 case NEW:
-                    button = new LabButton(this, 0, LabLayout.NEW, false);
+                    button = new LabButton(this, 0, LabLayout.NEW + " ▾", false);
                     button.setContentDescription("New brush");
-                    button.setOnClickListener(v -> { pad.finishStroke(); lab.newBrush(); render(); });
+                    button.setOnClickListener(v -> { pad.finishStroke(); settings.newMenu(v); });
                     break;
                 case OPEN:
                     button = new LabButton(this, 0, LabLayout.OPEN, false);
                     button.setOn(sheetOpen);
-                    button.setContentDescription(sheetOpen ? "Close" : "Open a brush");
+                    button.setContentDescription(sheetOpen ? LabLayout.CLOSE : LabLayout.OPEN_SAID);
                     button.setOnClickListener(v -> showSheet(!sheetOpen));
                     break;
                 case SAVE: {
-                    // A brush not from the library has only Save as New, the one way it can go there (the owner, 2026-10-29:
-                    // "move to save as new if it's a new brush (instead of staying on save)").
-                    if (entry == null) continue;
                     // Saved reads unlike Save at a glance on e-ink: plain words with a check, where Save is solid ink with a disk.
                     // Just tapped, it says for a moment what Save did (the owner, 2026-10-23: "Save on Brush Lab doesn't give a confirmation").
                     boolean saved = lab.saved();
-                    String label = saveSaid != null ? saveSaid : saved ? "Saved" : LabLayout.SAVE;
+                    String label = saveSaid != null ? saveSaid : lab.saveWords();
                     button = new LabButton(this, 0, label, !saved);
                     button.setIcon(saved ? R.drawable.ic_ph_saved : R.drawable.ic_ph_save, 18);
-                    button.setContentDescription(saveSaid != null ? saveSaid : saved ? "Saved" : entry != null ? "Save over " + entry.brush.name() : "Save to library");
-                    button.setOnClickListener(v -> { lab.save(); saySaved(lab.status); });
+                    button.setContentDescription(saveSaid != null ? saveSaid : saved ? "Saved" : entry != null && !asNew ? "Save over " + entry.brush.name() : "Save to library");
+                    button.setOnClickListener(v -> { lab.save(asNew); saySaved(lab.status); });
                     break;
                 }
-                case SAVE_AS_NEW:
-                    // Solid ink with the disk where it is the only save; plain beside Save for a library brush.
-                    button = new LabButton(this, 0, LabLayout.SAVE_AS_NEW, entry == null);
-                    if (entry == null) button.setIcon(R.drawable.ic_ph_save, 18);
-                    button.setOnClickListener(v -> { lab.saveAsNew(); saySaved(lab.status); });
-                    break;
-                case BACK_TO:
-                    // Back to the slot's first brush (the owner: "an easy way"), taking the row's room.
-                    button = new LabButton(this, R.drawable.ic_ph_arrow_counter_clockwise, ToolsLayout.BACK_TO + lab.started().name(), false);
-                    button.setEllipsize(TextUtils.TruncateAt.END);
-                    button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-                    button.setOnClickListener(v -> { pad.finishStroke(); lab.restore(); render(); });
-                    button.setVisibility(lab.changed(lab.selected()) ? View.VISIBLE : View.INVISIBLE);
+                case AS_NEW:
+                    // A box beside Save (the owner's mockup, 2026-11-03), ticked while Save adds a copy; only where Save could write over.
+                    if (entry == null) continue;
+                    button = new LabButton(this, 0, LabLayout.AS_NEW, false).ticked(asNew);
+                    button.setOnClickListener(v -> { asNew = !asNew; render(); });
                     break;
                 default:
                     // A Stamp's Cut Stamp: the test page's next pen stroke is a lasso; on while it waits, a tap again stops it.
@@ -511,7 +515,7 @@ public final class BrushLabActivity extends Activity {
                     button.setOnClickListener(v -> cutStamp());
             }
             button.setPadding(barPad, 0, barPad, 0);
-            LinearLayout.LayoutParams place = action == Action.BACK_TO ? new LinearLayout.LayoutParams(0, -1, 1) : new LinearLayout.LayoutParams(-2, -1);
+            LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(-2, -1);
             if (!first) place.leftMargin = dp(LabLayout.ACTION_GAP);
             actions.addView(button, place);
             first = false;
@@ -564,19 +568,6 @@ public final class BrushLabActivity extends Activity {
         render();
     }
 
-    // The scratch pad
-
-    /** The scratch pad's head row, as tall as the column's, so the test page and the modules start level: its label, Clear and the wet indicator at its right. */
-    private View testHeader() {
-        LinearLayout head = LabUi.header(this, "Scratch Pad");
-        LabUi.spring(head);
-        LabButton clear = test.clear(layout.clearPad);
-        clear.setMinHeight(0); clear.setMinimumHeight(0);
-        head.addView(clear, new LinearLayout.LayoutParams(-2, -1));
-        // Beside Clear, the droplet while the test page's Slow wash is still settling; a tap lays it now.
-        head.addView(test.wet(), new LinearLayout.LayoutParams(dp(layout.wet), -1));
-        return head;
-    }
     /**
      * The slot's size and grey: the drawing screen's picker box ({@link PickerBox}; the owner, 2026-10-29: "we can use the
      * same horizontal picker from the toolbar in place of the pickers there"), turned a quarter so it lies across: the
@@ -618,52 +609,56 @@ public final class BrushLabActivity extends Activity {
 
     /**
      * Under About This Brush's header, a sheet in a menu's look (paper, a fine ink edge), its fields framed the same:
-     * open a pasted code (or Cancel, which closes it, nothing changed), copy this brush's, or open one of the library's
+     * open a pasted code (or Cancel, which closes it, nothing changed), copy this brush's or share it to Brush Studio, or open one of the library's
      * brushes, a page of them at a time; a line under them says when a code didn't read, or was copied.
      */
     private LinearLayout sheet() {
         LinearLayout sheet = LabUi.column(this);
         sheet.setBackground(Theme.menu(this));
-        sheet.setPadding(dp(16), dp(12), dp(16), dp(12));
+        sheet.setPadding(dp(LabLayout.SHEET_SIDE), dp(LabLayout.SHEET_TOP), dp(LabLayout.SHEET_SIDE), dp(LabLayout.SHEET_TOP));
         // Taps on it stay on it, never reaching the page under it.
         sheet.setClickable(true);
-        int labelWidth = dp(layout.compact ? 120 : 140);
+        int labelWidth = dp(layout.sheetLabel()), row = LabLayout.SHEET_ROW, gap = LabLayout.SHEET_BUTTON_GAP;
         LinearLayout loadRow = LabUi.row(this);
-        loadRow.addView(LabUi.heading(this, "Paste code"), new LinearLayout.LayoutParams(labelWidth, -2));
+        loadRow.addView(LabUi.heading(this, LabLayout.PASTE_CODE), new LinearLayout.LayoutParams(labelWidth, -2));
         paste = new EditText(this);
         Theme.style(paste, TypeStyle.BODY);
-        paste.setHint("brave-onion.M…"); paste.setHintTextColor(Theme.GREY_800); paste.setSingleLine(true);
+        paste.setHint(LabLayout.CODE_HINT); paste.setHintTextColor(Theme.GREY_800); paste.setSingleLine(true);
         paste.setBackground(Theme.menu(this)); paste.setPadding(dp(8), dp(8), dp(8), dp(8));
         paste.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         paste.setImeOptions(EditorInfo.IME_ACTION_DONE);
         paste.setOnEditorActionListener((v, action, event) -> { loadCode(); return true; });
-        loadRow.addView(paste, new LinearLayout.LayoutParams(0, dp(44), 1));
+        loadRow.addView(paste, new LinearLayout.LayoutParams(0, dp(row), 1));
         LabButton load = new LabButton(this, 0, LabLayout.OPEN, false);
-        load.setContentDescription("Open the code");
+        load.setContentDescription(LabLayout.OPEN_CODE);
         load.setOnClickListener(v -> loadCode());
-        loadRow.addView(load, LabUi.after(this, -2, 44, 8));
-        LabButton cancel = new LabButton(this, 0, "Cancel", false);
+        loadRow.addView(load, LabUi.after(this, -2, row, gap));
+        LabButton cancel = new LabButton(this, 0, LabLayout.CANCEL, false);
         cancel.setOnClickListener(v -> showSheet(false));
-        loadRow.addView(cancel, LabUi.after(this, -2, 44, 8));
+        loadRow.addView(cancel, LabUi.after(this, -2, row, gap));
         sheet.addView(loadRow, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout copyRow = LabUi.row(this);
-        copyRow.addView(LabUi.heading(this, "This brush"), new LinearLayout.LayoutParams(labelWidth, -2));
+        copyRow.addView(LabUi.heading(this, LabLayout.THIS_BRUSH), new LinearLayout.LayoutParams(labelWidth, -2));
         code = LabUi.text(this, "", TypeStyle.CAPTION);
         code.setTypeface(Theme.face(400)); code.setGravity(Gravity.CENTER_VERTICAL);
         code.setSingleLine(true); code.setEllipsize(TextUtils.TruncateAt.MIDDLE); code.setTextIsSelectable(true);
         code.setBackground(Theme.menu(this)); code.setPadding(dp(8), 0, dp(8), 0);
-        copyRow.addView(code, new LinearLayout.LayoutParams(0, dp(44), 1));
-        LabButton copy = new LabButton(this, R.drawable.ic_ph_copy, "Copy", false);
+        copyRow.addView(code, new LinearLayout.LayoutParams(0, dp(row), 1));
+        LabButton copy = new LabButton(this, R.drawable.ic_ph_copy, LabLayout.COPY, false);
         copy.setOnClickListener(v -> copyCode());
-        copyRow.addView(copy, LabUi.after(this, -2, 44, 8));
-        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2); below.topMargin = dp(10);
+        copyRow.addView(copy, LabUi.after(this, -2, row, gap));
+        LabButton studio = new LabButton(this, R.drawable.ic_ph_export, DrawLayout.STUDIO, false);
+        studio.setContentDescription(LabLayout.TO_STUDIO);
+        studio.setOnClickListener(v -> shareToStudio());
+        copyRow.addView(studio, LabUi.after(this, -2, row, gap));
+        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2); below.topMargin = dp(LabLayout.SHEET_GAP);
         sheet.addView(copyRow, below);
         shelf = LabUi.column(this);
-        LinearLayout.LayoutParams shelfPlace = new LinearLayout.LayoutParams(-1, dp(LabLayout.SECTION_BAR + layout.shelfRows * layout.cardHeight)); shelfPlace.topMargin = dp(10);
+        LinearLayout.LayoutParams shelfPlace = new LinearLayout.LayoutParams(-1, dp(LabLayout.SECTION_BAR + layout.shelfRows * layout.cardHeight)); shelfPlace.topMargin = dp(LabLayout.SHEET_GAP);
         sheet.addView(shelf, shelfPlace);
         note = LabUi.text(this, "", TypeStyle.CAPTION);
         note.setTextColor(Theme.INK);
-        LinearLayout.LayoutParams under = new LinearLayout.LayoutParams(-1, -2); under.topMargin = dp(10);
+        LinearLayout.LayoutParams under = new LinearLayout.LayoutParams(-1, -2); under.topMargin = dp(LabLayout.SHEET_GAP);
         sheet.addView(note, under);
         return sheet;
     }
@@ -683,7 +678,7 @@ public final class BrushLabActivity extends Activity {
         shelf.removeAllViews();
         LinearLayout head = LabUi.bar(this);
         head.setPadding(0, 0, 0, 0);
-        head.addView(LabUi.barText(this, "Library"));
+        head.addView(LabUi.barText(this, LabLayout.LIBRARY));
         LabUi.spring(head);
         if (pages > 1) {
             LabButton previous = LabButton.headIcon(this, R.drawable.ic_ph_caret_left, "Previous page");
@@ -707,11 +702,11 @@ public final class BrushLabActivity extends Activity {
                 View cell;
                 if (index < cards.size()) {
                     BrushLab.Card card = cards.get(index);
-                    LoopCard tile = new LoopCard(this, samples, java.util.Collections.emptyList(), card.brush.name());
+                    LoopCard tile = new LoopCard(this, samples, java.util.Collections.emptyList(), card.brush.shownName());
                     tile.ruled = true;
                     tile.setSample(card.brush.identity() + " tray", LabLibrary.traySampler(card.brush, null));
                     tile.setNow(entry != null && card.entry.id == entry.id);
-                    tile.setContentDescription(LabLayout.OPEN + " " + card.brush.name());
+                    tile.setContentDescription(LabLayout.OPEN + " " + card.brush.shownName());
                     tile.setOnClickListener(v -> { pad.finishStroke(); lab.open(card.entry); showSheet(false); });
                     cell = tile;
                 } else { cell = new View(this); cell.setBackgroundColor(Theme.PAPER); }
@@ -732,7 +727,12 @@ public final class BrushLabActivity extends Activity {
     private void copyCode() {
         ClipboardManager clipboard = (ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
         if (clipboard != null) clipboard.setPrimaryClip(ClipData.newPlainText("Brush code", lab.code()));
-        say(clipboard != null ? "Copied" : "Select the code to copy");
+        say(clipboard != null ? LabLayout.COPIED : LabLayout.NO_COPY);
+    }
+    /** This brush in Brush Studio, the web page: its code after the link's # (studio.js openHash reads it), in the tablet's browser; the app sends nothing itself. */
+    private void shareToStudio() {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DrawLayout.STUDIO_LINK + "#" + android.net.Uri.encode(lab.code())))); }
+        catch (android.content.ActivityNotFoundException error) { say(DrawLayout.NO_BROWSER); }
     }
     /** Puts the pasted code's brush in the selected slot and closes the sheet; a code that doesn't read says so in it, as the lab words it. */
     private void loadCode() {
@@ -759,7 +759,7 @@ public final class BrushLabActivity extends Activity {
     // Leaving
 
     /**
-     * Back to the drawing (and on to the Tools page when it opened the lab), with the ten slots' brushes and the
+     * Back to the drawing (and on to the Tools page when it opened the lab), with the nine slots' brushes and the
      * selected slot: the slot the lab opened on holds whatever it ended with, saved or not (the owner, 2026-10-23: no trap).
      */
     private void back() {

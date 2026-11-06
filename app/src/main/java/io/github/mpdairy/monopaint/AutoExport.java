@@ -23,7 +23,9 @@ final class AutoExport {
         return thread;
     });
 
-    static File folder() { return new File(Environment.getExternalStorageDirectory(), PngExport.SUPERNOTE_FOLDER); }
+    /** The copies' folder on a Supernote (the one its Files app shows). */
+    static final String SUPERNOTE_FOLDER = "EXPORT/" + BuildConfig.LIBRARY_FOLDER;
+    static File folder() { return new File(Environment.getExternalStorageDirectory(), SUPERNOTE_FOLDER); }
     /** A drawing's PNG copy from before notebooks. */
     static File file(String path) { return new File(folder(), DrawingFiles.name(path) + ".png"); }
     /** Where the notebooks' PDFs go: beside the notebooks (Document/<app folder> on a Supernote). */
@@ -31,7 +33,7 @@ final class AutoExport {
     /** Whether {@code path}'s notebook has its copies as this version writes them (its PDF in Documents recorded). */
     static boolean hasCopies(String path) { return new File(new File(folder(), DrawingFiles.name(path)), NotebookPdf.STATE).isFile(); }
     /** The notebook's PDF's title: its name without a title's hidden date ({@link DrawingNames#titled}). */
-    static String title(String path) { String name = DrawingFiles.name(path); return DrawingNames.titled(name) ? name.substring(11) : name; }
+    static String title(String path) { return NotebookPdf.title(DrawingFiles.name(path)); }
     private static NotebookExport.Documents documents(String path) { return new NotebookExport.Documents(documents(), title(path), java.time.LocalDate.now()); }
     /** Tells the media index the PDF is there (the Documents app may list from it). */
     private static void scan(PaintActivity app, NotebookExport.Done done) {
@@ -73,17 +75,17 @@ final class AutoExport {
         return true;
     }
     /**
-     * Queues page {@code place}'s (a stack's) {@code choice} copy (Export Page, {@link PageExport}) from {@code book} (a
+     * Queues page {@code place}'s (a stack's) {@code choice} copy at {@code size} (a PNG's; Export Page, {@link PageExport}) from {@code book} (a
      * snapshot), in EXPORT/<app folder> beside the notebooks' PNG folders, behind any notebook's copies; {@code done} or
      * {@code failed} (logged) run on the main thread after; whether it was queued (not where shared storage isn't allowed).
      */
-    static boolean page(PaintActivity app, String path, DrawingBook.Snapshot book, int place, String choice, Runnable failed, Runnable done) {
+    static boolean page(PaintActivity app, String path, DrawingBook.Snapshot book, int place, String choice, ExportSize size, Runnable failed, Runnable done) {
         if (path.isEmpty() || book == null || !DrawingStorage.sharedAllowed(app)) return false;
         WORKER.execute(() -> {
             try {
                 List<PackedPage> pages = book.packed();
                 book.release();
-                PageExport.write(folder(), title(path), place, choice, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles());
+                PageExport.write(folder(), title(path), place, choice, size, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles());
                 app.runOnUiThread(done);
             } catch (Exception | OutOfMemoryError error) {
                 book.release();

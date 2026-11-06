@@ -3,8 +3,6 @@ package io.github.mpdairy.monopaint;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Arrays;
 
 /**
@@ -122,21 +120,11 @@ public final class TimedSectionsChecks {
     static byte[] write(ToneDocument d) throws Exception { ByteArrayOutputStream out = new ByteArrayOutputStream(); DocumentCodec.write(out, d.layerSnapshot()); return out.toByteArray(); }
 
     static void prompts() throws Exception {
-        NotebookTemplate t = NotebookTemplate.DIARY_PAGE;
-        check(Arrays.equals(DailyPrompt.sectionTimes(DailyPrompt.DEFAULTS, t), DIARY), "The defaults' line gives the template's times");
-        check(DailyPrompt.parse(DailyPrompt.DEFAULTS).stream().noneMatch(c -> c.text.contains("Did 2:30")), "and is not a card");
-        check(Arrays.equals(DailyPrompt.sectionTimes("diary page TIMES | Did 1:00 | Heard 45 s | Picture 3 min | Saw 0:05\n", t), new int[]{60, 5, 45, 180}), "By name in any order, m:ss, s or min, any case");
-        check(Arrays.equals(DailyPrompt.sectionTimes("Diary Page times | Did soon | Saw 0:00 | Heard 99:99 | Picture 61 min | Nap 1:00\n", t), DIARY), "Times that don't read keep the template's");
-        check(Arrays.equals(DailyPrompt.sectionTimes("# Diary Page times | Did 1:00\nLined times | Did 1:00\n", t), DIARY), "A note or another template's line changes nothing");
-        check(Arrays.equals(DailyPrompt.sectionTimes((String) null, t), DIARY) && DailyPrompt.sectionTimes("", NotebookTemplate.LINED) == null, "No file: the template's; no sections: none");
-        check(DailyPrompt.parse("Diary Page times | Did 1:00\n1 min | A card.\n").size() == 1, "A times line is never a card");
-        File dir = Files.createTempDirectory("sections").toFile();
-        try {
-            check(Arrays.equals(DailyPrompt.sectionTimes(dir, t), DIARY) && !new File(dir, DailyPrompt.FILE).exists(), "No file: the template's times, nothing written");
-            Files.write(new File(dir, DailyPrompt.FILE).toPath(), "1 min | Draw.\nDiary Page times | Saw 4:00\n".getBytes(StandardCharsets.UTF_8));
-            check(Arrays.equals(DailyPrompt.sectionTimes(dir, t), new int[]{150, 240, 30, 30}), "The file's line as edited");
-        } finally {
-            new File(dir, DailyPrompt.FILE).delete(); dir.delete();
-        }
+        // The prompts file's "Diary Page times" line went with the Self-Portrait Prompt (2026-11-05): the template's own.
+        check(TimedSections.MOST_SECONDS == 60 * 60, "A section an hour at most");
+        // A page from before the cut holding its card (a PRMT section) opens, the card passed over.
+        byte[] old = PageShadeChecks.page(PageShadeChecks.section(0x50524d54, "3 min | Draw yourself skating.".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        ToneDocument read = PageShadeChecks.read(old);
+        check(read.unmarked(), "An old page's Self-Portrait Prompt card is passed over: the page opens blank");
     }
 }

@@ -24,7 +24,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.ScrollView;
@@ -41,8 +40,7 @@ import java.util.function.Consumer;
  *
  * <p>Layout, from the outside in: {@link PanelPreviewLayout} (optional smaller-panel
  * simulation) → {@link QuarterTurnLayout} turning the whole UI → {@link #root}, holding
- * the header/color bar ({@link #palette}) and the {@link #body} with the {@link Toolbar}
- * and the {@link DrawingPad} canvas. Android itself always stays in portrait.
+ * the {@link #body} with the {@link DrawingPad} canvas. Android itself always stays in portrait.
  */
 public final class PaintActivity extends Activity implements ControlHost {
     // Document
@@ -50,8 +48,8 @@ public final class PaintActivity extends Activity implements ControlHost {
     DrawingBook book;
     /** Saved path of the open drawing, or empty if never saved. */
     String drawingName = "";
-    /** Names the open notebook's file, and says it in the foot's corner ({@link InkWashBar#bookName}). */
-    private void named(String path) { drawingName = path; if (inkWashBar != null) inkWashBar.bookName(DrawingFiles.name(path)); }
+    /** Names the open notebook's file. */
+    private void named(String path) { drawingName = path; }
     String saveError;
     boolean resumed, loading = true, destroyed, saving;
     /** The old app's brushes and settings were taken in at this launch (HandOver): one note once the page is up. */
@@ -76,63 +74,43 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** The shelf of notebooks and the inside of one, over the drawing screen (Inkwash's notebooks). */
     NotebookScreens notebooks;
     boolean navigationLocked = true;
-    /** The eyedropper is active; {@link #pickedShade} once it has sampled the canvas. */
-    boolean pickingShade, pickedShade;
-    /** Shade to restore if the eyedropper is cancelled. */
-    int pickOriginalShade;
 
     // App-only rotation: Android and the e-ink driver always remain in portrait.
     int appRotation = Surface.ROTATION_0;
     boolean landscape, toolboxRight;
-    /** Degrees the header strip is turned; 90 in landscape. */
+    /** Degrees a header control is turned ({@link ControlHost}); 90 in landscape. */
     int toolbarTurn;
     /** The untransformed event, whose pen tilt axes Android would otherwise rotate. */
     MotionEvent physicalPenEvent;
 
     // Layout
-    LinearLayout root, body, palette, headerControls, leftHeader, rightHeader, menuControls;
+    LinearLayout root, body;
     /** Inkwash's page area beside the column: the pad, and the page bar under it ({@link InkWashBar#turner}). */
     private LinearLayout pageArea;
     /** Along the foot: Zen Mode's corner under the column ({@link #zenCorner}, its button floats over it), the brush line and the notebook's name in the far corner. */
     private LinearLayout footRow;
     private View zenCorner;
-    QuarterTurnLayout paletteFrame, orientationFrame;
+    QuarterTurnLayout orientationFrame;
     PanelPreviewLayout previewFrame;
     DrawingPad pad;
-    FullscreenController fullscreen;
-    EdgeBars edgeBars;
-    Toolbar toolbar;
+    /** Live pages' probe: listens only with live-probe.txt in the library folder (live-probe branch only). */
+    final LiveProbe live = new LiveProbe(this);
+    /** Share on Wi-Fi: the app's own live relay, for a browser on the same Wi-Fi. */
+    final LiveShare share = new LiveShare(this);
     RotationPrompt rotationPrompt;
-    CanvasGravity canvasGravity;
-    ShadePicker shadePicker;
-    WetnessBar wetnessBar;
-    /** The droplet and wetness slider, kept upright together. */
-    private QuarterTurnLayout wetControls;
-    WetDroplet wetDroplet;
-    ToolButton maskButton, watercolorButton, opaqueButton, transparentButton, eyedropperButton, eraseButton;
-    ImageButton menuButton, previousPage, nextPage, pageMenuButton;
-    PageActionButton rotateButton, pagesButton;
-    TextView pageNumber;
+    PageActionButton rotateButton;
 
     // Panels. At most one popup is open at a time.
-    PopupWindow toolPicker, filePopup, layersPopup;
-    AlertDialog pageOverview, pageConfirmation;
+    PopupWindow filePopup;
     QuarterTurnLayout pagePanel;
-    private TextView popupPageNumber;
-    private PageActionButton popupPrevious, popupNext;
     private final Rect pagePanelBounds = new Rect();
     private boolean pagePanelByFinger;
-    TextView gradientHint;
-    private final Runnable gradientHintTask = this::showGradientHint;
     /** Swallows the rest of a touch that dismissed a panel. */
     private boolean dismissingTouch;
     /** Where a finger landed in the screen's top band (raw px), until it moves ({@link StripGesture#edgePull}); NaN for none. */
     private float edgeX = Float.NaN, edgeY;
     boolean pageActionPending;
     final SelectionFeedback selectionFeedback = new SelectionFeedback();
-    /** Rubbing in the color bar or palette loads a brush with limited paint. */
-    final PaintRub paintRub = new PaintRub(this::loadPaint);
-    final SelectionFeedback layerFeedback = new SelectionFeedback();
 
     @Override protected void attachBaseContext(Context base) {
         super.attachBaseContext(Ui.largerText(base));
@@ -143,6 +121,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         // Textures and name lists are read from the APK's assets (see Assets).
         Assets.install(getApplicationContext().getAssets()::open);
         Theme.fonts(this);
+        // Text boxes' letters, for the page and every copy of it.
+        if (TextBoxes.type == null) TextBoxes.type = new TextType();
         // Notebook covers' labels in the app's face.
         NotebookCovers.lettering = new CoverLettering();
         forgetOldCovers();
@@ -181,19 +161,13 @@ public final class PaintActivity extends Activity implements ControlHost {
             return pixels;
         };
         store = new DocumentStore(DrawingStorage.appPrivate(this), DrawingStorage.recovery(this));
+        share.restore();
 
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Theme.PAPER);
-        buildHeader();
-        paletteFrame = new QuarterTurnLayout(this); paletteFrame.addView(palette);
-        root.addView(paletteFrame);
+        rotateButton = rotateButton();
         body = new LinearLayout(this);
-        toolbar = new Toolbar(this);
-        body.addView(toolbar.toolScroll, new LinearLayout.LayoutParams(dp(64), -1));
-        toolbar.rebuildTools();
         inkWashBar = new InkWashBar(this);
-        fullscreen = new FullscreenController(this);
-        edgeBars = new EdgeBars(this);
         pad = new DrawingPad(this);
         pageArea = new LinearLayout(this); pageArea.setOrientation(LinearLayout.VERTICAL);
         pageArea.addView(pad, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -205,9 +179,19 @@ public final class PaintActivity extends Activity implements ControlHost {
         FrameLayout stage = new FrameLayout(this);
         stage.addView(root);
         // Zen Mode's button, in the foot corner under the column in both states (under the notebook screens).
+        // Under it its fan (Zen Mode's tools, closed).
+        zenFan = new ZenFanView(this);
+        zenFan.setVisibility(View.GONE);
+        stage.addView(zenFan, new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
         zenButton = zenButton();
         stage.addView(zenButton, new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
-        root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (r - l != or - ol || b - t != ob - ot) zenButton.post(this::placeZen); });
+        // Over it, while the fan is open, the brush's dot, which takes no touch.
+        zenDot = new SwatchReadout(this);
+        zenDot.setVisibility(View.GONE);
+        zenDot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        InkWashBar.partialGrey(zenDot);
+        stage.addView(zenDot, new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
+        root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (r - l != or - ol || b - t != ob - ot) zenButton.post(() -> { closeZenFan(); placeZen(); }); });
         stage.addView(notebooks.view);
         orientationFrame.addView(stage);
         orientationFrame.afterLayout = () -> { pad.disconnectDisplay(); pad.updateViewport(); pad.post(pad::connectDisplay); };
@@ -222,7 +206,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         previewFrame.setVisibility(View.INVISIBLE);
         applyToolboxSide(); updatePages();
         rotationPrompt = new RotationPrompt(this, rotateButton);
-        canvasGravity = new CanvasGravity(this);
         pad.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             if (l != ol || t != ot || r != or || b != ob) { pad.disconnectDisplay(); pad.post(pad::connectDisplay); }
         });
@@ -230,6 +213,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         else root.post(this::askForSharedStorage);
     }
 
+    private static final String START_HERE_GIVEN = "start_here_given";
     /** Moves the library to shared storage when allowed, then restores the working drawing. */
     private void loadDrawing() {
         if (destroyed) return;
@@ -240,6 +224,12 @@ public final class PaintActivity extends Activity implements ControlHost {
             if (error != null) runOnUiThread(() -> message("Could not move drawings to "
                     + DrawingStorage.SHARED_NAME + ": " + error.getMessage()));
         });
+        // A fresh install opens on the Start Here notebook, given once (deleted, it stays gone).
+        if (!preferences.getBoolean(START_HERE_GIVEN, false))
+            store.startHere((given, error) -> {
+                // Given, the library was empty: no old drawings to make into notebooks, so no migration (and its shelf).
+                if (error == null) preferences.edit().putBoolean(START_HERE_GIVEN, true).putBoolean(NotebookScreens.MIGRATED, preferences.getBoolean(NotebookScreens.MIGRATED, false) || given).apply();
+            });
         store.recover((recovered, error) -> runOnUiThread(() -> {
             if (destroyed) return;
             loading = false;
@@ -284,7 +274,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         warmSlots();
     }
     /**
-     * The ten slots' brushes resolved once in the background at their sizes and greys, so the first stroke or fill
+     * The nine slots' brushes resolved once in the background at their sizes and greys, so the first stroke or fill
      * doesn't wait for what a brush first loads. The result is dropped: each stroke resolves its own, the same.
      */
     private void warmSlots() {
@@ -343,82 +333,15 @@ public final class PaintActivity extends Activity implements ControlHost {
             preferences.edit().putBoolean("plainPages", true).apply();
         }));
     }
-    /** Builds the header strip: menu, undo/redo, the color bar and the page controls. */
-    private void buildHeader() {
-        palette = new LinearLayout(this);
-        leftHeader = new LinearLayout(this); rightHeader = new LinearLayout(this);
-        rightHeader.setGravity(Gravity.END);
-        // Size each control group to its contents; the shade strip gets all spare space.
-        palette.addView(leftHeader, new LinearLayout.LayoutParams(-2, dp(48)));
-        LinearLayout colors = new LinearLayout(this);
-        palette.addView(colors, new LinearLayout.LayoutParams(0, dp(48), 1));
-        palette.addView(rightHeader, new LinearLayout.LayoutParams(-2, dp(48)));
-
-        menuButton = new PageActionButton(this, this, true);
-        menuButton.setImageResource(R.drawable.ic_ph_list); menuButton.setContentDescription("File menu");
-        menuButton.setOnClickListener(v -> {
-            if (busy()) return;
-            pad.finishStroke(); setPickingShade(false);
-            fileMenu(menuButton);
-        });
-        menuControls = new LinearLayout(this);
-        menuControls.addView(menuButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        headerUndo = headerAction("Undo", R.drawable.ic_ph_undo, this::undo);
-        headerRedo = headerAction("Redo", R.drawable.ic_ph_redo, this::redo);
-        leftHeader.addView(menuControls);
-
-        rotateButton = pageAction("Rotate", R.drawable.ic_ph_arrow_clockwise, () -> rotationPrompt.accept(), false);
+    /** The rotation prompt's button ({@link RotationPrompt}), over the page. */
+    private PageActionButton rotateButton() {
+        PageActionButton rotateButton = pageAction("Rotate", R.drawable.ic_ph_arrow_clockwise, () -> rotationPrompt.accept());
         // Over the page, so a menu's panel: paper, a fine ink edge, square.
         rotateButton.setBackground(Theme.menu(this)); rotateButton.setStateListAnimator(null);
         // 1.5 times a header button (the owner, 2026-10-27: "make it a bit bigger"): 72 dp, its icon 36 dp.
         rotateButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER); rotateButton.setPadding(dp(18), dp(18), dp(18), dp(18));
         rotateButton.setVisibility(View.INVISIBLE);
-
-        headerControls = new LinearLayout(this);
-        previousPage = headerPageButton("Previous page", R.drawable.ic_ph_caret_left, () -> turnPage(-1));
-        pageNumber = new PageLabel(this, this); pageNumber.setOnClickListener(v -> showPageOverview());
-        Theme.style(pageNumber, TypeStyle.BODY); pageNumber.setTypeface(Theme.face(700));
-        pageNumber.setGravity(Gravity.CENTER); headerControls.addView(pageNumber, new LinearLayout.LayoutParams(dp(76), dp(48)));
-        nextPage = headerPageButton("Next page", R.drawable.ic_ph_caret_right, () -> turnPage(1));
-        pageMenuButton = headerPageButton("Page actions", R.drawable.ic_ph_file, this::showPageMenu);
-        pagesButton = new PageActionButton(this, this, true); pagesButton.setImageResource(R.drawable.ic_ph_files);
-        pagesButton.setContentDescription("Pages");
-        pagesButton.setOnClickListener(v -> { if (!busy()) showPagePanel(); });
-
-        maskButton = colorBarButton(colors, "Masking fluid", R.drawable.ic_masking_fluid, 32, this::toggleMaskingFluid);
-        maskButton.setOnTouchListener(new MaskPeelTouch(this, maskButton));
-        maskButton.markerBelow = true;
-        // The droplet and its wetness slider make one square, turned upright in landscape
-        // like an icon, so the slider always fills from the bottom.
-        LinearLayout wetPair = new LinearLayout(this);
-        wetControls = new QuarterTurnLayout(this); wetControls.addView(wetPair);
-        colors.addView(wetControls, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        watercolorButton = colorBarButton(wetPair, "Watercolour mode", 0, 32, this::tapDroplet);
-        watercolorButton.headerIcon = false;
-        // No icon resource: the droplet is solid while Watercolor mode is on, and dashed while it is off.
-        watercolorButton.iconOnly(new DropletIcon(false), new DropletIcon(true));
-        watercolorButton.setContentDescription("Watercolour mode. Transparent brushes, shapes and flat fills paint watercolour. While wet paint is moving, tap to dry it.");
-        watercolorButton.iconHalf = 18;
-        wetDroplet = new WetDroplet(this, watercolorButton);
-        wetnessBar = new WetnessBar(this);
-        wetPair.addView(wetnessBar, new LinearLayout.LayoutParams(dp(16), dp(48)));
-        eyedropperButton = colorBarButton(colors, "Pick color from canvas", R.drawable.ic_ph_eyedropper, () -> {
-            setPickingShade(!pickingShade);
-            if (pickingShade) pad.dryWet();
-        });
-        eyedropperButton.markerBelow = true;
-        eyedropperButton.setOnTouchListener((view, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) hideGradientHint();
-            return false;
-        });
-        shadePicker = new ShadePicker(this);
-        colors.addView(shadePicker, new LinearLayout.LayoutParams(0, dp(48), 1));
-        eraseButton = colorBarButton(colors, "Erase with current tool", R.drawable.ic_ph_eraser, this::toggleEraseMode);
-        eraseButton.markerBelow = true;
-        transparentButton = colorBarButton(colors, "Transparent paint", R.drawable.ic_ph_circle_dashed, () -> setTransparentPaint(true));
-        opaqueButton = colorBarButton(colors, "Opaque paint", R.drawable.ic_ph_circle, () -> setTransparentPaint(false));
-        refreshPaintModes(); setMaskingFluid(paint.maskingFluid);
-        rightHeader.addView(headerControls);
+        return rotateButton;
     }
 
     int dp(float value) { return Ui.dp(this, value); }
@@ -427,7 +350,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     // ControlHost
     /** The shelf's taps: with no notebook open (a recovery that failed), only a load or save in progress holds them. */
     boolean shelfBusy() { return book == null ? loading || saving : busy(); }
-    @Override public boolean busy() { return replay.running() || loading || saving || pad == null || pad.document == null || pad.fill != null || pad.gradientCommit; }
+    @Override public boolean busy() { return replay.running() || loading || saving || pad == null || pad.document == null; }
     @Override public boolean pageActionPending() { return pageActionPending; }
     @Override public int toolbarTurn() { return toolbarTurn; }
     @Override public boolean colorMarkersOnTop() { return landscape && !toolboxRight; }
@@ -435,10 +358,7 @@ public final class PaintActivity extends Activity implements ControlHost {
 
     // Controls
 
-    /**
-     * An icon control. Pressing it first ends the current pen gesture and leaves the
-     * eyedropper, except that color controls may act on a pending gradient.
-     */
+    /** An icon control. Pressing it first ends the current pen gesture. */
     ToolButton iconButton(String title, int icon, Runnable action) {
         ToolButton button = new ToolButton(this, this);
         button.setTag(title); button.setContentDescription(title);
@@ -446,39 +366,14 @@ public final class PaintActivity extends Activity implements ControlHost {
         button.iconOnly(icon);
         button.setOnClickListener(v -> {
             if (busy()) return;
-            boolean colorControl = button == eyedropperButton || button == eraseButton;
-            if (button != eyedropperButton) setPickingShade(false);
-            if (!colorControl || !pad.hasGradient()) pad.finishStroke();
+            pad.finishStroke();
             action.run();
         });
         return button;
     }
-    private ToolButton headerButton(LinearLayout parent, String title, int icon, Runnable action) {
-        return headerButton(parent, title, icon, 48, action);
-    }
-    /**
-     * A header control {@code width} dp along the strip. A narrow icon takes a narrow button,
-     * leaving the room to the shade strip; it still turns upright in place in landscape.
-     */
-    private ToolButton headerButton(LinearLayout parent, String title, int icon, int width, Runnable action) {
-        ToolButton button = iconButton(title, icon, action);
-        button.headerIcon = true; button.setBackgroundColor(Theme.PAPER);
-        parent.addView(button, new LinearLayout.LayoutParams(dp(width), dp(48)));
-        return button;
-    }
-    private ToolButton headerAction(String title, int icon, Runnable action) { return headerButton(menuControls, title, icon, action); }
-    /** A color bar toggle that shows its state with a dot. */
-    private ToolButton colorBarButton(LinearLayout parent, String title, int icon, Runnable action) {
-        return colorBarButton(parent, title, icon, 48, action);
-    }
-    private ToolButton colorBarButton(LinearLayout parent, String title, int icon, int width, Runnable action) {
-        ToolButton button = headerButton(parent, title, icon, width, action);
-        button.alwaysDot = true;
-        return button;
-    }
     /** A button whose action runs after its pressed outline reaches the panel. */
-    private PageActionButton pageAction(String name, int icon, Runnable action, boolean header) {
-        PageActionButton button = new PageActionButton(this, this, header);
+    private PageActionButton pageAction(String name, int icon, Runnable action) {
+        PageActionButton button = new PageActionButton(this, this, false);
         button.setImageResource(icon); button.setContentDescription(name);
         button.setOnClickListener(v -> {
             if (busy() || pageActionPending) return;
@@ -490,24 +385,11 @@ public final class PaintActivity extends Activity implements ControlHost {
                     // new panel request an Android frame. Retaining the box for
                     // 200 ms lets those redraws replay (and dim) its fast pixels.
                     button.press.set(false);
-                    if (resumed && !destroyed && button.isAttachedToWindow()) { setPickingShade(false); action.run(); }
+                    if (resumed && !destroyed && button.isAttachedToWindow()) action.run();
                 } finally { pageActionPending = false; }
             });
         });
         return button;
-    }
-    private ImageButton headerPageButton(String name, int icon, Runnable action) {
-        PageActionButton button = pageAction(name, icon, action, true);
-        headerControls.addView(button, new LinearLayout.LayoutParams(dp(40), dp(48))); return button;
-    }
-    /** A drag shadow that matches the app's turned UI. */
-    View.DragShadowBuilder turnedShadow(View view) {
-        return new View.DragShadowBuilder(view) {
-            @Override public void onDrawShadow(Canvas canvas) {
-                canvas.save(); canvas.rotate(appTurn(), view.getWidth()/2f, view.getHeight()/2f);
-                super.onDrawShadow(canvas); canvas.restore();
-            }
-        };
     }
 
     // Pages
@@ -515,30 +397,17 @@ public final class PaintActivity extends Activity implements ControlHost {
     void updatePages() { updatePages(false); }
     /** As {@link #updatePages()}; {@code turned}: another page turned to, the pages as they were (the page bar moves its marks alone). */
     private void updatePages(boolean turned) {
-        if (pageNumber == null) return;
         if (book != null && book.current() != null) nameBook(false);
         // A stack of layers is one page: its number, and the count of them (PageStacks).
         PageStacks stacks = book == null ? null : book.stacks();
         int count = book == null ? 1 : stacks.count(), index = book == null ? 0 : stacks.of(book.index());
         // A cover's pattern made ahead, from the first and the last page (and on a cover), so turning to one needn't wait.
         if (book != null && (index <= 0 || index == count - 1)) CoverPattern.prepare(book.design(), book.name(), book.width, book.height, null);
-        // Text and enabled states use Android's next frame. Artwork is already
-        // submitted by showPage; updating the counter must not add an e-ink flash.
-        updatePageRow(pageNumber, previousPage, nextPage, index, count);
-        if (pagesButton != null) pagesButton.setContentDescription("Pages. Page " + (index+1) + " of " + count);
-        if (popupPageNumber != null) updatePageRow(popupPageNumber, popupPrevious, popupNext, index, count);
         if (inkWashBar != null) { inkWashBar.pagesChanged(index, count, turned); inkWashBar.turner.timer(pageLocked(), false); }
         if (notebooks != null) notebooks.pagesChanged();
         timedLook();
         // The pages changed or another is drawn on: the ghosts follow, if what they are of changed.
         ghosts.changed();
-    }
-    private void updatePageRow(TextView label, View previous, View next, int index, int count) {
-        boolean cover = DrawingBook.isCover(index);
-        label.setText(index == DrawingBook.FRONT ? NotebookCovers.FRONT_WORD : index == DrawingBook.BACK ? NotebookCovers.BACK_WORD : (index+1) + " / " + count);
-        label.setContentDescription((cover ? label.getText() : "Page " + (index+1) + " of " + count) + ". Show all pages");
-        Ui.setDimmed(previous, book != null && index != DrawingBook.FRONT, .3f);
-        Ui.setDimmed(next, book != null && index != DrawingBook.BACK, .3f);
     }
     /**
      * The open notebook's name for its covers' pattern and label ({@link DrawingBook#name}); with {@code show}, the cover
@@ -591,21 +460,9 @@ public final class PaintActivity extends Activity implements ControlHost {
     void chooseTools(NotebookOptions.Tools tools) {
         if (book == null || busy()) return;
         captureToolbar();
-        NotebookOptions o = book.options();
-        ToolSlots slots = inkWash.slots;
-        boolean rolled = tools == NotebookOptions.Tools.SURPRISE || tools == NotebookOptions.Tools.EACH_PAGE;
-        boolean wasRolled = o.tools == NotebookOptions.Tools.SURPRISE || o.tools == NotebookOptions.Tools.EACH_PAGE;
-        if (tools == NotebookOptions.Tools.MINE) setNotebookOptions(o.withTools(tools, null));
-        else if (rolled && wasRolled && tools != o.tools) setNotebookOptions(o.withTools(tools, o.toolbar));
-        else if (rolled) {
-            List<Brush> library = new ArrayList<>();
-            for (BrushLibrary.Entry e : slots.library.entries()) library.add(e.brush);
-            setNotebookOptions(o.withTools(tools, SurpriseTools.toolbar(SurpriseTools.roll(library, slots.swatches, new java.util.Random())).lines()));
-        } else {
-            ToolSlots.Toolbar own = ToolSlots.of(o);
-            setNotebookOptions(o.withTools(tools, (own != null ? own : slots.appWide()).lines()));
-            notebooks.hide(); openTools(Math.min(inkWash.selected, ToolSlots.COUNT - 1));
-        }
+        setNotebookOptions(inkWash.slots.withTools(book.options(), tools, new java.util.Random()));
+        // Library: the Tools page fills the notebook's own toolbar.
+        if (tools == NotebookOptions.Tools.LIBRARY) { notebooks.hide(); openTools(Math.min(inkWash.selected, ToolSlots.COUNT - 1)); }
     }
     /**
      * Page {@code page}'s own template made {@code template} (a hold on it in the notebook's strip, {@link CardSelector}), a
@@ -646,6 +503,18 @@ public final class PaintActivity extends Activity implements ControlHost {
         recoveryNow();
         if (notebooks.shown()) notebooks.pagesChanged();
     }
+    /**
+     * Page {@code page}'s own surface made {@code surface} (Page Settings' Surface; null or the notebook's: the notebook's
+     * again), a change to save: the next strokes on it meet it. What is drawn there already stays as it is.
+     */
+    void setPageSurface(int page, BrushTexture surface) {
+        if (book == null || busy()) return;
+        pad.finishStroke();
+        book.setPageSurface(page, surface);
+        if (pad.document != null) WildSample.show(pad.document.surface);
+        recoveryNow();
+        if (notebooks.shown()) notebooks.pagesChanged();
+    }
     /** The side column's sand timer ({@link SandTimer}): the app's, running across pages; whether it has the countdown's row now. */
     private final SandTimer sand = new SandTimer();
     private boolean sandRow;
@@ -675,6 +544,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         syncToolbar();
         // The guides are the page's paper: it shows again with them, or without; a blank page drawn on takes a new Page Colour.
         if ((!options.template.equals(was.template) || options.guidesShown != was.guidesShown || options.paper != was.paper) && pad.document == book.current()) pad.showPage(book.current());
+        // Its surface: the next strokes meet it, and Brush Lab's samples show it.
+        if (options.surface != was.surface && pad.document != null) WildSample.show(pad.document.surface);
         recoveryNow();
         if (notebooks.shown()) notebooks.pagesChanged();
     }
@@ -706,13 +577,26 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** The rules in force on page {@code page}: the notebook's with the page's own over them ({@link NotebookRules#forPage}), else the defaults. */
     NotebookOptions rules(int page) { return book != null && notebooks != null && !notebooks.onShelf() ? book.rules(page) : NotebookOptions.DEFAULT; }
     /** Whether the page shown is locked (its time ran out under Lock Pages, or a PDF's page): no marks, no Undo, no Redo. */
+    /**
+     * Vector Ink's notes ({@link VectorInk}): beside the tool in use, as Cut Stamp's words are, never at the brush line's
+     * right (the owner, 2026-11-04: that spot is for Draw Together's connection status); a toast off the drawing screen.
+     */
+    void sayVector(String text) {
+        if (inkWashBar != null && !zen) inkWashBar.sayAt(inkWash.selected, text, InkWashBar.LABEL_MS);
+        else message(text);
+    }
     boolean pageLocked() { return pad != null && pad.document != null && pad.document.locked(); }
     /** Whether {@code tool} (a slot, the eraser or the smudge tool) may draw here now; if not, the note why. Locked page and No Erasing and Brushes alike. */
     boolean allowStroke(int tool) {
-        if (pageLocked()) { note(NotebookRules.PAGE_LOCKED); return false; }
-        if (NotebookRules.refuses(rules(), tool, inkWash.brush(tool))) { note(NotebookRules.ERASING_OFF); return false; }
-        // Show Kinds: nothing is drawn, or erased, unseen.
+        String refused = NotebookRules.refusal(rules(), pageLocked(), tool, inkWash.brush(tool));
+        if (refused != null) { note(refused); return false; }
+        // Vector Ink: its own pair on top, made when needed; refused only with no room for it.
+        String vector = pad.document == null ? null : VectorInk.refusal(pad.document, inkWash.brush(tool));
+        if (vector != null) { sayVector(vector); return false; }
+        // Show Kinds: nothing is drawn, or erased, unseen; nor on a hidden layer (the layer button's hold, 2026-11-06).
         String hidden = hiddenNote(tool);
+        if (hidden == null && pad.document != null && !InkWashLayers.visible(pad.document, InkWashLayers.current(pad.document)))
+            hidden = DrawLayout.layerHiddenNote(Math.max(1, InkWashLayers.layer(pad.document)));
         if (hidden != null) { note(hidden); return false; }
         // Marbling's order (ToolKits): clear water or a comb with nothing floating moves nothing; another brush prints the rings.
         Brush drawn = inkWash.brush(tool);
@@ -733,35 +617,30 @@ public final class PaintActivity extends Activity implements ControlHost {
      * or the eraser's every kind hidden: "Pen is hidden, see Show Kinds"; null when it may.
      */
     String hiddenNote(int tool) {
-        int shown = shownKinds(), hidden = EraseKind.hidden(shown);
-        return EraseKind.refusal(shown, tool != InkWash.ERASER ? inkWash.kindOf(tool) : hidden != 0 && inkWash.erasing() == 0 ? hidden : 0);
+        boolean eraser = tool == InkWash.ERASER;
+        return EraseKind.hiddenNote(shownKinds(), eraser, eraser ? 0 : inkWash.kindOf(tool), eraser ? inkWash.erasing() : 0);
     }
     /** Show Kinds' steps on the page drawn on ({@link ToneDocument#kindsShown}); 0, all Full, with none. */
     int shownKinds() { return pad == null || pad.document == null ? 0 : pad.document.kindsShown(); }
     /** Show Kinds: tool {@code tool} taken up, the kind it lays not Full says so ("Pen is hidden", "Dry media is faint"). */
     void sayKind(int tool) {
         if (tool == InkWash.ERASER) return;
-        int choice = EraseKind.choiceOf(inkWash.kindOf(tool)), step = EraseKind.step(shownKinds(), choice);
-        if (choice > 0 && step != NotebookOptions.FULL) message(EraseKind.said(choice, step));
+        String said = EraseKind.takenUp(shownKinds(), inkWash.kindOf(tool));
+        if (said != null) message(said);
     }
     /** {@link #message}, but not again within a few seconds (a finger drag asks at every touch). */
     void note(String text) {
         long now = android.os.SystemClock.uptimeMillis();
-        if (now - lastNote < 3000) return;
+        if (now - lastNote < DrawLayout.NOTE_AGAIN_MS) return;
         lastNote = now; message(text);
     }
     private long lastNote = -10000;
-    /** The header's Undo and Redo, disabled under No Erasing. */
-    private ToolButton headerUndo, headerRedo;
     /** The page's clock, the open notebook's Timed Pages ({@link TimedPages}). */
     final TimedPages timed = new TimedPages();
     private final Runnable timedTick = this::timedLook;
     /** The rules changed (a notebook opened, left or its options changed): the bar and the clock follow. */
     private void rulesChanged() {
         if (inkWashBar != null) inkWashBar.rulesChanged(rules());
-        // No Erasing: Undo and Redo show disabled (the header's, where it is shown, as the bar's).
-        boolean undoOff = NotebookRules.undoOff(rules());
-        for (ToolButton b : new ToolButton[]{headerUndo, headerRedo}) if (b != null) { b.setEnabled(!undoOff); b.setAlpha(undoOff ? .3f : 1f); }
         timedLook();
     }
     /** Counting stops and the time so far is given to the page: before it is left, packed or saved, or the app paused. */
@@ -810,7 +689,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         // The sand timer counts while the app is resumed, whatever the page; at zero, once the pen is up, its popup, the
         // page as it was.
         if (resumed) sand.resume(now); else sand.pause(now);
-        boolean sandWaits = sand.on() && sand.remaining(now) <= 0 && pad.stroking();
+        boolean sandWaits = sand.waits(now, pad.stroking());
         if (!sandWaits && sand.ended(now) && inkWashBar != null) inkWashBar.timeUp(null);
         if (inkWashBar != null) {
             // The blink and the countdown are small updates of their own squares, and wait for the pen to be up (as the wet droplet's does).
@@ -818,7 +697,7 @@ public final class PaintActivity extends Activity implements ControlHost {
             inkWashBar.turner.timer(page != null && page.locked(), stroking ? inkWashBar.turner.numberHidden() : hidden);
             if (stroking && hidden != inkWashBar.turner.numberHidden()) next = 150;
             // A page out of time shows the row as an untimed page does; a locked one its 0:00.
-            String countdown = options.seconds > 0 && page != null && !cover && (timed.remaining(now) > 0 || page.locked()) ? NotebookRules.countdown(timed.remaining(now)) : null;
+            String countdown = page == null ? null : NotebookRules.shownCountdown(options.seconds, cover, page.locked(), timed.remaining(now));
             if (sectioned != null) {
                 long[] look = {next};
                 countdown = sectionLook(sectioned, showing, pad.drawingNow(), look);
@@ -828,14 +707,12 @@ public final class PaintActivity extends Activity implements ControlHost {
             // a cover or a locked page, where there is no drawing to time).
             sandRow = countdown == null;
             boolean icon = false;
-            if (sandRow && sand.on()) countdown = NotebookRules.countdown(sand.remaining(now));
-            else icon = sandRow && page != null && !cover && !page.locked();
+            if (sandRow) { countdown = sand.countdown(now); icon = countdown == null && page != null && !cover && !page.locked(); }
             if (!inkWashBar.countdown(countdown, icon, stroking)) next = 150;
         }
         long sandNext = sandWaits ? 150 : sand.nextLook(now);
         if (sandNext >= 0 && (next < 0 || sandNext < next)) next = sandNext;
         if (next >= 0) pad.postDelayed(timedTick, next);
-        if (showing) promptLook(page);
     }
     // Timed Sections (TimedSections): the Diary Page's boxes timed in order.
 
@@ -845,9 +722,9 @@ public final class PaintActivity extends Activity implements ControlHost {
         NotebookTemplate template = book.template(book.index());
         if (!template.timed()) return null;
         if (!template.equals(sectionTemplate) || sectionTimesFor != pad.document) {
-            // Read once a page shown: the owner edits the times in the prompts file.
+            // The template's own times (the prompts file could change them until the Self-Portrait Prompt's cut, 2026-11-05).
             sectionTemplate = template; sectionTimesFor = pad.document;
-            sectionTimes = DailyPrompt.sectionTimes(DrawingStorage.sharedAllowed(this) ? DrawingStorage.shared() : null, template);
+            sectionTimes = template.sectionSeconds.clone();
         }
         return pad.document;
     }
@@ -909,25 +786,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (page.setSections(next)) recovery();
         timedLook();
     }
-    /** The pages whose prompt has shown this session (the notebook and the page), so each shows once. */
-    private final java.util.Set<String> promptsShown = new java.util.HashSet<>();
-    /** The page shown has a Self-Portrait Prompt card: it shows, once a session (on opening the app too, which reopens the last page). */
-    private void promptLook(ToneDocument page) {
-        if (page.prompt() == null || busy() || pad.drawingNow() || !promptsShown.add(drawingName + "\n" + book.index())) return;
-        // Found with nothing on the page but the card (the app closed without a pause): it goes, unshown.
-        if (page.dropUnusedPrompt()) { recovery(); return; }
-        DailyPrompt.Card card = DailyPrompt.of(page.prompt());
-        if (card != null) promptCard(card, DailyPrompt.heading(card), null);
-    }
-    /**
-     * The page drawn on is being left (another page, the shelf, the app paused): its Self-Portrait Prompt card goes if nothing was
-     * done with it ({@link ToneDocument#dropUnusedPrompt}), before the book keeps the page. True when it went (a change to save).
-     */
-    private boolean leavePrompt() {
-        if (book == null || pad.document == null || pad.document != book.current()) return false;
-        pad.finishStroke(); // a stroke still down is drawing
-        return pad.document.dropUnusedPrompt();
-    }
     /** The slots as the open notebook's own toolbar, if it has one and it is loaded: a change to save. */
     void captureToolbar() {
         if (book == null || inkWash == null || !inkWash.slots.inNotebook() || ToolSlots.of(book.options()) == null) return;
@@ -960,7 +818,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         // An old notebook's blank page at its end goes (BlankPages.opened): the page bar's + adds one now.
         try { BlankPages.opened(replacement); }
         catch (java.io.IOException | RuntimeException error) { Log.w(ProbeActivity.TAG, "The blank page at the end stays", error); }
-        pad.finishStroke(); book = replacement; pad.showPage(book.current()); updatePages(); pad.post(fullscreen::pageChanged);
+        pad.finishStroke(); book = replacement; pad.showPage(book.current()); updatePages();
         syncToolbar();
         // A blank page's bytes made ahead off the main thread, so its blank pages are told by them.
         BlankPages.prepare(book.width, book.height, book.options().paper);
@@ -969,10 +827,9 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (busy() || !book.valid(index)) return;
         nameBook(false);
         // Settled while the page is still the book's current one, so the page kept is the settled one.
-        pad.finishStroke(); pad.dryWet(); pad.settleDrying(); pauseTimer();
-        leavePrompt();
+        pad.finishStroke(); pad.settleDrying(); pauseTimer();
         notebooks.leavingPage();
-        try { book.select(index); pad.showPage(book.current()); pad.pageTurned(); updatePages(true); syncToolbar(); recoveryNow(); fullscreen.pageChanged(); }
+        try { book.select(index); pad.showPage(book.current()); pad.pageTurned(); updatePages(true); syncToolbar(); recoveryNow(); }
         catch (java.io.IOException error) { message("Could not open page: " + error.getMessage()); }
     }
     private void addPage() { addPage(() -> book.addPage()); }
@@ -982,24 +839,10 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (book.count() >= DrawingBook.MAX_PAGES) { note(DrawingBook.PAGES_FULL); return; }
         addPage(() -> book.insertPage());
     }
-    /**
-     * A page added by {@code add} and turned to; with the notebook's Self-Portrait Prompt on ({@link NotebookOptions#selfPortrait}),
-     * dealt a card of its own ({@link #dailyPrompt}). A page only gets one as it is added: one left unused goes as any
-     * card does ({@link #leavePrompt}) and is not dealt again on coming back, so a blank page never asks twice.
-     */
-    private void addPage(BookEdit add) {
-        int pages = book.count();
-        pageEdit("add", add);
-        if (book.count() <= pages || !book.options().selfPortrait) return;
-        // Read each time: the owner edits the cards' file beside the notebooks.
-        List<DailyPrompt.Card> cards = DailyPrompt.load(DrawingStorage.sharedAllowed(this) ? DrawingStorage.shared() : null);
-        dailyPrompt(cards, new java.util.Random().nextInt(cards.size()));
-    }
-    /** Inserts a copy of the current page after it and turns to the copy. */
-    private void duplicatePage() { pageEdit("duplicate", () -> book.duplicatePage()); }
+    /** A page added by {@code add} and turned to. */
+    private void addPage(BookEdit add) { pageEdit("add", add); }
     private void deletePage() { if (erasingOff(BlankPages.deleteAsks(book, book.index()))) return; pageEdit("delete", () -> book.deletePage()); }
     void clearPage() { if (erasingOff()) return; layerChange(() -> pad.document.clearAllLayers()); }
-    private void clearLayer() { if (erasingOff()) return; layerChange(() -> pad.document.clear()); }
     /** No Erasing is on here: the note is given, and whatever erases is not done. */
     boolean erasingOff() { return erasingOff(true); }
     /** As {@link #erasingOff()}, for a page or layer that is {@code marked} (a blank one may still go: {@link NotebookRules#keeps}). */
@@ -1014,99 +857,10 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** Changes the pages with {@code edit}, which selects the page to show, and shows it. */
     private void pageEdit(String verb, BookEdit edit) {
         if (busy()) return;
-        pad.finishStroke(); pad.dryWet(); pad.settleDrying(); pauseTimer();
-        leavePrompt();
+        pad.finishStroke(); pad.settleDrying(); pauseTimer();
         notebooks.leavingPage();
-        try { edit.run(); pad.showPage(book.current()); pad.pageTurned(); updatePages(); syncToolbar(); recoveryNow(); fullscreen.pageChanged(); }
+        try { edit.run(); pad.showPage(book.current()); pad.pageTurned(); updatePages(); syncToolbar(); recoveryNow(); }
         catch (java.io.IOException error) { message("Could not " + verb + " page: " + error.getMessage()); }
-    }
-    /** The compact layout's Pages box: the page row with Add page, above the other page actions. */
-    private void showPagePanel() {
-        if (!beginPagePanel()) return;
-        LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_HORIZONTAL);
-        popupPrevious = pageAction("Previous page", R.drawable.ic_ph_caret_left, () -> turnPage(-1), false);
-        popupNext = pageAction("Next page", R.drawable.ic_ph_caret_right, () -> turnPage(1), false);
-        popupPageNumber = Theme.style(new TextView(this), TypeStyle.BODY);
-        popupPageNumber.setOnClickListener(v -> showPageOverview());
-        popupPageNumber.setTypeface(Theme.face(700)); popupPageNumber.setGravity(Gravity.CENTER);
-        row.addView(popupPrevious, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        row.addView(popupPageNumber, new LinearLayout.LayoutParams(dp(76), dp(48)));
-        row.addView(popupNext, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        addPageItem(row);
-        updatePageRow(popupPageNumber, popupPrevious, popupNext, book.index(), book.count());
-        LinearLayout actions = new LinearLayout(this); actions.setGravity(Gravity.CENTER_HORIZONTAL); addPageChanges(actions);
-        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
-        box.addView(row, new LinearLayout.LayoutParams(-1, dp(48)));
-        box.addView(actions, new LinearLayout.LayoutParams(-1, dp(48)));
-        showPagePanel(pagesButton, box, 5*dp(48), 2*dp(48));
-    }
-    /**
-     * The page actions in a column below the header's page button; compact layouts show them in
-     * the Pages box instead.
-     */
-    private void showPageMenu() {
-        if (compactLayout()) { showPagePanel(); return; }
-        if (!beginPagePanel()) return;
-        LinearLayout column = new LinearLayout(this); column.setOrientation(LinearLayout.VERTICAL);
-        addPageItem(column); addPageChanges(column);
-        showPagePanel(pageMenuButton, column, dp(48), 6*dp(48));
-    }
-    private void addPageItem(LinearLayout menu) {
-        pageMenuItem(menu, "Add page", R.drawable.ic_ph_file_plus, this::addPage, book.count() < DrawingBook.MAX_PAGES);
-    }
-    /** Adds the actions that change the current page; deleting it, which can't be undone, asks first unless it is blank. */
-    private void addPageChanges(LinearLayout menu) {
-        // A cover is neither copied nor deleted.
-        boolean page = !DrawingBook.isCover(book.index());
-        // No Erasing keeps a page with marks (as Clear page).
-        boolean kept = page && NotebookRules.keeps(rules(), BlankPages.deleteAsks(book, book.index()));
-        pageMenuItem(menu, "Duplicate page", R.drawable.ic_ph_files, this::duplicatePage, page && book.count() < DrawingBook.MAX_PAGES);
-        pageMenuItem(menu, "Delete page", R.drawable.ic_ph_file_x, () -> {
-            if (DrawingBook.isCover(book.index()) || erasingOff(BlankPages.deleteAsks(book, book.index()))) return;
-            if (!BlankPages.deleteAsks(book, book.index())) { deletePage(); return; }
-            confirmPageAction("Delete page " + (book.index()+1) + "?", "You can't undo this.", "Delete", this::deletePage);
-        }, page && book.count() > 1 && !kept);
-        pageMenuItem(menu, "Replay page", R.drawable.ic_ph_play, () -> replay.choose(compactLayout() ? pagesButton : pageMenuButton), replay.available());
-        pageMenuItem(menu, "Clear page", R.drawable.ic_ph_broom, this::clearPage, !rules().noErasing);
-        pageMenuItem(menu, "Clear current layer", R.drawable.ic_ph_eraser, this::clearLayer, !rules().noErasing);
-    }
-    private View pageMenuItem(LinearLayout menu, String name, int icon, Runnable action, boolean enabled) {
-        // Like the page row, act while the panel is open so page artwork reaches the panel at once.
-        View item = pageAction(name, icon, () -> { action.run(); closePagePanel(); }, false);
-        Ui.setDimmed(item, enabled, .3f);
-        menu.addView(item, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        return item;
-    }
-    private void confirmPageAction(String title, String text, String verb, Runnable action) {
-        closePagePanel();
-        AlertDialog dialog = showDialog(new AlertDialog.Builder(this).setTitle(title).setMessage(text)
-                .setPositiveButton(verb, (unused, which) -> { if (!busy()) action.run(); })
-                .setNegativeButton("Cancel", null));
-        pageConfirmation = dialog;
-        dialog.setOnDismissListener(unused -> { if (pageConfirmation == dialog) pageConfirmation = null; });
-    }
-    /** Closes an open page panel, or prepares the canvas for a new one; false when none should open. */
-    private boolean beginPagePanel() {
-        if (pagePanel != null) { closePagePanel(); return false; }
-        if (busy()) return false;
-        dismissPanels(); hideGradientHint();
-        pad.suspend();
-        return true;
-    }
-    /**
-     * Shows {@code content} ({@code width} × {@code height} pixels, without its border) in an
-     * outlined panel beside {@code button}, drawn through the same fast path as toolbar selection.
-     */
-    private void showPagePanel(View button, View content, int width, int height) {
-        content.setPadding(dp(4), dp(4), dp(4), dp(4));
-        content.setBackground(Theme.menu(this));
-        RectF anchor = Popups.bounds(root, button);
-        // Sum rounded child pixels: at density 300, dp(56) is one pixel shorter
-        // than dp(48)+2*dp(4), which clips buttons and disables direct feedback.
-        width += 2*dp(4); height += 2*dp(4);
-        float left = landscape ? (toolboxRight ? anchor.left-width : anchor.right) : anchor.right-width;
-        float top = landscape ? anchor.bottom-height : anchor.bottom;
-        showPanelAt(content, Popups.rect(Popups.clamp(left, 0, root.getWidth()-width), Popups.clamp(top, 0, root.getHeight()-height), width, height));
     }
     /**
      * Shows {@code content} in a panel over the canvas at {@code bounds} ({@link #root}'s coordinates), drawn through the
@@ -1131,86 +885,29 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (pagePanel == null) return;
         Rect bounds = new Rect(pagePanelBounds); pagePanel = null;
         if (shown) selectionFeedback.update(previewFrame, bounds, previewFrame::hidePanel); else previewFrame.hidePanel();
-        pagePanelBounds.setEmpty(); popupPageNumber = null; popupPrevious = null; popupNext = null;
+        pagePanelBounds.setEmpty();
         pad.post(pad::connectDisplay);
         // Inkwash: what it covered gets the clean pass, as a menu's does (no ghost; the owner, 2026-10-23).
         if (shown) { RectF covered = new RectF(bounds); PanelCoordinates.fromView(previewFrame).mapRect(covered); pad.cleanArea(covered); }
-    }
-    /** The thumbnail grid of every page. */
-    private void showPageOverview() {
-        if (busy() || pageOverview != null) return;
-        dismissPanels(); hideGradientHint();
-        pad.suspend();
-        DrawingBook source = book;
-        PageOverview grid = new PageOverview(this, source.snapshot());
-        // Bound the scrolling content in app coordinates, including rotated Nomad mode.
-        grid.setLayoutParams(new FrameLayout.LayoutParams(-1, Math.max(dp(120), Math.min(dp(540), root.getHeight()-dp(180)))));
-        FrameLayout content = new FrameLayout(this); content.addView(grid);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Pages").setView(content)
-                .setNegativeButton("Close", null).create();
-        pageOverview = dialog;
-        grid.setOnItemClickListener((parent, view, index, id) -> {
-            dialog.dismiss();
-            if (book == source && index != book.index()) changePage(index);
-        });
-        // A hold on a page: its Page Settings.
-        grid.setOnItemLongClickListener((parent, view, index, id) -> {
-            dialog.dismiss();
-            if (book == source && index < book.count()) notebooks.showPageSettings(book.stacks().of(index), true);
-            return true;
-        });
-        dialog.setOnDismissListener(unused -> {
-            grid.close(); if (pageOverview == dialog) pageOverview = null; pad.post(pad::connectDisplay);
-        });
-        dialog.show(); compactDialog(dialog, 600); grid.setSelection(source.index());
     }
 
     // Orientation and layout
 
     /** Lays the screen out for the current rotation and drawing hand. */
     void applyToolboxSide() {
-        edgeBars.reset();
+        // Its line holds the column's buttons, laid out again here: home first.
+        closeZenFan();
         closePagePanel();
-        dismiss(filePopup); dismiss(layersPopup);
+        dismiss(filePopup);
         boolean right = prefs.toolboxRight();
         toolboxRight = right;
         if (pad != null) { pad.finishStroke(); pad.disconnectDisplay(); }
-        // Read the side column from menu/undo at the top to page controls at the bottom.
         toolbarTurn = landscape ? 90 : 0;
-        shadePicker.setContentDescription(!landscape
-                ? "Gray gradient. Tap or drag from black on the left to white on the right."
-                : "Gray gradient. Tap or drag from black at the bottom to white at the top.");
-        // Follow the shade endpoints in portrait and landscape.
-        LinearLayout colors = (LinearLayout)shadePicker.getParent();
-        colors.removeView(eraseButton); colors.removeView(eyedropperButton);
-        colors.addView(landscape ? eraseButton : eyedropperButton, colors.indexOfChild(shadePicker));
-        colors.addView(landscape ? eyedropperButton : eraseButton, colors.indexOfChild(shadePicker) + 1);
-        paletteFrame.setTurn(toolbarTurn); wetControls.setTurn(-toolbarTurn);
-        root.setOrientation(landscape ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-        root.removeView(paletteFrame);
-        root.addView(paletteFrame, landscape && right ? root.getChildCount() : 0,
-                new LinearLayout.LayoutParams(landscape ? dp(48) : -1, landscape ? -1 : dp(48)));
-        body.setLayoutParams(new LinearLayout.LayoutParams(landscape ? 0 : -1, landscape ? -1 : 0, 1));
-        body.setOrientation(landscape ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
-        body.removeView(toolbar.toolScroll); body.removeView(toolbar.landscapeTools);
-        toolbar.orient(landscape);
-        // Both drawing hands keep tools above the canvas in either landscape direction.
-        if (landscape) body.addView(toolbar.landscapeTools, 0, new LinearLayout.LayoutParams(-1, dp(64)));
-        else body.addView(toolbar.toolScroll, right ? body.getChildCount() : 0, new LinearLayout.LayoutParams(dp(64), -1));
-        arrangeHeader(right);
-        toolbar.rebuildTools();
-        fullscreen.applyVisibility();
-        Ui.invalidateTree(palette);
         pad.updateViewport(); pad.invalidate(); pad.post(pad::connectDisplay);
         showInkWashBar();
     }
-    /**
-     * Inkwash shows only its own toolbar beside the page. MonoPaint's header, color bar and side
-     * toolbar are still built, so code that refers to them keeps working, but never shown.
-     */
+    /** Inkwash's own toolbar beside the page. */
     private void showInkWashBar() {
-        paletteFrame.setVisibility(View.GONE);
-        toolbar.toolScroll.setVisibility(View.GONE); toolbar.landscapeTools.setVisibility(View.GONE);
         // Inkwash's arrangement in either turn: one column down the drawing hand's side (MonoPaint's tool column's place
         // in the body row) and beside it the page bar over the pad (the owner, 2026-10-23: "moving the pages bar to the
         // top"); along the foot Zen Mode's corner under the column and the brush line from just past it, the page shorter
@@ -1229,49 +926,71 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (footRow == null) {
             footRow = new LinearLayout(this); footRow.setOrientation(LinearLayout.HORIZONTAL); zenCorner = new View(this);
             // The name's most room follows the screen as laid out (a turn): what the brush line leaves past its least.
-            footRow.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (r - l != or - ol) footRow.post(this::fitBookName); });
+            footRow.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (r - l != or - ol) footRow.post(this::fitStatusCorner); });
         }
         Ui.detach(footRow); footRow.removeAllViews(); Ui.detach(inkWashBar.brushLine);
         footRow.addView(zenCorner, new LinearLayout.LayoutParams(dp(layout.lineStart()), -1));
         LinearLayout.LayoutParams linePlace = new LinearLayout.LayoutParams(0, dp(DrawLayout.BRUSH_LINE), 1);
         linePlace.gravity = Gravity.TOP;  // the row's top is the line's top; the room under it centres the line on Zen Mode's icon
         footRow.addView(inkWashBar.brushLine, toolboxRight ? 0 : 1, linePlace);
-        // The notebook's name in the foot's far corner, beside the line (never over it), away from Zen Mode's button, as
-        // wide as its words up to what the line leaves (DrawLayout.bookName).
-        Ui.detach(inkWashBar.bookName);
-        fitBookName();
+        // The status in the foot's far corner, beside the line (never over it), away from Zen Mode's button, as
+        // wide as its words up to what the line leaves (DrawLayout.statusCorner).
+        Ui.detach(inkWashBar.statusCorner);
+        fitStatusCorner();
         LinearLayout.LayoutParams namePlace = new LinearLayout.LayoutParams(-2, dp(DrawLayout.BRUSH_LINE));
         namePlace.gravity = Gravity.TOP;
-        footRow.addView(inkWashBar.bookName, toolboxRight ? 0 : footRow.getChildCount(), namePlace);
-        inkWashBar.bookName.setGravity(Gravity.CENTER_VERTICAL | (toolboxRight ? Gravity.LEFT : Gravity.RIGHT));
+        footRow.addView(inkWashBar.statusCorner, toolboxRight ? 0 : footRow.getChildCount(), namePlace);
+        inkWashBar.statusCorner.setGravity(Gravity.CENTER_VERTICAL | (toolboxRight ? Gravity.LEFT : Gravity.RIGHT));
         // As far in from the screen's side as its words sit up from the screen's foot, about 28 dp (the owner, 2026-10-27:
         // "put a bit of right padding, like, a tab", "equal distance as from the bottom of the screen").
-        inkWashBar.bookName.setPadding(toolboxRight ? dp(28) : 0, 0, toolboxRight ? 0 : dp(28), 0);
-        inkWashBar.bookName(DrawingFiles.name(drawingName));
+        inkWashBar.statusCorner.setPadding(toolboxRight ? dp(28) : 0, 0, toolboxRight ? 0 : dp(28), 0);
+        inkWashBar.statusCorner(live.status());
         root.addView(footRow, new LinearLayout.LayoutParams(-1, dp(layout.footHeight())));
         inkWashBar.arrange(toolboxRight);
         // Zen Mode: the column, the brush line and the page bar gone, the pad the whole screen (the page fitted to it again).
         inkWashBar.view.setVisibility(zen ? View.GONE : View.VISIBLE);
-        inkWashBar.turner.view.setVisibility(zen ? View.GONE : View.VISIBLE);
+        showPageBar();
         footRow.setVisibility(zen ? View.GONE : View.VISIBLE);
         inkWashBar.brushLine.setVisibility(zen ? View.GONE : View.VISIBLE);
         showZen();
     }
 
-    /** The notebook's name at most what the brush line leaves past its least on the screen as it is ({@link DrawLayout#bookName}). */
-    private void fitBookName() {
-        int most = Math.max(0, dp(inkWashBar.layout().bookName()));
-        if (inkWashBar.bookName.getMaxWidth() != most) inkWashBar.bookName.setMaxWidth(most);
+    /** The notebook's name at most what the brush line leaves past its least on the screen as it is ({@link DrawLayout#statusCorner}). */
+    private void fitStatusCorner() {
+        int most = Math.max(0, dp(inkWashBar.layout().statusCorner()));
+        if (inkWashBar.statusCorner.getMaxWidth() != most) inkWashBar.statusCorner.setMaxWidth(most);
     }
 
     // Zen Mode (DrawLayout.ZEN)
 
     /** Whether Zen Mode is on: no column, no brush line, no page bar. Not kept: a new launch has the bars. */
     boolean zen;
+    /** The menu's Page Bar ({@link DrawLayout#PAGE_BAR}): the page bar hidden, Zen Mode or not (leaving it, the bar is as Page Bar left it). A session's, as Zen Mode. */
+    private boolean barHidden;
+    /**
+     * Page Bar's tap: the page bar hidden or shown. The pad's new room refits the page as Zen Mode's does
+     * ({@link CanvasViewport#configure}: fitted again while untouched, a zoom kept), then one refresh, forced as a zoom's.
+     */
+    void togglePageBar() {
+        if (inkWashBar == null) return;
+        barHidden = !barHidden;
+        showPageBar();
+        if (pad != null) pad.refreshAsked("Page bar");
+    }
+    /** The page bar shown or not: Zen Mode hides it too. */
+    private void showPageBar() { inkWashBar.turner.view.setVisibility(!zen && !barHidden ? View.VISIBLE : View.GONE); }
     private ToolButton zenButton;
-    /** Zen Mode's one button, both ways, no background: the dashed circle while off, the circle while on. */
+    /** Zen Mode's fan ({@link ZenFanView}), open or GONE; the brush's dot over Zen's circle while it is open. */
+    private ZenFanView zenFan;
+    private SwatchReadout zenDot;
+    /**
+     * Zen Mode's one button, both ways, no background: the dashed circle while off, the circle while on, its fan open too
+     * (the owner's sketch, 2026-11-04; the brush's dot in its place that day until: "sometimes the tool size is bigger than
+     * the space available, so it looks cramped"). Only a long press turns Zen Mode on or off (the owner, 2026-11-05).
+     */
     private ToolButton zenButton() {
-        ToolButton button = iconButton(DrawLayout.ZEN, R.drawable.ic_ph_circle_dashed, () -> setZen(!zen));
+        ToolButton button = iconButton(DrawLayout.ZEN, R.drawable.ic_ph_circle_dashed, this::zenTapped);
+        button.setOnLongClickListener(v -> { zenHeld(); return true; });
         button.iconHalf = DrawLayout.ZEN_ICON / 2;
         // Menu's icon size and no background, as Menu (the owner, 2026-10-22: "it can be the same size circle as the menu on top").
         button.setBackground(null);
@@ -1282,10 +1001,112 @@ public final class PaintActivity extends Activity implements ControlHost {
         // The dashed circle while off, the circle while on (the owner, 2026-10-29: "the icon for zen mode activated is a full
         // circle, but it should be what is on the toolbar . the toolbar icon should be a dotted circle icon initially";
         // circle and filled circle from 2026-10-24, dashed and circle before).
+        // The fan open: the circle still, no X; a hold leaves (the owner, 2026-11-05; unbroken in Zen Mode, 2026-11-04).
+        // The fan open: the brush's dot over the circle (the owner, 2026-11-06: "change back to nib + shade preview (but only when fan is open)").
+        boolean open = zenFanOpen();
         zenButton.iconOnly(zen ? R.drawable.ic_ph_circle : R.drawable.ic_ph_circle_dashed);
-        String said = zen ? DrawLayout.ZEN_LEAVE : DrawLayout.ZEN;
+        String said = open ? DrawLayout.ZEN_LEAVE : zen ? DrawLayout.ZEN_TOOLS : DrawLayout.ZEN;
         zenButton.setTag(said); zenButton.setContentDescription(said);
+        zenDot.setVisibility(open ? View.VISIBLE : View.GONE);
+        showZenDot();
         placeZen();
+    }
+    /**
+     * The dot over Zen's circle while its fan is open: the tool in use's nib and grey ({@link SwatchReadout}, as the
+     * column's), true to size up to the X's target (until 2026-11-04 in every state: "sometimes the tool size is bigger
+     * than the space available"). Drawn through Android in partial grey, never the fast display.
+     */
+    void showZenDot() {
+        if (zenDot == null || inkWashBar == null || !zenFanOpen()) return;
+        int tool = inkWash.selected;
+        zenDot.show(inkWash.look(tool), inkWash.brush(tool), DrawLayout.greys(tool));
+        zenDot.invalidate();
+    }
+    /** A hold on Zen's circle: Zen Mode on or off. */
+    void zenHeld() { if (!busy()) setZen(!zen); }
+    /** A tap on Zen's button: off, the hint to hold it; on, its fan opened or closed (only a hold turns Zen Mode on or off). */
+    void zenTapped() {
+        if (!zen) message(DrawLayout.ZEN_HOLD);
+        else if (zenFanOpen()) closeZenFan();
+        else openZenFan();
+    }
+    /**
+     * The layer button's tap (the owner, 2026-11-06): layer {@code layer} (1 to 3)
+     * drawn on, nothing when it is already ({@link InkWashLayers#pickLayer}). On a page of fewer than three pairs the
+     * blank ones are made first, one Undo step; else it is a selection, no step. The button follows ({@link
+     * InkWashBar#showLayer}) and the note says it, "Layer 3".
+     */
+    void pickLayer(int layer) {
+        if (busy() || inkWashBar == null || pad == null || pad.document == null) return;
+        ToneDocument page = pad.document;
+        if (InkWashLayers.layer(page) == layer) return;
+        if (InkWashLayers.pairs(page) < InkWashLayers.LAYERS) layerChange(() -> InkWashLayers.pickLayer(page, layer));
+        else { pad.finishStroke(); InkWashLayers.pickLayer(page, layer); }
+        if (InkWashLayers.layer(page) != layer) return;
+        // A page with tracing paper's layer steps shows the pair drawn on Solid: the page shown again for the new one.
+        pad.showSteps(layerSteps(page), true);
+        inkWashBar.pageChanged();
+        if (!zen) message(DrawLayout.layerNote(layer));
+    }
+    /**
+     * A layer's eye in the layer button's hold's popup (2026-11-06): layer {@code layer} (1 to 3) shown at {@code step}
+     * (Full, Half, Faint or Hidden), both halves of its pair, an Undo step kept with the page ({@link InkWashLayers#setStep});
+     * a layer not made yet made first, as a tap makes it. Said "Layer 1 half".
+     */
+    void layerStep(int layer, int step) {
+        if (inkWashBar == null || pad == null || pad.document == null) return;
+        ToneDocument page = pad.document;
+        if (InkWashLayers.stepOf(page, layer) == step) return;
+        layerChange(() -> InkWashLayers.setStep(page, layer, step));
+        if (InkWashLayers.stepOf(page, layer) != step) return;
+        inkWashBar.pageChanged();
+        if (!zen) message(DrawLayout.layerStepNote(layer, step));
+    }
+    boolean zenFanOpen() { return zenFan != null && zenFan.getVisibility() == View.VISIBLE; }
+    /** Zen Mode's open fan's whole area in panel pixels, else null: cleaned as it closes. */
+    RectF zenFanPanel() {
+        if (!zenFanOpen()) return null;
+        RectF area = zenFan.area();
+        PanelCoordinates.fromView((View) zenFan.getParent()).mapRect(area);
+        return area;
+    }
+    /** Zen Mode's open fan's shape in panel pixels ({@link ZenFan#mask}: its stepped paper disc and its line), else null: the fast display keeps off it ({@code DrawingPad.covered}) and still draws beside it. */
+    java.util.List<RectF> zenFanMask() {
+        if (!zenFanOpen()) return null;
+        java.util.List<RectF> mask = zenFan.mask();
+        android.graphics.Matrix toPanel = PanelCoordinates.fromView((View) zenFan.getParent());
+        for (RectF box : mask) toPanel.mapRect(box);
+        return mask;
+    }
+    /** Zen Mode's fan opened from its corner, over the page, drawn as the column is (partial grey, no flash). */
+    private void openZenFan() {
+        if (inkWashBar == null || zenFanOpen()) return;
+        FrameLayout.LayoutParams cell = (FrameLayout.LayoutParams) zenButton.getLayoutParams();
+        View stage = (View) zenFan.getParent();
+        zenFan.place(cell.leftMargin + cell.width / 2f, cell.topMargin + cell.height / 2f, inkWashBar.slotsShown(), toolboxRight, stage.getWidth(), stage.getHeight());
+        InkWashBar.partialGrey(zenFan);
+        zenFan.setVisibility(View.VISIBLE);
+        // The column's own buttons in its line, over the fan, under Zen's button.
+        RectF[] cells = new RectF[ZenFan.CELLS];
+        for (int i = 0; i < cells.length; i++) cells[i] = zenFan.cell(i);
+        inkWashBar.lend((ViewGroup) stage, ((ViewGroup) stage).indexOfChild(zenFan) + 1, cells);
+        RectF dot = zenFan.dot();
+        FrameLayout.LayoutParams square = new FrameLayout.LayoutParams(Math.round(dot.width()), Math.round(dot.height()), Gravity.TOP | Gravity.START);
+        square.setMargins(Math.round(dot.left), Math.round(dot.top), 0, 0);
+        zenDot.setLayoutParams(square);
+        inkWashBar.zenAnchor = zenFan;
+        showZen();
+    }
+    /** Zen Mode's fan closed, if open, its menus with it, its line's buttons home; what it covered cleaned on the panel as a popup's is, no flash. Zen Mode stays. */
+    void closeZenFan() {
+        RectF area = zenFanPanel();
+        if (area == null) return;
+        zenFan.setVisibility(View.GONE);
+        inkWashBar.giveBack();
+        inkWashBar.zenAnchor = null;
+        inkWashBar.closePanel(); inkWashBar.hideLabel();
+        if (pad != null) pad.cleanArea(area);
+        showZen();
     }
     /** Puts the button in the foot corner under the column as it is laid out now ({@link DrawLayout#zenCell}), in Zen Mode too. */
     private void placeZen() {
@@ -1304,6 +1125,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** Turns Zen Mode on or off: the screen laid out again, the stroke in progress finished first. */
     void setZen(boolean on) {
         if (zen == on || inkWashBar == null) return;
+        closeZenFan();
         zen = on;
         inkWashBar.closePanel(); inkWashBar.hideLabel();
         applyToolboxSide();
@@ -1312,32 +1134,28 @@ public final class PaintActivity extends Activity implements ControlHost {
     }
     /** Zen Mode's button drawn again through Android (after a full e-ink refresh of the page, which may have drawn over it). */
     void invalidateZen() { if (zenButton != null) zenButton.invalidate(); }
-    /** Keeps menu/undo/redo in the outer corner and page controls at the other end. */
-    private void arrangeHeader(boolean right) {
-        Ui.detach(menuControls);
-        boolean menuAtEnd = !landscape && right;
-        // Keep Undo/Redo beside the outer-corner menu for either drawing hand.
-        if ((menuControls.indexOfChild(menuButton) == 0) == menuAtEnd) {
-            ArrayList<View> controls = new ArrayList<>();
-            for (int i = menuControls.getChildCount()-1; i >= 0; i--) controls.add(menuControls.getChildAt(i));
-            menuControls.removeAllViews();
-            for (View control : controls) menuControls.addView(control);
-        }
-        Ui.detach(headerControls); Ui.detach(pagesButton);
-        LinearLayout menuSide = menuAtEnd ? rightHeader : leftHeader;
-        LinearLayout pageSide = menuAtEnd ? leftHeader : rightHeader;
-        menuSide.addView(menuControls, new LinearLayout.LayoutParams(-2, dp(48)));
-        // A narrower header replaces the page row with a Pages button.
-        if (compactLayout()) pageSide.addView(pagesButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        else pageSide.addView(headerControls);
+    /**
+     * Zen's button put on the panel again where {@code panelArea} (panel pixels) was cleaned through the pad's fast display,
+     * which wrote the page's pixels over it (the owner, 2026-11-04: "when i select a tool the circle disappears": Zen's
+     * fan closing): the window as Android draws it there, the page and the button over it, in the grey mode, no blink.
+     */
+    void redrawZen(RectF panelArea) {
+        if (zenButton == null || !zenButton.isShown()) return;
+        RectF at = new RectF(0, 0, zenButton.getWidth(), zenButton.getHeight());
+        PanelCoordinates.fromView(zenButton).mapRect(at);
+        if (!at.intersect(panelArea)) return;
+        Matrix fromPanel = new Matrix();
+        if (!PanelCoordinates.fromView(previewFrame).invert(fromPanel)) return;
+        fromPanel.mapRect(at);
+        Rect patch = new Rect(); at.roundOut(patch);
+        if (patch.intersect(0, 0, previewFrame.getWidth(), previewFrame.getHeight())) selectionFeedback.clean(previewFrame, patch);
     }
     /** Turns the app to a quarter turn from the tablet's natural portrait. */
     void requestQuarter(int quarter) {
         if (busy()) return;
         pad.suspend();
-        dismiss(toolPicker);
-        toolbar.presetDrag.reset(); rotationPrompt.hide();
-        inkWashBar.closePanel(); pad.words.close();
+        rotationPrompt.hide();
+        inkWashBar.closePanel(); pad.words.close(); pad.text.close();
         appRotation = (4-quarter)%4;
         landscape = appRotation == Surface.ROTATION_90 || appRotation == Surface.ROTATION_270;
         orientationFrame.setTurn(appTurn());
@@ -1346,7 +1164,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     @Override public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
         rotationPrompt.hide();
-        dismiss(toolPicker); inkWashBar.closePanel();
+        inkWashBar.closePanel();
         applyToolboxSide();
     }
     boolean canSimulate() { return device.simulates != null; }
@@ -1361,7 +1179,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     void setSimulating(boolean enabled) {
         if (busy()) return;
         enabled = enabled && canSimulate();
-        dismissPanels(); hideGradientHint();
+        dismissPanels();
         pad.suspend(); pad.viewport.reset();
         prefs.setSimulateSmallerPanel(enabled);
         previewFrame.setSimulated(enabled ? device.simulates : null);
@@ -1433,7 +1251,7 @@ public final class PaintActivity extends Activity implements ControlHost {
                 dismissingTouch = true; return true;
             }
         }
-        // A touch outside the page row or palette editor only closes it, or is a resting hand to ignore.
+        // A touch outside the panel over the page only closes it, or is a resting hand to ignore.
         if (down && pagePanel != null && Ui.outside(pagePanel, event)) {
             if (Ui.closesPanel(pagePanelByFinger, event)) closePagePanel();
             dismissingTouch = true; return true;
@@ -1442,6 +1260,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         // With a palm or finger already resting, the pen arrives as a further pointer.
         int action = event.getActionMasked(), landing = event.getActionIndex();
         if (down && inkWashBar != null) inkWashBar.touchDown();
+        // Zen Mode's fan stays open while drawing; only a tap on Zen's circle closes it (the owner, 2026-11-06: "Keep tray open when drawing - press to close").
         if ((down || action == MotionEvent.ACTION_POINTER_DOWN) && inkWashBar != null
                 && event.getToolType(landing) != MotionEvent.TOOL_TYPE_FINGER) inkWashBar.penDown(event, landing);
         // Android treats ORIENTATION as radians when it transforms a View's events.
@@ -1456,40 +1275,19 @@ public final class PaintActivity extends Activity implements ControlHost {
     private static void dismiss(PopupWindow popup) { if (popup != null) popup.dismiss(); }
     /** Closes every panel and popup and leaves the eyedropper. */
     void dismissPanels() {
-        closePagePanel(); setPickingShade(false);
-        dismiss(filePopup); dismiss(layersPopup); dismiss(toolPicker);
+        closePagePanel();
+        dismiss(filePopup);
         if (inkWashBar != null) { inkWashBar.closePanel(); inkWashBar.hideLabel(); }
-        if (pad != null) pad.words.close();
+        if (pad != null) { pad.words.close(); pad.text.close(); }
     }
     /** Whether a menu, list or panel popup, or the bar's label, is open over the window. */
     boolean popupOpen() {
-        return filePopup != null || layersPopup != null || toolPicker != null
+        return filePopup != null
                 || (inkWashBar != null && (inkWashBar.panelOpen() || inkWashBar.labelShown()));
     }
     /** Whether a panel or prompt covers the canvas, so direct presentation must pause. */
     boolean canvasCovered() {
-        return rotateButton.getVisibility() == View.VISIBLE || pagePanel != null || pageOverview != null || notebookShown();
-    }
-    /** Shows a popup beside a toolbar control, fitted inside the canvas area. */
-    void showBesideTool(PopupWindow popup, View content, View anchor, int preferredWidthDp) {
-        RectF area = Popups.bounds(root, pad); area.inset(dp(8), dp(8));
-        int width = Math.min(dp(preferredWidthDp), Math.round(area.width()));
-        int height = Math.min(Popups.measuredHeight(content, width, Math.round(area.height())), Math.round(area.height()));
-        Popups.show(popup, root, Popups.besideAnchor(Popups.bounds(root, anchor), area, width, height, landscape, dp(8)));
-    }
-    /** Opens settings for the selected tool beside its toolbar button. */
-    PopupWindow showToolSettings() {
-        closePagePanel(); dismiss(toolPicker);
-        View anchor = toolbar.selectionButtons.get(toolbar.selectedKey());
-        ToolSettingsPanel panel = new ToolSettingsPanel(this, anchor == null ? toolbar.toolRail : anchor);
-        panel.show(); return panel.popup;
-    }
-    void showLayers(ToolButton anchor) {
-        closePagePanel();
-        if (busy()) return;
-        if (layersPopup != null) { layersPopup.dismiss(); return; }
-        pad.finishStroke(); pad.dryWet();
-        new LayersPanel(this, anchor);
+        return rotateButton.getVisibility() == View.VISIBLE || pagePanel != null || notebookShown();
     }
 
     /**
@@ -1503,32 +1301,82 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (book.options().equals(next)) message(NotebookOptions.guidesNote(step));
     }
     /**
-     * The menu (the owner, 2026-10-24: "tidy up the order of it, it's chaotic"): two groups, most used first, a grey-400
-     * line between them. The notebook: Settings, Open Notebook, Import (a picture onto the page, or a PDF as a new notebook
-     * or one of its pages onto the page; Import PDF and the page's group, Import Image, until 2026-10-29). No Play (a row
-     * here from 2026-10-28; the column's confetti button again since 2026-10-30, {@link #playMenu}). The app:
-     * Finger (what one finger does; the menu's row alone since the column's button was cut), Left-Handed. Gone at the
+     * The menu (the owner, 2026-10-24: "tidy up the order of it, it's chaotic"), {@link DrawLayout#fileRows}' four groups
+     * since 2026-11-06 (the owner's order), a grey-400 line between each: Notebook Explorer, Notebook Settings; Export Page
+     * (2026-11-02), Import (a picture onto the page, or a PDF as a new notebook or one of its pages onto the page; Import
+     * PDF and the page's group, Import Image, until 2026-10-29), Show Kinds (its popup beside the column), Page Bar ({@link #togglePageBar}); Draw Together,
+     * Sand Timer (its choices beside the countdown's row), Play ({@link #playMenu}; a row here from 2026-10-28, the
+     * column's confetti button 2026-10-30 to 2026-11-06; the sand timer and Show Kinds the column's until then too);
+     * Left-Handed, System Settings ({@link #systemSettings}), which holds Finger Action since 2026-11-06. Before then:
+     * Finger (what one finger does; the menu's row alone since the column's button was cut), Left-Handed. System Settings (2026-11-04)
+     * after them. Gone at the
      * refocus: Template (Template Visibility is the column's and the Template screen's), Guides in PDF (the guides always
      * print), Use This Page on the Cover (Settings' More). Gone 2026-10-28: Export Now, Rename and Delete Notebook (Notebook
-     * Settings' foot), Show Kinds (the column's), the Daily Prompt and Replay Page (Play's).
+     * Settings' foot), Show Kinds (the column's until 2026-11-06), the Daily Prompt and Replay Page (Play's).
      */
     void fileMenu(View anchor) {
-        List<String> names = new ArrayList<>();
-        List<Integer> icons = new ArrayList<>();
-        List<Runnable> actions = new ArrayList<>();
-        // The notebook.
-        names.add(DrawLayout.NOTEBOOK_SETTINGS); icons.add(R.drawable.ic_ph_list); actions.add(this::showSettings);
-        names.add(NotebookLayout.OPEN_NOTEBOOK); icons.add(R.drawable.ic_ph_folder); actions.add(() -> { if (leaveDrawing()) leaveNotebook(); });
-        names.add(PictureImport.IMPORT); icons.add(R.drawable.ic_ph_file); actions.add(this::importFile);
-        // The app.
-        divider(names, icons, actions);
-        // Finger, what one finger does now: its choices beside the menu.
-        names.add(inkWashBar.fingerRow()); icons.add(R.drawable.ic_finger); actions.add(() -> fingerMenu(anchor));
-        // The drawing hand (MonoPaint's setting), the row naming the other hand: the column on the right, or back.
-        names.add(toolboxRight ? DrawLayout.RIGHT_HANDED : DrawLayout.LEFT_HANDED); icons.add(toolboxRight ? R.drawable.ic_ph_hand_pointing_mirrored : R.drawable.ic_ph_hand_pointing); actions.add(() -> { prefs.setToolboxRight(!prefs.toolboxRight()); applyToolboxSide(); });
-        Drawable[] icon = new Drawable[icons.size()];
-        for (int i = 0; i < icon.length; i++) icon[i] = icons.get(i) == 0 ? null : getDrawable(icons.get(i));
-        menu(anchor, "file menu", names.toArray(new String[0]), icon, actions.toArray(new Runnable[0]), prefs.largeSettingsText() ? 256 : 240, new boolean[names.size()], null);
+        // Show Kinds, the Sand Timer and Play the column's until 2026-11-06; Finger Action System Settings' since.
+        boolean playing = DrawLayout.playOn(pad != null && (pad.words.open() || pad.text.on() || pad.shapesOn && !pad.lassoOn && !pad.dropperOn), mirrors.on());
+        List<DrawLayout.Row> rows = DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing, !barHidden);
+        // A cover has no copy of its own (Page Settings is a page's alone): no Export Page there, as the browser's.
+        if (book == null || DrawingBook.isCover(book.index())) rows.removeIf(r -> "exportPage".equals(r.key));
+        Runnable[] actions = new Runnable[rows.size()];
+        for (int i = 0; i < actions.length; i++) {
+            String key = rows.get(i).key;
+            if (key == null) continue;
+            switch (key) {
+                // A notebook screen opens once the menu has left the panel: built at once, it held the menu's leaving back until
+                // after its clean, and the menu left a ghost of the page behind it (the owner, 2026-10-31).
+                case "settings": actions[i] = () -> pad.postDelayed(this::showSettings, NotebookScreens.MENU_GONE_MS); break;
+                case "open": actions[i] = () -> pad.postDelayed(() -> { if (leaveDrawing()) leaveNotebook(); }, NotebookScreens.MENU_GONE_MS); break;
+                // Export Page: the page shown's copies, the menu Page Settings' button opens.
+                case "exportPage": actions[i] = () -> { if (book != null) exportMenu(anchor, book.stacks().of(book.index())); }; break;
+                case "import": actions[i] = this::importFile; break;
+                case "sand": actions[i] = this::countdownTapped; break;
+                case "kinds": actions[i] = inkWashBar::kindsPopup; break;
+                case "pageBar": actions[i] = this::togglePageBar; break;
+                case "play": actions[i] = () -> { if (!busy()) playMenu(anchor); }; break;
+                // Share on Wi-Fi (live branch): marked while on; a tap its window (the link, Stop Sharing).
+                case "share": actions[i] = share::tapped; break;
+                // System Settings (2026-11-04): a popup where the menu was (its own screen until 2026-11-06).
+                case "system": actions[i] = () -> systemSettings(anchor); break;
+                // The drawing hand (MonoPaint's setting): the column on the right, or back.
+                default: actions[i] = () -> { prefs.setToolboxRight(!prefs.toolboxRight()); applyToolboxSide(); }; break;
+            }
+        }
+        menu(anchor, "file menu", rows, actions, prefs.largeSettingsText() ? 256 : 240, null);
+    }
+    /** System Settings' popup's width, dp: Finger Action's three chips a line. */
+    private static final int SYSTEM_WIDTH = 440;
+    /**
+     * System Settings ({@link SystemSettingsPanel}) as a popup over the drawing (the owner, 2026-11-06: "it's too small it
+     * should just pop up over instead of being its own page"; its own screen left the column ghosting): the menu's look and
+     * place beside {@code anchor}, once the menu it came from has left and had its clean ({@link #show}), one grey pass as it opens.
+     */
+    private void systemSettings(View anchor) {
+        // Finger Action's chips name the slots' brushes as the drawing screen has them (Pan in a No Erasing notebook).
+        String[] fingers = new String[FingerTool.Choice.values().length];
+        for (FingerTool.Choice c : FingerTool.Choice.values()) fingers[c.ordinal()] = inkWashBar.fingerName(c);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(SystemSettingsPanel.rows(this, fingers));
+        scroll.setBackground(Theme.menu(this));
+        int edge = dp(Theme.FINE);
+        scroll.setPadding(edge, edge, edge, edge);
+        Menu shown = new Menu();
+        placed(shown, Popups.create(scroll, appTurn()), scroll, Popups.bounds(root, anchor), SYSTEM_WIDTH);
+        show(shown);
+    }
+    /** {@link #menu} with {@code rows}' words, icons and marks ({@link DrawLayout.Row}), {@code actions} the rows' own. */
+    void menu(View anchor, String name, List<DrawLayout.Row> rows, Runnable[] actions, int widthDp, String note) {
+        String[] names = new String[rows.size()];
+        Drawable[] icons = new Drawable[names.length];
+        boolean[] marked = new boolean[names.length];
+        for (int i = 0; i < names.length; i++) {
+            DrawLayout.Row row = rows.get(i);
+            names[i] = row.words; marked[i] = row.marked;
+            if (row.icon != null) icons[i] = getDrawable(getResources().getIdentifier(row.icon, "drawable", getPackageName()));
+        }
+        menu(anchor, name, names, icons, actions, widthDp, marked, note);
     }
     /** Kind {@code choice} ({@link EraseKind#LABELS}) shown at {@code step} on the page drawn on, a change to save: it shows again once; said in a note ("Pen half"). */
     void showKind(int choice, int step) {
@@ -1536,28 +1384,30 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (pad.document.setKindsShown(EraseKind.withStep(pad.document.kindsShown(), choice, step))) { pad.showSteps(layerSteps(pad.document), false); recovery(); }
         message(EraseKind.stepNote(choice, step));
     }
-    /** A grey-400 line between a menu's groups: a null name ({@link #menu}). */
-    private static void divider(List<String> names, List<Integer> icons, List<Runnable> actions) { names.add(null); icons.add(0); actions.add(null); }
     /**
      * Play's menu (the refocus, 2026-10-24: the toys in one place, "a paper notebook that feels like real media, useful
      * first, then a little mischief"; {@link DrawLayout#PLAY}), from the menu's Play row (2026-10-28): Magnetic Poetry (the
      * magnets' bin), Mirrors (their list), each marked while on; then Replay Page (tucked low: the owner, 2026-10-24) on a
-     * page it can replay. Beside the column's Play (2026-10-30; the menu's Play row from 2026-10-28). No Shapes (the
-     * column's, beside Play, 2026-10-30), Self-Portrait Prompt (Notebook Settings', 2026-10-30), Stamp (the Tools page's),
+     * page it can replay. Beside the column's Play (2026-10-30; the menu's Play row from 2026-10-28). Shapes (its menu)
+     * and Spirograph (the Basic tool on the slot) too since the release pare-down (2026-11-05; Shapes the column's button
+     * from 2026-10-30). No Self-Portrait Prompt (cut 2026-11-05), Stamp (the Tools page's),
      * Surprise Me (Notebook Settings' Tools) or Fling (the owner, 2026-10-28); no Diary Page and no ready brushes (the owner, 2026-10-27).
      */
     void playMenu(View anchor) {
-        List<String> names = new ArrayList<>();
-        List<Integer> icons = new ArrayList<>();
-        List<Runnable> actions = new ArrayList<>();
-        List<Boolean> on = new ArrayList<>();
-        names.add(DrawLayout.POETRY); icons.add(R.drawable.ic_ph_magnet); actions.add(() -> pad.words.toggle()); on.add(pad.words.open());
-        names.add(DrawLayout.MIRRORS); icons.add(R.drawable.ic_ph_flip_horizontal); actions.add(() -> mirrors.mirrors(anchor)); on.add(mirrors.on());
-        if (replay.available()) { divider(names, icons, actions); on.add(false); names.add(PageReplay.REPLAY_PAGE); icons.add(R.drawable.ic_ph_play); actions.add(() -> replay.choose(anchor)); on.add(false); }
-        Drawable[] icon = new Drawable[icons.size()];
-        boolean[] marked = new boolean[on.size()];
-        for (int i = 0; i < icon.length; i++) { icon[i] = icons.get(i) == 0 ? null : getDrawable(icons.get(i)); marked[i] = on.get(i); }
-        menu(anchor, "play menu", names.toArray(new String[0]), icon, actions.toArray(new Runnable[0]), prefs.largeSettingsText() ? 256 : 240, marked, null);
+        List<DrawLayout.Row> rows = DrawLayout.playRows(pad.text.on(), pad.words.open(), pad.shapesOn && !pad.lassoOn && !pad.dropperOn, mirrors.on(), replay.available(), false);
+        // Shapes and Spirograph act on the slot in use (the first when the eraser, the smudge tool or the stamp tool is).
+        int slot = inkWash.selected < ToolSlots.COUNT ? inkWash.selected : 0;
+        Runnable[] actions = new Runnable[rows.size()];
+        for (int i = 0; i < actions.length; i++) {
+            String key = rows.get(i).key;
+            if ("text".equals(key)) actions[i] = () -> pad.text.toggle();
+            else if ("poetry".equals(key)) actions[i] = () -> pad.words.toggle();
+            else if ("shapes".equals(key)) actions[i] = () -> shapesMenu(slot, anchor);
+            else if ("spiro".equals(key)) actions[i] = () -> { ToolPresets.Preset spiro = ToolKits.preset(DrawLayout.SPIROGRAPH); if (spiro != null) pickBrush(slot, spiro.brush()); };
+            else if ("mirrors".equals(key)) actions[i] = () -> mirrors.mirrors(anchor);
+            else if ("replay".equals(key)) actions[i] = () -> replay.choose(anchor);
+        }
+        menu(anchor, "play menu", rows, actions, prefs.largeSettingsText() ? 256 : 240, null);
     }
     /**
      * The tool picker's pick: {@code brush} put in slot {@code slot}, which is selected, an Undo step; the
@@ -1565,69 +1415,17 @@ public final class PaintActivity extends Activity implements ControlHost {
      */
     private void pickBrush(int slot, Brush brush) {
         if (toolbarFixed()) return;
-        Brush was = inkWash.slots.brush(slot);
-        if (was != null && !was.sameAs(brush)) inkWash.slots.keep(was);
-        boolean used = inkWash.slots.use(slot, brush);
+        boolean used = inkWash.slots.pick(slot, brush);
         inkWashBar.selectTool(slot);
         if (!used) return;
         recovery();
-        inkWashBar.brushChanged(slot, brush.name());
+        inkWashBar.brushChanged(slot, brush.shownName());
     }
     /** Whether the slots can't change now (Each Page's toolbar): said, never silently. */
     boolean toolbarFixed() {
         String fixed = NotebookRules.toolsFixed(rules());
         if (fixed != null) note(fixed);
         return fixed != null;
-    }
-    /**
-     * The Self-Portrait Prompt (a new page's, {@link #addPage(BookEdit)}): card {@code index} of {@code cards}, its length in the heading. Start (timed cards) sets the sand timer to its
-     * length and closes the card; a Diary Page card first makes the page drawn on's own template Diary Page (guides are
-     * paper, so no ink is touched and there is nothing to undo). Deal Another shows a different card.
-     */
-    void dailyPrompt(List<DailyPrompt.Card> cards, int index) {
-        DailyPrompt.Card card = cards.get(index);
-        // The page drawn on is given the card: it shows again when the page is next opened (once a session).
-        String line = DailyPrompt.line(card);
-        if (book != null && book.index() >= 0 && pad.document == book.current() && line.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= DailyPrompt.MOST_BYTES
-                && pad.document.setPrompt(line)) { promptsShown.add(drawingName + "\n" + book.index()); recovery(); }
-        promptCard(card, DailyPrompt.heading(card), () -> dailyPrompt(cards, DailyPrompt.another(index, cards.size(), new java.util.Random())));
-    }
-    /** A card's window: its heading and words, Deal Another when {@code deal} is given, Close, and Start for a timed card. */
-    private void promptCard(DailyPrompt.Card card, String heading, Runnable deal) {
-        int seconds = card.seconds;
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(heading).setMessage(card.text).setNegativeButton("Close", null);
-        if (deal != null) b.setNeutralButton(DailyPrompt.DEAL, (d, w) -> deal.run());
-        if (seconds > 0) b.setPositiveButton(DailyPrompt.START, null);
-        AlertDialog dialog = showDialog(b);
-        if (seconds == 0) return;
-        // Start hands the time to the sand timer and closes the card, so the page is free to draw on: its countdown in the
-        // column, "Time's up" at zero, never a lock (the owner, 2026-10-27: "they shouldn't lock the page so permanently").
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            // The page drawn on alone takes the card's template, as a hold on it in the strip would (never the notebook's).
-            if (card.diary && book != null) setPageTemplate(book.index(), DailyPrompt.template(card));
-            setSandTimer(seconds);
-            dialog.dismiss();
-        });
-    }
-    /**
-     * What one finger on the page does ({@link FingerTool}): Nothing, Eraser, Smudge or a slot, kept; the one chosen
-     * marked by the bar's black bar at its right. Each shows what it is (the owner, 2026-10-19: "include brush previews
-     * for brushes"): a slot its tray stroke and its brush's name (the slots have no numbers), Eraser and Smudge their
-     * icons, Nothing the hand struck through ({@link InkWashBar#fingerIcon}). Beside the menu, from its Finger row (the owner,
-     * 2026-10-27: back in the menu; the column's button from 2026-10-26: "finger switch to toolbar. single tap to change").
-     */
-    void fingerMenu(View anchor) {
-        FingerTool.Choice[] choices = FingerTool.Choice.values();
-        String[] names = new String[choices.length];
-        Drawable[] icons = new Drawable[choices.length];
-        Runnable[] actions = new Runnable[choices.length];
-        for (int i = 0; i < choices.length; i++) {
-            FingerTool.Choice choice = choices[i];
-            names[i] = inkWashBar.fingerName(choice);
-            icons[i] = inkWashBar.fingerIcon(choice, dp(64), dp(28));
-            actions[i] = () -> inkWash.finger(choice);
-        }
-        menu(anchor, "finger menu", names, icons, actions, prefs.largeSettingsText() ? 296 : 280, inkWash.finger().ordinal());
     }
     /**
      * A list of labeled rows {@code widthDp} wide dropping down from {@code anchor}, Inkwash's one menu ({@link
@@ -1653,15 +1451,25 @@ public final class PaintActivity extends Activity implements ControlHost {
      * {@code note} (null: none) under the rows in captions, which a tap passes by; a null name is a grey-400 line between groups.
      */
     void menu(View anchor, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked, String note) {
-        if (preparing) { built(anchor, name, names, icons, widthDp, marked, note); return; }
+        if (preparing) { built(Popups.bounds(root, anchor), name, names, icons, widthDp, marked, note); return; }
+        menuAt(Popups.bounds(root, anchor), name, names, icons, actions, widthDp, marked, note);
+    }
+    /** As above, beside {@code anchorBounds} (the root's app coordinates) rather than a view: a text box's menu ({@link TextMode}). */
+    void menuAt(RectF anchorBounds, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked) { menuAt(anchorBounds, name, names, icons, actions, widthDp, marked, null); }
+    private void menuAt(RectF anchorBounds, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked, String note) {
         closePagePanel();
-        dismiss(filePopup); dismiss(layersPopup); inkWashBar.closePanel();
-        Menu menu = built(anchor, name, names, icons, widthDp, marked, note);
+        dismiss(filePopup); inkWashBar.closePanel();
+        Menu menu = built(anchorBounds, name, names, icons, widthDp, marked, note);
         menu.actions = actions;
         show(menu);
     }
     /** {@code menu} on the panel, as the one popup open over the page. */
     private void show(Menu menu) {
+        // Opened from a menu's row (Play, System Settings, Mirrors from Play): once that menu has left the panel and had its
+        // clean (DrawingPad.cleanArea skips it while a popup is open), as a notebook screen opened from the menu waits. At
+        // once, over the menu's ghost, Play was unreadable (the owner, 2026-11-06: "play dropdown... impossible to read").
+        long wait = menuLeaving - android.os.SystemClock.uptimeMillis();
+        if (wait > 0) { pad.postDelayed(() -> { if (!destroyed && filePopup == null) show(menu); }, wait); return; }
         // Inkwash: one grey pass as it opens, and only what it covered cleaned as it closes (2026-10-25: the page's whole
         // refresh and the bars drawn again after every menu until then).
         InkWashBar.partialGrey(menu.scroll);
@@ -1679,6 +1487,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         String key; PopupWindow popup; View scroll; RectF bounds, covered; Bitmap pixels; Runnable[] actions;
     }
     private Menu fileMenuBuilt;
+    /** Until when (uptime) a menu closed by a tap on its row is still leaving the panel ({@link NotebookScreens#MENU_GONE_MS}). */
+    private long menuLeaving;
     /** While true, {@link #menu} builds the menu and keeps it rather than show it ({@link #prepareFileMenu}). */
     private boolean preparing;
     /** The file menu built ahead, at the drawing screen's next idle moment with its focus. */
@@ -1687,8 +1497,14 @@ public final class PaintActivity extends Activity implements ControlHost {
         preparing = true;
         try { fileMenu(inkWashBar.menu); } finally { preparing = false; }
     }
-    private Menu built(View anchor, String name, String[] names, Drawable[] icons, int widthDp, boolean[] marked, String note) {
-        RectF anchorBounds = Popups.bounds(root, anchor);
+    /** A menu's grey-400 line between groups, added to {@code rows} (the menu's, and the tool picker's between kinds). */
+    private void groupLine(LinearLayout rows) {
+        View line = new View(this); line.setBackgroundColor(Theme.GREY_400);
+        LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(-1, dp(DrawLayout.GROUP_LINE));
+        place.setMargins(dp(16), dp(DrawLayout.GROUP_LINE_ROOM), dp(16), dp(DrawLayout.GROUP_LINE_ROOM));
+        rows.addView(line, place);
+    }
+    private Menu built(RectF anchorBounds, String name, String[] names, Drawable[] icons, int widthDp, boolean[] marked, String note) {
         String key = name + "|" + java.util.Arrays.toString(names) + java.util.Arrays.toString(marked) + note + widthDp + anchorBounds
                 + root.getWidth() + "x" + root.getHeight() + toolboxRight + appTurn() + Ui.fingerPress() + prefs.largeSettingsText();
         // The file menu's icons are fixed by its rows' names, so its key holds them; other menus (Play's strokes) are built each time.
@@ -1704,13 +1520,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         PopupWindow menu = Popups.create(scroll, appTurn());
         for (int i = 0; i < names.length; i++) {
             // A null name: a grey-400 line between groups (the refocus, 2026-10-24), not a row.
-            if (names[i] == null) {
-                View line = new View(this); line.setBackgroundColor(Theme.GREY_400);
-                LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(-1, dp(Theme.FINE));
-                place.setMargins(dp(16), dp(4), dp(16), dp(4));
-                rows.addView(line, place);
-                continue;
-            }
+            if (names[i] == null) { groupLine(rows); continue; }
             int index = i;
             TextView row = Theme.menuRow(new TextView(this), i < marked.length && marked[i]); row.setText(names[i]);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1722,6 +1532,7 @@ public final class PaintActivity extends Activity implements ControlHost {
             row.setCompoundDrawables(icon, null, null, null); row.setCompoundDrawablePadding(dp(12));
             row.setFocusable(true);
             row.setOnClickListener(v -> {
+                menuLeaving = android.os.SystemClock.uptimeMillis() + NotebookScreens.MENU_GONE_MS;
                 menu.dismiss();
                 if (busy()) return;
                 pad.finishStroke(); built.actions[index].run();
@@ -1772,17 +1583,20 @@ public final class PaintActivity extends Activity implements ControlHost {
      * ({@link #pickBrush}). Under them Brush Lab on its brush
      * ("brush studio could be opened directly from the tiny popup") and Advanced, the Tools page on it ("an advanced
      * button which pulls up the library we have now"), and over them, for a Stamp, its menu ({@link DrawLayout#STAMP_MENU});
-     * at its top Reset to Default when the slot's brush is a Basic tool edited ({@link DrawLayout#edited}); at its foot the switch Tools First ({@link DrawLayout#TOOLS_FIRST}), with which on
-     * the Tools page opens on the slot instead of the picker.
+     * at its top Reset to Default when the slot's brush is a Basic tool edited ({@link DrawLayout#edited}); at its foot one row, Edit Brush, Full Library, the checkbox Hold Opens Full Library ({@link DrawLayout#TOOLS_FIRST}; ticked,
+     * the Tools page opens on the slot instead of the picker; Brush Studio's link went 2026-11-06, Brush Lab shares to it). The tools kind by kind, a grey line between ({@link DrawLayout#pickerGroups}).
      */
     void toolPicker(int slot, View anchor) {
         if (prefs.toolsFirst()) { openTools(slot); return; }
         closePagePanel();
-        dismiss(filePopup); dismiss(layersPopup); inkWashBar.closePanel();
+        dismiss(filePopup); inkWashBar.closePanel();
         pad.finishStroke();
         Brush held = inkWash.brush(slot);
-        int columns = DrawLayout.pickerColumns(Math.round(root.getHeight() / getResources().getDisplayMetrics().density));
-        int cellWidth = DrawLayout.pickerCellWidth(), room = dp(DrawLayout.PICKER_PAD);
+        // Four wide beside the column (2026-11-06), the drawings smaller where that fits the height (the Manta turned, the Nomad upright).
+        float density = getResources().getDisplayMetrics().density;
+        int columns = DrawLayout.pickerColumns(Math.round(root.getWidth() / density) - inkWashBar.layout().side);
+        int tip = DrawLayout.pickerTip(columns, Math.round(root.getHeight() / density));
+        int cellWidth = DrawLayout.pickerCellWidth(), room = dp(DrawLayout.PICKER_PAD), roomOver = dp(DrawLayout.pickerRoom(tip));
         LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
         ScrollView scroll = new ScrollView(this); scroll.addView(rows);
         scroll.setBackground(Theme.menu(this));
@@ -1790,7 +1604,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         scroll.setPadding(edge, edge, edge, edge);
         PopupWindow popup = Popups.create(scroll, appTurn());
         Menu built = new Menu();
-        ToolPresets.Preset original = DrawLayout.edited(held);
+        DrawLayout.Picker picker = new DrawLayout.Picker(held, pad.shapesOn && inkWash.selected == slot);
+        ToolPresets.Preset original = picker.reset;
         if (original != null) {
             // Reset to Default, at the top (the owner, 2026-10-28): the Basic tool back in the slot, an Undo step; the slot keeps its own size and grey (ToolSwatches).
             TextView reset = Theme.menuRow(new TextView(this), false);
@@ -1801,15 +1616,18 @@ public final class PaintActivity extends Activity implements ControlHost {
         }
         LinearLayout line = null;
         int shown = 0;
-        for (String[] tool : DrawLayout.PICKER) {
-            ToolPresets.Preset preset = ToolKits.preset(tool[0]);
+        for (int t = 0; t < picker.tools.size(); t++) {
+            ToolPresets.Preset preset = picker.tools.get(t);
+            String art = picker.drawings.get(t);
+            // A new kind (the owner, 2026-11-06: "group alphabetically but divide by type"): the menu's grey line, a new row.
+            if (picker.divided.get(t)) { groupLine(rows); shown = 0; }
             // The drawing by its file's name, so the table stays one list the owner can change (no resource shrinking).
-            int drawing = tool[1] == null ? 0 : getResources().getIdentifier(tool[1], "drawable", getPackageName());
-            if (preset == null || tool[1] != null && drawing == 0) continue;
+            int drawing = art == null ? 0 : getResources().getIdentifier(art, "drawable", getPackageName());
+            if (art != null && drawing == 0) continue;
             if (shown++ % columns == 0) { line = LabUi.row(this); rows.addView(line, new LinearLayout.LayoutParams(-1, -2)); }
             LinearLayout cell = LabUi.column(this);
             cell.setGravity(Gravity.CENTER_HORIZONTAL);
-            cell.setPadding(room, room, room + dp(DrawLayout.PICKER_MARK), room);
+            cell.setPadding(room, roomOver, room + dp(DrawLayout.PICKER_MARK), roomOver);
             View picture;
             if (drawing != 0) {
                 android.widget.ImageView drawn = new android.widget.ImageView(this);
@@ -1820,25 +1638,26 @@ public final class PaintActivity extends Activity implements ControlHost {
                 // Not drawn yet: its stroke across the cell, as the Tools page shows it (ToolCard), drawn in the background.
                 if (toolPictures == null) toolPictures = new SampleQueue();
                 ToolCard stroke = new ToolCard(this, toolPictures);
-                stroke.setArt(cellWidth - 2 * DrawLayout.PICKER_PAD - DrawLayout.PICKER_MARK, DrawLayout.PICKER_TIP);
+                stroke.setArt(cellWidth - 2 * DrawLayout.PICKER_PAD - DrawLayout.PICKER_MARK, tip);
                 Brush brush = preset.brush();
                 stroke.show(brush.identity() + " tray", brush, LabLibrary.traySampler(brush, null), "");
                 picture = stroke;
             }
-            cell.addView(picture, new LinearLayout.LayoutParams(-1, dp(DrawLayout.PICKER_TIP)));
+            cell.addView(picture, new LinearLayout.LayoutParams(-1, dp(tip)));
             TextView name = Theme.style(new TextView(this), TypeStyle.CAPTION);
-            name.setText(preset.name); name.setSingleLine(true); name.setGravity(Gravity.CENTER_HORIZONTAL);
+            String toolName = preset.shownName();
+            name.setText(toolName); name.setSingleLine(true); name.setGravity(Gravity.CENTER_HORIZONTAL);
             name.setEllipsize(android.text.TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams namePlace = new LinearLayout.LayoutParams(-1, -2);
-            namePlace.topMargin = room;
+            namePlace.topMargin = roomOver;
             cell.addView(name, namePlace);
-            boolean on = !(pad.shapesOn && inkWash.selected == slot) && held != null && held.sameAs(preset.brush());
+            boolean on = picker.marked.get(t);
             if (on) { cell.setBackground(Theme.marked(this)); name.setTypeface(Theme.face(700)); }
-            cell.setContentDescription(preset.name);
+            cell.setContentDescription(toolName);
             cell.setOnClickListener(v -> { popup.dismiss(); if (!busy()) pickBrush(slot, preset.brush()); });
             line.addView(cell, new LinearLayout.LayoutParams(dp(cellWidth), -2));
         }
-        if (held != null && held.parts.stamps()) {
+        if (picker.stamp) {
             // A Stamp's own menu beside the slot (InkWashBar.stampMenu): Cut Stamp, Turns, Spacing, Ink Fade.
             TextView stamp = Theme.menuRow(new TextView(this), false);
             stamp.setText(DrawLayout.STAMP_MENU); stamp.setGravity(Gravity.CENTER);
@@ -1846,31 +1665,28 @@ public final class PaintActivity extends Activity implements ControlHost {
             stamp.setOnClickListener(v -> { popup.dismiss(); if (!busy()) inkWashBar.stampMenu(slot); });
             rows.addView(stamp, new LinearLayout.LayoutParams(-1, -2));
         }
-        // The last row: Brush Lab, Advanced.
+        // The foot, one row of menu words (2026-11-06): Edit Brush (Brush Lab), Full Library, Hold Opens Full Library.
         String[] words = {DrawLayout.BRUSH_LAB, DrawLayout.ADVANCED};
         Runnable[] acts = {() -> openBrushLab(slot), () -> openTools(slot)};
         LinearLayout last = LabUi.row(this);
         for (int i = 0; i < words.length; i++) {
             Runnable act = acts[i];
             TextView button = Theme.menuRow(new TextView(this), false);
-            button.setText(words[i]); button.setGravity(Gravity.CENTER);
-            button.setMinHeight(dp(DrawLayout.MENU_ROW));
+            button.setText(words[i]); button.setGravity(Gravity.CENTER); button.setSingleLine(true);
+            button.setMinHeight(dp(DrawLayout.MENU_ROW)); button.setPadding(dp(DrawLayout.FOOT_PAD), 0, dp(DrawLayout.FOOT_PAD), 0);
             button.setOnClickListener(v -> { popup.dismiss(); if (!busy()) act.run(); });
-            last.addView(button, new LinearLayout.LayoutParams(0, -2, 1));
+            last.addView(button, new LinearLayout.LayoutParams(-2, -2, 1));
         }
-        rows.addView(last, new LinearLayout.LayoutParams(-1, -2));
-        // Tools First, a switch: marked while on, as Shapes' Filled; on, the next long press opens the Tools page instead.
-        TextView first = Theme.menuRow(new TextView(this), false);
-        first.setText(DrawLayout.TOOLS_FIRST); first.setGravity(Gravity.CENTER);
-        first.setMinHeight(dp(DrawLayout.MENU_ROW));
-        first.setContentDescription(DrawLayout.TOOLS_FIRST + ", off");
+        // Hold Opens Full Library, a checkbox (Brush Lab's As New's) in menu words, third: ticked, the next long press opens the Tools page instead.
+        LabButton first = new LabButton(this, 0, DrawLayout.TOOLS_FIRST, false).menu().ticked(false);
+        first.setPadding(dp(DrawLayout.FOOT_PAD), 0, dp(DrawLayout.FOOT_PAD), 0); first.setSingleLine(true);
         first.setOnClickListener(v -> {
             boolean on = !prefs.toolsFirst();
             prefs.setToolsFirst(on);
-            Theme.menuRow(first, on);
-            first.setContentDescription(DrawLayout.TOOLS_FIRST + (on ? ", on" : ", off"));
+            first.ticked(on);
         });
-        rows.addView(first, new LinearLayout.LayoutParams(-1, -2));
+        last.addView(first, 2, new LinearLayout.LayoutParams(-2, dp(DrawLayout.MENU_ROW), 1));
+        rows.addView(last, new LinearLayout.LayoutParams(-1, -2));
         placed(built, popup, scroll, Popups.bounds(root, anchor), columns * cellWidth + 2 * Math.round(Theme.FINE));
         show(built);
     }
@@ -1879,23 +1695,10 @@ public final class PaintActivity extends Activity implements ControlHost {
      * five shapes, then Filled, the shape in use and Filled marked; a tap takes Shapes up on the slot with that shape, or with Filled turned on or off.
      */
     void shapesMenu(int slot, View anchor) {
-        ToolSettings.Shape[] kinds = ToolSettings.Shape.values();
-        int filled = kinds.length;
-        String[] names = new String[filled + 1];
-        Drawable[] icons = new Drawable[names.length];
-        Runnable[] actions = new Runnable[names.length];
-        boolean[] marked = new boolean[names.length];
-        boolean on = pad.shapesOn && inkWash.selected == slot;
-        for (int i = 0; i < filled; i++) {
-            ToolSettings.Shape kind = kinds[i];
-            names[i] = kind.label; icons[i] = getDrawable(ToolIcons.shape(kind));
-            actions[i] = () -> takeUpShapes(slot, anchor, pad.shapes.shape(kind));
-            marked[i] = on && pad.shapes.shape == kind;
-        }
-        names[filled] = DrawLayout.FILLED; icons[filled] = getDrawable(R.drawable.ic_ph_circle_fill);
-        actions[filled] = () -> takeUpShapes(slot, anchor, pad.shapes.filled(!pad.shapes.filled));
-        marked[filled] = pad.shapes.filled;
-        menu(anchor, "shapes menu", names, icons, actions, prefs.largeSettingsText() ? 216 : 200, marked, null);
+        List<DrawLayout.Row> rows = DrawLayout.shapeRows(pad.shapes, pad.shapesOn && inkWash.selected == slot);
+        Runnable[] actions = new Runnable[rows.size()];
+        for (int i = 0; i < actions.length; i++) { String key = rows.get(i).key; actions[i] = () -> takeUpShapes(slot, anchor, DrawLayout.shapePicked(pad.shapes, key)); }
+        menu(anchor, "shapes menu", rows, actions, prefs.largeSettingsText() ? 216 : 200, null);
     }
     /** Shapes taken up on slot {@code slot}, drawing {@code shapes}, said beside its {@code anchor}. */
     private void takeUpShapes(int slot, View anchor, ToolSettings shapes) {
@@ -1911,7 +1714,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (busy()) return;
         if (pageLocked()) { note(NotebookRules.PAGE_LOCKED); return; }
         // A Drying wash still settling is laid where it is first, on the layers it was drawn on.
-        pad.finishStroke(); pad.dryWet(); pad.settleDrying();
+        pad.finishStroke(); pad.settleDrying();
         try { action.run(); inkWash.slots.pageChanged(); pad.renderDirty(); pad.present(); recovery(); }
         catch (IllegalStateException | IllegalArgumentException error) { message(error.getMessage()); }
     }
@@ -1931,6 +1734,8 @@ public final class PaintActivity extends Activity implements ControlHost {
      * naming the brush it goes back to, or else undoes the page.
      */
     void undo() {
+        // A live change drawing itself on is laid whole first, so Undo takes it all (LiveProbe).
+        live.layNow();
         // A floating piece (the Lasso) is dropped instead, putting back what it lifted.
         if (pad.cancelSelection()) return;
         // Scribulor: so is a Spiro's ring set up, the page untouched.
@@ -1940,16 +1745,19 @@ public final class PaintActivity extends Activity implements ControlHost {
         // A layer deleted or merged down, nothing done since: back as it was, in one step.
         if (!layerUndos.isEmpty() && layerUndos.peek().ready(book)) { LayerEdits.Undo back = layerUndos.pop(); pageEdit("undo", () -> back.apply(book)); return; }
         int slot = inkWash.slots.undo();
-        // While paint floats (Float), Undo takes back its strokes one by one.
-        if (slot < 0) { history(() -> inkWash.session.undo(pad.document)); return; }
+        // Live (LiveProbe): only this tablet's own changes. While paint floats (Float), Undo takes back its strokes one by one.
+        if (slot < 0) { history(live.listening() ? () -> live.undo(pad.document) : () -> inkWash.session.undo(pad.document)); return; }
         // A tool kit's step puts back every slot it filled, in one Undo.
         for (int other : inkWash.slots.undone()) if (other != slot) inkWashBar.showBrush(other);
-        inkWashBar.brushChanged(slot, inkWash.slots.brush(slot).name());
+        inkWashBar.brushChanged(slot, inkWash.slots.brush(slot).shownName());
     }
     /** Redo, from the bar or a three-finger tap. */
     void redo() {
+        live.layNow();
         if (pageLocked()) { note(NotebookRules.PAGE_LOCKED); return; }
-        if (!undoOff()) history(pad.document::redo);
+        if (undoOff()) return;
+        // Live (LiveProbe): puts back what this tablet's own live Undo took.
+        history(live.listening() ? () -> live.redo(pad.document) : pad.document::redo);
     }
     /** No Erasing is on here: Undo and Redo give the note and do nothing (the history is kept, unused while it is on). */
     private boolean undoOff() {
@@ -1962,7 +1770,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         // Locked means locked: no Undo, no Redo, no magnet moved.
         if (pageLocked()) { note(NotebookRules.PAGE_LOCKED); return; }
         inkWashBar.closePanel();
-        pad.finishStroke(); pad.dryWet();
+        pad.finishStroke();
         int width=pad.document.width, height=pad.document.height;
         if (step.apply()) {
             inkWash.slots.pageChanged();
@@ -1972,147 +1780,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         }
     }
 
-    // Color and paint modes
-
-    /** Changes the color bar's state through the fast display path. */
-    void updateColorBar(Runnable change) { selectionFeedback.update(shadePicker, shadePicker.markerArea(), change); }
-    boolean shadeMarkerVisible() { return !(((paint.eraseMode || paint.maskingFluid) && !pickingShade) || (pickingShade && !pickedShade)); }
-
-    void selectShade(int value) {
-        if (busy()) return;
-        setPickingShade(false);
-        if (!pad.hasGradient()) pad.finishStroke();
-        setEraseMode(false); setMaskingFluid(false);
-        // A brush pen holding no ink lays no color: choosing one goes back to the brush last in use.
-        if (library.current().tool.water && !library.current().holdsInk()) toolbar.returnToBrush();
-        if (paint.gray != value) updateColorBar(() -> paint.gray = value);
-        loadInk(value);
-        if (pad.hasGradient()) pad.previewGradient(value);
-    }
-    /**
-     * Any shade chosen, the same one too, resets a watercolor brush's ink to it, after the brush
-     * has laid the paint it is still showing; with the wet brush pen, it dips the pen in that ink.
-     */
-    void loadInk(int value) {
-        pad.layQueuedPaint();
-        paint.brushLoad.tint(value);
-        if (holdsInk()) paint.brushInk.load(value);
-    }
-    /**
-     * With the wet brush pen, the color bar's marker slides to the ink it holds now, after a stroke;
-     * with opaque paint it stays, since the next stroke starts dipped in the selected ink again.
-     */
-    void showBrushInk() {
-        if (!holdsInk() || !paint.transparentPaint || paint.eraseMode || paint.maskingFluid || pickingShade) return;
-        int shade = 255 - Math.round(paint.brushInk.fullness() * 255), from = paint.gray;
-        if (shade == from) return;
-        // The marker still shows the old shade until it slides.
-        paint.gray = shade; shadePicker.slideMarker(from);
-    }
-    /** Loads a brush with limited paint by as far as the pen rubbed in the color bar or palette. */
-    void loadPaint(float travel) {
-        ToolSettings current = library.current();
-        if (busy()) return;
-        if (!current.limitsPaint()) return;
-        library.edit(current.loadedBy(travel)); saveToolState(); toolbar.refreshToolSelection();
-    }
-    /** The pen or key left the shade strip: commit or cancel what it previewed. */
-    void endShadeGesture(boolean committed) {
-        if (committed) pad.applyGradient(); else pad.cancelGradient();
-    }
-    private void toggleEraseMode() {
-        if (busy() || !library.current().supportsEraseMode() || erasingOff()) return;
-        // A pending gradient fades to transparent instead of waiting for a color.
-        boolean gradient = pad.hasGradient();
-        if (!gradient) pad.finishStroke();
-        setPickingShade(false); pad.dryWet();
-        setEraseMode(gradient || !paint.eraseMode);
-        if (gradient) { pad.previewGradient(ToneDocument.ERASE); pad.applyGradient(); }
-        saveToolState();
-    }
-    void setEraseMode(boolean value) {
-        if (paint.eraseMode != value) updateColorBar(() -> paint.eraseMode = value);
-        refreshEraseControl();
-    }
-    void refreshEraseControl() {
-        if (eraseButton == null) return;
-        boolean supported = library.current().supportsEraseMode();
-        if (!supported && paint.eraseMode) { setEraseMode(false); return; }
-        eraseButton.setEnabled(supported);
-        eraseButton.setAlpha(supported ? 1f : .3f);
-        eraseButton.setContentDescription(supported ? "Erase with current tool" : "This tool does not use a color");
-        eraseButton.mark(paint.eraseMode && !pickingShade);
-    }
-    /** The wet brush pen holds the ink it is dipped in, or soaks up, between strokes; white cleans it. */
-    private boolean holdsInk() { return library.current().holdsInk(); }
-    void setPickingShade(boolean picking) {
-        if (pickingShade == picking) return;
-        if (picking) { hideGradientHint(); pickOriginalShade = paint.gray; pickedShade = false; }
-        updateColorBar(() -> pickingShade = picking);
-        refreshEraseControl();
-        if (eyedropperButton != null) {
-            eyedropperButton.mark(picking);
-            eyedropperButton.setContentDescription(picking ? "Cancel picking color" : "Pick color from canvas");
-        }
-    }
-    // Masking fluid
-
-    /** Masking fluid is chosen like a color; the eraser then rubs it off. */
-    private void toggleMaskingFluid() {
-        if (busy()) return;
-        pad.dryWet();
-        // The brush pens lay no color: masking fluid goes on with the brush last in use.
-        if (!paint.maskingFluid && library.current().tool.water) toolbar.returnToBrush();
-        setMaskingFluid(!paint.maskingFluid); saveToolState();
-    }
-    void setMaskingFluid(boolean value) {
-        if (paint.maskingFluid != value) updateColorBar(() -> paint.maskingFluid = value);
-        if (maskButton == null) return;
-        maskButton.mark(value);
-        maskButton.setContentDescription(value ? "Masking fluid. Erase to rub it off; hold to peel it all off."
-                : "Masking fluid. Hold to peel it all off.");
-    }
-    /** Opens the Peel button below the masking fluid; null when no panel opened. */
-    View showPeel() {
-        if (!beginPagePanel()) return null;
-        LinearLayout column = new LinearLayout(this);
-        View peel = pageMenuItem(column, "Peel off masking fluid", R.drawable.ic_peel, this::peelMask, pad.document.hasMask());
-        showPagePanel(maskButton, column, dp(48), dp(48));
-        return peel;
-    }
-    private void peelMask() { if (erasingOff()) return; layerChange(() -> pad.document.peelMask()); }
-
-    void refreshPaintModes() {
-        watercolorButton.mark(paint.watercolor);
-        transparentButton.mark(paint.transparentPaint);
-        opaqueButton.mark(!paint.transparentPaint);
-    }
-    /** Transparent paint from brushes, shapes and flat fills becomes watercolor, or stops being it. */
-    private void setWatercolor(boolean value) {
-        if (busy()) return;
-        pad.finishStroke(); paint.watercolor = value;
-        refreshPaintModes(); saveToolState();
-    }
-    /** While wet paint is moving, the droplet dries it; otherwise it toggles watercolor mode. */
-    private void tapDroplet() {
-        if (wetDroplet.moving()) blowDry();
-        else setWatercolor(!paint.watercolor);
-    }
-    /**
-     * The blow dryer: wet paint stops moving and stays as it is, and the droplet blows a little
-     * air. The modes stay as they are, so on a wet canvas the next stroke wets the paint it reaches again.
-     */
-    void blowDry() {
-        if (busy()) return;
-        setPickingShade(false);
-        pad.finishStroke(); pad.dryWet();
-        wetDroplet.rest(); BlowDryer.blow(this, watercolorButton);
-    }
-    private void setTransparentPaint(boolean value) {
-        if (busy()) return;
-        pad.finishStroke(); paint.transparentPaint = value;
-        refreshPaintModes(); saveToolState();
-    }
     void toggleNavigationLock() {
         // Discard any fingers already down; unlocking requires a fresh gesture.
         pad.touchBlocked = true; pad.endNavigation();
@@ -2122,36 +1789,10 @@ public final class PaintActivity extends Activity implements ControlHost {
     }
     /** Saves the current color, modes and tools. */
     void saveToolState() {
-        // The Nomad's side refresh can reuse Android's last surface without an
-        // app redraw. Commit the final marker once rapid color taps have settled.
-        shadePicker.finishUpdate();
         try { prefs.savePaint(paint, library); }
         catch (java.io.IOException error) { message("Could not save tool settings: " + error.getMessage()); }
     }
 
-    // Gradient hint
-
-    /** Prompts for a gradient's second color if none is chosen soon. */
-    void scheduleGradientHint() { hideGradientHint(); shadePicker.postDelayed(gradientHintTask, 3000); }
-    private void showGradientHint() {
-        if (pad == null || !pad.gradientWaiting || pickingShade || !resumed || !hasWindowFocus()) return;
-        TextView hint = Theme.style(new TextView(this), TypeStyle.BODY); hint.setText("Select a second color");
-        hint.setBackgroundColor(Theme.PAPER);
-        hint.setPadding(dp(8), dp(4), dp(8), dp(4));
-        hint.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, root.getWidth()-dp(16)), View.MeasureSpec.AT_MOST),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        RectF anchor = Popups.bounds(root, shadePicker);
-        int width = hint.getMeasuredWidth(), height = hint.getMeasuredHeight();
-        float x = landscape ? (toolboxRight ? anchor.left-width-dp(4) : anchor.right+dp(4)) : anchor.centerX()-width/2f;
-        int left = Math.round(Popups.clamp(x, 0, root.getWidth()-width));
-        int top = Math.round(Popups.clamp(anchor.bottom+dp(4), 0, root.getHeight()-height));
-        hint.layout(left, top, left+width, top+height);
-        gradientHint = hint; root.getOverlay().add(hint);
-    }
-    void hideGradientHint() {
-        if (shadePicker != null) shadePicker.removeCallbacks(gradientHintTask);
-        if (gradientHint != null) { root.getOverlay().remove(gradientHint); gradientHint = null; }
-    }
 
     // Dialogs
 
@@ -2219,6 +1860,7 @@ public final class PaintActivity extends Activity implements ControlHost {
      */
     void recovery() {
         if (loading || pad.document == null) return;
+        live.changed();
         recoveryIn(recoverySchedule.changed(android.os.SystemClock.uptimeMillis()));
         scheduleAutosave();
     }
@@ -2264,7 +1906,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (autosaveScheduled || drawingName.isEmpty() || book == null || !book.unsaved()) return;
         autosaveScheduled = true; pad.postDelayed(autosave, AUTOSAVE_MS);
     }
-    private void autosaveNow() { pad.removeCallbacks(autosave); autosave(); }
+    /** The open notebook saved now, not in a minute (leaving it; a browser reading it, LiveShare). */
+    void autosaveNow() { if (pad != null) { pad.removeCallbacks(autosave); autosave(); } }
     /** Writes a named painting to its own file without interrupting drawing. */
     private void autosave() {
         autosaveScheduled = false;
@@ -2373,7 +2016,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     }
     private void saveDrawingTo(String path, boolean replace, Runnable saved) {
         if (busy()) return;
-        pad.finishStroke(); pad.dryWet();
+        pad.finishStroke();
         captureToolbar();
         DrawingBook savedBook = book;
         saving = true;
@@ -2397,7 +2040,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         // A failed save must never change the destination of subsequent saves.
         if (book == savedBook) { savedBook.markSaved(snapshot.book); named(path); recoveryNow(); }
     }
-    private static final int PICK_FOLDER = 1;
     private static final int BRUSH_LAB = 3, TOOLS = 4, PICK_DOCUMENT = 5;
     /**
      * Opens the Tools page on slot {@code slot} (the tool picker's Advanced, {@link #toolPicker}), turned as
@@ -2435,7 +2077,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (eraser >= 0 && eraser < EraseKind.KINDS.length) { inkWash.eraseKinds = EraseKind.KINDS[eraser]; inkWashBar.eraserChanged(); }
         boolean changed = slotsReturned(written, slot, data.getBooleanExtra(ToolsActivity.TOGETHER, false));
         if (lab) { openBrushLab(slot, data.getStringArrayExtra(ToolsActivity.START)); return; }
-        if (data.getBooleanExtra(ToolsActivity.CUT, false)) { cutStamp(slot); return; }
         if (!changed) return;
         // Its step in a kit ("1 Drop ink"), else its name.
         String name = inkWashBar.said(slot);
@@ -2443,7 +2084,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         pad.post(() -> inkWashBar.brushChanged(slot, name));
     }
     /**
-     * Each of the ten slots whose brush came back ({@code written}, as {@link Brush#write}; null: unchanged) takes it,
+     * Each of the nine slots whose brush came back ({@code written}, as {@link Brush#write}; null: unchanged) takes it,
      * an Undo step each, or, {@code together}, every change one Undo step (a tool kit's, {@link ToolSlots#useAll}). Every
      * button shows its slot as it is now, and slot {@code slot} is selected. Whether {@code slot}'s brush changed.
      */
@@ -2452,10 +2093,10 @@ public final class PaintActivity extends Activity implements ControlHost {
         boolean refused = false;
         Brush[] brushes = new Brush[ToolSlots.COUNT];
         for (int i = 0; i < ToolSlots.COUNT; i++) brushes[i] = Brush.read(written[i]);
-        boolean[] usedAll = together ? inkWash.slots.useAll(brushes) : null;
+        boolean[] usedAll = inkWash.slots.take(brushes, together);
         for (int i = 0; i < ToolSlots.COUNT; i++) {
             Brush brush = brushes[i];
-            boolean used = brush != null && (together ? usedAll[i] : inkWash.slots.use(i, brush));
+            boolean used = usedAll[i];
             if (brush != null && !used && inkWash.slots.frozen && !brush.identity().equals(inkWash.slots.brush(i).identity())) refused = true;
             if (used && i == slot) changed = true;
             else inkWashBar.showBrush(i);
@@ -2469,7 +2110,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         return changed;
     }
     /**
-     * Cut Stamp (the Tools page's, for a slot holding a Stamp, and the stamp tool's menu, {@link InkWash#STAMP}): the
+     * Cut Stamp (a Stamp slot's Stamp ▾ menu, and the stamp tool's menu, {@link InkWash#STAMP}): the
      * pen's next stroke on the page is a lasso ({@link DrawingPad.Placing#CUT}), shown in marching ants; the ink inside it
      * becomes tool {@code slot}'s nib ({@link #stampCut}). Said beside the tool once the drawing is back on screen.
      */
@@ -2485,15 +2126,29 @@ public final class PaintActivity extends Activity implements ControlHost {
     void stampCut(MirrorShow.Place lasso) {
         pad.placing = DrawingPad.Placing.NONE;
         int slot = pad.cutting;
-        ToneDocument page = pad.document;
-        Brush brush = inkWash.slots.brush(slot);
-        StampNib nib = page == null || brush == null || !brush.parts.stamps() ? null
-                : StampNib.cut(page::compositeTone, page.paperTone(), lasso.xs(), lasso.ys(), lasso.count(), page.width, page.height);
-        if (nib == null) { inkWashBar.sayAt(slot, StampNib.NOTHING, StampNib.NOTHING_MS); return; }
-        if (inkWash.slots.use(slot, Brush.of(brush.parts.withNib(StampNib.keep(nib))))) recovery();
+        Brush was = inkWash.slots.brush(slot);
+        String said = inkWash.slots.cutStamp(slot, pad.document, lasso.xs(), lasso.ys(), lasso.count());
+        if (StampNib.NOTHING.equals(said)) { inkWashBar.sayAt(slot, said, StampNib.NOTHING_MS); return; }
+        stampMade(slot, !inkWash.slots.brush(slot).sameAs(was));
+    }
+    /**
+     * Make Stamp on the Lasso's bar (2026-11-02): the floating {@code piece}'s ink is a Stamp's nib ({@link
+     * ToolSlots#makeStamp}), then the Stamp's slot is in use, which puts the Lasso away and the piece down where it lies;
+     * or "Nothing to cut", the piece still up. A fixed toolbar takes no change.
+     */
+    void makeStamp(FloatingSelection piece) {
+        if (busy() || toolbarFixed()) return;
+        int slot = inkWash.slots.makeStamp(piece, inkWash.selected, inkWashBar.slotsShown());
+        if (slot < 0) { note(StampNib.NOTHING); return; }
+        stampMade(slot, true);
+    }
+    /** Slot {@code slot}'s Stamp has its new nib: kept if {@code changed}, in use, said beside it; the hint says how to print it. */
+    private void stampMade(int slot, boolean changed) {
+        if (changed) recovery();
+        inkWashBar.selectTool(slot);
         inkWashBar.brushChanged(slot, StampNib.DONE);
     }
-    /** Opens Brush Lab on slot {@code slot}'s brush; the ten slots' brushes come back in {@link #brushLabReturned}. */
+    /** Opens Brush Lab on slot {@code slot}'s brush; the nine slots' brushes come back in {@link #brushLabReturned}. */
     void openBrushLab(int slot) { openBrushLab(slot, null); }
     /**
      * As {@link #openBrushLab(int)}; {@code start}: opened from the Tools page, its slots' start, and its Back goes to the Tools page again ({@link
@@ -2520,21 +2175,9 @@ public final class PaintActivity extends Activity implements ControlHost {
         String[] start = data.getStringArrayExtra(BrushLabActivity.START);
         if (start != null) { openTools(slot, start); return; }
         if (!changed) return;
-        String name = inkWash.slots.brush(slot).name();
+        String name = inkWash.slots.brush(slot).shownName();
         // Once the drawing is back on screen: the label is a popup over it.
         pad.post(() -> inkWashBar.brushChanged(slot, name));
-    }
-    private Consumer<Uri> folderPicked;
-    /** Opens Android's folder picker at Supernote's EXPORT folder; keeps access to the chosen folder. */
-    void pickFolder(Consumer<Uri> picked) {
-        folderPicked = picked;
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-                .putExtra(DocumentsContract.EXTRA_INITIAL_URI,
-                        DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:EXPORT"));
-        try { startActivityForResult(intent, PICK_FOLDER); }
-        catch (android.content.ActivityNotFoundException error) { folderPicked = null; message("No folder picker on this tablet"); }
     }
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
@@ -2544,15 +2187,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (request == PICK_DOCUMENT) {
             Consumer<Uri> picked = documentPicked; documentPicked = null;
             if (picked != null && result == RESULT_OK && data != null && data.getData() != null) picked.accept(data.getData());
-            return;
         }
-        if (request != PICK_FOLDER) return;
-        Consumer<Uri> picked = folderPicked; folderPicked = null;
-        if (picked == null || result != RESULT_OK || data == null || data.getData() == null) return;
-        Uri tree = data.getData();
-        getContentResolver().takePersistableUriPermission(tree,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        picked.accept(tree);
     }
     // Import and Export Now (the owner, 2026-10-22: docs/archive/superpowers/specs/2026-10-22-import-design.md; Import
     // Image and Import PDF one Import since 2026-10-29)
@@ -2602,14 +2237,16 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** {@code picture} shown over the page drawn on, to move and size, then Place or Cancel. */
     private void placePicture(android.graphics.Bitmap picture) {
         if (destroyed || book == null || busy() || pageLocked()) { picture.recycle(); return; }
-        dismissPanels(); pad.words.close(); pad.finishStroke();
+        String vector = pad.document == null ? null : VectorInk.shapeRefusal(pad.document, null);
+        if (vector != null) { sayVector(vector); picture.recycle(); return; }
+        dismissPanels(); pad.words.close(); pad.text.close(); pad.finishStroke();
         pad.placer.begin(picture, this::lay);
     }
     /** Place: the picture laid where it lies, on the layer drawn on, as any mark. */
-    private void lay(android.graphics.Bitmap picture, PictureImport.Frame frame) {
+    private void lay(android.graphics.Bitmap picture, PictureImport.Frame frame, int shade, int contrast) {
         Rect area = new Rect(frame.rect()[0], frame.rect()[1], frame.rect()[2], frame.rect()[3]);
         if (book == null || !area.intersect(0, 0, book.width, book.height)) return;
-        int[] greys = PictureImport.greys(PicturePlacer.pixels(picture, frame, area));
+        int[] greys = PictureImport.greys(PicturePlacer.pixels(picture, frame, area), shade, contrast);
         layerChange(() -> PictureImport.place(book, area.left, area.top, area.width(), area.height(), greys));
         pad.refreshAfterLargeChange("picture placed");
         if (inkWashBar != null) inkWashBar.pageChanged();
@@ -2646,25 +2283,55 @@ public final class PaintActivity extends Activity implements ControlHost {
     void exportNow() {
         if (book == null || busy() || loading || pad.document == null) return;
         leaving();
-        pad.dryWet();
         if (!AutoExport.notebook(this, drawingName, book.snapshot(), () -> message(EXPORT_FAILED), () -> message(EXPORTED))) message(EXPORT_FAILED);
     }
     /** Export Now's notes: where the copies are (docs/TEXT-STYLE.md: the result, in a few words). */
-    static final String EXPORTED = "PDF in " + DrawingStorage.SHARED_NAME, EXPORT_FAILED = "Export failed";
+    static final String EXPORTED = "PDF in " + DrawingStorage.SHARED_NAME, EXPORT_FAILED = PageExport.FAILED;
+    /**
+     * Export Page's menu beside {@code anchor} (Page Settings' button, the menu's row): page {@code place}'s PDF, PNG or
+     * Layers ({@link #exportPage}), and Send (2026-11-05: those and the notebook's PDF to a phone or computer on the Wi-Fi, {@link LiveShare#send}).
+     */
+    void exportMenu(View anchor, int place) {
+        String[] names = java.util.Arrays.copyOf(PageExport.CHOICES, PageExport.CHOICES.length + 1);
+        names[names.length - 1] = LiveSend.SEND;
+        Runnable[] choices = new Runnable[names.length];
+        for (int i = 0; i < PageExport.CHOICES.length; i++) {
+            String choice = PageExport.CHOICES[i];
+            choices[i] = PageExport.sized(choice) ? () -> sizeMenu(anchor, place, choice) : () -> exportPage(place, choice, ExportSize.PAGE);
+        }
+        choices[names.length - 1] = () -> sendPage(place);
+        menu(anchor, "export menu", names, new int[]{R.drawable.ic_ph_file_pdf, R.drawable.ic_ph_image, R.drawable.ic_ph_stack, R.drawable.ic_ph_export}, choices, prefs.largeSettingsText() ? 176 : 160);
+    }
+    /** Send: page {@code place}'s copies as they are now, wet paint set first, as Export Page. */
+    private void sendPage(int place) {
+        if (book == null || drawingName.isEmpty() || busy() || loading || pad.document == null) return;
+        leaving();
+        share.send(book.snapshot(), DrawingFiles.name(drawingName), place);
+    }
+    /** Export Page's sizes for the PNG or Layers (the owner, 2026-11-05), each with its size for the page: "Social, 1080 × 1444"; Layers' High Res says its file is large. */
+    private void sizeMenu(View anchor, int place, String choice) {
+        if (book == null) return;
+        ExportSize[] sizes = ExportSize.values();
+        String[] words = PageExport.sizeWords(choice, book.width, book.height);
+        Runnable[] choices = new Runnable[sizes.length];
+        int[] icons = new int[sizes.length];
+        boolean png = choice.equals(PageExport.PNG);
+        for (int i = 0; i < sizes.length; i++) {
+            ExportSize size = sizes[i];
+            choices[i] = () -> exportPage(place, choice, size);
+            icons[i] = png ? R.drawable.ic_ph_image : R.drawable.ic_ph_stack;
+        }
+        menu(anchor, png ? "png size menu" : "layers size menu", words, icons, choices, (png ? 240 : 336) + (prefs.largeSettingsText() ? 24 : 0));
+    }
     /**
      * Export Page (Page Settings, the owner, 2026-10-28): page {@code place}'s (a stack's) {@code choice} copy, a PDF, PNG
-     * or Layers ({@link PageExport}), wet paint set first, as Export Now; done, a note says where it is: "p5.psd in EXPORT/Scribulor".
+     * or Layers (each at {@code size}; {@link PageExport}), wet paint set first, as Export Now; done, a note says where it is: "p5.psd in EXPORT/Scribulor".
      */
-    void exportPage(int place, String choice) {
+    void exportPage(int place, String choice, ExportSize size) {
         if (book == null || busy() || loading || pad.document == null) return;
         leaving();
-        pad.dryWet();
-        String done = PageExport.page(place, choice) + " in " + PngExport.SUPERNOTE_FOLDER;
-        if (!AutoExport.page(this, drawingName, book.snapshot(), place, choice, () -> message(EXPORT_FAILED), () -> message(done))) message(EXPORT_FAILED);
-    }
-    private void exportPng() {
-        pad.dryWet();
-        PngExport.show(this, book.snapshot(), drawingName);
+        String done = PageExport.page(place, choice) + " in " + AutoExport.SUPERNOTE_FOLDER;
+        if (!AutoExport.page(this, drawingName, book.snapshot(), place, choice, size, () -> message(EXPORT_FAILED), () -> message(done))) message(EXPORT_FAILED);
     }
     private void openDrawing() {
         showSaveError();
@@ -2697,7 +2364,8 @@ public final class PaintActivity extends Activity implements ControlHost {
      * name, which the rename then moves. Another notebook (a long press on the shelf) has no saves to follow.
      */
     void renameNotebook(String from) {
-        if (from.isEmpty()) return;
+        // Favourites keeps its name: the star finds it by it.
+        if (from.isEmpty() || NotebookStrip.favourites(from)) return;
         String folder = DrawingFiles.parent(from);
         NotebookNames names = NotebookNames.renaming(DrawingFiles.name(from), java.time.LocalDate.now());
         // Checked here because the store would otherwise overwrite; a case-only change (this notebook's own file) goes through.
@@ -2725,7 +2393,7 @@ public final class PaintActivity extends Activity implements ControlHost {
      * what they wrote.
      */
     void deleteNotebook(String path) {
-        if (path.isEmpty()) return;
+        if (path.isEmpty() || NotebookStrip.favourites(path)) return;
         boolean open = path.equals(drawingName) && book != null;
         Runnable delete = () -> {
             if (busy()) return;
@@ -2838,24 +2506,50 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (book == null || DrawingBook.isCover(place)) return;
         PageStacks s = book.stacks();
         if (s.count() <= 1 || place < 0 || place >= s.count()) return;
-        int from = s.first(place), to = s.last(place);
-        boolean asks = false;
-        for (int p = from; p <= to; p++) asks |= BlankPages.deleteAsks(book, p);
-        Runnable delete = () -> pageEdit("delete", () -> {
-            // The page drawn on goes too: the page after it is drawn on first (the one before, for the last).
-            int at = book.index();
-            if (at >= from && at <= to) book.select(book.pageOf(to + 1 < book.count() ? place + 1 : place - 1));
-            for (int p = to; p >= from; p--) book.deletePage(p);
-        });
+        boolean asks = NotebookStrip.deleteAsks(book, place);
+        Runnable delete = () -> pageEdit("delete", () -> NotebookStrip.deleteStack(book, place));
         // No Erasing (the page's own, or the notebook's) keeps a page with marks (as Clear page).
-        if (erasingOff(rules(from), asks)) return;
+        if (erasingOff(rules(s.first(place)), asks)) return;
         if (asks) notebooks.confirmDelete(place, delete); else delete.run();
+    }
+    /**
+     * Favourites (the owner, 2026-11-06): the star on page {@code place}'s preview (a stack, every layer of it). Without
+     * one: the page copied as it is now to the end of Favourites ({@link NotebookStrip#FAVOURITES}, made at the first
+     * star), both marked alike. With one: after asking, its copy deleted from Favourites and the mark gone. None in Favourites.
+     */
+    void star(int place) {
+        if (book == null || busy() || NotebookStrip.favourites(drawingName) || place < 0 || place >= book.stacks().count()) return;
+        DrawingBook starred = book;
+        int bottom = starred.stacks().first(place), had = starred.fave(bottom);
+        // Filled only while Favourites holds its copy: a copy deleted there leaves the mark, and a tap stars it afresh.
+        if (notebooks.held(had)) {
+            notebooks.confirmUnstar(() -> {
+                if (book != starred || starred.fave(bottom) != had) return;
+                starred.setFave(bottom, 0); notebooks.held(had, false); recovery(); notebooks.starChanged();
+                store.unfavourite(had, (unused, error) -> runOnUiThread(() -> { if (!destroyed && error != null) message("Remove failed: " + error.getMessage()); }));
+            });
+            return;
+        }
+        java.util.List<DrawingBook.Taken> stack;
+        try { stack = starred.copyStack(place); }
+        catch (java.io.IOException e) { message("Copy failed: " + e.getMessage()); return; }
+        int fave = NotebookStrip.newFave(new java.util.Random());
+        // The star fills once the copy is in Favourites (one redraw).
+        starred.setFave(bottom, fave); recovery();
+        store.favourite(stack, fave, starred.width, starred.height, (unused, error) -> runOnUiThread(() -> {
+            if (destroyed) return;
+            if (error == null) { notebooks.held(fave, true); notebooks.starChanged(); message(NotebookStrip.STARRED); return; }
+            // Not copied: the star goes again, wherever the page is now.
+            for (int i = 0; i < starred.count(); i++) if (starred.fave(i) == fave) starred.setFave(i, 0);
+            if (book == starred) recovery();
+            message("Copy failed: " + error.getMessage());
+        }));
     }
     /** ‹ Notebooks: the notebook is left, and the shelf shows. */
     void leaveNotebook() {
         if (busy()) return;
         captureToolbar();
-        if (leavePrompt()) recovery();
+        pad.finishStroke(); // a stroke still down is drawing
         recoverySaved();
         notebooks.leavingPage();
         leaving();
@@ -2865,10 +2559,11 @@ public final class PaintActivity extends Activity implements ControlHost {
     void openNotebook(String path) { openNotebook(path, false); }
     /** As {@link #openNotebook(String)}, on its library card when {@code card} (a shelf tile's Settings). */
     void openNotebook(String path, boolean card) {
-        if (path.equals(drawingName) && book != null) {
-            if (card) notebooks.showCard(); else notebooks.showPages(book.index());
-            return;
-        }
+        openNotebook(path, () -> { if (card) notebooks.showCard(); else notebooks.showPages(book.index()); });
+    }
+    /** Notebook {@code path} opened (the open one saved first), then {@code then}. */
+    private void openNotebook(String path, Runnable then) {
+        if (path.equals(drawingName) && book != null) { then.run(); return; }
         settleChanges("opening another notebook", () -> {
             loading = true;
             store.openBook(path, (opened, error) -> {
@@ -2876,11 +2571,21 @@ public final class PaintActivity extends Activity implements ControlHost {
                     if (destroyed) return;
                     loading = false;
                     if (error != null) { message("Couldn't open it: " + error.getMessage()); return; }
-                    replaceBook(opened); named(path); recoveryNow();
-                    if (card) notebooks.showCard(); else notebooks.showPages(opened.index());
+                    // Named first: the page shown goes to a live page's guests with its notebook's path (LiveProbe.shown).
+                    named(path); replaceBook(opened); recoveryNow();
+                    then.run();
                 });
             });
         });
+    }
+    /**
+     * A live page's guest asked ({@link LivePage}): notebook {@code asked.path} opened and drawn on here too (as a shelf
+     * tile and Open), or the page turned as the page bar's ‹ or › turns it. One page for the room, this tablet's.
+     */
+    void guestAsked(LivePage asked) {
+        if (busy()) return;
+        if (LivePage.OPEN.equals(asked.kind)) { if (DrawingFiles.validPath(asked.path)) openNotebook(asked.path, notebooks::hide); }
+        else if (book != null && !notebooks.shown()) turnPage(asked.place);
     }
     /**
      * New notebook, on the shelf: its name asked first (the one it would get, all selected, and others), then its library
@@ -2903,6 +2608,8 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** A long press on a shelf tile: Rename, Settings (the notebook opened on its library card) and Delete for that notebook. */
     void notebookMenu(View anchor, DocumentStore.Notebook notebook) {
         String path = notebook.path;
+        // Favourites: Settings alone (never renamed or deleted).
+        if (NotebookStrip.favourites(path)) { menu(anchor, "notebook menu", new String[]{LibraryCard.SETTINGS}, new int[]{R.drawable.ic_ph_list}, new Runnable[]{() -> openNotebook(path, true)}, prefs.largeSettingsText() ? 288 : 264); return; }
         menu(anchor, "notebook menu", new String[]{"Rename", LibraryCard.SETTINGS, "Delete"},
                 new int[]{R.drawable.ic_ph_pencil_simple, R.drawable.ic_ph_list, R.drawable.ic_ph_trash},
                 new Runnable[]{() -> renameNotebook(path), () -> openNotebook(path, true), () -> deleteNotebook(path)},
@@ -2954,27 +2661,28 @@ public final class PaintActivity extends Activity implements ControlHost {
         DrawingStorage.leaveHandOver(this);
         // The tilt watch for the Rotate prompt (dropped by mistake with MonoPaint's controls, 53b444a).
         rotationPrompt.enable();
-        if (inkWash != null) inkWash.importBrushes();
+        if (inkWash != null) {
+            inkWash.importBrushes();
+            if (inkWash.importNote != null) { message(inkWash.importNote); inkWash.importNote = null; }
+        }
         if (pad != null) { pad.returned(); pad.updateViewport(); pad.post(pad::connectDisplay); pad.resumeDrying(); }
         if (notebooks != null && notebooks.onShelf() && !loading) notebooks.showShelf();
         timedLook();
+        live.start();
     }
     @Override protected void onPause() {
+        live.stop();
         replay.stop();
-        if (edgeBars != null) edgeBars.reset();
-        if (fullscreen != null) fullscreen.dismiss();
-        if (pageOverview != null) pageOverview.dismiss();
         dismissPanels();
         resumed = false;
         rotationPrompt.disable();
         rotationPrompt.hide();
-        toolbar.presetDrag.reset();
         if (pad != null) { pad.suspend(); pad.pauseDrying(); pad.removeCallbacks(warmTools); }
         // The pictures not yet drawn ahead are let go: the Tools page, opening now, draws what it needs itself.
         if (toolPictures != null) { toolPictures.close(); toolPictures = null; }
         pauseTimer();
         sand.pause(android.os.SystemClock.uptimeMillis());
-        if (!loading && book != null) { leavePrompt(); saveToolState(); recoveryNow(); autosaveNow(); leaving(); }
+        if (!loading && book != null) { if (pad != null) pad.finishStroke(); saveToolState(); recoveryNow(); autosaveNow(); leaving(); }
         DrawingStorage.leaveHandOver(this);
         super.onPause();
     }
@@ -3006,9 +2714,9 @@ public final class PaintActivity extends Activity implements ControlHost {
     }
     @Override protected void onDestroy() {
         destroyed = true;
+        share.off();
         if (rotationPrompt != null) rotationPrompt.orientationSensor.disable();
         selectionFeedback.close();
-        layerFeedback.close();
         if (pad != null) pad.close();
         if (inkWashBar != null) inkWashBar.close();
         if (notebooks != null) notebooks.close();
@@ -3019,9 +2727,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (notebooks != null && notebooks.shown()) { if (!notebooks.back()) super.onBackPressed(); return; }
         if (inkWashBar != null && inkWashBar.panelOpen()) { inkWashBar.closePanel(); return; }
         if (pagePanel != null) { closePagePanel(); return; }
-        if (fullscreen != null && fullscreen.mode != 0) { fullscreen.setMode(0); return; }
+        if (zenFanOpen()) { closeZenFan(); return; }
         if (zen) { setZen(false); return; }
-        if (pad != null && (pad.hasGradient() || pad.fillGesture)) { pad.finishStroke(); return; }
         // From drawing, back to its notebook.
         if (!busy()) showNotebook();
     }

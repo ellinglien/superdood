@@ -13,26 +13,42 @@ import java.io.File;
  */
 final class AppRename {
     /** The files beside the drawings that are named for the app, after the name (a folder last). */
-    static final String[] OWN = {BrushBackup.SUFFIX, DailyPrompt.SUFFIX, BrushImport.SUFFIX, BrushImport.DONE_SUFFIX, BrushBackup.NIBS_SUFFIX, ToolBackup.SUFFIX};
+    static final String[] OWN = {BrushBackup.SUFFIX, BrushImport.SUFFIX, BrushImport.DONE_SUFFIX, BrushBackup.NIBS_SUFFIX, ToolBackup.SUFFIX};
 
     /** {@code folder} (a library folder named {@code name}, maybe with a suffix: "Inkwash bench") under {@code former}. */
     static String formerFolder(String folder, String name, String former) {
         return folder.startsWith(name) ? former + folder.substring(name.length()) : null;
     }
 
+    /** The other builds' library folders, after the name (app/build.gradle's bench and checks): each build moves its own. */
+    static final String[] VARIANTS = {" bench", " checks"};
+
     /**
-     * Carries every former name's {@code folder} under each of {@code parents} into the current one, then renames the
-     * app's own files in {@code drawings}; true if nothing was left behind.
+     * Carries every former name's {@code folder} under each of {@code parents} into the current one, and each folder
+     * beside it named after it ("Old PDFs" to "New PDFs", 2026-11-04: Document/My Bad Drawings PDFs stayed behind; not
+     * another build's, {@link #VARIANTS}), then renames the app's own files in {@code drawings}; true if nothing was left behind.
      */
     static boolean carryOver(File[] parents, File drawings, String folder, String name, String[] former) {
         boolean clean = true;
         for (String old : former) {
             String from = formerFolder(folder, name, old);
             if (from == null || from.equals(folder)) continue;
-            for (File parent : parents) if (parent != null) clean &= merge(new File(parent, from), new File(parent, folder));
+            for (File parent : parents) if (parent != null) {
+                clean &= merge(new File(parent, from), new File(parent, folder));
+                File[] beside = parent.listFiles(File::isDirectory);
+                if (beside != null) for (File f : beside) {
+                    String rest = f.getName().startsWith(from + " ") ? f.getName().substring(from.length()) : null;
+                    if (rest != null && !variant(rest)) clean &= merge(f, new File(parent, folder + rest));
+                }
+            }
         }
         if (drawings != null) clean &= adopt(drawings, name, former);
         return clean;
+    }
+    /** Whether {@code rest} (after a library folder's name: " bench", " bench PDFs") is another build's. */
+    private static boolean variant(String rest) {
+        for (String v : VARIANTS) if (rest.equals(v) || rest.startsWith(v + " ")) return true;
+        return false;
     }
 
     /**

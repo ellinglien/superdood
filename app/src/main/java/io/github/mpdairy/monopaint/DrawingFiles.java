@@ -23,8 +23,27 @@ final class DrawingFiles {
 
     static boolean validName(String name) {
         return name != null && name.length() > 0 && name.length() <= NAME_MOST
-                && name.equals(name.trim()) && name.matches("[\\p{L}\\p{N} _-]+")
+                && name.equals(name.trim()) && name.codePoints().allMatch(DrawingFiles::nameSign)
                 && !name.equals("_recovery");
+    }
+    /**
+     * Whether a name may hold {@code c}: a letter, a number, a space, - or _ (the regex [\\p{L}\\p{N} _-], spelled out:
+     * the browser's Java has no Unicode classes in its regexes).
+     */
+    static boolean nameSign(int c) {
+        int t = Character.getType(c);
+        return Character.isLetter(c) || t == Character.DECIMAL_DIGIT_NUMBER || t == Character.LETTER_NUMBER || t == Character.OTHER_NUMBER || c == ' ' || c == '_' || c == '-';
+    }
+    /** {@code name} with every run of other signs ({@link #nameSign}) as one space. */
+    static String signsAsSpaces(String name) {
+        StringBuilder s = new StringBuilder();
+        boolean other = false;
+        for (int i = 0; i < name.length(); ) {
+            int c = name.codePointAt(i); i += Character.charCount(c);
+            if (nameSign(c)) { if (other) s.append(' '); other = false; s.appendCodePoint(c); } else other = true;
+        }
+        if (other) s.append(' ');
+        return s.toString();
     }
 
     static boolean validPath(String path) {

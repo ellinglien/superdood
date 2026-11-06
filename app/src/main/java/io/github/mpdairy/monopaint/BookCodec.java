@@ -30,7 +30,7 @@ final class BookCodec {
         BookOptions.Covers covers=new BookOptions.Covers();
         PackedPage[] filed=snapshot.filedCovers();
         for(int s=0;s<2;s++){covers.pages[s]=filed[s];covers.pictures[s]=filed[s]==null?null:snapshot.coverPictures[s];}
-        covers.picture=snapshot.cover;covers.design=snapshot.design;covers.options=snapshot.options;covers.tracing=snapshot.tracing;covers.pageTemplates=snapshot.pageTemplates;covers.pageRules=snapshot.pageRules;covers.pageSeconds=snapshot.pageSeconds;covers.lastDay=snapshot.lastDay;
+        covers.picture=snapshot.cover;covers.design=snapshot.design;covers.options=snapshot.options;covers.tracing=snapshot.tracing;covers.pageTemplates=snapshot.pageTemplates;covers.pageRules=snapshot.pageRules;covers.pageSeconds=snapshot.pageSeconds;covers.pageSurfaces=snapshot.pageSurfaces;covers.pageFaves=snapshot.pageFaves;covers.lastDay=snapshot.lastDay;
         long[] coverOffsets=new long[2];
         long[] offsets=write(output,snapshot.width,snapshot.height,pages,snapshot.fileIndex(),choices,snapshot.cover,snapshot.pictures,covers,coverOffsets);
         for(int s=0;s<2;s++){snapshot.writtenCovers[s]=filed[s];snapshot.coverOffsets[s]=coverOffsets[s];}
@@ -143,6 +143,8 @@ final class BookCodec {
         book.restorePageTemplates(read.covers.pageTemplates);
         book.restorePageRules(read.covers.pageRules);
         book.restorePageSeconds(read.covers.pageSeconds);
+        book.restorePageSurfaces(read.covers.pageSurfaces);
+        book.restorePageFaves(read.covers.pageFaves);
         book.restoreLastDay(read.covers.lastDay);
         return book;
     }

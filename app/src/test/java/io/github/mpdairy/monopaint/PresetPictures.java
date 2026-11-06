@@ -46,7 +46,12 @@ public final class PresetPictures {
         out.add(tone("Dot tone", "even dots", 3101, 0, .42, 6, 45));
         out.add(tone("Line tone", "fine lines", 3102, 1, .45, 6, 45));
         out.add(tone("Sand tone", "speckled grain", 3103, 2, .4, 6, 45));
-        out.add(tone("Gradient tone", "fades down", 3104, 3, .6, 7, 45));
+        {
+            // "change gradient tone to full pressure for dots (so it's variable)" (the owner, 2026-11-06): its dots light to full as it presses.
+            Made gradient = tone("Gradient tone", "fades down", 3104, 3, .6, 7, 45);
+            fullPressDark(gradient.brush);
+            out.add(gradient);
+        }
         out.add(tone("Hatched tone", "crossed lines", 3105, 4, .75, 8, 45));
         // Print: ink through a Print Shading. A wet ink body glazes grey, so the screen breaks it into its pattern;
         // pressure darkens it, so the pattern fills in as the pen presses.
@@ -79,7 +84,10 @@ public final class PresetPictures {
             m.set(PartDial.SPREAD, .25); m.set(PartDial.HOLD, .45);
             screen(m, 9, 7, 30, 0, 0, .15);
             paper(b, PartChoice.COLD_PRESS, .5);
-            hand(b, PartChoice.TILT_SIDE);
+            // Tilt Shade with full Pressure Dark (2026-11-06, the owner: "all of those patterns"): the dashes fill in as it presses.
+            ModularBrush.Part h = new ModularBrush.Part(PartChoice.TILT_SIDE);
+            h.set(PartDial.PD, 1);
+            b.set(BrushPart.HAND, ModularBrush.namedHand(h));
             out.add(new Made("Print", "Mezzotint", "velvet dashes", 3121, b));
         }
         {
@@ -106,6 +114,21 @@ public final class PresetPictures {
             hand(b, PartChoice.PRESS_BOTH);
             out.add(new Made("Print", "Wavy-line pen", "banknote style", 3124, b));
         }
+        // The texture markers (2026-11-06, the owner: "all of those patterns would be awesome"): one a Print Shading no
+        // shown tool had, Riso's ink line through it, the pattern filling in as it presses.
+        out.add(texture("Woodcut", "carved lines", 3231, 12, 6, 30));
+        out.add(texture("Diamond dots", "dotted lattice", 3232, 10, 6, 45));
+        out.add(texture("Scribble", "looping lines", 3233, 13, 6, 30));
+        out.add(texture("Maze", "winding paths", 3234, ScreenChecks.MAZE, 5, 0));
+        out.add(texture("Brick", "brick courses", 3235, ScreenChecks.BRICK, 4, 0));
+        out.add(texture("Basketweave", "woven strands", 3236, ScreenChecks.BASKETWEAVE, 4, 0));
+        out.add(texture("Waves", "wave scales", 3237, ScreenChecks.WAVES, 4, 0));
+        out.add(texture("Honeycomb", "hexagons", 3238, ScreenChecks.HONEYCOMB, 4, 0));
+        out.add(texture("Rings", "ripples", 3239, ScreenChecks.RINGS, 5, 0));
+        // Pixels and Stitches (2026-11-06, the owner: "a pixel texture brush", "maybe also a cross-stitch texture"): a grey a
+        // cell, pressure picking the grey; square to the page (Angle's default), cells big enough to see on the Manta.
+        out.add(texture("Pixel pen", "chunky pixels", 3240, ScreenChecks.PIXELS, 10, 45));
+        out.add(texture("Stitch pen", "cross-stitches", 3241, ScreenChecks.STITCHES, 12, 45));
         // Everyday pens.
         {
             // Ballpoint: thin, a little grainy, darker pressed, now and then skipping. Breaks .2 (the owner, 2026-10-26: at .5
@@ -184,7 +207,7 @@ public final class PresetPictures {
         }
         {
             // Fill in (the owner, 2026-10-23: "maybe this app doesn't use a bucket, just a brush with fill in the lines"): the
-            // Colouring pen's flat wash at Flood 1, so a few scribbles inside a shape fill it to its lines; on open paper a plain wash.
+            // Colouring pen's flat wash at Flood 1, so a few scribbles inside a shape fill it to its lines; on open paper a loop fills (Filled shape merged in, 2026-10-31).
             ModularBrush b = brush("Marker", "Fill in", 3149, PartChoice.ROUND);
             tip(b).set(PartDial.WEIGHT, 1.4);
             ModularBrush.Part m = medium(b, PartChoice.WASH);
@@ -195,42 +218,31 @@ public final class PresetPictures {
             out.add(new Made("Marker", "Fill in", "fills shapes", 3149, b));
         }
         {
-            // Filled shape (the owner, 2026-10-23: "draw a filled shape"): the Colouring pen's flat wash as Filled Shape, so
-            // an outline closes at the lift and fills in its own wash.
-            ModularBrush b = brush("Marker", "Filled shape", 3150, PartChoice.ROUND);
-            tip(b).set(PartDial.WEIGHT, 1.4);
-            ModularBrush.Part m = medium(b, PartChoice.WASH);
-            m.set(PartDial.WET, .3); m.set(PartDial.BLOOM, 0);
-            b.set(BrushPart.CARRY, new ModularBrush.Part(PartChoice.SHAPE));
-            out.add(new Made("Marker", "Filled shape", "fills outlines", 3150, b));
-        }
-        {
-            // Damp tissue: a soft broad blot that soaks up the wash it passes over and lays nothing. Clear Water (no paint
-            // of its own) that lays none of what it lifts back down: Lift always lays its own wash too, which Behind
-            // put on the paper as a dark mark (the owner, 2026-10-22: "if it touches any light/paper area it leaves a
-            // dark mark"). Pick Up .5 lifts as much as the Lift at .8 did.
-            ModularBrush b = brush("Watercolor", "Damp tissue", 3145, PartChoice.ROUND);
-            tip(b).set(PartDial.WEIGHT, 1); tip(b).set(PartDial.SOFT, .6);
-            ModularBrush.Part m = medium(b, PartChoice.WASH);
-            m.set(PartDial.WET, .3); m.set(PartDial.BLOOM, 0);
-            ModularBrush.Part c = new ModularBrush.Part(PartChoice.CLEAR_WATER);
-            c.set(PartDial.PICK, .5); c.set(PartDial.LAY, 0);
-            b.set(BrushPart.CARRY, c);
-            out.add(new Made("Watercolor", "Damp tissue", "lifts paint", 3145, b));
-        }
-        {
-            // Vanishing ink (the owner's Disappearing Ink, too wide for the card): a pen line that fades away (Fading, its Fades In at the default).
+            // Vanishing ink (the owner's Disappearing Ink, too wide for the card): a pen line that fades away (Fading, its Fades In 20 s as made).
             ModularBrush b = brush("Fineliner", "Vanishing ink", 3146, PartChoice.ROUND);
-            b.set(BrushPart.LIFE, new ModularBrush.Part(PartChoice.FADE));
+            b.set(BrushPart.LIFE, timed(PartChoice.FADE, PartDial.FADE_IN, 20));
             out.add(new Made("Fineliner", "Vanishing ink", "fades away", 3146, b));
         }
         {
             // Lemon juice: a nib dipped in lemon juice, faint at first, darkening in as it dries.
             ModularBrush b = brush("Dip pen", "Lemon juice", 3147, PartChoice.ROUND);
             tip(b).set(PartDial.TAPER_OUT, .3);
-            b.set(BrushPart.LIFE, new ModularBrush.Part(PartChoice.LEMON));
+            b.set(BrushPart.LIFE, timed(PartChoice.LEMON, PartDial.DRY_IN, 300));
             hand(b, PartChoice.PRESS_WIDER);
             out.add(new Made("Dip pen", "Lemon juice", "appears later", 3147, b));
+        }
+        {
+            // Metalpoint (the module gaps survey, 2026-11-01): a silver stylus on a toothed ground, a hard, fine, pale grey
+            // line that barely answers pressure and tarnishes darker over minutes (Later's Tarnish).
+            ModularBrush b = brush("Pencil", "Metalpoint", 3191, PartChoice.ROUND);
+            tip(b).set(PartDial.WEIGHT, .6); tip(b).set(PartDial.SOFT, .1);
+            medium(b, PartChoice.GRAPHITE).set(PartDial.GRADE, 0);
+            paper(b, PartChoice.COLD_PRESS, .4);
+            ModularBrush.Part h = new ModularBrush.Part(PartChoice.PRESS_DARKER);
+            h.set(PartDial.PD, .2);
+            b.set(BrushPart.HAND, ModularBrush.namedHand(h));
+            b.set(BrushPart.LATER, timed(PartChoice.LATER_TARNISH, PartDial.DRY_IN, 300));
+            out.add(new Made("Pencil", "Metalpoint", "tarnishes", 3191, b));
         }
         {
             // Springy brush: a round brush on Control's Springy, swelling and darkening as it presses and thinning when quick.
@@ -275,6 +287,155 @@ public final class PresetPictures {
         // Wet brush (the wet brush spec; the owner's go-ahead, 2026-10-22): the old Wet brush's tip and Control, Wet on a
         // Wash (the pair's wash half, where the wet paint is): MonoPaint's wet brush pen, ink in water held between strokes.
         out.add(wetBrush());
+        // explore-media (2026-11-01; docs/archive/pictures/explore/media): white chalk for a toned or dark page, a dip nib that
+        // runs dry, a water-soluble pencil.
+        {
+            // White chalk: charcoal laid white (Blend White), catching the tooth, denser pressed; for Page Colour's toned pages and a blackboard.
+            ModularBrush b = brush("Charcoal", "White chalk", 3191, PartChoice.ROUND);
+            tip(b).set(PartDial.WEIGHT, .7);
+            medium(b, PartChoice.CHARCOAL).set(PartDial.M_BLEND, 1);
+            paper(b, PartChoice.COLD_PRESS, .5);
+            sideShade(b);
+            out.add(new Made("Charcoal", "White chalk", "for dark pages", 3191, b));
+        }
+        {
+            // Dip nib: ink that pools where it starts and runs dry into streaks along the line (Drag's Paint Load on a line,
+            // barely picking up what it crosses); each stroke starts with at least a third of a dip, a rub on a grey dips it again.
+            ModularBrush b = brush("Dip pen", "Dip nib", 3192, PartChoice.ROUND);
+            tip(b).set(PartDial.TAPER_OUT, .2);
+            medium(b, PartChoice.INK).set(PartDial.POOL, .3);
+            ModularBrush.Part c = new ModularBrush.Part(PartChoice.DRAG);
+            c.set(PartDial.PICK, .05); c.set(PartDial.LAY, .1); c.set(PartDial.LOAD, 1); c.set(PartDial.PLOAD, .5); c.set(PartDial.PMIN, .35);
+            b.set(BrushPart.CARRY, c);
+            hand(b, PartChoice.PRESS_WIDER);
+            out.add(new Made("Dip pen", "Dip nib", "runs dry", 3192, b));
+        }
+        {
+            // Water pencil: a soft water-soluble graphite (4B); the Water brush melts it into a wash.
+            ModularBrush b = brush("Pencil", "Water pencil", 3193, PartChoice.ROUND);
+            ModularBrush.Part m = medium(b, PartChoice.GRAPHITE);
+            m.set(PartDial.GRADE, .7); m.set(PartDial.SOLUBLE, 1);
+            sideShade(b);
+            out.add(new Made("Pencil", "Water pencil", "water over it", 3193, b));
+        }
+        {
+            // Soft pencil (the owner, 2026-11-06: "a softer pencil option"): a 4B to 6B lead, broader than Another pencil and
+            // dark from the lightest touch (soft Graphite .8, no Pressure Dark), grainy on cold press, a little smudgy (Messy
+            // Edge); pressed, a little wider; laid low, the side of the lead (Tilt Shading).
+            ModularBrush b = brush("Pencil", "Soft pencil", 3222, PartChoice.ROUND);
+            tip(b).set(PartDial.WEIGHT, 1.5); tip(b).set(PartDial.SOFT, .3);
+            ModularBrush.Part m = medium(b, PartChoice.GRAPHITE);
+            m.set(PartDial.GRADE, .8); m.set(PartDial.SPREAD, .15);
+            paper(b, PartChoice.COLD_PRESS, .7);
+            ModularBrush.Part h = new ModularBrush.Part(PartChoice.PRESS_WIDER);
+            h.set(PartDial.PS, .3); h.set(PartDial.SIDE_SHADE, 1);
+            b.set(BrushPart.HAND, ModularBrush.namedHand(h));
+            out.add(new Made("Pencil", "Soft pencil", "dark, grainy", 3222, b));
+        }
+        // The nibs (explore-nibs), one each: a ruling pen on cold press so its dry blade skips on the tooth; a twig in ink;
+        // a fan brush of ink hairs; a brayer that reprints what it rolls over.
+        {
+            ModularBrush b = brush("Dip pen", "Ruling pen", 3201, PartChoice.RULING);
+            paper(b, PartChoice.COLD_PRESS, .4);
+            out.add(new Made("Dip pen", "Ruling pen", "dries, blots", 3201, b));
+        }
+        {
+            ModularBrush b = brush("Dip pen", "Twig pen", 3202, PartChoice.TWIG);
+            out.add(new Made("Dip pen", "Twig pen", "blots, dries", 3202, b));
+        }
+        {
+            ModularBrush b = brush("Dry brush", "Fan brush", 3203, PartChoice.FAN);
+            out.add(new Made("Dry brush", "Fan brush", "hair lines", 3203, b));
+        }
+        {
+            ModularBrush b = brush("Print", "Brayer", 3204, PartChoice.ROLLER);
+            tip(b).set(PartDial.PICKUP, .7);
+            out.add(new Made("Print", "Brayer", "reprints", 3204, b));
+        }
+        // Reprint (explore-reprint): brushed over marks already there, they lay them again in their print, no paint of
+        // their own; a light touch reprints part way. A photocopy's toner on smooth paper; halftone dots on library paper.
+        {
+            ModularBrush b = brush("Print", "Photocopier", 3211, PartChoice.ROUND);
+            medium(b, PartChoice.INK).set(PartDial.SCREEN, ScreenChecks.PHOTOCOPY);
+            b.set(BrushPart.CARRY, new ModularBrush.Part(PartChoice.REPRINT));
+            out.add(new Made("Print", "Photocopier", "photocopies", 3211, b));
+        }
+        {
+            ModularBrush b = brush("Print", "Newsprint", 3212, PartChoice.ROUND);
+            ModularBrush.Part m = medium(b, PartChoice.INK);
+            m.set(PartDial.SCREEN, 1); m.set(PartDial.CELL, 5); m.set(PartDial.S_GAIN, .5); m.set(PartDial.UNEVEN, .35);
+            b.set(BrushPart.CARRY, new ModularBrush.Part(PartChoice.REPRINT));
+            paper(b, PartChoice.LIBRARY, .8);
+            out.add(new Made("Print", "Newsprint", "halftone dots", 3212, b));
+        }
+        // The new print and age tools (explore-presets, 2026-11-01), so Risograph, Letterpress and Cracks are on the bar.
+        // Riso: a broad chisel marker, its ink line (no wet body, which spread it wide) broken into Risograph's grain, a
+        // little patchy and doubled; Steady, as a printer's flat ink is.
+        {
+            ModularBrush b = brush("Print", "Riso", 3213, PartChoice.CHISEL);
+            tip(b).set(PartDial.ASPECT, .5); tip(b).set(PartDial.ANGLE, 40); tip(b).set(PartDial.WEIGHT, 1.5); tip(b).set(PartDial.SOFT, .5);
+            printInk(b, ScreenChecks.RISO, 6, 0, 2, 0, .4, 0, 1);
+            // "i adjusted riso to be pressure sensitive" (the owner, 2026-11-06).
+            fullPressDark(b);
+            out.add(new Made("Print", "Riso", "grainy print", 3213, b));
+        }
+        // Letterpress: a crisp round pen on cotton paper, its ink pressed into the paper as it sets (Later's Letterpress, a
+        // light impression, so the middle mottles and the cotton's low places starve; cold press's grain hardly showed).
+        {
+            ModularBrush b = brush("Print", "Letterpress", 3214, PartChoice.ROUND);
+            tip(b).set(PartDial.WEIGHT, 1.3); tip(b).set(PartDial.SOFT, 0);
+            paper(b, PartChoice.COTTON, .8);
+            hand(b, PartChoice.PRESS_WIDER);
+            ModularBrush.Part l = new ModularBrush.Part(PartChoice.LATER_PRESS);
+            l.set(PartDial.IMPRESSION, .15); l.set(PartDial.SPREAD_IN, 2);
+            b.set(BrushPart.LATER, l);
+            out.add(new Made("Print", "Letterpress", "pressed type", 3214, b));
+        }
+        // Cracking paint (Cracks until 2026-11-06, the owner: "maybe rename it cracking paint"; its code name and seed kept,
+        // so a copy still finds it): thick opaque paint from a round brush, Slow, crazing as it ages (Later's Cracks).
+        {
+            ModularBrush b = brush("Gouache", "Cracks", 3221, PartChoice.ROUND);
+            tip(b).set(PartDial.WEIGHT, 1.5); tip(b).set(PartDial.SOFT, .2);
+            ModularBrush.Part m = medium(b, PartChoice.COVER);
+            m.set(PartDial.IMPASTO, .6);
+            b.set(BrushPart.LIFE, new ModularBrush.Part(PartChoice.DRYING));
+            hand(b, PartChoice.PRESS_BOTH);
+            ModularBrush.Part l = timed(PartChoice.LATER_CRACKS, PartDial.DRY_IN, 120);
+            l.set(PartDial.CRACKS, .6);
+            b.set(BrushPart.LATER, l);
+            out.add(new Made("Gouache", "Cracking paint", "ages, cracks", 3221, b));
+        }
+        // The owner's Brush Lab saves (2026-11-06), kept as made (their codes and seeds), named as the owner did; built
+        // here dial by dial from their codes so the rows stay PresetPictures'. Opaque flat: a flat nib of covering paint,
+        // Fast wet, its Control pressed wider and tilted thinner, a little speed-thinned, its style Anything goes as saved.
+        {
+            ModularBrush b = brush("Anything goes", "Opaque flat", 1991437662L, PartChoice.FLAT_NIB);
+            tip(b).set(PartDial.ASPECT, .2); tip(b).set(PartDial.ANGLE, 46.2); tip(b).set(PartDial.WEIGHT, .998); tip(b).set(PartDial.SOFT, .161);
+            medium(b, PartChoice.COVER).set(PartDial.COVER, .8355);
+            ModularBrush.Part life = new ModularBrush.Part(PartChoice.FAST_WET);
+            life.set(PartDial.WINDOW, 5.045);
+            b.set(BrushPart.LIFE, life);
+            ModularBrush.Part h = new ModularBrush.Part(PartChoice.CUSTOM);
+            h.set(PartDial.PS, 1); h.set(PartDial.TW, 1); h.set(PartDial.SD, .549); h.set(PartDial.GAIN, 1.5);
+            b.set(BrushPart.HAND, ModularBrush.namedHand(h));
+            out.add(new Made("Anything goes", "Opaque flat", "turns on tilt", 1991437662L, b));
+        }
+        // Watercolour splatter: a stipple tip of big, jittered wash dots that build up, pooling and blooming, drying
+        // at once, pressed wider and a little darker.
+        {
+            ModularBrush b = brush("Watercolor", "Watercolour splatter", 4107326823L, PartChoice.STIPPLE);
+            ModularBrush.Part t = tip(b);
+            t.set(PartDial.DOT, .705); t.set(PartDial.SCATTER, .175); t.set(PartDial.JITTER, 1); t.set(PartDial.WEIGHT, 1.185); t.set(PartDial.BUILD_UP, 1);
+            ModularBrush.Part m = medium(b, PartChoice.WASH);
+            m.set(PartDial.WET, .706); m.set(PartDial.POOL, .669); m.set(PartDial.BLOOM, .508);
+            ModularBrush.Part life = new ModularBrush.Part(PartChoice.DRYING);
+            life.set(PartDial.DRYING, 0); life.set(PartDial.G_POOL, .08);
+            b.set(BrushPart.LIFE, life);
+            ModularBrush.Part h = new ModularBrush.Part(PartChoice.CUSTOM);
+            h.set(PartDial.PS, 1); h.set(PartDial.PD, .5);
+            b.set(BrushPart.HAND, ModularBrush.namedHand(h));
+            out.add(new Made("Watercolor", "Watercolour splatter", "blooming dots", 4107326823L, b));
+        }
         for (Made m : out) m.brush.normalize();
         return out;
     }
@@ -327,6 +488,14 @@ public final class PresetPictures {
         hand(b, PartChoice.STEADY);
         return new Made("Print", name, line, seed, b);
     }
+    /** A texture marker: a broad round, a little soft (crisp enough that the pattern reads to its edge), of Riso's ink line through Print Shading {@code screen}, a {@code cell} px pattern at {@code angle}, full Pressure Dark. */
+    static Made texture(String name, String line, long seed, int screen, int cell, int angle) {
+        ModularBrush b = brush("Print", name, seed, PartChoice.ROUND);
+        tip(b).set(PartDial.WEIGHT, 1.5); tip(b).set(PartDial.SOFT, .2);
+        printInk(b, screen, cell, angle, 0, 0, 0, 0, 1);
+        fullPressDark(b);
+        return new Made("Print", name, line, seed, b);
+    }
     /** Ink with a wet, line-less body through Print Shading {@code screen}. */
     static void printInk(ModularBrush b, int screen, int cell, int angle, int mis, double gain, double uneven, double wet, double line) {
         ModularBrush.Part m = medium(b, PartChoice.INK);
@@ -350,6 +519,16 @@ public final class PresetPictures {
         return b;
     }
     static ModularBrush.Part tip(ModularBrush b) { return b.part(BrushPart.TIP); }
+    /**
+     * A fresh {@code c} whose {@code time} (Dries In or Fades In) is {@code seconds} as made, while the dial went from 10 s:
+     * the step its code holds, read over today's range from 1 s (2026-11-06), so the preset keeps its code.
+     */
+    static ModularBrush.Part timed(PartChoice c, PartDial time, double seconds) {
+        ModularBrush.Part p = new ModularBrush.Part(c);
+        long step = Math.round((seconds - 10) / (time.max - 10) * ModularCode.STEPS);
+        p.set(time, time.min + step / (double) ModularCode.STEPS * (time.max - time.min));
+        return p;
+    }
     /** {@code b}'s medium made {@code c}, fresh, at its style's real Erasable. */
     static ModularBrush.Part medium(ModularBrush b, PartChoice c) {
         ModularBrush.Part m = new ModularBrush.Part(c);
@@ -359,6 +538,18 @@ public final class PresetPictures {
     }
     static void paper(ModularBrush b, PartChoice c, double tooth) { ModularBrush.Part p = new ModularBrush.Part(c); p.set(PartDial.TOOTH, tooth); b.set(BrushPart.PAPER, p); }
     static void hand(ModularBrush b, PartChoice c) { b.set(BrushPart.HAND, new ModularBrush.Part(c)); }
+    /** Steady with full Pressure Dark: a light touch a fifth as dark, a full press full (Riso, Gradient tone). */
+    static void fullPressDark(ModularBrush b) {
+        ModularBrush.Part h = new ModularBrush.Part(PartChoice.STEADY);
+        h.set(PartDial.PD, 1);
+        b.set(BrushPart.HAND, ModularBrush.namedHand(h));
+    }
+    /** Press Dark with Tilt Shading, as every Pencil and Charcoal stick has: laid low, the side of the lead or stick. */
+    static void sideShade(ModularBrush b) {
+        ModularBrush.Part h = new ModularBrush.Part(PartChoice.PRESS_DARKER);
+        h.set(PartDial.SIDE_SHADE, 1);
+        b.set(BrushPart.HAND, ModularBrush.namedHand(h));
+    }
 
     // ---- The sheet ----
 

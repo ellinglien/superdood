@@ -221,15 +221,17 @@ final class SelectionFeedback {
      * updates that run inside {@code change} are captured and compared, each before its change and after them all (a
      * slot's mark, the old slot's, the swatch bar, the Dropper), not the whole 135 × 2401 column twice. Each patch's
      * changed pixels are split into the boxes they fall in ({@link #differences}), and every box all ink and paper goes
-     * out in the panel's binary update (mode 5 on this Manta firmware), the rest in one grey update over them all. A slot's
+     * out in the panel's binary update (mode 5 on this Manta firmware), the rest in one grey update per patch. A slot's
      * mark is ink on the paper of the bar's room, so a slot pick no longer goes grey for the brush strokes of the rows
      * between (the whole patch was checked until 2026-10-25).
      */
     void updateParts(View owner, Runnable change) {
         Rect whole = new Rect(0, 0, owner.getWidth(), owner.getHeight());
-        if (gathering != null || !(owner instanceof android.view.ViewGroup) || !direct(owner, whole, owner.hasWindowFocus())) { updateBinary(owner, whole, change); return; }
+        if (gathering != null || !direct(owner, whole, owner.hasWindowFocus())) { updateBinary(owner, whole, change); return; }
         List<Part> mine = new ArrayList<>();
-        parts = mine; gathering = owner;
+        // A single view (Zen Mode's fan, ZenFanView): one patch, all of it, its changed pixels split into boxes as a group's are.
+        boolean group = owner instanceof android.view.ViewGroup;
+        if (group) { parts = mine; gathering = owner; } else mine.add(new Part(owner, 0, 0, whole, capture(owner, whole)));
         try { change.run(); } finally { gathering = null; parts = null; }
         if (mine.isEmpty()) return;
         Rect union = new Rect();
@@ -241,17 +243,20 @@ final class SelectionFeedback {
         Canvas was = new Canvas(before), now = new Canvas(after);
         boolean fastPlane = DirectEink.fastBinaryControls();
         int stroke = fastPlane ? 9 : Device.current(owner.getContext()).fastStrokeMode();
-        List<Rect> fast = new ArrayList<>();
-        Rect grey = new Rect();
+        List<Rect> fast = new ArrayList<>(), greys = new ArrayList<>();
         // Back to front, so where two patches overlap the first one's before is the one kept.
         for (int i = mine.size() - 1; i >= 0; i--) was.drawBitmap(mine.get(i).before, mine.get(i).area.left - union.left, mine.get(i).area.top - union.top, null);
         for (Part part : mine) {
             Bitmap shown = capture(owner, part.area);
+            Rect grey = new Rect();
+            part.changed.setEmpty();
             for (Rect box : differences(part.before, shown)) {
                 boolean ink = stroke >= 0 && opaqueBinary(shown, box);
                 box.offset(part.area.left, part.area.top);
+                part.changed.union(box);
                 if (ink) { box.offset(-union.left, -union.top); fast.add(box); } else grey.union(box);
             }
+            if (!grey.isEmpty()) greys.add(grey);
             now.drawBitmap(shown, part.area.left - union.left, part.area.top - union.top, null);
             shown.recycle(); part.before.recycle();
         }
@@ -259,16 +264,20 @@ final class SelectionFeedback {
         bitmapToView.setTranslate(union.left, union.top);
         boolean ok = presentAll(owner, before, after, bitmapToView, fast, fastPlane ? 9 : stroke, fastPlane);
         before.recycle(); after.recycle();
-        if (!grey.isEmpty()) {
-            // The grey boxes in one update, as the whole column's was: the panel runs grey updates one after another. Drawn
-            // again over their union (it may span patches, white between them in the bitmaps above), refreshed.
+        for (Rect grey : greys) {
+            // Each patch's grey boxes in one update, drawn again over their union, refreshed: the panel runs grey updates one
+            // after another, so not one per box. Not one over every patch either: a refresh drives the unchanged grey under it
+            // again (the owner, 2026-11-05: at a page turn the page bar's previews between the turned pages' marks and the
+            // number, their grey edges "get darker twice").
             Bitmap shown = capture(owner, grey);
             bitmapToView.setTranslate(grey.left, grey.top);
             ok &= presentAll(owner, null, shown, bitmapToView, java.util.Collections.singletonList(new Rect(0, 0, grey.width(), grey.height())), 7, false);
             shown.recycle();
             union.union(grey);
         }
-        if (ok) retainForNextDraw(owner, union); else invalidateWithin(owner, union);
+        if (!ok) { invalidateWithin(owner, union); return; }
+        // Only what changed drawn again by Android, patch by patch, so the views between two changed patches are left alone.
+        for (Part part : mine) if (!part.changed.isEmpty()) { part.changed.offset(-part.dx, -part.dy); retainForNextDraw(part.view, part.changed); }
     }
     /** {@code boxes} of {@code after} (over {@code before}; {@code before} null: refreshed) put on the panel in {@code mode}; whether all of them went. */
     private boolean presentAll(View owner, Bitmap before, Bitmap after, android.graphics.Matrix bitmapToView, List<Rect> boxes, int mode, boolean fastPlane) {
@@ -296,19 +305,23 @@ final class SelectionFeedback {
             if (display != null) display.close();
         }
     }
-    /** A patch of the gathering view, {@link #updateParts}: where (its pixels) and what it showed before. */
+    /**
+     * A patch of the gathering view, {@link #updateParts}: the view it is of and that view's place in the gathering one,
+     * where (its pixels) and what it showed before, and what of it changed.
+     */
     private static final class Part {
-        final Rect area; final Bitmap before;
-        Part(Rect area, Bitmap before) { this.area = area; this.before = before; }
+        final View view; final int dx, dy; final Rect area, changed = new Rect(); final Bitmap before;
+        Part(View view, int dx, int dy, Rect area, Bitmap before) { this.view = view; this.dx = dx; this.dy = dy; this.area = area; this.before = before; }
     }
     private List<Part> parts;
     /** {@code view}'s {@code area} as a patch of the gathering view, captured as it is now, unless one already holds it. */
     private void part(View view, Rect area) {
         Rect at = new Rect(area);
         ((android.view.ViewGroup) gathering).offsetDescendantRectToMyCoords(view, at);
+        int dx = at.left - area.left, dy = at.top - area.top;
         if (!at.intersect(0, 0, gathering.getWidth(), gathering.getHeight())) return;
         for (Part part : parts) if (part.area.contains(at)) return;
-        parts.add(new Part(at, capture(gathering, at)));
+        parts.add(new Part(view, dx, dy, at, capture(gathering, at)));
     }
     /**
      * Inkwash: the view whose update is running, so the updates of views inside it (a slot's mark, the strip's tab, the
@@ -348,7 +361,9 @@ final class SelectionFeedback {
             DirectEink display = session;
             if ((reused ? display.refresh(after, dirty) : display.present(after, dirty)) > 0) {
                 presented = true;
-                retainForNextDraw(owner, area);
+                // As updateParts: only the changed patch drawn again by Android.
+                Rect changed = new Rect(dirty); changed.offset(area.left, area.top);
+                retainForNextDraw(owner, changed);
                 submitted++;
                 lastDisplayMode = mode;
                 lastBufferRegion = display.bufferRegion(dirty);

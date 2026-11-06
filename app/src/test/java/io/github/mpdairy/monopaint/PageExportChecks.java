@@ -55,7 +55,8 @@ public final class PageExportChecks {
             check(psd.getName().equals("Harbour p1.psd"), "Named for the notebook and the page");
             int[] greys = greys(pngBytes);
             Psd read = read(Files.readAllBytes(psd.toPath()));
-            check(read.names.equals(Arrays.asList("Paper", "Template", "Dry Media", "Washes", "Pen", "Paint", "Magnets")), "The layers, bottom first: " + read.names);
+            // Old Paint: what the sample's light marks cover sank under them, into the base (ToneDocument.sinkUnder).
+            check(read.names.equals(Arrays.asList("Paper", "Template", "Old Paint", "Dry Media", "Washes", "Pen", "Paint", "Magnets")), "The layers, bottom first: " + read.names);
             compare(read, greys, "page 1");
             Psd two = read(Files.readAllBytes(PageExport.write(folder, "Harbour", 1, PageExport.LAYERS, pages, lined, null, null, tiles()).toPath()));
             check(two.names.equals(Arrays.asList("Paper", "Template", "Layer 1 Old Paint", "Layer 2 Pen")), "An old page's layers named by number, its paint of no kind Old Paint: " + two.names);
@@ -106,17 +107,20 @@ public final class PageExportChecks {
     static int worst;
     static double meanDiff;
     /** {@code psd}'s merged image is the PNG's greys; its layers laid Normal come within a few greys of them. */
-    static void compare(Psd psd, int[] greys, String what) {
+    static void compare(Psd psd, int[] greys, String what) { compare(psd, greys, what, 0); }
+    /** As above, at most {@code share} of its pixels more than 12 greys off (where partial marks of several layers meet in a pixel shrunk, or at finer edges). */
+    static void compare(Psd psd, int[] greys, String what, double share) {
         check(Arrays.equals(psd.merged, greys), "The merged image is the PNG's greys, " + what);
         int[] laid = new int[greys.length];
-        long sum = 0; int most = 0;
+        long sum = 0; int most = 0, off = 0;
         for (int i = 0; i < laid.length; i++) {
             int result = 0;
             for (int l = 0; l < psd.grey.size(); l++) { int a = psd.alpha.get(l)[i] & 255, g = psd.grey.get(l)[i] & 255; result = (g * a + result * (255 - a) + 127) / 255; }
             int d = Math.abs(result - greys[i]); sum += d; most = Math.max(most, d);
+            if (d > 12) off++;
         }
         worst = Math.max(worst, most); meanDiff = Math.max(meanDiff, sum / (double) laid.length);
-        check(most <= 12 && sum / (double) laid.length < .5, "The layers laid Normal show the PNG within a few greys, " + what + ": at most " + most + ", " + sum / (double) laid.length + " on average");
+        check(off <= share * laid.length && sum / (double) laid.length < .5, "The layers laid Normal show the PNG within a few greys, " + what + ": at most " + most + ", " + off + " over 12 off, " + sum / (double) laid.length + " on average");
     }
 
     static int[] greys(byte[] png) throws Exception {
@@ -134,9 +138,12 @@ public final class PageExportChecks {
         final List<String> names = new ArrayList<>();
         final List<byte[]> grey = new ArrayList<>(), alpha = new ArrayList<>();
         int[] merged;
+        int width, height;
     }
-    /** Reads {@code file} by Adobe's specification, checking each part as it goes. */
-    static Psd read(byte[] file) {
+    /** Reads {@code file} by Adobe's specification, checking each part as it goes; at 300 dpi. */
+    static Psd read(byte[] file) { return read(file, NotebookExport.DPI); }
+    /** As above, at {@code dpi}; its size in {@link Psd#width} and {@link Psd#height}. */
+    static Psd read(byte[] file, int dpi) {
         ByteBuffer b = ByteBuffer.wrap(file);
         byte[] sig = new byte[4]; b.get(sig);
         check(new String(sig, StandardCharsets.US_ASCII).equals("8BPS") && b.getShort() == 1, "A PSD, version 1");
@@ -148,12 +155,13 @@ public final class PageExportChecks {
         b.position(b.position() + 4);
         check(b.getShort() == 1005, "Its resolution");
         b.position(b.position() + 2 + 4);
-        check(b.getInt() == NotebookExport.DPI << 16, "300 dpi");
+        check(b.getInt() == dpi << 16, dpi + " dpi");
         b.position(end);
         int section = b.getInt(), sectionEnd = b.position() + section, info = b.getInt();
         check(info % 2 == 0, "The layers' part an even length");
         int count = b.getShort();
         Psd psd = new Psd();
+        psd.width = w; psd.height = h;
         int[][] ids = new int[count][];
         for (int l = 0; l < count; l++) {
             check(b.getInt() == 0 && b.getInt() == 0 && b.getInt() == h && b.getInt() == w, "A layer the page's size");

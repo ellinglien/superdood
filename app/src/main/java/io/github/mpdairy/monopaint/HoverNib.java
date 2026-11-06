@@ -5,8 +5,12 @@ package io.github.mpdairy.monopaint;
  * pixels. Hovering reads no pressure, so it is the nib at {@link #TYPICAL}, the pressure a hand usually draws at, held
  * upright at a steady pace. No ring for the firmest nib (the owner, 2026-10-24: "make hover indicators more subtle. right
  * now they can disrupt the image"; a fainter dotted ring where pressing broadened it by half again until then). A shaped tip (chisel, flat nib, filbert) is its ellipse at its Nib Angle; bristles
- * a circle as wide as the swarm lands, a stipple its band at that touch; other patterns, placed lines and a smudge's stump a circle as far as
- * they reach. Pure, checked on the desktop.
+ * a circle as wide as the swarm lands, a stipple its band at that touch; placed lines a circle as far across as they
+ * lie; other patterns and the nibs (a ruling pen's blade, a twig's end, a fan's hairs) their quick preview's shape at the
+ * natural hold (2026-11-02: a twig's ring was eight times its mark as far as it may reach); a smudge's stump a circle as
+ * far as it reaches. A brush that only reworks the marks there (the owner, 2026-11-01: "hard to see what area is going to be
+ * affected") rings what it changes: a smudge, Water or Reprint its dab, a palette knife its blade at the natural hold
+ * ({@link #HOLD_LEAN}), clear water a tap's drop. Pure, checked on the desktop.
  */
 final class HoverNib {
     /** The pressure travel a hand usually draws at ({@link WildSample#TYPICAL_PRESS}). */
@@ -17,11 +21,25 @@ final class HoverNib {
      * {@link #TYPICAL} until then). The owner's light strokes read .10 to .13 (docs/TILT_INPUT.md).
      */
     static final double LIGHT = .15;
+    /**
+     * The lean a hovering pen is taken at for a palette knife (Scrape), whose blade a lean broadens from a fine tip to
+     * its flat: the natural hold ({@link ResolvedBrush#NATURAL}), as a stroke with no tilt reading draws a wide Tilt range.
+     * Hovering reads no tilt; upright the ring would be a dot, laid over twice what a usual hold scrapes (2026-11-01).
+     */
+    static final double HOLD_LEAN = BrushDirection.tiltLean(ResolvedBrush.NATURAL, 0);
     /** A pace at which the hand's Speed size leaves the nib as it is, px/ms ({@code clamp(v / 2.5)} is .3). */
     private static final double STEADY = .75;
     /** The ring is never drawn smaller than this radius, screen px: a fine nib's still shows where it is, clear of the line. */
     static final float MIN_RADIUS = 5;
 
+    /**
+     * The ring shows this long, ms, as the pen arrives, then goes (the owner, 2026-10-29: the dots "like a little bug on the
+     * screen demanding my attention"); the pen arrives once it has been away {@link #AWAY_MS}, or with a new tool or size, never
+     * at a stroke's lift ({@code DrawingPad}, the browser's live.html).
+     */
+    static final long SHOWN_MS = 1000, AWAY_MS = 2000;
+    /** The ring's dots' side, screen px. */
+    static final float TICK_SIDE = 2;
     /** The ring's dots at most ({@code DrawingPad}'s hover ring), and its length a dot, px: a 5 px ring ({@link #MIN_RADIUS}) one, a 20 px one five. */
     static final int TICKS = 5;
     static final float TICK_SPACING = 24;
@@ -46,15 +64,17 @@ final class HoverNib {
      * The nib {@code r} lays at pressure travel {@code p}, upright at a steady pace: its long side, short side and angle.
      * The widest of its line ({@link LineStamper#nib}), its body ({@link BodyStamper#shape}) and its smudge's stump.
      */
-    static double[] nib(ResolvedBrush r, double p) {
+    static double[] nib(ResolvedBrush r, double p) { return nib(r, p, HOLD_LEAN); }
+    /** {@link #nib(ResolvedBrush, double)} with the pen leaning {@code lean} (0 upright to 1 laid over), which only a palette knife's blade reads. */
+    static double[] nib(ResolvedBrush r, double p, double lean) {
         double[] nib = {0, 0, 0};
         if (r.line && r.lineTip == ResolvedBrush.LineTip.NIB && !r.linePlaced) {
             double a = Math.max(.6, r.pen.width(r.inkSize, p, STEADY) / 2), b = LineStamper.shortHalf(a, r.pen.aspect);
             wider(nib, 2 * a, 2 * b, r.pen.angle * LineStamper.DEG);
         } else if (r.line) {
             double d = r.lineTip == ResolvedBrush.LineTip.BRISTLES ? BristleSwarm.landing(r.lineSwarm, r.inkSize / 2, p, STEADY)
-                    : r.lineTip == ResolvedBrush.LineTip.STIPPLE ? StippleStamper.reach(r.pattern, r.inkSize, p) : ModularStroke.lineReach(r);
-            wider(nib, d, d, 0);
+                    : r.lineTip == ResolvedBrush.LineTip.STIPPLE ? StippleStamper.reach(r.pattern, r.inkSize, p) : r.linePlaced ? FootprintSweep.placedAcross(r, p) : -1;
+            if (d >= 0) wider(nib, d, d, 0); else footprint(nib, r, true, p);
         }
         if (r.body != null && r.bodyTip == ResolvedBrush.BodyTip.BODY) {
             BodyStamper.Shape s = new BodyStamper.Shape();
@@ -62,11 +82,29 @@ final class HoverNib {
             wider(nib, 2 * s.A, 2 * s.B, s.th);
         } else if (r.body != null) {
             double d = r.bodyTip == ResolvedBrush.BodyTip.BRISTLES ? BristleSwarm.landing(r.bodySwarm, r.bodySize / 2, p, STEADY)
-                    : r.bodyTip == ResolvedBrush.BodyTip.STIPPLE ? StippleStamper.reach(r.pattern, r.bodySize, p) : ModularStroke.bodyReach(r);
+                    : r.bodyTip == ResolvedBrush.BodyTip.STIPPLE ? StippleStamper.reach(r.pattern, r.bodySize, p) : r.bodyTip == ResolvedBrush.BodyTip.PLACED ? ModularStroke.bodyReach(r) : -1;
+            if (d >= 0) wider(nib, d, d, 0); else footprint(nib, r, false, p);
+        }
+        if (r.carry != null && r.carry.moves) {
+            double d = 2 * (r.carry.scrape() ? r.carry.bladeReach(lean) : r.carry.r);
             wider(nib, d, d, 0);
         }
-        if (r.carry != null && r.carry.moves) wider(nib, 2 * r.carry.r, 2 * r.carry.r, 0);
+        // Clear water lays nothing: a tap's clear drop is what it changes (a drag combs within it).
+        if (r.flt != null && r.flt.clear()) {
+            double d = 2 * FloatPen.dropRadius(r.flt.filmW, r.flt.spread, p);
+            wider(nib, d, d, 0);
+        }
         return nib;
+    }
+    /**
+     * A pattern's or a hake's mark (or a nib's) as a quick stroke's preview sweeps it ({@link FootprintSweep#atRest}), held
+     * at the natural lean ({@link #HOLD_LEAN}), which a ruling pen's blade, a twig's end and a fan read: not how far its
+     * marks may reach, which is the page's bound for redrawing (a twig's ring was eight times its mark until 2026-11-02).
+     */
+    private static void footprint(double[] nib, ResolvedBrush r, boolean isLine, double p) {
+        double[] e = FootprintSweep.atRest(r, isLine, p, ResolvedBrush.NATURAL);
+        double turn = Math.atan2(e[3], e[2]);
+        if (e[0] >= e[1]) wider(nib, 2 * e[0], 2 * e[1], turn); else wider(nib, 2 * e[1], 2 * e[0], turn + Math.PI / 2);
     }
     private static void wider(double[] nib, double width, double height, double angle) {
         if (width > nib[0]) { nib[0] = width; nib[1] = height; nib[2] = angle; }

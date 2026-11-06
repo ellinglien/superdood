@@ -378,10 +378,10 @@ public final class FloatChecks {
     static void codes() {
         String lab = "f.M70i000000000at_000zz0000000000000_3wejs00_000_3lli0i0_0000000000000000000nz0.7";
         ModularBrush b = ModularCode.decode(lab);
-        check(b != null && b.choice(BrushPart.LIFE) == PartChoice.FLOAT && ModularCode.encode(b).equals(lab), "the lab's Float code reads and writes back byte for byte");
-        check(Math.abs(b.part(BrushPart.LIFE).get(PartDial.DRYING) - .6) < .001 && Math.abs(b.part(BrushPart.LIFE).get(PartDial.F_SPREAD) - .5) < .001 && Math.abs(b.part(BrushPart.LIFE).get(PartDial.DRIFT) - .5) < .001, "with its floating time, spread and drift");
+        check(b != null && b.mischief() == PartChoice.LATER_FLOAT && ModularCode.encode(b).equals(lab), "the lab's Float code reads and writes back byte for byte");
+        check(Math.abs(b.part(BrushPart.LATER).get(PartDial.FLOAT_TIME) - .6) < .001 && Math.abs(b.part(BrushPart.LATER).get(PartDial.F_SPREAD) - .5) < .001 && Math.abs(b.part(BrushPart.LATER).get(PartDial.DRIFT) - .5) < .001, "with its floating time, spread and drift (Later's)");
         check(ModularWords.clearWater(b) && ModularWords.plainWords(b).startsWith("Clear water. Taps drop clear rings"), "and says it is clear water");
-        check(ModularWords.choiceWords(sumi(), BrushPart.LIFE).equals("Float 7.7 s"), "Float's card says its floating time: " + ModularWords.choiceWords(sumi(), BrushPart.LIFE));
+        check(ModularWords.choiceWords(sumi(), BrushPart.LATER).equals("Float 7.7 s"), "Float's card (Later's) says its floating time: " + ModularWords.choiceWords(sumi(), BrushPart.LATER));
     }
     /** Rolls: every other part of every style rolls as before for the same Random; Float at its odds. */
     static void rolls() {
@@ -392,9 +392,9 @@ public final class FloatChecks {
             ModularStyle.floatRolls = true;
             ModularBrush with = style.roll(new Random(9000L * (style.index + 1) + i));
             n++;
-            if (with.choice(BrushPart.LIFE) == PartChoice.FLOAT) {
+            if (with.mischief() == PartChoice.LATER_FLOAT) {
                 floats++;
-                for (BrushPart p : BrushPart.values()) if (p != BrushPart.LIFE && !with.part(p).sameAs(without.part(p))) other++;
+                for (BrushPart p : BrushPart.values()) if (p != BrushPart.LIFE && p != BrushPart.LATER && !with.part(p).sameAs(without.part(p))) other++;
                 check(style.floatOdds() > 0, style.name + " rolls Float only if it has odds for it");
             } else if (!ModularCode.encode(with).equals(ModularCode.encode(without))) other++;
         }
@@ -402,7 +402,7 @@ public final class FloatChecks {
         int wild = 0, wn = 6000;
         ModularStyle anything = ModularStyle.named(ModularStyle.ANYTHING_GOES);
         Random random = new Random(5);
-        for (int i = 0; i < wn; i++) if (anything.roll(random).choice(BrushPart.LIFE) == PartChoice.FLOAT) wild++;
+        for (int i = 0; i < wn; i++) if (anything.roll(random).mischief() == PartChoice.LATER_FLOAT) wild++;
         double p = 1 / 30.0;
         check(Math.abs(wild / (double) wn - p) <= 4 * Math.sqrt(p * (1 - p) / wn), "Anything goes rolls Float about 1 in 30 (" + wild + " of " + wn + ")");
         check(floats > 0, "some styles' rolls float (" + floats + " of " + n + ")");

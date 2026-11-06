@@ -45,7 +45,7 @@ final class StabilityBench {
         flush.run();
     }
 
-    static ModularBrush brush(String name) { for (ToolPresets.Preset p : ToolPresets.all()) if (p.name.equals(name)) return p.brush().parts; throw new IllegalArgumentException(name); }
+    static ModularBrush brush(String name) { for (ToolPresets.Preset p : ToolPresets.withRetired()) if (p.name.equals(name)) return p.brush().parts; throw new IllegalArgumentException(name); }
 
     /** One action: its time, the heap kept after and the most seen during it; false on OutOfMemoryError. */
     interface Action { void run() throws Exception; }

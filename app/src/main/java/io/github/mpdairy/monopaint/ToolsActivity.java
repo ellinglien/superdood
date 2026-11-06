@@ -23,51 +23,52 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * The Tools page, the full-screen page the tool picker's Advanced opens (a long press on a tray row opens the picker) (spec
- * docs/archive/superpowers/specs/2026-10-15-tools-page-design.md; the owner's mockup, 2026-10-28, "Tools page v2"), all
- * in the app's face (Ukulele, {@link Theme#face}), on paper with no frames or grid lines.
- * The bar: <b>Back</b> (the caret and its word, always at the left), "Tools", Undo and <b>Brush Lab</b>, boxed. Then
- * the <b>scratch pad</b> (Brush Lab's test page, {@link TestArea}: the pen draws with the selected slot's brush at its size
- * and grey) in a rounded box, the brush's name (bold) and its one line in its foot, and in its corner small grey words:
- * Clear and the wet drop, and while the tool has them <b>Back to</b> the slot's first brush ({@link ToolsPage#restore}),
- * <b>Load Kit</b> and <b>Cut Stamp</b>; a change's note ("Kept Fineliner in Recent") at its other corner. Under it the
- * small grey label <b>Toolbar</b> over the ten slots, two rows of five {@link ToolCard}s (each its drawing as the side bar
- * shows it over its name; the selected one underlined and bold, a slot changed on this visit a dot). Then the Library:
- * the tabs (Tools, Recent, Saved, Kits) as words, the chosen one bold and underlined, the pages ("‹ 1 / 2 ›") at their
- * right; the chips ({@link ToolsPage.Chip}, the chosen one filled) under them; and one grid of {@link ToolCard}s, under
- * All the Tools tab's in groups a little apart. Stacked in portrait; in landscape the scratch pad and the slots are a
- * column at the left. Every size is {@link ToolsLayout}'s.
+ * The Tools page, the full-screen page the tool picker's Library opens (a long press on a slot opens the picker; Tools
+ * First opens this page at once) (spec docs/archive/superpowers/specs/2026-10-15-tools-page-design.md; the redesign,
+ * 2026-11-03, the owner: "it's not clear what to do once you're there and it seems like it should just be simpler"),
+ * all in the app's face (Ukulele, {@link Theme#face}), on paper with no frames or grid lines.
+ * The bar ({@link LabUi.PageBar}): <b>Back</b> (the caret and its word), the title <b>Toolbar</b> over the page's job,
+ * "Tap a slot, then a brush for it." (a change's note, "Kept Fineliner in Recent", in its place for a moment). Then what
+ * is changed: the slots, one row of {@link ToolCard} tiles across the page (2026-11-03, the owner: "all on one line";
+ * each its drawing alone, as the side bar shows it; the selected one inverted, ink with its drawing in paper, a slot
+ * changed on this visit a dot under it); the selected slot's tool, its name (bold) and its one line, with <b>Edit in
+ * Brush Lab</b> boxed at the row's right. Then the Library: <b>Search</b> (its field and × in its place while open)
+ * with the pages ("‹ 1 / 2 ›") at the row's right; the filter row's chips ({@link ToolsPage.Chip}: Recent, Saved, the
+ * kinds, Kits; the chosen one filled); and one grid of {@link ToolCard}s. Last, at the foot, the <b>try strip</b>
+ * ({@link TestArea#strip}, Brush Lab's too: "Draw here to try Fill in" and Clear over the test page, drawing with the
+ * selected slot's tool at its size and grey). Stacked in portrait; in landscape the slots' row spans the page, the name
+ * row over the try strip a column at the left under it. Every size is {@link ToolsLayout}'s. No Undo (the drawing screen's takes each change
+ * back), no Load Kit (Kits in the filter row); Tools First (the picker's foot row) in the bar only while it is on, the
+ * one way to turn it off then.
  * <p>
  * Tap a slot, then a card (the owner: "click a slot and then click an option from library"): the card's brush is the
  * slot's here (its card underlined, its slot showing it, the page staying to try it), its size following it; an unsaved
- * brush it replaces is kept in Recent, said in the scratch pad's corner ({@link ToolsPage#note}). Undo takes each back,
- * in any slot; Back takes each slot its tool. A long press on a saved card deletes it, asked in the chips' place. The
- * drawing screen makes the changes ({@link #BRUSHES}: an Undo step each there), selects the slot selected here, and
- * opens Brush Lab after when asked ({@link #LAB}); Brush Lab's Back comes here again, the slots' start carried through
- * ({@link #START}). Turned as the drawing is ({@link #TURN}). Everything it does is {@link ToolsPage}'s; nothing
- * scrolls, and only what changed is drawn again (e-ink).
+ * brush it replaces is kept in Recent, said in the bar ({@link ToolsPage#note}). Back takes each slot its tool. A long
+ * press on a saved card deletes it, asked in the search's place. The drawing screen makes the changes ({@link #BRUSHES}:
+ * an Undo step each there), selects the slot selected here, and opens Brush Lab after when asked ({@link #LAB}); Brush
+ * Lab's Back comes here again, the slots' start carried through ({@link #START}). Turned as the drawing is ({@link
+ * #TURN}). Everything it does is {@link ToolsPage}'s; nothing scrolls, and only what changed is drawn again (e-ink).
  */
 public final class ToolsActivity extends Activity {
     /**
      * Extras: the slot it opens on, and the drawing screen's turn in degrees; back, the slot selected, the brush to put
-     * in each slot (as {@link Brush#write}; null: unchanged), and whether to open Brush Lab on the selected slot, or on a
-     * new brush for it, or to cut the selected slot's Stamp a nib from the page (Cut Stamp, {@link StampNib}). Both ways,
-     * the slots' start ({@link ToolSlots.Start#write}; in: null when opened from the drawing screen).
+     * in each slot (as {@link Brush#write}; null: unchanged), and whether to open Brush Lab on the selected slot. Both
+     * ways, the slots' start ({@link ToolSlots.Start#write}; in: null when opened from the drawing screen).
      */
-    static final String SLOT = "slot", TURN = "turn", BRUSHES = "brushes", LAB = "lab", CUT = "cut", START = "start";
+    static final String SLOT = "slot", TURN = "turn", BRUSHES = "brushes", LAB = "lab", START = "start";
     /** In: when the drawing screen opened it ({@link SystemClock#uptimeMillis}), for the log's "Tools page shown in N ms". */
     static final String OPENED = "opened";
     /**
      * In: the note when the notebook's toolbar can't change ({@link NotebookRules#toolsFixed}; null: it can), and the
      * library card's screen that frees it ({@link NotebookRules#toolsSettings}, a {@link CardSheet.Screen} name; null:
-     * none, sealed). With a note the bar says it in place of "Tools", the library's cards are greyed and take no tap, New
-     * Brush and Undo go, and <b>Notebook Settings</b> takes the place of Undo. Back, SETTINGS says to open that screen.
+     * none, sealed). With a note the bar says it in place of the title, its line empty, the library's cards are greyed
+     * and take no tap, and <b>Notebook Settings</b> shows in the bar. Back, SETTINGS says to open that screen.
      */
     static final String FIXED = "fixed", SETTINGS = "settings";
     /**
-     * Tool kits ({@link ToolKits}). In: how many slots the bar shows ({@link NotebookOptions#slotsShown}) and whether the
-     * notebook's rules are locked (a kit can't then show more). Back: the count a kit raised it to (-1: unchanged), the
-     * eraser's kind a kit set (-1: unchanged), and whether the slots' changes are one Undo step there (a kit was loaded).
+     * Tool kits ({@link ToolKits}). In: how many slots the bar shows ({@link NotebookOptions#slotsShown}). Back: the count
+     * a kit raised it to (-1: unchanged), the eraser's kind a kit set (-1: unchanged), and whether the slots' changes are
+     * one Undo step there (a kit was loaded).
      */
     static final String BAR = "bar", ERASER = "eraser", TOGETHER = "together";
     /** The note, or null, and the screen Notebook Settings opens, or null. */
@@ -79,30 +80,32 @@ public final class ToolsActivity extends Activity {
     private FrameLayout root;
     /** When the page was opened, until its first frame is drawn (then 0). */
     private long opened;
-    /** The scratch pad, Brush Lab's test page, drawing with the tool as it stands. */
+    /** The try strip's test page, drawing with the tool as it stands. */
     private TestArea test;
-    private LabButton undo;
-    /** The ten slots. */
+    /** The bar's line: the page's job, or a change's note for a moment. */
+    private TextView job;
+    /** The slots' tiles. */
     private final ToolCard[] slotCards = new ToolCard[ToolSlots.COUNT];
-    /** The scratch pad's words: the tool's name and line in its foot, a change's note; and what they show, to draw them again only when that changes. */
-    private TextView toolName, toolLine, note;
+    /** The name row's words: the tool's name and line; and what they show, to draw them again only when that changes. */
+    private TextView toolName, toolLine;
+    private LabButton reset;
     private String toolShown;
-    /** In the scratch pad's corner: Back to (the slot's first brush), Cut Stamp (a Stamp's) and Load Kit (a kit's brush). */
-    private LabButton backTo, cut, kitButton;
     /** The kit sheet over the page while open, else null. */
     private View sheet;
-    // The tabs, the pages, the chips (or a delete's question in their place), the grid and its cards, and what they show.
-    private final TextView[] tabs = new TextView[ToolsPage.Tab.values().length];
+    // The search's row (Search, or its field, or a delete's question), the pages, the chips, the grid and its cards, and what they show.
+    private LabButton find;
     private LinearLayout pager, question;
     private LabUi.Wrap chips;
+    /** More Brushes, the shelf's chip, beside Search (the release pare-down, 2026-11-05). */
+    private TextView more;
     private TextView empty;
     private LinearLayout grid;
-    private String chipsShown, gridShown, pagesShown;
+    private String chipsShown, findShown, gridShown, pagesShown;
     private List<ToolsPage.Card> shown = Collections.emptyList();
     private ToolCard[] cards = new ToolCard[0];
-    /** The saved card whose delete waits for an answer in the chips' place, or null. */
+    /** The saved card whose delete waits for an answer in the search's place, or null. */
     private ToolsPage.Card confirming;
-    /** The search's line in the chips' place (its field and ×), and whether it is open. */
+    /** The search's field and ×, in Search's place, and whether it is open. */
     private LinearLayout searchRow;
     private EditText searchField;
     private boolean searchOpen;
@@ -147,28 +150,47 @@ public final class ToolsActivity extends Activity {
     }
 
     /**
-     * Lays the page out for the screen: the bar, then the scratch pad and the slots, then the Library (portrait: stacked;
-     * landscape: side by side). The scratch pad keeps what is drawn on it. Whether it did (not with no size yet).
+     * Lays the page out for the screen: the bar, the slots' row, then the name row, the Library and the try strip
+     * (portrait: stacked; landscape: side by side). The try strip keeps what is drawn on it. Whether it did (not with no
+     * size yet).
      */
     private boolean build() {
         int width = dpOf(root.getWidth()), height = dpOf(root.getHeight());
         if (width <= 0 || height <= 0 || isFinishing()) return false;
         layout = new ToolsLayout(width, height);
-        page.layout(layout.perPage(), layout.columns, layout.cardWidth);
+        page.layout(layout.perPage(), layout.cardWidth);
         test.pad.disconnect();
         root.removeAllViews();
         sheet = null;
-        toolShown = null; chipsShown = null; gridShown = null; pagesShown = null;
+        toolShown = null; chipsShown = null; findShown = null; gridShown = null; pagesShown = null;
         LinearLayout column = LabUi.column(this);
         column.addView(bar(), new LinearLayout.LayoutParams(-1, dp(ToolsLayout.BAR)));
+        int side = dp(layout.side);
+        LinearLayout.LayoutParams slotsPlace = new LinearLayout.LayoutParams(-1, dp(layout.slotCard));
+        slotsPlace.setMargins(side, dp(layout.gap), side, dp(layout.gap));
+        column.addView(slots(), slotsPlace);
         LinearLayout main = layout.wide ? LabUi.row(this) : LabUi.column(this);
         main.setGravity(Gravity.TOP);
-        int side = dp(layout.side);
         main.setPadding(side, 0, side, side);
-        main.addView(tools(), layout.wide ? new LinearLayout.LayoutParams(dp(layout.top), -1) : new LinearLayout.LayoutParams(-1, -2));
+        View named = named(), strip = test.strip(ToolsLayout.TRY_HEAD, 0, 8);
         LinearLayout.LayoutParams place = layout.wide ? new LinearLayout.LayoutParams(0, -1, 1) : new LinearLayout.LayoutParams(-1, 0, 1);
-        if (layout.wide) place.leftMargin = dp(layout.apart); else place.topMargin = dp(layout.apart);
-        main.addView(library(), place);
+        if (layout.wide) {
+            // Landscape: the name row over the try strip at the left, the Library beside them.
+            LinearLayout left = LabUi.column(this);
+            left.addView(named, new LinearLayout.LayoutParams(-1, dp(ToolsLayout.NAME_ROW)));
+            left.addView(strip, new LinearLayout.LayoutParams(-1, dp(ToolsLayout.TRY_HEAD + layout.testHeight)));
+            main.addView(left, new LinearLayout.LayoutParams(dp(layout.top), -1));
+            place.leftMargin = dp(layout.apart);
+            main.addView(library(), place);
+        } else {
+            // Portrait: the name row, the Library, then the try strip at the foot (the owner: "move the preview area to the bottom").
+            main.addView(named, new LinearLayout.LayoutParams(-1, dp(ToolsLayout.NAME_ROW)));
+            place.topMargin = dp(layout.apart);
+            main.addView(library(), place);
+            LinearLayout.LayoutParams stripPlace = new LinearLayout.LayoutParams(-1, dp(ToolsLayout.TRY_HEAD + layout.testHeight));
+            stripPlace.topMargin = dp(layout.gap);
+            main.addView(strip, stripPlace);
+        }
         column.addView(main, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(column, new FrameLayout.LayoutParams(-1, -1));
         render();
@@ -176,47 +198,44 @@ public final class ToolsActivity extends Activity {
         test.pad.post(test.pad::connect);
         return true;
     }
-    /** The scratch pad, then the label Toolbar over the ten slots. */
-    private View tools() {
-        LinearLayout box = LabUi.column(this);
-        LinearLayout.LayoutParams padPlace = new LinearLayout.LayoutParams(-1, dp(layout.testHeight));
-        padPlace.topMargin = dp(layout.gap);
-        box.addView(pad(), padPlace);
-        FrameLayout head = new FrameLayout(this);
-        TextView label = small(ToolsLayout.TOOLBAR);
-        label.setGravity(Gravity.BOTTOM | Gravity.START);
-        label.setPadding(0, 0, 0, dp(layout.gap / 2f));
-        head.addView(label, new FrameLayout.LayoutParams(-1, -1));
-        // Tools First at its right, a chip filled while on (the picker's switch too): a slot's long press opens this page.
-        PaintPreferences prefs = new PaintPreferences(getSharedPreferences(PaintPreferences.FILE, MODE_PRIVATE));
-        TextView first = chip(DrawLayout.TOOLS_FIRST, prefs.toolsFirst());
-        first.setOnClickListener(v -> {
-            boolean on = !prefs.toolsFirst();
-            prefs.setToolsFirst(on);
-            chip(first, on);
-        });
-        FrameLayout.LayoutParams firstPlace = new FrameLayout.LayoutParams(-2, dp(ToolsLayout.CHIP), Gravity.BOTTOM | Gravity.END);
-        firstPlace.bottomMargin = dp(layout.switchFoot());
-        head.addView(first, firstPlace);
-        box.addView(head, new LinearLayout.LayoutParams(-1, dp(layout.label)));
-        LinearLayout slots = LabUi.column(this);
-        for (int r = 0; r < ToolsLayout.SLOT_ROWS; r++) {
-            LinearLayout row = LabUi.row(this);
-            for (int c = 0; c < layout.slotColumns; c++) {
-                int slot = r * layout.slotColumns + c;
-                ToolCard card = new ToolCard(this, samples);
-                card.setOnClickListener(v -> { test.pad.finishStroke(); page.select(slot); render(); });
-                slotCards[slot] = card;
-                LinearLayout.LayoutParams cell = new LinearLayout.LayoutParams(0, -1, 1);
-                if (c > 0) cell.leftMargin = dp(layout.gap);
-                row.addView(card, cell);
-            }
-            LinearLayout.LayoutParams rowPlace = new LinearLayout.LayoutParams(-1, dp(layout.slotCard));
-            if (r > 0) rowPlace.topMargin = dp(layout.gap);
-            slots.addView(row, rowPlace);
+    /** The slots, one row of tiles across the page (the owner, 2026-11-03: "all on one line"). */
+    private View slots() {
+        LinearLayout row = LabUi.row(this);
+        for (int slot = 0; slot < layout.slotCount; slot++) {
+            int i = slot;
+            ToolCard card = new ToolCard(this, samples).tile();
+            card.setOnClickListener(v -> { test.pad.finishStroke(); page.select(i); render(); });
+            slotCards[slot] = card;
+            LinearLayout.LayoutParams cell = new LinearLayout.LayoutParams(0, -1, 1);
+            if (slot > 0) cell.leftMargin = dp(layout.slotGap);
+            row.addView(card, cell);
         }
-        box.addView(slots, new LinearLayout.LayoutParams(-1, dp(layout.slots)));
-        return box;
+        return row;
+    }
+    /** The selected slot's tool named, with Edit in Brush Lab at the row's right (Reset to Default before it, for an edited Basic tool). */
+    private View named() {
+        // The tool: its name bold, then its one line, grey ("Fill in · fills shapes"); Edit in Brush Lab at the right.
+        LinearLayout named = LabUi.row(this);
+        toolName = LabUi.text(this, "", TypeStyle.CAPTION);
+        toolName.setTypeface(Theme.face(700));
+        toolName.setSingleLine(true);
+        toolName.setEllipsize(TextUtils.TruncateAt.END);
+        named.addView(toolName, new LinearLayout.LayoutParams(-2, -2));
+        toolLine = LabUi.text(this, "", TypeStyle.CAPTION);
+        toolLine.setTextColor(Theme.GREY_800);
+        toolLine.setSingleLine(true);
+        toolLine.setEllipsize(TextUtils.TruncateAt.END);
+        named.addView(toolLine, new LinearLayout.LayoutParams(0, -2, 1));
+        // Reset to Default, plain words, while the tool is a Basic tool changed in Brush Lab (the tool picker's top row).
+        reset = new LabButton(this, 0, DrawLayout.RESET, false).quiet();
+        reset.setOnClickListener(v -> { ToolPresets.Preset p = page.edited(); if (p != null) pick(p.brush()); });
+        named.addView(reset, new LinearLayout.LayoutParams(-2, -1));
+        // Brush Lab on the slot's brush, boxed, saying what it does (the owner: "brush lab button on top right (if you're not familiar)").
+        LabButton lab = new LabButton(this, R.drawable.ic_ph_flask, ToolsLayout.LAB, false);
+        lab.setBackground(Theme.rounded(this, Theme.PAPER, Theme.BASE, Theme.INK, ToolsLayout.PAD_RADIUS));
+        lab.setOnClickListener(v -> leave(true));
+        named.addView(lab, LabUi.after(this, -2, 40, layout.gap));
+        return named;
     }
     /** Slot {@code i}'s tile as the page stands: its picture (kept by its brush, its size and the art box) and its name. */
     static void showSlot(ToolCard card, ToolsLayout layout, ToolsPage page, int i) {
@@ -232,17 +251,17 @@ public final class ToolsActivity extends Activity {
     }
     /**
      * Draws ahead, on {@code samples}' thread, the pictures the page would open with on slot {@code slot} on a {@code width
-     * × height} dp screen: the ten slots and the first page of the tab and chip last chosen, kept for it ({@link ToolCard});
+     * × height} dp screen: the nine slots and the first page of the chip last chosen, kept for it ({@link ToolCard});
      * those kept already cost nothing. The owner, 2026-10-28: slow "just on the first load", because of the pictures.
      */
     static void warm(Context context, SampleQueue samples, ToolSlots slots, BrushLibrary.Store store, int slot, int width, int height) {
         ToolsLayout layout = new ToolsLayout(width, height);
         ToolsPage page = new ToolsPage(slots, store, Math.max(0, Math.min(ToolSlots.COUNT - 1, slot)));
-        page.layout(layout.perPage(), layout.columns, layout.cardWidth);
+        page.layout(layout.perPage(), layout.cardWidth);
         for (int i = 0; i < layout.slotCount; i++) showSlot(new ToolCard(context, samples), layout, page, i);
-        for (ToolsPage.Card card : page.cards()) if (card != null) showCard(new ToolCard(context, samples), layout, card);
+        for (ToolsPage.Card card : page.cards()) showCard(new ToolCard(context, samples), layout, card);
     }
-    /** Small grey words ({@link TypeStyle#CAPTION}, grey-800, one line): the Toolbar label, the pages' count, a note. */
+    /** Small grey words ({@link TypeStyle#CAPTION}, grey-800, one line): the pages' count. */
     private TextView small(String words) {
         TextView view = LabUi.text(this, words, TypeStyle.CAPTION);
         view.setTextColor(Theme.GREY_800);
@@ -259,20 +278,12 @@ public final class ToolsActivity extends Activity {
             Brush brush = page.current(i);
             ToolCard card = slotCards[i];
             showSlot(card, layout, page, i);
-            card.setNow(i == selected);
             card.setChosen(i == selected);
             card.setChanged(page.changed(i));
-            card.setContentDescription(brush.name() + (i == selected ? ", selected" : "") + (page.changed(i) ? ", changed" : ""));
+            card.setContentDescription(brush.shownName() + (i == selected ? ", selected" : "") + (page.changed(i) ? ", changed" : ""));
         }
         renderTool();
-        if (undo.isEnabled() != page.canUndo()) undo.setEnabled(page.canUndo());
-        for (ToolsPage.Tab t : ToolsPage.Tab.values()) {
-            // None chosen while a search shows every tab's finds.
-            boolean on = t == page.tab() && !page.searching();
-            tabs[t.ordinal()].setTypeface(Theme.face(on ? 700 : 400));
-            tabs[t.ordinal()].setBackground(on ? Theme.underlined(this) : null);
-            tabs[t.ordinal()].setContentDescription(t.label + (on ? ", chosen" : ""));
-        }
+        renderFind();
         renderChips();
         renderPages();
         renderGrid();
@@ -280,158 +291,80 @@ public final class ToolsActivity extends Activity {
 
     // The bar
 
-    /** Back (the caret and its word, first at the left), "Tools" (bold), then Undo (plain words; its icon only on the Nomad) and Brush Lab, boxed. */
+    /** The page's bar: Back, the title over its job (a fixed toolbar's note in the title's place), then Notebook Settings for a fixed one. */
     private View bar() {
-        LinearLayout bar = LabUi.row(this);
-        bar.setPadding(dp(layout.side), 0, dp(layout.side), 0);
-        // The owner: "back button should be clearly visible.. sometimes it gets lost".
-        LabButton back = LabButton.back(this);
-        back.setOnClickListener(v -> leave(false, false));
-        bar.addView(back, new LinearLayout.LayoutParams(-2, dp(44)));
         // A fixed toolbar: its note in the title's place, so the page never seems to take a pick it won't keep.
-        TextView title = LabUi.text(this, fixed != null ? fixed : ToolsLayout.TITLE, fixed != null ? TypeStyle.BODY : TypeStyle.HEADING);
-        title.setSingleLine(true);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        title.setGravity(Gravity.CENTER_VERTICAL);
-        if (fixed != null) { LinearLayout.LayoutParams rest = new LinearLayout.LayoutParams(0, dp(44), 1); rest.leftMargin = dp(10); bar.addView(title, rest); }
-        else { bar.addView(title, LabUi.after(this, -2, 44, 10)); LabUi.spring(bar); }
+        LabUi.PageBar bar = new LabUi.PageBar(this, layout.side, "Back", fixed != null ? fixed : ToolsLayout.TITLE, fixed != null ? "" : ToolsLayout.JOB);
+        if (fixed != null) Theme.style(bar.title, TypeStyle.BODY);
+        bar.back.setOnClickListener(v -> leave(false));
+        job = bar.line;
         if (settings != null) {
             LabButton open = new LabButton(this, 0, NotebookRules.NOTEBOOK_SETTINGS, false);
-            open.setOnClickListener(v -> leave(false, false, true));
-            bar.addView(open, LabUi.after(this, -2, 40, 10));
+            open.setOnClickListener(v -> leave(false, true));
+            bar.view.addView(open, LabUi.after(this, -2, 40, 10));
         }
-        // Greyed with nothing to undo, as Brush Lab's.
-        undo = new LabButton(this, R.drawable.ic_ph_undo, layout.compact ? null : ToolsLayout.UNDO, false);
-        undo.setContentDescription("Undo");
-        undo.setEnabled(page.canUndo());
-        undo.setOnClickListener(v -> { test.pad.finishStroke(); closeKit(); page.undo(); render(); });
-        // Nothing to undo where nothing is picked.
-        if (fixed == null) bar.addView(undo, LabUi.after(this, layout.compact ? dp(44) : -2, 40, 10));
-        // Brush Lab on the slot's brush, boxed (the owner's mockup; Tweak in Brush Lab, ink-filled, until 2026-10-28).
-        LabButton lab = new LabButton(this, R.drawable.ic_ph_flask, ToolsLayout.LAB, false);
-        lab.setBackground(Theme.rounded(this, Theme.PAPER, Theme.BASE, Theme.INK, ToolsLayout.PAD_RADIUS));
-        lab.setOnClickListener(v -> leave(true, false));
-        bar.addView(lab, LabUi.after(this, -2, 40, 10));
-        return bar;
+        // Hold Opens Full Library is the picker's foot row's checkbox; while it is ticked the long press skips the picker, so
+        // only here, and only then, can it be unticked again (Brush Lab's As New's box).
+        PaintPreferences prefs = new PaintPreferences(getSharedPreferences(PaintPreferences.FILE, MODE_PRIVATE));
+        if (prefs.toolsFirst()) {
+            LabButton first = new LabButton(this, 0, DrawLayout.TOOLS_FIRST, false).ticked(true);
+            first.setOnClickListener(v -> {
+                boolean on = !prefs.toolsFirst();
+                prefs.setToolsFirst(on);
+                first.ticked(on);
+            });
+            bar.view.addView(first, LabUi.after(this, -2, 40, 10));
+        }
+        return bar.view;
     }
-
-    // The scratch pad
-
-    /**
-     * The scratch pad: the test page in a rounded {@link Theme#BASE} dp ink box; in its corner small grey words, Back to,
-     * Load Kit and Cut Stamp while the tool has them, Clear, and the wet drop; a change's note at its other corner; the
-     * tool's name (bold) and its line in its foot.
-     */
-    private View pad() {
-        FrameLayout box = new FrameLayout(this);
-        box.setBackground(Theme.rounded(this, Theme.PAPER, Theme.BASE, Theme.INK, ToolsLayout.PAD_RADIUS));
-        // Inside the rounded corners: the page's own corners stay off the edge.
-        int inset = dp(Theme.BASE + 1);
-        box.setPadding(inset, inset, inset, inset);
-        Ui.detach(test.pad);
-        box.addView(test.pad, new FrameLayout.LayoutParams(-1, -1));
-        int gap = dp(layout.gap);
-        // Across the top: the note in what the corner's words leave, then the corner's words.
-        LinearLayout corner = LabUi.row(this);
-        note = small("");
-        note.setGravity(Gravity.CENTER_VERTICAL);
-        corner.addView(note, new LinearLayout.LayoutParams(0, -1, 1));
-        backTo = new LabButton(this, 0, "", false).quiet();
-        backTo.setEllipsize(TextUtils.TruncateAt.END);
-        backTo.setMaxWidth(dp(layout.backToWidth()));
-        backTo.setOnClickListener(v -> { test.pad.finishStroke(); if (page.restore()) { sayNote(); render(); } });
-        kitButton = new LabButton(this, 0, ToolKits.LOAD, false).quiet();
-        kitButton.setOnClickListener(v -> { ToolKits.Kit k = page.kit(); if (k != null) openKit(k); });
-        cut = new LabButton(this, 0, StampNib.CUT, false).quiet();
-        cut.setOnClickListener(v -> leave(false, true));
-        for (View v : new View[]{backTo, kitButton, cut, test.clear(8).quiet()}) corner.addView(v, new LinearLayout.LayoutParams(-2, -1));
-        corner.addView(test.wet(), new LinearLayout.LayoutParams(dp(layout.wet()), -1));
-        FrameLayout.LayoutParams cornerPlace = new FrameLayout.LayoutParams(-1, dp(ToolsLayout.PAD_ROW), Gravity.TOP);
-        cornerPlace.leftMargin = gap;
-        cornerPlace.rightMargin = gap / 2;
-        box.addView(corner, cornerPlace);
-        // The tool: its name bold, then its one line, grey (the owner's mockup: "Steady line · even and crisp").
-        LinearLayout words = LabUi.row(this);
-        words.setGravity(Gravity.BOTTOM);
-        toolName = LabUi.text(this, "", TypeStyle.CAPTION);
-        toolName.setTypeface(Theme.face(700));
-        toolName.setSingleLine(true);
-        toolName.setEllipsize(TextUtils.TruncateAt.END);
-        toolName.setMaxWidth(dp(layout.padRoom() * 2 / 3f));
-        words.addView(toolName, new LinearLayout.LayoutParams(-2, -2));
-        toolLine = small("");
-        words.addView(toolLine, new LinearLayout.LayoutParams(0, -2, 1));
-        FrameLayout.LayoutParams wordsPlace = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.START);
-        wordsPlace.setMargins(gap, 0, gap, gap);
-        box.addView(words, wordsPlace);
-        return box;
-    }
-    private final Runnable noteGone = () -> note.setText("");
-    /** The note the page's last change left, if any, for {@link DrawLayout#NOTE_MS}; no animation. */
+    private final Runnable noteGone = () -> job.setText(fixed != null ? "" : ToolsLayout.JOB);
+    /** The note the page's last change left, if any, in the job's line for {@link DrawLayout#NOTE_MS}; no animation. */
     private void sayNote() {
         String said = page.note();
         if (said == null) return;
-        note.setText(said);
+        job.setText(said);
         root.removeCallbacks(noteGone);
         root.postDelayed(noteGone, DrawLayout.NOTE_MS);
         root.announceForAccessibility(said);
     }
-    /** The scratch pad's words: the tool's name and line, drawn again only when the tool changed; its corner's words as the brush has them. */
+
+    // The name row and the try strip
+
+    /** The name row's words and the try strip's: the tool's name and line, drawn again only when the tool changed. */
     private void renderTool() {
         Brush brush = page.current();
-        int cuts = brush.parts.stamps() ? View.VISIBLE : View.GONE;
-        if (cut.getVisibility() != cuts) cut.setVisibility(cuts);
-        // The owner, 2026-10-22: "maybe sumi tools load several tools in your toolbar". Shown while the brush is in a kit.
-        ToolKits.Kit kit = page.kit();
-        int kits = kit != null ? View.VISIBLE : View.GONE;
-        if (kitButton.getVisibility() != kits) kitButton.setVisibility(kits);
-        if (kit != null) kitButton.setContentDescription("Load the " + kit.name + " kit");
-        // Back to the slot's first brush, once it holds another (the owner: "an easy way").
-        int back = page.changed(page.slot()) && fixed == null ? View.VISIBLE : View.GONE;
-        String backSaid = ToolsLayout.BACK_TO + page.started().name();
-        if (!backSaid.contentEquals(backTo.getText())) { backTo.setText(backSaid); backTo.setContentDescription(backSaid); }
-        if (backTo.getVisibility() != back) backTo.setVisibility(back);
         if (brush.identity().equals(toolShown)) return;
         toolShown = brush.identity();
-        ToolsPage.Card card = ToolsPage.card(brush, layout.padRoom() / 2f);
+        boolean edited = page.edited() != null;
+        reset.setVisibility(edited ? View.VISIBLE : View.GONE);
+        // While Reset to Default shows, the line gives way first (the Nomad turned has room for a short name alone).
+        toolName.setMaxWidth(dp(edited ? layout.nameRoom(true) : layout.nameRoom() * 2 / 3f));
+        ToolsPage.Card card = ToolsPage.card(brush, layout.nameRoom() / 2f);
         toolName.setText(card.name);
         // Its line, unless it only says the name again (a style's own brush: "Fineliner", "Fineliner").
         boolean line = !card.line.isEmpty() && !card.line.equalsIgnoreCase(card.name);
         toolLine.setText(line ? " · " + card.line : "");
         toolName.setContentDescription(card.name + ": " + BrushVoice.about(brush.parts));
+        test.label(card.name);
     }
 
     // Library
 
-    /** The Library: the tabs with the pages at their right, the chips (or a delete's question), and the grid. */
+    /** The Library: Search (or its field, or a delete's question) with the pages at the row's right, the chips, and the grid. */
     private View library() {
         LinearLayout box = LabUi.column(this);
         LinearLayout head = LabUi.row(this);
-        for (ToolsPage.Tab t : ToolsPage.Tab.values()) {
-            TextView tab = LabUi.text(this, t.label, TypeStyle.BODY);
-            tab.setSingleLine(true);
-            tab.setGravity(Gravity.CENTER);
-            tab.setOnClickListener(v -> { test.pad.finishStroke(); confirming = null; closeSearch(); page.tab(t); render(); });
-            tabs[t.ordinal()] = tab;
-            head.addView(tab, LabUi.after(this, -2, ToolsLayout.TAB - 6, t.ordinal() == 0 ? 0 : layout.tabGap()));
-        }
-        LabUi.spring(head);
-        LabButton find = LabButton.headIcon(this, R.drawable.ic_ph_magnifying_glass, "Search");
+        FrameLayout swap = new FrameLayout(this);
+        find = new LabButton(this, R.drawable.ic_ph_magnifying_glass, ToolsLayout.SEARCH, false);
         find.setOnClickListener(v -> openSearch());
-        head.addView(find, new LinearLayout.LayoutParams(dp(ToolsLayout.PAGE_BUTTON), -1));
-        pager = LabUi.row(this);
-        head.addView(pager, new LinearLayout.LayoutParams(-2, -1));
-        box.addView(head, new LinearLayout.LayoutParams(-1, dp(ToolsLayout.TAB)));
-        FrameLayout chipsBox = new FrameLayout(this);
-        chips = new LabUi.Wrap(this, dp(layout.chipGap()));
-        chipsBox.addView(chips, new FrameLayout.LayoutParams(-1, -2));
+        swap.addView(find, new FrameLayout.LayoutParams(-2, -1, Gravity.START | Gravity.CENTER_VERTICAL));
         question = LabUi.row(this);
-        chipsBox.addView(question, new FrameLayout.LayoutParams(-1, dp(ToolsLayout.CHIP)));
-        // The search: one line in a chip's rounded edge, then × to close it (the chips again).
+        swap.addView(question, new FrameLayout.LayoutParams(-1, -1));
+        // The search: one line in a chip's rounded edge, then × to close it.
         searchRow = LabUi.row(this);
         searchField = Theme.style(new EditText(this), TypeStyle.CAPTION);
         searchField.setSingleLine(true);
-        searchField.setHint("Search");
+        searchField.setHint(ToolsLayout.SEARCH);
         searchField.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         // The keyboard's Search key: the finds now, the keyboard down to see the grid.
         searchField.setOnEditorActionListener((v, action, event) -> { root.removeCallbacks(searchNow); searchNow.run(); keyboard(false); return true; });
@@ -444,12 +377,22 @@ public final class ToolsActivity extends Activity {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) { root.removeCallbacks(searchNow); root.postDelayed(searchNow, SEARCH_MS); }
         });
-        searchRow.addView(searchField, new LinearLayout.LayoutParams(0, -1, 1));
+        searchRow.addView(searchField, new LinearLayout.LayoutParams(0, dp(ToolsLayout.CHIP), 1));
         LabButton close = LabButton.icon(this, R.drawable.ic_ph_x, "Close search");
         close.setOnClickListener(v -> { closeSearch(); render(); });
         searchRow.addView(close, LabUi.after(this, ToolsLayout.CHIP, ToolsLayout.CHIP, 6));
-        chipsBox.addView(searchRow, new FrameLayout.LayoutParams(-1, dp(ToolsLayout.CHIP)));
-        box.addView(chipsBox, new LinearLayout.LayoutParams(-1, dp(layout.chips())));
+        swap.addView(searchRow, new FrameLayout.LayoutParams(-1, -1));
+        head.addView(swap, new LinearLayout.LayoutParams(0, -1, 1));
+        more = chip(ToolsPage.Chip.MORE.label, false);
+        LinearLayout.LayoutParams morePlace = new LinearLayout.LayoutParams(-2, dp(ToolsLayout.CHIP));
+        morePlace.gravity = Gravity.CENTER_VERTICAL;
+        morePlace.leftMargin = dp(layout.chipGap());
+        head.addView(more, morePlace);
+        pager = LabUi.row(this);
+        head.addView(pager, new LinearLayout.LayoutParams(-2, -1));
+        box.addView(head, new LinearLayout.LayoutParams(-1, dp(ToolsLayout.FIND)));
+        chips = new LabUi.Wrap(this, dp(layout.chipGap()));
+        box.addView(chips, new LinearLayout.LayoutParams(-1, dp(layout.chips())));
         FrameLayout gridBox = new FrameLayout(this);
         grid = LabUi.column(this);
         gridBox.addView(grid, new FrameLayout.LayoutParams(-1, -2));
@@ -465,45 +408,48 @@ public final class ToolsActivity extends Activity {
         box.addView(gridBox, gridPlace);
         return box;
     }
-    /**
-     * The chips the open tab has ({@link ToolsPage#chipsShown}; none under Kits), rounded, the chosen one filled; or,
-     * while a saved card's delete waits, "Delete Name?", Delete and Keep in their place. Drawn again only when that changes.
-     */
+    /** The search's row: Search; its field while open; or, while a saved card's delete waits, "Delete Name?", Delete and Keep. Drawn again only when that changes. */
+    private void renderFind() {
+        String key = confirming != null ? "delete " + confirming.brush.identity() : searchOpen ? "search" : "find";
+        if (key.equals(findShown)) return;
+        findShown = key;
+        find.setVisibility(confirming == null && !searchOpen ? View.VISIBLE : View.GONE);
+        more.setVisibility(confirming == null && !searchOpen ? View.VISIBLE : View.GONE);
+        searchRow.setVisibility(confirming == null && searchOpen ? View.VISIBLE : View.GONE);
+        question.setVisibility(confirming == null ? View.GONE : View.VISIBLE);
+        question.removeAllViews();
+        if (confirming == null) return;
+        TextView asked = LabUi.text(this, "Delete " + confirming.name + "?", TypeStyle.BODY);
+        asked.setTypeface(Theme.face(700));
+        asked.setSingleLine(true); asked.setEllipsize(TextUtils.TruncateAt.END);
+        question.addView(asked, new LinearLayout.LayoutParams(0, -2, 1));
+        LabButton delete = new LabButton(this, R.drawable.ic_ph_trash, "Delete", false);
+        delete.setMinHeight(0); delete.setMinimumHeight(0);
+        delete.setOnClickListener(v -> { ToolsPage.Card card = confirming; confirming = null; page.delete(card); render(); });
+        question.addView(delete, LabUi.after(this, -2, ToolsLayout.CHIP, 10));
+        LabButton keep = new LabButton(this, 0, "Keep", false);
+        keep.setMinHeight(0); keep.setMinimumHeight(0);
+        keep.setOnClickListener(v -> { confirming = null; render(); });
+        question.addView(keep, LabUi.after(this, -2, ToolsLayout.CHIP, 6));
+    }
+    /** The filter row's chips and More Brushes, rounded, the chosen one filled (none while searching). Drawn again only when that changes. */
     private void renderChips() {
-        List<ToolsPage.Chip> now = page.chipsShown();
-        String key = confirming != null ? "delete " + confirming.brush.identity() : searchOpen ? "search" : page.tab() + " " + page.filter() + " " + now;
+        String key = page.filter() + " " + page.searching();
         if (key.equals(chipsShown)) return;
         chipsShown = key;
         chips.removeAllViews();
-        question.removeAllViews();
-        chips.setVisibility(confirming == null && !searchOpen ? View.VISIBLE : View.GONE);
-        question.setVisibility(confirming == null ? View.GONE : View.VISIBLE);
-        searchRow.setVisibility(confirming == null && searchOpen ? View.VISIBLE : View.GONE);
-        if (searchOpen) return;
-        if (confirming != null) {
-            TextView asked = LabUi.text(this, "Delete " + confirming.name + "?", TypeStyle.BODY);
-            asked.setTypeface(Theme.face(700));
-            asked.setSingleLine(true); asked.setEllipsize(TextUtils.TruncateAt.END);
-            question.addView(asked, new LinearLayout.LayoutParams(0, -2, 1));
-            LabButton delete = new LabButton(this, R.drawable.ic_ph_trash, "Delete", false);
-            delete.setMinHeight(0); delete.setMinimumHeight(0);
-            delete.setOnClickListener(v -> { ToolsPage.Card card = confirming; confirming = null; page.delete(card); render(); });
-            question.addView(delete, LabUi.after(this, -2, ToolsLayout.CHIP, 10));
-            LabButton keep = new LabButton(this, 0, "Keep", false);
-            keep.setMinHeight(0); keep.setMinimumHeight(0);
-            keep.setOnClickListener(v -> { confirming = null; render(); });
-            question.addView(keep, LabUi.after(this, -2, ToolsLayout.CHIP, 6));
-            return;
-        }
-        for (ToolsPage.Chip chip : now) {
-            boolean on = chip == page.filter();
-            TextView view = chip(chip.label, on);
-            view.setContentDescription(chip.label + (on ? ", chosen" : ""));
-            view.setOnClickListener(v -> { test.pad.finishStroke(); confirming = null; page.filter(chip); render(); });
-            chips.addView(view);
-        }
+        for (ToolsPage.Chip chip : ToolsLayout.rowChips()) chips.addView(chip(chip(chip.label, false), chip));
+        chip(more, ToolsPage.Chip.MORE);
     }
-    /** A chip: {@code label} (13 sp) in a rounded fine ink edge, filled while {@code on} (the chips, Tools First). */
+    /** {@code view} as {@code chip}'s: filled while chosen (not while searching), said so, a tap its cards. */
+    private TextView chip(TextView view, ToolsPage.Chip chip) {
+        boolean on = chip == page.filter() && !page.searching();
+        chip(view, on);
+        view.setContentDescription(chip.label + (on ? ", chosen" : ""));
+        view.setOnClickListener(v -> { test.pad.finishStroke(); confirming = null; closeSearch(); page.filter(chip); render(); });
+        return view;
+    }
+    /** A chip: {@code label} (13 sp) in a rounded fine ink edge, filled while {@code on}. */
     private TextView chip(String label, boolean on) {
         TextView view = LabUi.text(this, label, TypeStyle.CAPTION);
         view.setSingleLine(true);
@@ -513,14 +459,13 @@ public final class ToolsActivity extends Activity {
         view.setHeight(dp(ToolsLayout.CHIP));
         return chip(view, on);
     }
-    /** {@code view} as a chip on or off; said "on" or "off" (Tools First's, a switch). */
+    /** {@code view} as a chip on or off. */
     private TextView chip(TextView view, boolean on) {
         view.setTextColor(on ? Theme.ON_INK : Theme.INK);
         view.setBackground(Theme.rounded(this, on ? Theme.INK : Theme.PAPER, Theme.FINE, Theme.INK, ToolsLayout.CHIP / 2f));
-        view.setContentDescription(view.getText() + (on ? ", on" : ", off"));
         return view;
     }
-    /** At the tabs' right: "‹ 2 / 5 ›" (nothing while there is one page), drawn again only when that changes. */
+    /** At the search's right: "‹ 2 / 5 ›" (nothing while there is one page), drawn again only when that changes. */
     private void renderPages() {
         int pages = page.pages(), at = page.page();
         String key = pages > 1 ? (at + 1) + " / " + pages : "";
@@ -542,11 +487,11 @@ public final class ToolsActivity extends Activity {
         next.setOnClickListener(v -> { test.pad.finishStroke(); page.turn(1); render(); });
         pager.addView(next, new LinearLayout.LayoutParams(dp(ToolsLayout.PAGE_BUTTON), -1));
     }
-    /** The page of cards, row by row, a group's first row a little apart; or, with none, a short line. */
+    /** The page of cards, row by row; or, with none, a short line. */
     private void renderGrid() {
         List<ToolsPage.Card> now = page.cards();
         StringBuilder key = new StringBuilder();
-        for (ToolsPage.Card c : now) key.append(c == null ? "-" : c.brush.identity()).append('\n');
+        for (ToolsPage.Card c : now) key.append(c.brush.identity()).append('\n');
         if (!key.toString().equals(gridShown)) {
             gridShown = key.toString();
             shown = now;
@@ -558,7 +503,7 @@ public final class ToolsActivity extends Activity {
             empty.setText(none ? page.empty() : "");
             if (!none) fillGrid();
         }
-        for (int c = 0; c < shown.size(); c++) if (cards[c] != null) cards[c].setNow(page.now(shown.get(c)));
+        for (int c = 0; c < shown.size(); c++) cards[c].setNow(page.now(shown.get(c)));
     }
     private void fillGrid() {
         int columns = layout.columns;
@@ -575,14 +520,14 @@ public final class ToolsActivity extends Activity {
                     // A kit's card opens its sheet, which says why it won't load in a fixed toolbar.
                     if (card.kit != null) view.setOnClickListener(v -> openKit(card.kit));
                     else if (fixed == null) view.setOnClickListener(v -> pick(card.brush));
-                    if (fixed == null && page.deletable(card)) view.setOnLongClickListener(v -> { confirming = card; render(); return true; });
+                    if (fixed == null && page.deletable(card)) view.setOnLongClickListener(v -> { closeSearch(); confirming = card; render(); return true; });
                     cards[index] = view;
                     cell = view;
                 } else cell = new View(this);
                 row.addView(cell, new LinearLayout.LayoutParams(0, -1, 1));
             }
             LinearLayout.LayoutParams place = new LinearLayout.LayoutParams(-1, dp(layout.cardHeight));
-            if (r > 0) place.topMargin = dp(ToolsLayout.ROW_GAP + (page.opens(shown, r * columns) ? ToolsLayout.GROUP_GAP : 0));
+            if (r > 0) place.topMargin = dp(ToolsLayout.ROW_GAP);
             grid.addView(row, place);
         }
     }
@@ -592,7 +537,7 @@ public final class ToolsActivity extends Activity {
     /**
      * The kit's sheet over the page (the owner, 2026-10-22: "yes to kits"): its name, its intro, its steps in order
      * ("1 Drop ink", the Basic tool's name beside it), where it goes ("Fills the first 3 slots"), then Cancel and Load
-     * Kit; in a fixed toolbar the page's note in Load Kit's place, and on a locked bar too small for it the bar's note.
+     * Kit; in a fixed toolbar the page's note in Load Kit's place.
      * A tap outside closes it. The test page stops taking the pen while it is open.
      */
     private void openKit(ToolKits.Kit kit) {
@@ -663,7 +608,7 @@ public final class ToolsActivity extends Activity {
 
     // The search
 
-    /** The search's line in the chips' place, the keyboard up for it. */
+    /** The search's field in Search's place, the keyboard up for it. */
     private void openSearch() {
         test.pad.finishStroke();
         confirming = null;
@@ -672,7 +617,7 @@ public final class ToolsActivity extends Activity {
         searchField.requestFocus();
         keyboard(true);
     }
-    /** The search closed and cleared, the keyboard down: the open tab and its chips again. */
+    /** The search closed and cleared, the keyboard down: the chip's cards again. */
     private void closeSearch() {
         if (!searchOpen) return;
         searchOpen = false;
@@ -690,7 +635,7 @@ public final class ToolsActivity extends Activity {
 
     // Leaving
 
-    /** A card is the selected slot's tool now: underlined, its slot and the scratch pad showing it; the page stays. */
+    /** A card is the selected slot's tool now: underlined, its slot and the try strip showing it; the page stays. */
     private void pick(Brush brush) {
         test.pad.finishStroke();
         confirming = null;
@@ -698,23 +643,20 @@ public final class ToolsActivity extends Activity {
         sayNote();
         render();
     }
-    /**
-     * Back to the drawing with each slot's tool as it stands (null when unchanged) and the slot selected; then Brush Lab
-     * on it if {@code lab}, or the page's next pen stroke Cut Stamp's lasso if {@code cut}.
-     */
-    private void leave(boolean lab, boolean cut) { leave(lab, cut, false); }
-    /** As {@link #leave(boolean, boolean)}; {@code open}: to the library card's screen that frees the toolbar ({@link #SETTINGS}). */
-    private void leave(boolean lab, boolean cut, boolean open) {
+    /** Back to the drawing with each slot's tool as it stands (null when unchanged) and the slot selected; then Brush Lab on it if {@code lab}. */
+    private void leave(boolean lab) { leave(lab, false); }
+    /** As {@link #leave(boolean)}; {@code open}: to the library card's screen that frees the toolbar ({@link #SETTINGS}). */
+    private void leave(boolean lab, boolean open) {
         test.pad.finishStroke();
         Brush[] results = page.results();
         String[] written = new String[results.length];
         for (int i = 0; i < results.length; i++) written[i] = results[i] == null ? null : results[i].write();
-        setResult(RESULT_OK, new Intent().putExtra(SLOT, page.slot()).putExtra(BRUSHES, written).putExtra(LAB, lab).putExtra(CUT, cut).putExtra(START, page.start.write())
+        setResult(RESULT_OK, new Intent().putExtra(SLOT, page.slot()).putExtra(BRUSHES, written).putExtra(LAB, lab).putExtra(START, page.start.write())
                 .putExtra(SETTINGS, open ? settings : null).putExtra(BAR, page.barResult()).putExtra(ERASER, page.eraser()).putExtra(TOGETHER, page.together()));
         finish();
         overridePendingTransition(0, 0);
     }
-    @Override public void onBackPressed() { if (sheet != null) closeKit(); else leave(false, false); }
+    @Override public void onBackPressed() { if (sheet != null) closeKit(); else leave(false); }
     @Override protected void onResume() { super.onResume(); test.pad.opened(); if (sheet == null) test.pad.post(test.pad::connect); }
     @Override protected void onPause() { test.pad.disconnect(); super.onPause(); }
     @Override protected void onDestroy() { samples.close(); test.pad.close(); super.onDestroy(); }

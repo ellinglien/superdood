@@ -31,6 +31,18 @@ final class NotebookNames {
     static NotebookNames creating(LocalDate today, Random random, Predicate<String> taken) {
         return new NotebookNames(DrawingNames.notebook(today, random, taken), false, today);
     }
+    /**
+     * A notebook's name for a file called {@code file} brought in (the browser's Import, Share on Wi-Fi's upload): its
+     * name, any folders and its ending (.mpaint, a picture's or a PDF's) dropped, when it may be a notebook's; else a new
+     * notebook's. Not numbered yet where {@code taken} has it ({@link DrawingNames#unused}, {@code DrawingFiles.unusedName}).
+     */
+    static String imported(String file, LocalDate today, Random random, Predicate<String> taken) {
+        String base = file.substring(Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1), lower = base.toLowerCase(java.util.Locale.ROOT);
+        for (String ending : PictureImport.IMPORTABLE) if (lower.endsWith(ending)) base = base.substring(0, base.length() - ending.length());
+        if (lower.endsWith(DrawingFiles.EXTENSION)) base = base.substring(0, base.length() - DrawingFiles.EXTENSION.length());
+        base = NotebookMigration.safeName(base, "");
+        return base.isEmpty() || !DrawingNames.fits(base + " 99") ? creating(today, random, taken).base : base;
+    }
     /** Renaming the notebook named {@code name}. */
     static NotebookNames renaming(String name, LocalDate today) { return new NotebookNames(name, true, today); }
 
@@ -83,12 +95,12 @@ final class NotebookNames {
     /**
      * Why {@code name} (as stored) can't be the notebook's, or null when it can: signs a file name can't have, too long
      * for any tablet's shelf or title ({@link NotebookLayout#fits}), or another notebook's ({@code taken}; a rename may
-     * change only the case of its own name).
+     * change only the case of its own name; Favourites' name, in any case, is always taken: the star finds it by it).
      */
     String refused(String name, Predicate<String> taken) {
         if (!DrawingFiles.validName(name)) return DrawingFiles.nameRules(most());
         if (!NotebookLayout.fits(shown(name))) return TOO_LONG;
-        if (!(renaming && name.equalsIgnoreCase(base)) && taken.test(name)) return TAKEN;
+        if (!(renaming && name.equalsIgnoreCase(base)) && taken.test(name) || name.equalsIgnoreCase(NotebookStrip.FAVOURITES)) return TAKEN;
         return null;
     }
 }

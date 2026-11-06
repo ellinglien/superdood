@@ -6,54 +6,73 @@ import java.util.List;
 
 public final class PartModelChecks {
     public static void main(String[] args) {
-        tables(); fresh(); normalize(); swaps(); hand(); shown(); styles();
-        System.out.println("PASS: six parts with the prototype's choices and dials in code order; fresh parts take their choice's defaults, normalizing clamps to the choice's range, swaps keep what means the same, hands are named for the preset they match, deferred choices aren't offered");
+        tables(); fresh(); normalize(); swaps(); hand(); shown(); styles(); oneTerm();
+        System.out.println("PASS: two dials share a label only when they are one concept; six parts with the prototype's choices and dials in code order; fresh parts take their choice's defaults, normalizing clamps to the choice's range, swaps keep what means the same, hands are named for the preset they match, deferred choices aren't offered");
+    }
+    /**
+     * One term per concept (docs/TEXT-STYLE.md, rule 3; the design review, 2026-10-31): two dials share a label only when
+     * they are one concept, as these: a tip's dryness, how far a brush's paint lasts, Hand Hatch's (never shown) wobble
+     * and taper, Grey Shift's set (two numbers), how far apart lines side by side are (a Rake's, Hatch's Line Spacing,
+     * not a Stamp's Spacing), what a brush takes off the page (Smudge's Pick Up Paint, a Brayer's).
+     */
+    static void oneTerm() {
+        List<List<PartDial>> same = Arrays.asList(Arrays.asList(PartDial.TAPER_OUT, PartDial.HENDS), Arrays.asList(PartDial.DRY, PartDial.DRYNESS),
+                Arrays.asList(PartDial.WOBBLE, PartDial.HWOB), Arrays.asList(PartDial.INK_LOAD, PartDial.PLOAD), Arrays.asList(PartDial.SHIFT_ANY, PartDial.SHIFT_ANY2),
+                Arrays.asList(PartDial.REACH, PartDial.PITCH), Arrays.asList(PartDial.PICKUP, PartDial.PICK));
+        java.util.Map<String, List<PartDial>> by = new java.util.LinkedHashMap<>();
+        for (PartDial d : PartDial.values()) by.computeIfAbsent(d.label, k -> new ArrayList<>()).add(d);
+        for (List<PartDial> ds : by.values()) check(ds.size() == 1 || same.contains(ds), "One concept a label: " + ds);
+        check(PartDial.REACH.label.equals("Line Spacing") && PartDial.PITCH.label.equals("Line Spacing") && PartDial.STAMP_SPACING.label.equals("Spacing"), "Line Spacing, a Stamp's Spacing");
     }
     static String keys(BrushPart part) { List<String> k = new ArrayList<>(); for (PartChoice c : part.choices()) k.add(c.key); return String.join(",", k); }
     static String dials(PartChoice c) { List<String> k = new ArrayList<>(); for (PartDial d : c.dials) k.add(d.key); return String.join(" ", k); }
     static void tables() {
-        check(Arrays.toString(BrushPart.values()).equals("[TIP, MEDIUM, CARRY, PAPER, LIFE, HAND]"), "Six parts in code order");
-        check(keys(BrushPart.TIP).equals("round,chisel,flat,hake,split,multi,bristles,stipple,hatch,filbert,stamp,spiro,handhatch"), "Tip choices, Stipple, Hatch, the Filbert, the Stamp, the Spiro and Hand Hatch appended: " + keys(BrushPart.TIP));
+        check(Arrays.toString(BrushPart.values()).equals("[TIP, MEDIUM, CARRY, PAPER, LIFE, HAND, LATER]"), "Six parts in code order, then Later (LaterChecks)");
+        check(keys(BrushPart.TIP).equals("round,chisel,flat,hake,split,multi,bristles,stipple,hatch,filbert,stamp,spiro,handhatch,ruling,twig,fan,roller"), "Tip choices, Stipple, Hatch, the Filbert, the Stamp, the Spiro, Hand Hatch and the nibs appended: " + keys(BrushPart.TIP));
         check(dials(PartChoice.SPIRO).equals("weight mode curve loops teeth wheel hole petals ratio phase fades flick") && PartChoice.SPIRO.label.equals("Spiro")
                 && String.join(",", PartDial.SPIRO_MODE.choices).equals("Line,Ring,Oval,Bar") && PartDial.WHEEL.def == 4 && PartDial.HOLE.def == .8 && PartDial.PETALS.def == 5,
                 "The Spiro's dials (mischief-lab-2.html): Size, Mode, Curve, Loops per cm, the toy's Ring Teeth, Wheel and Hole, Petals, Ratio, Phase, Fade Turns, then Flick");
-        check(keys(BrushPart.MEDIUM).equals("ink,wash,cover,charcoal,graphite,resist,tone,crayon"), "Medium choices, Resist, Screentone and Crayon appended: " + keys(BrushPart.MEDIUM));
-        check(keys(BrushPart.CARRY).equals("off,lift,drag,smudge,water,stayin,shape"), "Carry choices, Clear Water, Stay in Lines and Filled Shape appended: " + keys(BrushPart.CARRY));
+        check(keys(BrushPart.MEDIUM).equals("ink,wash,cover,charcoal,graphite,resist,tone,crayon,vector"), "Medium choices, Resist, Screentone, Crayon and Vector Ink appended: " + keys(BrushPart.MEDIUM));
+        check(keys(BrushPart.CARRY).equals("off,lift,drag,smudge,water,stayin,shape,scrape,reprint"), "Carry choices, Clear Water, Stay in Lines, Filled Shape, Scrape and Reprint appended: " + keys(BrushPart.CARRY));
         check(keys(BrushPart.PAPER).equals("plain,cold press,laid,felt,crumpled,canvas,watercolour,rough,unryu,library,kraft,old buff,blue fibre,fine speck"), "Paper choices");
         check(keys(BrushPart.LIFE).equals("none,wet,dry,float,halo,fade,lemon,wetpaint"), "Life choices, Halo, Fading, Lemon Juice and Wet appended: " + keys(BrushPart.LIFE));
         check(keys(BrushPart.HAND).equals("steady,wider,darker,both,brush,side,nib,quick,custom"), "Hand choices");
-        check(dials(PartChoice.ROUND).equals("weight taperIn taperOut dry wobble soft flick"), "Round's dials");
-        check(dials(PartChoice.CHISEL).equals("aspect angle weight taperIn taperOut dry wobble soft flick") && dials(PartChoice.FLAT_NIB).equals(dials(PartChoice.CHISEL)), "Chisel's and flat nib's dials");
+        check(dials(PartChoice.ROUND).equals("weight taperIn taperOut dry wobble soft flick wear"), "Round's dials");
+        check(dials(PartChoice.CHISEL).equals("aspect angle weight taperIn taperOut dry wobble soft flick wear") && dials(PartChoice.FLAT_NIB).equals("aspect angle weight taperIn taperOut dry wobble soft flick"), "Chisel's and flat nib's dials (Wears Down, Chisel's only)");
         check(dials(PartChoice.HAKE).equals("weight headTurn angle dry soft flick"), "Hake's dials");
         check(dials(PartChoice.SPLIT_NIB).equals("gap aspect angle weight taperIn taperOut dry flick"), "Split nib's dials");
         check(dials(PartChoice.MULTI_LINE).equals("count reach weight taperIn taperOut dry wobble flick"), "Multi-line's dials");
         check(dials(PartChoice.BRISTLES).equals("hairs splay cohesion dryness weight load flick"), "Bristles' dials: the prototype's, then Ink load, then Flick");
-        check(dials(PartChoice.FILBERT).equals(dials(PartChoice.CHISEL)) && Arrays.equals(PartChoice.FILBERT.range(PartDial.ASPECT), new double[]{.3, .55}), "The Filbert's dials are a chisel's (the oil paint spec)");
+        check(dials(PartChoice.FILBERT).equals(dials(PartChoice.FLAT_NIB)) && Arrays.equals(PartChoice.FILBERT.range(PartDial.ASPECT), new double[]{.3, .55}), "The Filbert's dials are a chisel's but Wears Down (the oil paint spec)");
         check(dials(PartChoice.STIPPLE).equals("dot scatter jitter weight hold flick") && dials(PartChoice.HATCH).equals("pitch lineW hangle headTurn layers weight flick"), "Stipple's and Hatch's dials (newmods.js), Stipple's Build-up, then Flick last");
         check(dials(PartChoice.STAMP).equals("weight spacing headTurn inkFade flick") && PartChoice.STAMP.labelOf(PartDial.HEAD_TURN).equals("Turns")
                 && String.join(",", PartChoice.STAMP.optionsOf(PartDial.HEAD_TURN)).equals("On,Off") && PartChoice.STAMP.defaultOf(PartDial.HEAD_TURN) == 0
                 && PartChoice.STAMP.defaultOf(PartDial.STAMP_SPACING) == .12 && PartChoice.STAMP.defaultOf(PartDial.INK_FADE) == .22, "The Stamp's dials (mischief-lab-2.html): Size, Spacing, Turns (On), Ink Fade, then Flick");
         check(PartChoice.HATCH.defaultOf(PartDial.HEAD_TURN) == 1 && PartChoice.HATCH.labelOf(PartDial.HEAD_TURN).equals("Lines Follow") && ModularCode.ADDED.contains(PartDial.BUILD_UP), "Hatch's lines fixed by default, named Lines Follow; Build-up written only when on");
         String screen = " screen cell sangle mis gain uneven fling";
-        check(dials(PartChoice.INK).equals("wet line pool splatter bleed bloom lines offset chaos erase blend" + screen), "Ink's dials, Erasable, Blend then Screen's last");
+        check(dials(PartChoice.INK).equals("wet line pool splatter bleed bloom lines offset chaos erase blend" + screen + " soluble"), "Ink's dials, Erasable, Blend then Screen's, Water-Soluble last");
         check(dials(PartChoice.WASH).equals("wet pool bleed bloom backrun line erase blend" + screen), "Wash's dials, Erasable, Blend then Screen's last");
-        check(dials(PartChoice.COVER).equals("cover impasto erase blend" + screen) && dials(PartChoice.CHARCOAL).equals("spread hold dust erase blend" + screen) && dials(PartChoice.GRAPHITE).equals("grade spread erase blend" + screen), "Cover's, charcoal's, graphite's dials, Erasable, Blend then Screen's last");
+        check(dials(PartChoice.COVER).equals("cover impasto erase blend" + screen) && dials(PartChoice.CHARCOAL).equals("spread hold dust erase blend" + screen + " soluble") && dials(PartChoice.GRAPHITE).equals("grade spread erase blend" + screen + " soluble")
+                && ModularCode.ADDED.contains(PartDial.SOLUBLE) && PartDial.SOLUBLE.def == 0 && PartDial.SOLUBLE.label.equals("Dissolves"),
+                "Cover's, charcoal's, graphite's dials, Erasable, Blend then Screen's last (charcoal's and graphite's Water-Soluble after, written only when on)");
         check(dials(PartChoice.TONE).equals("pattern ttone cell sangle"), "Screentone's dials");
         check(String.join(",", PartChoice.INK.optionsOf(PartDial.M_BLEND)).equals("Darken,White,Behind,Invert") && String.join(",", PartChoice.COVER.optionsOf(PartDial.M_BLEND)).equals("Cover,White,Behind,Invert")
                 && ModularCode.ADDED.contains(PartDial.M_BLEND) && PartDial.M_BLEND.label.equals("Blend Mode"), "Blend Mode: the medium's own way first (Opaque's Cover), then White, Behind, Invert; written only when not 0");
-        check(dials(PartChoice.OFF).isEmpty() && dials(PartChoice.LIFT).equals("pick lay") && dials(PartChoice.SMUDGE).equals("pick lay load soften keep pload pmin")
-                && dials(PartChoice.DRAG).equals("pick lay load keep pload pmin") && dials(PartChoice.CLEAR_WATER).equals("pick lay")
+        check(dials(PartChoice.OFF).isEmpty() && dials(PartChoice.LIFT).equals("pick lay") && dials(PartChoice.SMUDGE).equals("pick lay load soften keep pload pmin press")
+                && dials(PartChoice.DRAG).equals("pick lay load keep pload pmin") && dials(PartChoice.CLEAR_WATER).equals("pick lay press")
                 && ModularCode.ADDED.contains(PartDial.SOFTEN) && PartDial.SOFTEN.def == 0 && ModularCode.ADDED.contains(PartDial.KEEPS) && PartDial.KEEPS.def == 0
-                && ModularCode.ADDED.contains(PartDial.PLOAD) && PartDial.PLOAD.def == 0 && ModularCode.ADDED.contains(PartDial.PMIN),
-                "Carry's dials, Smear's Soften then Keeps Paint, Paint Load and Starting Load last (Drag's too), written only when on; Clear Water's Pick up and Lay down");
+                && ModularCode.ADDED.contains(PartDial.PLOAD) && PartDial.PLOAD.def == 0 && ModularCode.ADDED.contains(PartDial.PMIN) && ModularCode.ADDED.contains(PartDial.PRESS) && PartDial.PRESS.def == 0
+                && PartChoice.SMUDGE.labelOf(PartDial.PRESS).equals("Press to Push") && PartChoice.CLEAR_WATER.labelOf(PartDial.PRESS).equals("Press to Lift"),
+                "Carry's dials, Smear's Soften then Keeps Paint, Paint Load and Starting Load (Drag's too), then Press to Push, written only when on; Clear Water's Pick up, Lay down and Press to Lift");
         check(dials(PartChoice.NONE).isEmpty() && dials(PartChoice.FAST_WET).equals("window runs pool sink") && dials(PartChoice.DRYING).equals("drying settle takes plume runs drips pool sink blend")
                 && dials(PartChoice.FLOAT).equals("drying spread drift") && dials(PartChoice.HALO).equals("drying reach growth") && dials(PartChoice.FADE).equals("fadeIn") && dials(PartChoice.LEMON).equals("dryIn") && dials(PartChoice.WET_PAINT).equals("stays runs") && ModularCode.ADDED.contains(PartDial.STAYS_WET) && PartChoice.WET_PAINT.index() == 7 && PartChoice.HALO.defaultOf(PartDial.DRYING) == .55,
                 "Life's dials, gravity's last; Float's floating time, spread and drift; Halo's drying time (6.6 s), Reach and Growth");
-        for (PartChoice c : BrushPart.HAND.choices()) check(dials(c).equals("ps pd pw ts td tw ss sd sw gain dir trange gs gd gw pdrive sdrive tdrive shift sorder sgreys sbar sany sany2 grad gto glen tshade") && ModularCode.ADDED.contains(PartDial.SIDE_SHADE) && PartDial.SIDE_SHADE.def == 0,
+        for (PartChoice c : BrushPart.HAND.choices()) check(dials(c).equals("ps pd pw ts td tw ss sd sw gain dir trange gs gd gw pdrive sdrive tdrive shift sorder sgreys sbar sany sany2 grad gto glen tshade smooth stick") && ModularCode.ADDED.contains(PartDial.SIDE_SHADE) && PartDial.SIDE_SHADE.def == 0
+                && ModularCode.ADDED.containsAll(java.util.Arrays.asList(PartDial.STEADY_HAND, PartDial.LONG_STICK)) && PartDial.STEADY_HAND.def == 0 && PartDial.LONG_STICK.def == 0,
                 "Every hand has the nine cells, gain, dir, Tilt range, page tilt's three, a Spiro's drives, Grey Shift's six, Gradient's three and Tilt Shading (written only when on)");
         for (BrushPart part : BrushPart.values()) for (int i = 0; i < part.choices().size(); i++)
             check(part.choices().get(i).index() == i && PartChoice.of(part, i) == part.choices().get(i) && part.choices().get(i).part == part, "Choice indexes: " + part + " " + i);
-        check(PartChoice.of(BrushPart.TIP, 13) == null && PartChoice.of(BrushPart.TIP, -1) == null, "No choice past the list");
+        check(PartChoice.of(BrushPart.TIP, 17) == null && PartChoice.of(BrushPart.TIP, -1) == null, "No choice past the list");
         check(PartChoice.PLAIN.texture() == BrushTexture.PLAIN && PartChoice.COLD_PRESS.texture() == BrushTexture.COLD_PRESS && PartChoice.LAID.texture() == BrushTexture.LAID
                 && PartChoice.FELT.texture() == BrushTexture.FELT && PartChoice.CRUMPLED.texture() == BrushTexture.CRUMPLED && PartChoice.CANVAS.texture() == BrushTexture.CANVAS, "A paper is its texture");
         check(BrushPart.PAPER.choices().size() == BrushTexture.values().length && PartChoice.COTTON.texture() == BrushTexture.WATERCOLOUR && PartChoice.BUMPY.texture() == BrushTexture.ROUGH
@@ -154,8 +173,8 @@ public final class PartModelChecks {
         check(ModularFeatures.offered(PartChoice.BRISTLES) && ModularFeatures.offered(PartChoice.LIFT) && ModularFeatures.offered(PartChoice.DRAG) && ModularFeatures.offered(PartChoice.SMUDGE)
                 && ModularFeatures.offered(PartChoice.HAKE) && ModularFeatures.offered(PartChoice.OFF) && ModularFeatures.offered(PartChoice.DRYING), "Smudge's choices and Bristles are offered");
         for (PartChoice c : PartChoice.values()) check(ModularFeatures.late(c) == (c == PartChoice.BRISTLES || c == PartChoice.LIFT || c == PartChoice.DRAG || c == PartChoice.SMUDGE), "Bristles and Smudge's choices are rolled after every part: " + c);
-        for (PartChoice c : PartChoice.values()) check(ModularFeatures.seedOnly(c) == (c == PartChoice.FLOAT || c == PartChoice.STIPPLE || c == PartChoice.HATCH || c == PartChoice.RESIST || c == PartChoice.HALO || c == PartChoice.TONE || c == PartChoice.CLEAR_WATER || c == PartChoice.FILBERT || c == PartChoice.FADE || c == PartChoice.LEMON || c == PartChoice.STAMP || c == PartChoice.CRAYON || c == PartChoice.SPIRO || c == PartChoice.STAY_IN || c == PartChoice.SHAPE || c == PartChoice.HAND_HATCH || c == PartChoice.WET_PAINT || c.part == BrushPart.PAPER && c.index() >= 6) && ModularFeatures.varies(c) == (ModularFeatures.offered(c) && !ModularFeatures.seedOnly(c)),
-                "Float, Stipple, Hatch, Resist, Mold, Screentone, Clear Water and the Filbert only from a roll's seed, the Stamp, Crayon, the Spiro, Stay in Lines and Hand Hatch from none, never a variation's swap: " + c);
+        for (PartChoice c : PartChoice.values()) check(ModularFeatures.seedOnly(c) == (c == PartChoice.FLOAT || c == PartChoice.STIPPLE || c == PartChoice.HATCH || c == PartChoice.RESIST || c == PartChoice.HALO || c == PartChoice.TONE || c == PartChoice.CLEAR_WATER || c == PartChoice.FILBERT || c == PartChoice.FADE || c == PartChoice.LEMON || c == PartChoice.STAMP || c == PartChoice.CRAYON || c == PartChoice.VECTOR || c == PartChoice.SPIRO || c == PartChoice.STAY_IN || c == PartChoice.SHAPE || c == PartChoice.HAND_HATCH || c == PartChoice.WET_PAINT || c == PartChoice.SCRAPE || c == PartChoice.REPRINT || c.part == BrushPart.PAPER && c.index() >= 6 || c.part == BrushPart.LATER && c != PartChoice.LATER_OFF || ResolvedBrush.nib(c)) && ModularFeatures.varies(c) == (ModularFeatures.offered(c) && !ModularFeatures.seedOnly(c)),
+                "Float, Stipple, Hatch, Resist, Mold, Screentone, Clear Water and the Filbert only from a roll's seed, the Stamp, Crayon, Vector Ink, the Spiro, Stay in Lines, Hand Hatch and the nibs from none, never a variation's swap: " + c);
     }
     private static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 }

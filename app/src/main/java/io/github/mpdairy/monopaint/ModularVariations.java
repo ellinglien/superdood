@@ -42,9 +42,13 @@ final class ModularVariations {
      * parts.js makeVars: six variations of {@code b}, which is left as it is. A nudge moves an unlocked slider
      * (not the response, Erasable, Soften, a Screen's dials or Tone's Tone, as the web lab leaves them) 35–80% of the style's band, widened to take in its value (else the choice's range),
      * towards the far end when it sits near one; a dial that can be off snaps off below .04; a nudged hand is
-     * renamed for its cells.
+     * renamed for its cells. Vector Ink's: its Size and its pressure to size alone, no swap.
      */
     static List<Made> make(ModularBrush b, ModularLocks locks, Random random) {
+        // A Later an older version holds in Drying varies as it did there (each variation is split again, normalized),
+        // unless Later is locked.
+        ModularBrush joined = locks.parts.contains(BrushPart.LATER) ? null : b.joined();
+        if (joined != null) b = joined;
         List<Made> out = new ArrayList<>();
         int swapAt = random.nextDouble() < .85 ? (int) (random.nextDouble() * COUNT) : -1;
         List<PartDial> pool = new ArrayList<>();
@@ -52,7 +56,7 @@ final class ModularVariations {
             if (locks.parts.contains(part)) continue;
             // A gravity dial that is off stays off: a variation never sets a still wash running; nor Flick or Fling a still pen.
             for (PartDial d : b.choice(part).dials)
-                if (!locks.dials.contains(d) && !d.choice() && d != PartDial.GAIN && d != PartDial.ERASABLE && d != PartDial.SOFTEN && d != PartDial.KEEPS && d != PartDial.PLOAD && d != PartDial.PMIN && !d.underScreen() && d != PartDial.TTONE && !((d.gravity() || d.mischief()) && b.part(part).get(d) == 0)) pool.add(d);
+                if (!locks.dials.contains(d) && !d.choice() && (!VectorInk.is(b) || d == PartDial.WEIGHT || d == PartDial.PS) && d != PartDial.GAIN && d != PartDial.ERASABLE && d != PartDial.SOFTEN && d != PartDial.WEAR && d != PartDial.KEEPS && d != PartDial.PRESS && d != PartDial.PLOAD && d != PartDial.PMIN && !d.underScreen() && d != PartDial.TTONE && !((d.gravity() || d.mischief() || d.follows()) && b.part(part).get(d) == 0)) pool.add(d);
         }
         for (int i = 0; i < COUNT; i++) {
             ModularBrush c = b.copy(random.nextInt() & 0xffffffffL);
@@ -112,6 +116,8 @@ final class ModularVariations {
      * until carrying draws; the prototype has no part without one).
      */
     private static List<BrushPart> swappable(ModularBrush b, ModularLocks locks) {
+        // Vector Ink varies its size and its pressure to size alone, and swaps nothing (its medium kept, the rest set aside).
+        if (VectorInk.is(b)) return new ArrayList<>();
         List<BrushPart> parts = new ArrayList<>();
         for (BrushPart p : BrushPart.values())
             if (!locks.parts.contains(p) && p != BrushPart.HAND && !others(b.choice(p)).isEmpty()) parts.add(p);

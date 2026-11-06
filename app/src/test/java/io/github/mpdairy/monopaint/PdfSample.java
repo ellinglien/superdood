@@ -10,7 +10,7 @@ import java.util.Random;
 /**
  * A sample notebook's copies at the Manta's size, for trying the PDF on the tablet and for its size before and after
  * (built with the app's sources and MagnetPictures, as scripts/magnet_pictures.sh builds it, run from the repo): seven Lined pages over three days drawn with the app's brushes (fineliner lines, washes),
- * a Daily Prompt card, a page of fridge magnets. {@code <out> new} writes Document/ and EXPORT/ with this version (the
+ * a page of fridge magnets. {@code <out> new} writes Document/ and EXPORT/ with this version (the
  * days through {@code NotebookExport.Documents}, by reflection so the same file builds against the version before);
  * {@code <out> old} writes the copies as the version it is built with does, all today.
  */
@@ -51,7 +51,6 @@ public final class PdfSample {
             for (int k = 0; k < 24; k++) NotebookFixture.stroke(page, line, 3, 1, session, random);
             session.settleNow(page);
         }
-        if (i == 2) page.placePrompt("3 min | A self-portrait as a knight, full body, boots and all.");
         if (i == 3) {
             List<Magnets.Magnet> words = new ArrayList<>();
             String[][] poem = MagnetPictures.POEM;

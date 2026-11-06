@@ -6,8 +6,8 @@ import java.util.concurrent.ExecutorService;
 
 /**
  * The toolbar kept for good, beside the brushes' file ({@link BrushBackup}): "Scribulor toolbar.txt" in shared storage
- * lists the ten slots (number, brush name, full share code, its size and grey: each slot's own since 2026-10-27),
- * then the eraser's size and the selected tool, tab-separated. A backup only: the app never reads it. Written when the text changed, off the
+ * lists the nine slots (number, brush name, full share code, its size and grey: each slot's own since 2026-10-27),
+ * then Fill in's size and grey (a slot's until 2026-11-06), the eraser's size and the selected tool, tab-separated. A backup only: the app never reads it. Written when the text changed, off the
  * main thread, and an IO failure is let go. The text is pure, checked on the desktop.
  */
 final class ToolBackup {
@@ -24,9 +24,11 @@ final class ToolBackup {
             s.append(i + 1).append('\t').append(b.name()).append('\t').append(ModularCode.encode(b.parts))
                     .append('\t').append(ToolSwatches.pxText(look.px)).append(" px\t").append(Math.round(1000 * look.darkness) / 1000.0).append('\n');
         }
+        ToolSwatches.Look fill = slots.swatches.look(ToolSlots.FILL_KEY, ToolSlots.fill());
+        s.append("fill in\t").append(ToolSwatches.pxText(fill.px)).append(" px\t").append(Math.round(1000 * fill.darkness) / 1000.0).append('\n');
         s.append("eraser\t").append(ToolSwatches.pxText(slots.swatches.look(ToolSwatches.ERASER_KEY, null).px)).append(" px\n");
         s.append("selected\t").append(selected < ToolSlots.COUNT ? "slot " + (selected + 1)
-                : selected == ToolSlots.ERASER ? "eraser" : selected == ToolSlots.SMUDGE ? "smudge" : "stamp").append('\n');
+                : selected == ToolSlots.ERASER ? "eraser" : selected == ToolSlots.SMUDGE ? "smudge" : selected == ToolSlots.FILL ? "fill in" : "stamp").append('\n');
         return s.toString();
     }
 

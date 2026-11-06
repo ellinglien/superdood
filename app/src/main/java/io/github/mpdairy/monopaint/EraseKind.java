@@ -54,6 +54,20 @@ final class EraseKind {
         for (int c = 1; c < KINDS.length; c++) if ((kinds & hidden(shown) & KINDS[c]) != 0) return said(c, NotebookOptions.HIDDEN) + ", see " + SHOW_KINDS;
         return null;
     }
+    /**
+     * Why a tool may not draw on a page whose Show Kinds is {@code shown}: the kind it lays ({@code kinds}) hidden, or for
+     * the eraser ({@code eraser}, taking {@code erasing}, {@link #takes}) every kind it would take hidden: "Pen is hidden,
+     * see Show Kinds"; null when it may.
+     */
+    static String hiddenNote(int shown, boolean eraser, int kinds, int erasing) {
+        int hidden = hidden(shown);
+        return refusal(shown, !eraser ? kinds : hidden != 0 && erasing == 0 ? hidden : 0);
+    }
+    /** A brush laying {@code kinds} taken up: what it says when its kind isn't Full ("Pen is hidden", "Dry media is faint"); null when it is. */
+    static String takenUp(int shown, int kinds) {
+        int choice = choiceOf(kinds), step = step(shown, choice);
+        return choice > 0 && step != NotebookOptions.FULL ? said(choice, step) : null;
+    }
     /** What a brush of a kind not Full says when taken up (docs/TEXT-STYLE.md, sentence case): "Pen is hidden", "Dry media is faint". */
     static String said(int choice, int step) { return sentence(choice) + " is " + NotebookOptions.GUIDE_STEPS[step].toLowerCase(java.util.Locale.ROOT); }
     /** The note a step picked gives, as Template Visibility's ("Template half"): "Pen half", "Dry media hidden". */

@@ -32,4 +32,16 @@ interface DrawingStroke {
     default float ringGuide(float pressure, float tiltX, float tiltY) { return 0; }
     /** Inkwash: the shape that ring takes, a Spiro's Mode ({@link SpiroStamper#box}): 1 the ring, else an Oval's or Bar's track. */
     default int ringMode() { return 1; }
+    /**
+     * Inkwash: what the screen shows over the page while the pen is down where the stroke has changed the page but writes
+     * it only at its finish (a stump's other half, {@link ModularStroke#unwritten}); null for none.
+     */
+    default Unwritten unwritten() { return null; }
+    /** {@link #unwritten}: the page's tone as the stroke has it ({@link MirrorShow.Marks}: −1 where it is as the page shows), and where that changed. */
+    interface Unwritten extends MirrorShow.Marks {
+        /** The page area changed since last asked ({left, top, right, bottom}, inclusive), or null for none. */
+        int[] take();
+        /** All the stroke changed so, inclusive, or null for none: shown again from the page once it is written. */
+        int[] all();
+    }
 }

@@ -12,7 +12,7 @@ public final class QuickStrokeChecks {
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
         rule(); sameAsLive(); slices(); undo(); preview(false); preview(true); wetWhileRendering(); dryingSettlesAlike(); liveLiftOffThread(); tiltReplayed(); tap(); previewIsCheap(); placedPreview(); retapersWait();
-        System.out.println("PASS: big strokes past what keeps up live go quick (small ones and Watercolor at any size draw live, unchanged); the preview lays a flat footprint along the pen on the stroke's layer only and is gone at lift (with the true stroke written behind the pen, kept until the render is written); the true stroke rendered from the samples on its own thread while drawing, finished after lift or at once, ends with every layer as live (Fast-wet: the tones as live, the layers as live composed once), page tilt and all, as one undo step; the page reads as wet while it renders and a Drying wash then settles as after a live stroke; a live Drying stroke's lift worked off the pen's thread ends and settles as finished at once; the preview costs a fraction of drawing live; placed lines (a split nib's) preview as their own nibs, the split's gap and all, nearly every dot as the render's; a render's re-tapers wait for its composes and it ends byte for byte as re-tapering at each sample the pen's time calls for, composing often or never, the trail on or off");
+        System.out.println("PASS: big strokes past what keeps up live go quick (small ones and Watercolor at any size draw live, unchanged); the preview lays a flat footprint along the pen on the stroke's layer only and is gone at lift (with the true stroke written behind the pen, kept until the render is written); the true stroke rendered from the samples on its own thread while drawing (or at lift on the pen's, with no second thread), finished after lift or at once, ends with every layer as live (Fast-wet: the tones as live, the layers as live composed once), page tilt and all, as one undo step; the page reads as wet while it renders and a Drying wash then settles as after a live stroke; a live Drying stroke's lift worked off the pen's thread ends and settles as finished at once; the preview costs a fraction of drawing live; placed lines (a split nib's) preview as their own nibs, the split's gap and all, nearly every dot as the render's; a render's re-tapers wait for its composes and it ends byte for byte as re-tapering at each sample the pen's time calls for, composing often or never, the trail on or off");
     }
 
     // ---- the stroke ----
@@ -116,6 +116,10 @@ public final class QuickStrokeChecks {
                 ToneDocument ahead = quick(b, size, null);
                 QuickStroke.composeMs = every;
                 check(same(q, ahead), what + ": every layer the same however often it composed ahead");
+                QuickStroke.renderAtLift = true;
+                ToneDocument atLift = quick(b, size, null);
+                QuickStroke.renderAtLift = false;
+                check(same(q, atLift), what + ": every layer the same rendered at lift on the pen's thread (the web's one thread)");
                 if (life != PartChoice.FAST_WET) check(same(q, batched), what + ": every layer as drawn live");
                 else {
                     // Live, a Fast-wet layer keeps the most coverage any compose gave a pixel, so its bytes depend on how

@@ -344,7 +344,8 @@ function useTexture(surf, b) {
       fine[y * surf.w + x] = t[(y & 255) * 256 + (x & 255)];
       const fx = x / 3, fy = y / 3, ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy;
       const at = (u, v) => t[(v & 255) * 256 + (u & 255)];
-      mid[y * surf.w + x] = lerp(lerp(at(ix, iy), at(ix + 1, iy), tx), lerp(at(ix, iy + 1), at(ix + 1, iy + 1), tx), ty);
+      // Rounded to the scan's 256 steps, as the app keeps its mid (PaperGrain.scan).
+      mid[y * surf.w + x] = Math.round(255 * lerp(lerp(at(ix, iy), at(ix + 1, iy), tx), lerp(at(ix, iy + 1), at(ix + 1, iy + 1), tx), ty)) / 255;
     }
     surf.tex[b.texture] = { fine, mid };
   }

@@ -6,9 +6,9 @@
 // (float.js Bath.tick), Mold's halos (newmods.js Halo.step) and Fading's and Lemon Juice's clock (newmods.js fadeAll).
 // ===================================================================================================================
 const DEMO_W = 480, DEMO_H = 240, DEMO_TICK = 1000 / TPS;
-// Fading's clock is the pen's time here (the checks set their own the same way).
+// Fading's clock is the pen's time here, only while a job runs (the checks set their own the same way), so a page this
+// shares with Brush Studio keeps its own clock.
 const DEMO_CLOCK = { t: 0 };
-if (typeof FADE_CLOCK !== "undefined") FADE_CLOCK.now = () => DEMO_CLOCK.t;
 const DEMO_TILT = { x: 0, y: .8 };   // a page tilted toward the foot, for Float's Drift Downhill
 
 function demoLevels(s) {
@@ -187,8 +187,11 @@ function demoTimeline(m) {
   return { frames, times, lift, dry: t };
 }
 function demoJob(m) {
-  const t0 = performance.now();
-  if (m.k === "time") return Object.assign({ id: m.id, i: 0, ms: performance.now() - t0 }, demoTimeline(m));
-  if (m.k === "after") return Object.assign({ id: m.id, i: m.i }, demoAfter(m), { ms: performance.now() - t0 });
-  return { id: m.id, i: m.i, frames: demoFrame(m), ms: performance.now() - t0 };
+  const t0 = performance.now(), keep = FADE_CLOCK.now;
+  FADE_CLOCK.now = () => DEMO_CLOCK.t;
+  try {
+    if (m.k === "time") return Object.assign({ id: m.id, i: 0, ms: performance.now() - t0 }, demoTimeline(m));
+    if (m.k === "after") return Object.assign({ id: m.id, i: m.i }, demoAfter(m), { ms: performance.now() - t0 });
+    return { id: m.id, i: m.i, frames: demoFrame(m), ms: performance.now() - t0 };
+  } finally { FADE_CLOCK.now = keep; }
 }

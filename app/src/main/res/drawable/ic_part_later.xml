@@ -1,0 +1,6 @@
+<!-- Drawn for Superdood in Iconoir's style: an hourglass: what the page does later (Later). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M6 2.75H18M6 21.25H18" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M7.5 2.75C7.5 7.25 12 9 12 12C12 15 7.5 16.75 7.5 21.25M16.5 2.75C16.5 7.25 12 9 12 12C12 15 16.5 16.75 16.5 21.25" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M9.5 19.5C10.5 18 13.5 18 14.5 19.5" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

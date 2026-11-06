@@ -10,6 +10,7 @@ package io.github.mpdairy.monopaint;
  * fills whole, and both lobes of a figure eight fill. A dot or a short line ({@link #tiny}) stays a stroke, unclosed.
  * Mirrors: Copy Strokes fills every image of the shape, Real Mirror the kept side of what the page shows (each cell's
  * share of the shape folded into the kept cell), so the shape seen fills either way. Outline and fill are one Undo step.
+ * Stay in Lines at Flood 1 (Fill in, {@link #fillsLoops}) does the same on open paper; started in a shape, its flood fills that instead.
  * Pure, checked on the desktop ({@code FilledShapeChecks}).
  */
 final class FilledShape implements LiftingStroke {
@@ -57,12 +58,20 @@ final class FilledShape implements LiftingStroke {
         view = mirrors.reflects() ? mirrors.view() : null;
         maps = view != null ? view.inverse : mirrors.copies() ? mirrors.group().maps : new double[][]{Mirrors.Group.IDENTITY};
     }
-    /** {@code outline}, {@code brush}'s stroke at {@code size} and {@code darkness}: a filled shape's when the brush is one ({@link #fills}), else itself. */
+    /** {@code outline}, {@code brush}'s stroke at {@code size} and {@code darkness}: a filled shape's when the brush is one ({@link #fills}, {@link #fillsLoops}), else itself. */
     static DrawingStroke of(ToneDocument document, ModularBrush brush, DrawingStroke outline, double size, double darkness, WatercolorSession session) {
-        return fills(brush) ? new FilledShape(document, outline, brush, size, darkness, session) : outline;
+        return fills(brush) || fillsLoops(brush) ? new FilledShape(document, outline, brush, size, darkness, session) : outline;
+    }
+    /**
+     * Whether {@code b} fills its loops on open paper: Stay in Lines at Flood 1, "Fills" (the owner, 2026-10-31: "if you
+     * draw a closed shape with that one it should fill in"); started in a shape it floods that instead ({@link LiftingStroke#inShape}).
+     */
+    static boolean fillsLoops(ModularBrush b) {
+        return b != null && b.choice(BrushPart.CARRY) == PartChoice.STAY_IN && !b.floats()
+                && StayIn.reach(b.part(BrushPart.CARRY).get(PartDial.FLOOD)) == StayIn.ENDLESS;
     }
     /** Whether {@code b} fills the shapes it draws: Filled Shape, but on water (a float is a pen moving on water). */
-    static boolean fills(ModularBrush b) { return b != null && b.choice(BrushPart.CARRY) == PartChoice.SHAPE && b.choice(BrushPart.LIFE) != PartChoice.FLOAT; }
+    static boolean fills(ModularBrush b) { return b != null && b.choice(BrushPart.CARRY) == PartChoice.SHAPE && !b.floats(); }
 
     @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY) { sample(x, y, pressure, tiltX, tiltY, PenSpeed.UNTIMED); }
     @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY, long time) {
@@ -80,6 +89,7 @@ final class FilledShape implements LiftingStroke {
     @Override public boolean buildsWhileHeld() { return outline.buildsWhileHeld(); }
     @Override public float ringGuide(float pressure, float tiltX, float tiltY) { return outline.ringGuide(pressure, tiltX, tiltY); }
     @Override public int ringMode() { return outline.ringMode(); }
+    @Override public Unwritten unwritten() { return outline.unwritten(); }
     @Override public boolean screened() { return outline instanceof LiftingStroke && ((LiftingStroke) outline).screened(); }
 
     @Override public boolean developsAfterLift() { return !done; }
@@ -117,6 +127,8 @@ final class FilledShape implements LiftingStroke {
     private void close() {
         if (closed) return;
         closed = true;
+        // Stay in Lines started in a shape: its flood fills that, and the stroke stays as drawn.
+        if (outline instanceof LiftingStroke && ((LiftingStroke) outline).inShape()) return;
         room = n < 3 ? null : room(xs, ys, n, maps, document.width, document.height);
         if (room != null && view != null) room = FillTool.keptSide(room, view);
         if (room == null || tiny(room.area / (double) maps.length, size)) { room = null; return; }

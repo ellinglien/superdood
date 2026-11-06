@@ -184,6 +184,8 @@ public final class SwatchChecks {
     static java.util.List<PartDial> handHead(ModularBrush b, PartDial... more) {
         java.util.List<PartDial> rows = new java.util.ArrayList<>(Arrays.asList(PartDial.GAIN, PartDial.DIR));
         if (BrushLab.tiltShades(b)) rows.add(PartDial.SIDE_SHADE);
+        // Steady Hand and Long Stick: every brush's but a Spiro's.
+        if (b.choice(BrushPart.TIP) != PartChoice.SPIRO) rows.addAll(Arrays.asList(PartDial.STEADY_HAND, PartDial.LONG_STICK));
         rows.addAll(Arrays.asList(more));
         return rows;
     }

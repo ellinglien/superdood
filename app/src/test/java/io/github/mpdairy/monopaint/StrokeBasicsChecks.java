@@ -92,8 +92,8 @@ public final class StrokeBasicsChecks {
     static void paper() {
         StrokePaper plain = new StrokePaper(BrushTexture.PLAIN), laid = new StrokePaper(BrushTexture.LAID);
         PaperGrain g = PaperGrain.PLAIN;
-        float want = Math.max(0, Math.min(1, .5f + g.spread * (g.fine(3, 4) / 255f - .5f)));
-        check(Math.abs(plain.fine(3, 4) - want) < 1e-6 && plain.low(9, 9) == PaperNoise.low(9, 9) / 255f && plain.blob(9, 9) == PaperNoise.blob(9, 9) / 255f, "The paper's noise is the app's, widened as the old Wild ink widened it");
+        float want = .5f + StrokePaper.SHOWS * (Math.max(0, Math.min(1, .5f + g.spread * (g.fine(3, 4) / 255f - .5f))) - .5f);
+        check(Math.abs(plain.fine(3, 4) - want) < 1e-6 && plain.low(9, 9) == PaperNoise.low(9, 9) / 255f && plain.blob(9, 9) == PaperNoise.blob(9, 9) / 255f, "The paper's noise is the app's, widened as the old Wild ink widened it, at what marks show of it (StrokePaper.SHOWS)");
         int differ = 0; for (int x = 0; x < 64; x++) if (laid.fine(x, 7) != plain.fine(x, 7)) differ++;
         check(differ > 32, "and follows the paper's texture");
     }

@@ -1,6 +1,6 @@
 # Atelier 1.1.82 brush grayscale grades
 
-> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not My Bad Drawings.
+> MonoPaint's design note, from before the fork (upstream, by mpdairy); kept for its research. It describes MonoPaint, not Superdood.
 
 Read from the user's installed `com.ratta.supernote.paint`, versionCode 1182,
 versionName 1.1.82, on 2026-09-24. These are brush brightness values, not inferred

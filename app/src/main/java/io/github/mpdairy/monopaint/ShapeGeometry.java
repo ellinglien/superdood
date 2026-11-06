@@ -6,14 +6,27 @@ final class ShapeGeometry {
     private final int width,height;
     private final float startX,startY;
     private int[] next;
-    ShapeGeometry(ToolSettings settings,int width,int height,float x,float y) {
-        this.settings=settings;this.width=width;this.height=height;startX=x;startY=y;
+    /**
+     * Inkwash: sharp dry brushes ({@link #on}): page px to this raster's points, {@code x * k - ox}, the outline {@code k}
+     * times as wide; the page's edges, where a dragged corner stops, in points. On the page: 1, none, and the page.
+     */
+    private final int k,ox,oy;
+    private final float minX,minY,maxX,maxY;
+    ShapeGeometry(ToolSettings settings,int width,int height,float x,float y) { this(settings,width,height,x,y,1,0,0,width,height); }
+    private ShapeGeometry(ToolSettings settings,int width,int height,float x,float y,int k,int ox,int oy,int pageWidth,int pageHeight) {
+        this.settings=settings;this.width=width;this.height=height;this.k=k;this.ox=ox;this.oy=oy;
+        startX=x*k-ox;startY=y*k-oy;minX=-ox;minY=-oy;maxX=pageWidth*k-ox;maxY=pageHeight*k-oy;
     }
+    /** Inkwash: the same shape at {@code grid}'s points (a kept shape drawn finer, {@link SharpStrokes#lay}): its rows and columns the grid's, its geometry the page's. */
+    static ShapeGeometry on(FineGrid grid,ToolSettings settings,float x,float y) { return new ShapeGeometry(settings,grid.width,grid.height,x,y,grid.k,grid.ox,grid.oy,grid.pageWidth,grid.pageHeight); }
+    /** Inkwash: Record and Replay: the shape dragged to {@code x, y} in {@code shade} ({@link StrokeLog.Shape}), which rasters as this. */
+    StrokeLog.Shape logged(int shade,float x,float y) { return StrokeLog.Shape.of(settings,shade,startX,startY,x,y); }
     void raster(float x,float y,int[] spans) {
         next=spans;java.util.Arrays.fill(next,0);
+        x=x*k-ox; y=y*k-oy;
         // Input beyond the canvas remains bounded, while strokes at its edges clip naturally.
         if(settings.shape!=ToolSettings.Shape.CIRCLE) {
-            x=Math.max(0,Math.min(width,x)); y=Math.max(0,Math.min(height,y));
+            x=Math.max(minX,Math.min(maxX,x)); y=Math.max(minY,Math.min(maxY,y));
         }
         if(settings.shape==ToolSettings.Shape.SQUARE) {
             float size=Math.max(Math.abs(x-startX),Math.abs(y-startY));
@@ -30,7 +43,7 @@ final class ShapeGeometry {
             left=startX-radius;right=startX+radius;top=startY-radius;bottom=startY+radius;
         }
         if(right-left<1 || bottom-top<1) return;
-        double width=settings.outlineWidth;
+        double width=settings.outlineWidth*k;
         boolean oval=settings.shape==ToolSettings.Shape.OVAL || settings.shape==ToolSettings.Shape.CIRCLE;
         double cx=(left+right)/2, cy=(top+bottom)/2, rx=(right-left)/2, ry=(bottom-top)/2;
         for(int row=Math.max(0,(int)Math.ceil(top-.5)); row<Math.min(height,(int)Math.ceil(bottom-.5)); row++) {
@@ -60,7 +73,7 @@ final class ShapeGeometry {
         next[offset]=start;next[offset+1]=end;
     }
     private void line(float endX,float endY) {
-        double dx=endX-startX,dy=endY-startY,length=dx*dx+dy*dy,r=settings.outlineWidth/2.0;
+        double dx=endX-startX,dy=endY-startY,length=dx*dx+dy*dy,r=settings.outlineWidth*k/2.0;
         int bottom=Math.min(height-1,(int)Math.floor(Math.max(startY,endY)+r));
         for(int y=Math.max(0,(int)Math.floor(Math.min(startY,endY)-r));y<=bottom;y++) {
             double a=0,b=1;

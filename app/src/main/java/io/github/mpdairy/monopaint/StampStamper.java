@@ -42,6 +42,14 @@ final class StampStamper {
         final double load;
         final long last;
         Ink(double load, long last) { this.load = load; this.last = last; }
+        /** A kept stroke drawn again (sharp dry brushes): it starts with {@code load} ({@link #startLoad}, as the stroke did), never rested. */
+        static Ink kept(double load) { return new Ink(load, Long.MAX_VALUE); }
+    }
+
+    /** The ink a stroke whose first sample is at {@code t0} (ms) starts with after {@code start}: all of it if rested since (or untimed), else what is left. */
+    static double startLoad(Ink start, long t0) {
+        boolean rested = start == null || start.last == PenSpeed.UNTIMED || t0 == PenSpeed.UNTIMED || t0 - start.last > REST_MS;
+        return rested ? 1 : Math.max(FLOOR, start.load);
     }
 
     /** One stroke's prints, line or body: the next print's distance, how many so far, the ink left, the heading, the seed. */
@@ -74,9 +82,7 @@ final class StampStamper {
             M.seed = StippleStamper.hashInts((int) P.seed ^ 0x57a3b, Math.round(pts.x[0] * 4), Math.round(pts.y[0] * 4));
             M.jit = (StrokeMath.hash01(M.seed, 1) * 2 - 1) * JIT;
             // Rested since the holder's last print (or no times to tell): inked afresh.
-            long t0 = pts.t[0];
-            boolean rested = start == null || start.last == PenSpeed.UNTIMED || t0 == PenSpeed.UNTIMED || t0 - start.last > REST_MS;
-            M.load = rested ? 1 : Math.max(FLOOR, start.load);
+            M.load = startLoad(start, pts.t[0]);
         }
         State M = meta.stamp;
         double gap = gap(P, size);
@@ -122,6 +128,9 @@ final class StampStamper {
     static void print(FloatTiles into, FloatTiles wetD, StampNib nib, double cx, double cy, double size, double angle, double amount, double dk,
             int seed, int grit, double d, int[] rect) {
         if (!(size > 0) || !(dk > 0)) return;
+        // On a fine grid (sharp dry brushes): the print in the grid's points, the nib read finer.
+        FineGrid g = into.grid;
+        if (g != null) { cx = g.gridX(cx); cy = g.gridY(cy); size *= g.k; }
         int w = into.width, h = into.height;
         double k = size / nib.longer(), ca = StrictMath.cos(angle), sa = StrictMath.sin(angle), R = Math.hypot(nib.width, nib.height) * k / 2 + 2;
         int x0 = Math.max(0, (int) Math.floor(cx - R)), x1 = Math.min(w - 1, (int) Math.ceil(cx + R));

@@ -17,9 +17,9 @@ package io.github.mpdairy.monopaint;
  */
 final class AppName {
     /** The visible name. app/build.gradle parses this exact line: keep it {@code static final String NAME = "...";}. */
-    static final String NAME = "My Bad Drawings";
+    static final String NAME = "Superdood";
     /** The names the app had before, newest first: their folders and files are carried over to {@link #NAME}'s. */
-    static final String[] FORMER = {"Scribulor", "Inkwash"};
+    static final String[] FORMER = {"My Bad Drawings", "Scribulor", "Inkwash"};
 
     private AppName() { }
 }

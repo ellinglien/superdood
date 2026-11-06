@@ -55,7 +55,7 @@ final class HandGrid extends LinearLayout {
             for (int c = 0; c < cells.length; c++) {
                 PartDial dial = cells[c];
                 String level = BrushLab.level(hand, dial);
-                Cell cell = new Cell(context, hand.get(dial), level, dial == PartDial.SS ? (int) hand.get(PartDial.DIR) : -1);
+                Cell cell = new Cell(context, hand.get(dial), BrushLab.cellText(hand, dial));
                 cell.setEnabled(!lab.locked(dial));
                 cell.setContentDescription(dial.label + ": " + level);
                 cell.setOnClickListener(v -> { lab.cycleCell(dial); changed.run(); });
@@ -80,12 +80,11 @@ final class HandGrid extends LinearLayout {
         private final String text;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-        /** {@code level} as {@link BrushLab#level(ModularBrush.Part, PartDial)} writes it; {@code fast}: Fast is (0 thinner, 1 thicker) for the speed-size cell, else -1. */
-        Cell(Context context, double value, String level, int fast) {
+        /** {@code text} as {@link BrushLab#cellText} writes it. */
+        Cell(Context context, double value, String text) {
             super(context);
             this.value = value;
-            level = level.toUpperCase(Locale.ROOT);
-            text = fast >= 0 && value > .1 ? (fast == 1 ? "+" : "−") + level : level;
+            this.text = text;
             paint.setTypeface(Theme.face(700));
             paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, LabLayout.DENSE_SP, getResources().getDisplayMetrics()));
             paint.setTextAlign(Paint.Align.CENTER);

@@ -6,7 +6,7 @@ import java.util.Arrays;
 /**
  * Timed Sections (the owner, 2026-10-21; Lynda Barry's diary): a template's boxes timed one after another, as the Diary Page's
  * Did 2:30, Saw 2:30, Heard 0:30, Picture 0:30 ({@link NotebookTemplate#sections}; the times editable in the prompts file,
- * {@link DailyPrompt#sectionTimes}). Immutable and kept in the page's own record ({@link DocumentCodec}'s {@code SECT} section,
+ * the template's own). Immutable and kept in the page's own record ({@link DocumentCodec}'s {@code SECT} section,
  * only once started): each section's length and the wall-clock time it ends, so a page reopened, or the app restarted, carries
  * on where the clock is. The time runs on whether the page shows or not, as a kitchen timer does. A skip ends the section
  * now and the ones after it follow on in full. Under the notebook's Lock Pages a section ended a day ago ({@link #LOCK_MS})
@@ -17,8 +17,8 @@ final class TimedSections {
     static final TimedSections NONE = new TimedSections(new int[0], new long[0]);
     /** How long a finished section stays open, ms: a day. */
     static final long LOCK_MS = 24L * 3600_000L;
-    /** The most sections a record keeps, and the longest a section may be, s (as a Daily Prompt card). */
-    static final int MOST = 16, MOST_SECONDS = DailyPrompt.MOST_SECONDS;
+    /** The most sections a record keeps, and the longest a section may be, s. */
+    static final int MOST = 16, MOST_SECONDS = 60 * 60;
     /** The notes (docs/TEXT-STYLE.md): the next section's, the end's, a locked box's. */
     static final String NEXT = "Next: ", DONE = "Done", LOCKED = "Section locked";
 
