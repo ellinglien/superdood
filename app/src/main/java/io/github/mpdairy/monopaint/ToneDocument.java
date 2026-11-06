@@ -665,6 +665,8 @@ final class ToneDocument {
         for(Edit e:undo) if(e.serial>since) after.add(e);
         return after;
     }
+    /** Draw Together: the layer Undo step {@code step} ({@link #stepsAfter}) drew on, or -1 (one of the stack's, a layer gone). */
+    int stepLayer(Object step) { Layer layer=((Edit)step).layer; return layer==null?-1:ownerOf(layer); }
     /**
      * Live pages (step 4): {@code steps} ({@link #stepsAfter}) taken back, newest first, as one new Undo step: each pixel as
      * the step found it, only where its layer still holds what the step left there (tone and coverage), so what was laid
@@ -1024,6 +1026,15 @@ final class ToneDocument {
     String layerName(int index) { return layers.get(index).name; }
     boolean layerVisible(int index) { return layers.get(index).visible; }
     int layerOpacity(int index) { return layers.get(index).opacity; }
+    /**
+     * Draw Together: {@code action} (another screen's change laid) with every layer shown, no Undo step: a layer this
+     * screen hides takes it all the same, as a layer's step is each screen's own (InkWashLayers.drawOn).
+     */
+    void withEveryLayer(Runnable action) {
+        ArrayList<Layer> hidden=new ArrayList<>();
+        for(Layer layer:layers) if(!layer.visible) { hidden.add(layer); layer.visible=true; }
+        try { action.run(); } finally { for(Layer layer:hidden) layer.visible=false; }
+    }
     /** Inkwash: whether layer {@code index} holds any mark, on its base or a plane. */
     boolean layerMarked(int index) { return layers.get(index).marked(); }
     void setLayerOpacity(int index,int value) {
@@ -1324,7 +1335,17 @@ final class ToneDocument {
      * Inkwash: as above as the screen shows it with Show Kinds at {@code kindsShown} ({@link #kindsShown}; 0 all Full,
      * the page's composite): each kind plane at its kind's step's strength, as {@link #visibleLayers} gives the screen.
      */
-    void compositeTones(int x,int y,int w,int h,int[] out,int offset,int stride,int kindsShown) {
+    void compositeTones(int x,int y,int w,int h,int[] out,int offset,int stride,int kindsShown) { compositeTones(x,y,w,h,out,offset,stride,kindsShown,-1); }
+    /**
+     * Draw Together: {@link #compositeTones} as every screen shares it, each layer shown Full whatever this screen's step
+     * for it (a layer's step is each screen's own and never sent, InkWashLayers.setStep). Pairs above {@code top} left
+     * out and pair {@code top}'s kind planes at {@code kindsShown}'s steps (the whole page sent a layer and a kind at a
+     * time, LiveChange.whole); {@code top} -1: every pair, every kind Full.
+     */
+    void liveTones(int x,int y,int w,int h,int[] out,int offset,int stride,int top,int kindsShown) { compositeTones(x,y,w,h,out,offset,stride,top<0?0:kindsShown,top<0?Integer.MAX_VALUE:top); }
+    void liveTones(int x,int y,int w,int h,int[] out,int offset,int stride) { liveTones(x,y,w,h,out,offset,stride,-1,0); }
+    /** {@code live} -1: the screen's composite; else {@link #liveTones}', pairs above {@code live} left out, only its kinds at {@code kindsShown}'s steps. */
+    private void compositeTones(int x,int y,int w,int h,int[] out,int offset,int stride,int kindsShown,int live) {
         byte[] under=pixels();
         for(int row=0;row<h;row++) {
             int o=offset+row*stride, i=(y+row)*width+x;
@@ -1332,9 +1353,9 @@ final class ToneDocument {
         }
         for(int k=0,end=stackSize(layers.size());k<end;k++) {
             Layer layer=stacked(layers,k); int n=stackOwner(k);
-            if(layer==null||!layers.get(n).visible) continue;
-            byte[] t=layer.tones,al=layer.alpha; int opacity=stackOpacity(layers.get(n),layer);
-            if(kindsShown!=0&&layer!=layers.get(n)) opacity=opacity*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(kindsShown,PLANE_KINDS[k%(2*(1+PLANES))/2-1])]/100;
+            if(layer==null||(live<0?!layers.get(n).visible:n/2>live)) continue;
+            byte[] t=layer.tones,al=layer.alpha; int opacity=live<0?stackOpacity(layers.get(n),layer):layer==layers.get(n)?100:layer.opacity;
+            if(kindsShown!=0&&layer!=layers.get(n)&&(live<0||n/2==live)) opacity=opacity*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(kindsShown,PLANE_KINDS[k%(2*(1+PLANES))/2-1])]/100;
             for(int row=0;row<h;row++) for(int c=0,o=offset+row*stride,i=(y+row)*width+x;c<w;c++,o++,i++) {
                 int a=al[i]&255;
                 if(a==0) continue;  // leaves it as it is, as compositeTone's sum does

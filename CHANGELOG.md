@@ -5,6 +5,11 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+- **Draw Together on three layers** (live-layers, 2026-11-06): a mark drawn on layer 1, 2 or 3 lands on that layer for
+  everyone, the Manta and the browser alike; a page of one layer makes the other two first. Each person picks their own
+  layer, and showing or hiding a layer stays on that screen. An eraser, a Lasso move or an Undo on one layer leaves the
+  other layers' marks. The browser's column has the layer button too (tap its top, middle or foot). A mark from an older
+  app lands on layer 2; an older app can't take marks on layers 1 and 3, so update both.
 - **Superdood 1.0** (2026-11-06): the first release under the Superdood name.
 - **Play opens clean** (play-flash, 2026-11-06, the owner: "play dropdown... impossible to read"). A menu opened from
   another menu's row (Play, Export Page, System Settings, Mirrors or Shapes from Play) now waits a moment for the menu

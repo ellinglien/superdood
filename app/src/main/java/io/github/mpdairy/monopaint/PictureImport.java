@@ -156,10 +156,12 @@ final class PictureImport {
     /**
      * As {@link #lay(ToneDocument, int, int, int, int, int[], boolean)}, {@code lighter}: the page made to show each grey,
      * lighter too (a live page's change that lightens, {@code LiveChange#set}: the eraser, an Undo, Clear Page; and a live
-     * page's own Undo). Only where a grey is lighter than the page shows: every shown layer's marks erased there, base and
-     * planes, then the grey laid on the layer drawn on, white (254 and up) leaving the paper. Where it is darker it goes on
-     * as ink ({@link #inked}), the other layers left as they are. Before 2026-11-02 every pixel of a set change was erased,
-     * so a guest's smudge that lightened one pixel flattened the owner's layers, kinds and tones under all of it.
+     * page's own Undo). Only where a grey is lighter than the page shows: the marks of the layer drawn on erased there, base
+     * and planes, and where that leaves it still too dark, every other shown layer's too (2026-11-06, three layers: a
+     * change made on one layer leaves the others'); then the grey laid on the layer drawn on, white (254 and up) leaving
+     * the paper. Where it is darker it goes on as ink ({@link #inked}), the other layers left as they are. Before
+     * 2026-11-02 every pixel of a set change was erased, so a guest's smudge that lightened one pixel flattened the
+     * owner's layers, kinds and tones under all of it.
      */
     static boolean lay(ToneDocument page, int x, int y, int w, int h, int[] greys, boolean joined, boolean lighter) { return lay(page, x, y, w, h, greys, joined, lighter, false); }
     /**
@@ -174,46 +176,67 @@ final class PictureImport {
     static boolean lay(ToneDocument page, int x, int y, int w, int h, int[] greys, boolean joined, boolean lighter, boolean exact, int kinds) {
         int[] shown = null;
         byte[] erased = null;
-        if (lighter) {
-            shown = new int[w * h]; erased = new byte[w * h];
-            int x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(page.width, x + w), y1 = Math.min(page.height, y + h);
-            if (x0 < x1 && y0 < y1) page.compositeTones(x0, y0, x1 - x0, y1 - y0, shown, (y0 - y) * w + x0 - x, w);
-        }
+        // A lighter change is another screen's (or a live page's own Undo): the page as every screen shares it, each layer Full.
+        if (lighter) { shown = liveTones(page, x, y, w, h); erased = new byte[w * h]; }
         boolean lightens = false;
         for (int row = 0; row < h; row++) for (int col = 0; col < w; col++) {
             int i = row * w + col, px = x + col, py = y + row;
             if (greys[i] < 0) continue;
             if (px < 0 || py < 0 || px >= page.width || py >= page.height) { greys[i] = -1; continue; }
             int g = greys[i] >= 254 ? 255 : greys[i];  // 254 is white as a change sends it
-            if (lighter && (g > shown[i] || exact && g < shown[i])) { erased[i] = 1; lightens = true; if (greys[i] >= 254) greys[i] = -1; continue; }
+            if (lighter && (g > shown[i] || exact && g < shown[i])) { erased[i] = 1; lightens = true; continue; }
             int layer = page.layerTone(px, py, kinds);
             if (lighter) greys[i] = greys[i] >= 254 ? -1 : inked(greys[i], shown[i], layer);
             if (greys[i] >= layer) greys[i] = -1;
         }
         boolean changed = false, link = joined;
         if (lightens) {
-            int active = page.activeLayer();
+            int active = page.activeLayer(), pair = InkWashLayers.current(page);
             Object mark = page.lastStep();
             try {
-                for (int layer = 0; layer < page.layerCount(); layer++) {
-                    if (!page.layerVisible(layer)) continue;
-                    page.selectLayer(layer);
-                    for (int k = -1; k < ToneDocument.PLANES; k++) {
-                        if (!page.beginPlane(k, false)) continue;
-                        page.eraseKinds(ToneDocument.KIND_ALL);
-                        try { page.eraseTones(x, y, w, h, erased); } finally { page.eraseKinds(0); }
-                        boolean c = link ? page.finishWithPrevious() : page.finish();
-                        changed |= c; link |= c;
-                    }
-                }
+                // The layer drawn on first (a change made on one layer: its Lasso, an Undo of its stroke), the others' marks
+                // kept; then, where the page must still get lighter (the eraser takes every layer), every other layer too.
+                changed = erase(page, x, y, w, h, erased, pair, true, link);
+                int[] now = liveTones(page, x, y, w, h);
+                byte[] rest = new byte[w * h];
+                boolean more = false;
+                for (int i = 0; i < rest.length; i++) if (erased[i] != 0 && (greys[i] >= 254 ? 255 : greys[i]) > now[i]) { rest[i] = 1; more = true; }
+                if (more && erase(page, x, y, w, h, rest, pair, false, link || changed)) { changed = true; now = liveTones(page, x, y, w, h); }
+                link |= changed;
                 // Vector Ink's lines cut there too, as the eraser cuts them: else the zoomed view drew them where they were erased, and the next eraser near them drew their pixels back.
-                if (VectorInk.cut(page, x, y, w, h, erased)) { changed = link = true; page.linkSince(mark); }
+                if (VectorInk.cut(page, x, y, w, h, VectorInk.layer(page) >= 0 ? erased : rest)) { changed = link = true; page.linkSince(mark); }
+                // The grey laid on the layer drawn on, now blank there, as ink over what the others show.
+                for (int i = 0; i < rest.length; i++) if (erased[i] != 0) { int g = greys[i] >= 254 ? -1 : inked(greys[i], now[i], 255); greys[i] = g >= 255 ? -1 : g; }
             } finally { page.selectLayer(active); }
         }
         page.begin(1, kinds);
         try { page.setTones(x, y, w, h, greys); }
         finally { changed |= link ? page.finishWithPrevious() : page.finish(); }
         return changed;
+    }
+    /** The halves of pair {@code pair} ({@code own}) or of every other pair, shown ones, erased at {@code erased}, each plane an Undo step joined to the one before when {@code link}; whether any changed. */
+    private static boolean erase(ToneDocument page, int x, int y, int w, int h, byte[] erased, int pair, boolean own, boolean link) {
+        boolean changed = false;
+        for (int layer = 0; layer < page.layerCount(); layer++) {
+            if (!page.layerVisible(layer) || (InkWashLayers.pair(layer) == pair) != own) continue;
+            page.selectLayer(layer);
+            for (int k = -1; k < ToneDocument.PLANES; k++) {
+                if (!page.beginPlane(k, false)) continue;
+                page.eraseKinds(ToneDocument.KIND_ALL);
+                try { page.eraseTones(x, y, w, h, erased); } finally { page.eraseKinds(0); }
+                boolean c = link ? page.finishWithPrevious() : page.finish();
+                changed |= c; link |= c;
+            }
+        }
+        return changed;
+    }
+    /** {@link ToneDocument#liveTones} over the rect, cut to the page; white off it. */
+    static int[] liveTones(ToneDocument page, int x, int y, int w, int h) {
+        int[] out = new int[w * h];
+        java.util.Arrays.fill(out, 255);
+        int x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(page.width, x + w), y1 = Math.min(page.height, y + h);
+        if (x0 < x1 && y0 < y1) page.liveTones(x0, y0, x1 - x0, y1 - y0, out, (y0 - y) * w + x0 - x, w);
+        return out;
     }
     /**
      * The grey the layer drawn on (tone {@code layer} there) takes so that the page, showing {@code shown}, shows

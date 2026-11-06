@@ -63,7 +63,7 @@ const post = body => new Promise((res, rej) => { const q = http.request(`http://
     // ---- The column: Menu, the smudge tool's row, the Dropper, the Lasso, Play, Zen Mode ----
     const parts = await p.evaluate(() => [...document.querySelectorAll("[data-m4]")].map(e => e.dataset.m4).join(","));
     ok(parts === "menu,dropper,lasso,play,zen", "The column's buttons (Shapes in Play): " + parts);
-    const smudgeRow = await p.evaluate(() => [...document.querySelectorAll("#column > button:not([data-m4]):not([data-x])")].map(b => b.getAttribute("aria-label"))), trays = await p.evaluate(() => guest.L.trays);
+    const smudgeRow = await p.evaluate(() => [...document.querySelectorAll("#column > button:not([data-m4]):not([data-x]):not(#layers)")].map(b => b.getAttribute("aria-label"))), trays = await p.evaluate(() => guest.L.trays);
     ok(smudgeRow.length === trays + 3 && smudgeRow[smudgeRow.length - 3] === "Fill in" && smudgeRow[smudgeRow.length - 2] === "Blend" && smudgeRow[smudgeRow.length - 1] === "Eraser", "Fill in's row, the smudge tool's, the eraser's: " + smudgeRow.slice(-3).join(", "));
     await shot(p, "column");
 

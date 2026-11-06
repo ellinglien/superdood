@@ -204,7 +204,7 @@ function newPage(w, h) {
   pageCanvas.width = W; pageCanvas.height = H;
   pageCtx = pageCanvas.getContext("2d", { willReadFrequently: true });
   pageCtx.fillStyle = "#fff"; pageCtx.fillRect(0, 0, W, H);
-  T.mirrors(P.id); own.length = undone.length = 0; wetSeen = null; undoLook();
+  T.mirrors(P.id); own.length = undone.length = 0; wetSeen = null; undoLook(); showLayer();
 }
 // What the engine changed over rect r (inclusive) into S and onto the canvas in its shades; r back.
 function pull(r) {
@@ -342,6 +342,15 @@ function arrange() {
   const box = document.createElement("canvas"); box.className = "at"; box.id = "box"; box.setAttribute("role", "slider");
   place(box, L.edge, top("FACES") + C.READOUT_ROWS * L.face, 2 * L.half, L.box); column.appendChild(box);
   boxInput(box);
+  // The layer button straight under the picker box (DrawLayout.LAYERS_ROW), none where the column has no room for it.
+  layerButton = null;
+  if (L.layers > 0) {
+    const b = layerButton = document.createElement("button"); b.className = "at"; b.id = "layers";
+    place(b, L.edge, top("LAYERS"), 2 * L.half, L.layers);
+    b.appendChild(document.createElement("canvas")); column.appendChild(b);
+    // Where it is tapped picks the layer, its whole height in thirds (DrawLayout.layerAt): the top third layer 3.
+    b.onclick = e => pickLayer(T.layerAt(e.clientY - b.getBoundingClientRect().top, b.offsetHeight));
+  }
   // The page bar's Zoom, at the end away from the column; the canvas under the bar; the brush line along the foot.
   across($("zoom"), L.side + L.strip[0], 0, L.zoomButton, L.pageBar - C.PAGE_RULE);
   across(undos, L.side, 0, 2 * C.UNDO_BUTTON, L.pageBar - C.PAGE_RULE);
@@ -357,10 +366,36 @@ function arrange() {
   fitView(); showTools();
   if (BK) BK.arranged();
 }
+// The layer button (InkWashBar.layers): the owner's three diamonds, the layer in use filled (res/drawable/layer_*.xml),
+// as tall as its row holds up to LAYERS_ICON, centred; this browser's own layer (each person picks a layer for themselves).
+let layerButton = null;
+const LAYER_ICONS = ["layer_bottom", "layer_middle", "layer_top"];
+async function showLayer() {
+  const b = layerButton;
+  if (!b || !P) return;
+  const layer = T.layer(P.id), w = b.offsetWidth, h = L.layers, v = await vector(LAYER_ICONS[layer - 1]), shows = [layer, w, h, !!v].join(" ");
+  b.setAttribute("aria-label", T.layerSaid(P.id));
+  if (b.shows === shows) return;
+  b.shows = shows;
+  const ctx = sized(b.firstChild, w, h);
+  ctx.clearRect(0, 0, w, h);
+  if (!v) return;
+  const ih = Math.min(C.LAYERS_ICON, h - 2 * C.TRAY_TOP), iw = ih * v.w / v.h;
+  drawVector(ctx, v, (w - iw) / 2, (h - ih) / 2, iw, ih);
+}
+// A tap on the layer button: that layer drawn on, here only; a page of one pair made three first, one Undo step. What
+// a wash still settling laid first (WebEngine.pickLayer) goes out as wet paint's does, on the layer it was drawn on.
+function pickLayer(layer) {
+  if (live) return;
+  const said = T.pickLayer(P.id, layer), r = pull(P.changed());
+  if (r && wetSeen) { wetBox = union(wetBox, r); wetFlush(); }
+  showLayer();
+  if (said) say(said);
+}
 // Every row, the readout, the box and the line as the tools are now.
 function showTools() {
   for (const r of rows) showRow(r);
-  showFaces();
+  showFaces(); showLayer();
   const s = slotOf(sel);
   $("words").textContent = s ? s.words : L.w.eraser;
   $("line").setAttribute("aria-label", s ? s.said : L.w.eraser);
@@ -600,7 +635,7 @@ function begin(e, finger) {
   if (X && X.refuses(tool, size, dk, eraseKinds)) return false;  // Show Kinds: nothing drawn, or erased, unseen
   wetFlush();
   const st = P.pen(tool, size, dk, tool === C.ERASER ? eraseKinds : 0, finger);
-  live = { st, id: e.pointerId, box: null, path: [], t0: e.timeStamp, found: S.slice(), finger, start: e.timeStamp, moved: false, tool, kinds: T.kindOf(tool, size, dk), part: null, partAt: performance.now(), parts: 0, sent: null };
+  live = { st, layer: T.layer(P.id), id: e.pointerId, box: null, path: [], t0: e.timeStamp, found: S.slice(), finger, start: e.timeStamp, moved: false, tool, kinds: T.kindOf(tool, size, dk), part: null, partAt: performance.now(), parts: 0, sent: null };
   hideRing();
   if (M4) M4.began(live);
   return true;
@@ -625,19 +660,20 @@ const PART_MS = 80;
 function sendPart(b) {
   live.part = null; live.partAt = performance.now();
   live.sent ??= live.found.slice();
-  if (send(b, [], live.sent, live.parts ? 2 : 1, live.kinds)) live.parts++;
+  if (send(b, [], live.sent, live.parts ? 2 : 1, live.kinds, live.layer)) live.parts++;
   const x = Math.max(0, b[0]), y = Math.max(0, b[1]);
   seen(x, y, Math.min(W - 1, b[2]) - x + 1, Math.min(H - 1, b[3]) - y + 1, live.sent);
 }
 function lift() {
   const t = performance.now(), r = pull(live.st.end());
   if (r) live.box = union(live.box, r);
-  const { box, path, found, parts, kinds } = live, ms = performance.now() - t;
+  const { box, path, found, parts, kinds, layer } = live, ms = performance.now() - t;
   // Sent in parts: the last over the whole stroke (Hold to Snap redraws it), and Undo takes back the whole stroke.
-  if (box && parts) { sendPart(box); const a = area(box, found); if (a) keep(a); }
+  if (box && parts) { sendPart(box); const a = area(box, found); if (a) keep(a, layer); }
+  wetLayer = layer;
   live = null; strokeLog.push({ lift: ms }); showSharp();
   if (M4) M4.lifted();
-  if (box && !parts) send(box, path, found, 0, kinds);
+  if (box && !parts) send(box, path, found, 0, kinds, layer);
   wetStart(); waiting.splice(0).forEach(go => go());
 }
 // A finger's stroke taken back (a second finger, the pen, a palm): finished, then the engine's own Undo; never sent, or
@@ -655,18 +691,19 @@ function area(b, found) {
   for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) before[r * w + c] = q16(found[(y + r) * W + x + c]);
   return { x, y, w, h, before };
 }
-// An own change, for Undo.
-function keep(a) { own.push({ ...a, after: shownRect(a.x, a.y, a.w, a.h) }); if (own.length > Live.MOST_OWN) own.shift(); undone.length = 0; undoLook(); }
+// An own change, for Undo, and the layer it was drawn on.
+function keep(a, layer) { own.push({ ...a, layer, after: shownRect(a.x, a.y, a.w, a.h) }); if (own.length > Live.MOST_OWN) own.shift(); undone.length = 0; undoLook(); }
 // What the stroke changed goes out: as ink, or set (an Undo's) when it lightens (the eraser, a lift). part: 1, a stroke's
 // first part sent while it is drawn, 2 a later one (kept for Undo at the lift, whole); kinds, its marks' kind (the
-// others lay them on its plane, so their Show Kinds fades them). Whether anything went.
-function send(b, path, found, part, kinds) {
+// others lay them on its plane, so their Show Kinds fades them); layer, the one it was drawn on (the others lay it there;
+// the one in use when left out: Shapes, the Lasso, a stamp). Whether anything went.
+function send(b, path, found, part, kinds, layer = T.layer(P.id)) {
   const a = area(b, found);
   if (!a) return false;
   const { x, y, w, h, before } = a, { greys, lighter, any } = Live.changed(x, y, w, h, W, S, found, before);
   if (!any) return false;
-  if (!part) keep(a);
-  post(Live.encode(x, y, w, h, greys, path, lighter, part === 2, kinds), w, h);
+  if (!part) keep(a, layer);
+  post(Live.encode(x, y, w, h, greys, path, lighter, part === 2, kinds, layer), w, h);
   return true;
 }
 const liveLog = [];
@@ -720,17 +757,18 @@ function takeBack(from, to, set) {
   while (from.length) {
     const o = from.pop(), was = shownRect(o.x, o.y, o.w, o.h), now = was.slice(), greys = Live.takeBack(o, now);
     if (greys.every(g => g === 255)) continue;
-    pull(P.picture(o.x, o.y, o.w, o.h, now)); seen(o.x, o.y, o.w, o.h);
-    to.push({ x: o.x, y: o.y, w: o.w, h: o.h, before: was, after: shownRect(o.x, o.y, o.w, o.h) });
+    // On the layer it was drawn on, here and everywhere: the other layers' marks there stay.
+    pull(P.picture(o.x, o.y, o.w, o.h, now, o.layer)); seen(o.x, o.y, o.w, o.h);
+    to.push({ x: o.x, y: o.y, w: o.w, h: o.h, layer: o.layer, before: was, after: shownRect(o.x, o.y, o.w, o.h) });
     if (to.length > Live.MOST_OWN) to.shift();
-    return post(Live.encode(o.x, o.y, o.w, o.h, greys, [], set || greys.some((g, i) => g !== 255 && g > was[i])), o.w, o.h);
+    return post(Live.encode(o.x, o.y, o.w, o.h, greys, [], set || greys.some((g, i) => g !== 255 && g > was[i]), false, 0, o.layer), o.w, o.h);
   }
 }
 
 // Wet paint after the lift, ten ticks a second as on the Manta (DryingTicker.TICK_MS) while no pen is down; what it
 // changed goes out every C.LIVE_TICKS_MS (LiveChange.TICKS_MS, as the Manta sends its own) and when it rests.
 const TICK_MS = 100;
-let wetSeen = null, wetBox = null, wetSent = 0, wetTicking = false;
+let wetSeen = null, wetBox = null, wetSent = 0, wetTicking = false, wetLayer = 2;  // wetLayer: the last stroke's, where its paint moves
 function wetStart() {
   if (!P.settling || wetTicking) return;
   wetTicking = true; wetSeen ??= S.slice(); setTimeout(wetTick, TICK_MS);
@@ -746,7 +784,7 @@ function wetTick() {
 function wetFlush() {
   if (!wetBox) return;
   const b = wetBox; wetBox = null; wetSent = performance.now();
-  send(b, [], wetSeen, 0, 2);  // wet paint's own moves: Paint (ToneDocument.KIND_PAINT)
+  send(b, [], wetSeen, 0, 2, wetLayer);  // wet paint's own moves: Paint (ToneDocument.KIND_PAINT), on its stroke's layer
   seen(b[0], b[1], b[2] - b[0] + 1, b[3] - b[1] + 1);
 }
 // What the page shows now over a rect, seen by wet paint's next send (or a stroke's next part, into).
@@ -992,7 +1030,7 @@ async function lay(data) {
   const put = (from, to) => {
     const part = new Uint8Array(w * h).fill(255);
     for (let k = from; k < to; k++) part[order[k]] = greys[order[k]];
-    pull(P.lay(x, y, w, h, part, c.set, c.kinds)); seen(x, y, w, h);
+    pull(P.lay(x, y, w, h, part, c.set, c.kinds, c.layer)); seen(x, y, w, h);  // on its layer, this page's own in use kept
   };
   for (let k = 0; k < n; k++) {
     const wait = start + k * over / Math.max(1, n - 1) - performance.now();

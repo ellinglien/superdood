@@ -11,7 +11,7 @@ import java.util.zip.*;
  * then a byte a pixel, 255 clear; then n, the path's samples (0: none), and n samples of x, y (page pixels) and ms since
  * the first, each an unsigned short; then, only when one is, a byte of flags: 1, a change that lightens (an Undo's, step
  * 4; the eraser's, Clear Page's: {@link #since}), its greys set, lighter too, not laid as ink; 2, a later part of a
- * stroke sent while it is drawn, one Undo step with the part before; {@link #kinds} {@code << 2}. Bytes ending after the greys (step 1–2a's form) are a change with no path. Pure, checked on the
+ * stroke sent while it is drawn, one Undo step with the part before; {@link #kinds} {@code << 2}; {@link #layer} {@code << 5} (0: layer 2); bit 7, none yet, ignored. Bytes ending after the greys (step 1–2a's form) are a change with no path. Pure, checked on the
  * desktop ({@code LiveChangeChecks}).
  */
 final class LiveChange {
@@ -48,6 +48,16 @@ final class LiveChange {
      * 2026-11-05: "visibility settings don't seem to affect anything on the browser"). A change of more kinds goes as none.
      */
     int kinds;
+    /**
+     * The layer it was drawn on, 1 to 3 ({@code InkWashLayers.layer}; the three layers, 2026-11-06): the receiver lays it
+     * there ({@code InkWashLayers.drawOn}), its own layer in use left as it is. Written as flags' bits 5 and 6, 0 for
+     * layer 2, so a layer 2 change is as an older app writes it, and a change from one, with none, lands on layer 2. An app
+     * before it refuses a layer 1 or 3 change (it took flags up to 31): one more reason to install both ends together.
+     * shortcut: the greys are what every layer shows together, so a mark laid under a darker one of a higher layer reaches
+     * the others' page only as that darker mark (their layer gets it when they join, {@link #whole}, not live); upgrade to
+     * each layer's own tones if hiding a layer on one screen shows it missing.
+     */
+    int layer = 2;
 
     LiveChange(int x, int y, int w, int h, int[] greys) { this(x, y, w, h, greys, NO_PATH); }
     LiveChange(int x, int y, int w, int h, int[] greys, int[] path) { this(x, y, w, h, greys, path, false); }
@@ -115,16 +125,59 @@ final class LiveChange {
         return new LiveChange(x0, y0, w, h, greys, path);
     }
 
+    /**
+     * The layer of {@code page} a change was drawn on ({@link #layer}): that of the newest of its Undo {@code steps}
+     * ({@link ToneDocument#stepsAfter}) that drew on one (Vector Ink's own pair, the wash a stroke settles on, the layer
+     * an Undo took back), else the layer in use (a stroke's part: the layer its gesture draws on); 1 for the pair under
+     * the three of an old four-pair page.
+     */
+    static int layerOf(ToneDocument page, java.util.List<Object> steps) {
+        int pair = InkWashLayers.current(page);
+        for (int i = steps.size() - 1; i >= 0; i--) { int n = page.stepLayer(steps.get(i)); if (n >= 0) { pair = InkWashLayers.pair(n); break; } }
+        return Math.max(1, InkWashLayers.layerOfPair(page, pair));
+    }
+
+    /**
+     * The whole page as it goes when a guest may be joining (LiveProbe.shown): a layer at a time, bottom first, each with
+     * its layer ({@link #layer}), so a guest has each mark on its layer (a layer with no marks passed by, the top one
+     * always); in each a kind at a time, as the page stacks them (the base, Dry Media, Paint, Pen), each with its kind
+     * ({@link #kinds}), so a guest's Show Kinds fades what was drawn before it joined too. Each the page as every screen
+     * shares it up to there ({@link ToneDocument#liveTones}: every layer Full, a layer's step being each screen's own),
+     * to go as what it adds ({@link #since}): each given to {@code each} as it is made, {@code last} true for the last, so
+     * only one whole page's greys are held at a time.
+     */
+    static void whole(ToneDocument page, java.util.function.BiConsumer<LiveChange, Boolean> each) {
+        LiveChange held = null;
+        int[] kinds = {0, ToneDocument.KIND_PENCIL, ToneDocument.KIND_PAINT, ToneDocument.KIND_PEN};
+        int pairs = InkWashLayers.pairs(page);
+        for (int pair = 0; pair < pairs; pair++) {
+            if (pair < pairs - 1 && !page.layerMarked(InkWashLayers.washOf(page, pair)) && !page.layerMarked(InkWashLayers.inkOf(page, pair))) continue;
+            final int top = pair;
+            for (int k = 0; k < kinds.length; k++) {
+                int hidden = 0;
+                for (int c = 1; c < kinds.length - k; c++) hidden = EraseKind.withStep(hidden, c, NotebookOptions.HIDDEN);  // Pen, Paint, Dry Media's columns
+                final int shown = hidden;
+                LiveChange c = shown(java.util.Collections.singletonList(new int[]{0, 0, page.width, page.height}), page.width, page.height,
+                        (x, y, w, h, o, offset, stride) -> page.liveTones(x, y, w, h, o, offset, stride, top, shown), NO_PATH);
+                c.kinds = kinds[k];
+                c.layer = Math.max(1, InkWashLayers.layerOfPair(page, pair));
+                if (held != null) each.accept(held, false);
+                held = c;
+            }
+        }
+        each.accept(held, true);
+    }
+
     /** This change as a part of a stroke sent while it is drawn: no path (laid at once), joining the part before unless the first; its kind kept. */
-    LiveChange part(boolean later) { LiveChange c = new LiveChange(x, y, w, h, greys, NO_PATH, set, later); c.kinds = kinds; return c; }
+    LiveChange part(boolean later) { LiveChange c = new LiveChange(x, y, w, h, greys, NO_PATH, set, later); c.kinds = kinds; c.layer = layer; return c; }
 
     /**
      * This change as it goes out: only the pixels that differ from {@code room} (what each pixel of a {@code width} wide
      * page was last sent as, a byte each, 255 for nothing yet), and set when one is lighter, since ink only darkens where
      * it is laid: the eraser, Clear Page, a layer hidden (the owner, 2026-11-02: "i cleared the page but the desktop
      * version kept the art"). A pixel not sent yet, or lost ({@link #forget}), goes set too: what a guest shows there is
-     * not known, so it may be darker. Its greys cut in place (a whole Manta page's are 20 MB); taken into the room
-     * ({@link #into}). Null when nothing differs.
+     * not known, so it may be darker. Its greys cut in place (a whole Manta page's are 20 MB), and to the box round
+     * what differs; taken into the room ({@link #into}). Null when nothing differs.
      */
     LiveChange since(byte[] room, int width) {
         int[] g = greys;
@@ -135,8 +188,17 @@ final class LiveChange {
             if (g[i] == was) g[i] = -1; else { any = true; lighter |= g[i] > was || was == 255; }
         }
         if (!any) return null;
-        LiveChange c = new LiveChange(x, y, w, h, g, path, set || lighter, joins);
-        c.kinds = kinds;
+        // Cut to the box round what differs: a later pass of the whole page (whole) holds a layer's marks, not 20 MB.
+        int l = w, t = h, r = -1, b = -1;
+        for (int i = 0; i < g.length; i++) if (g[i] >= 0) { int col = i % w, row = i / w; l = Math.min(l, col); r = Math.max(r, col); t = Math.min(t, row); b = Math.max(b, row); }
+        int cw = r - l + 1, ch = b - t + 1;
+        if (cw < w || ch < h) {
+            int[] cut = new int[cw * ch];
+            for (int row = 0; row < ch; row++) System.arraycopy(g, (t + row) * w + l, cut, row * cw, cw);
+            g = cut;
+        }
+        LiveChange c = new LiveChange(x + l, y + t, cw, ch, g, path, set || lighter, joins);
+        c.kinds = kinds; c.layer = layer;
         c.into(room, width);
         return c;
     }
@@ -171,7 +233,7 @@ final class LiveChange {
             out.write(raw);
             out.writeShort(path.length / 3);
             for (int v : path) out.writeShort(v);
-            int flags = (set ? 1 : 0) | (joins ? 2 : 0) | (kinds & ToneDocument.KIND_ALL) << 2;
+            int flags = (set ? 1 : 0) | (joins ? 2 : 0) | (kinds & ToneDocument.KIND_ALL) << 2 | (layer == 1 || layer == 3 ? layer : 0) << 5;
             if (flags != 0) out.write(flags);
         } finally { deflater.end(); }
         return bytes.toByteArray();
@@ -193,9 +255,9 @@ final class LiveChange {
             int[] path = new int[3 * n];
             for (int i = 0; i < path.length; i++) path[i] = in.readUnsignedShort();
             int flags = in.read();
-            if (flags != -1 && (flags < 1 || flags > 31 || in.read() != -1)) throw new IOException("Bytes after the change");
+            if (flags != -1 && (flags < 1 || in.read() != -1)) throw new IOException("Bytes after the change");
             LiveChange c = new LiveChange(x, y, w, h, greys, path, flags > 0 && (flags & 1) != 0, flags > 0 && (flags & 2) != 0);
-            if (flags > 0) c.kinds = flags >> 2;
+            if (flags > 0) { c.kinds = flags >> 2 & ToneDocument.KIND_ALL; c.layer = flags >> 5 & 3; if (c.layer == 0) c.layer = 2; }
             return c;
         } catch (ZipException e) { throw new IOException("Not deflated", e); }
     }

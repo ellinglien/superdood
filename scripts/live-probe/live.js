@@ -8,10 +8,12 @@
   // raw = x,y,w,h, w*h greys, then n and n samples of x,y,ms (uint16 each, big-endian); path is a flat [x,y,ms,...];
   // then, only when one is, a byte of flags: 1, an Undo's change, its greys set, lighter too (LiveChange.set); 2, a later
   // part of a stroke sent while it is drawn, one Undo step with the part before (LiveChange.joins); kinds << 2, the
-  // marks' kind (KIND_ bits: Pen 1, Paint 2, Dry Media 4), laid on its plane so Show Kinds fades them (LiveChange.kinds).
-  function encode(x, y, w, h, greys, path, set, joins, kinds) {
+  // marks' kind (KIND_ bits: Pen 1, Paint 2, Dry Media 4), laid on its plane so Show Kinds fades them (LiveChange.kinds);
+  // layer << 5, the layer it was drawn on, 1 or 3 (0: layer 2, as an older page writes every change), laid on that layer
+  // (LiveChange.layer); bit 7, none yet, ignored.
+  function encode(x, y, w, h, greys, path, set, joins, kinds, layer = 2) {
     let k = 1; while (path.length / 3 / k > MAXN) k++;
-    const flags = (set ? 1 : 0) | (joins ? 2 : 0) | (kinds & 7) << 2;
+    const flags = (set ? 1 : 0) | (joins ? 2 : 0) | (kinds & 7) << 2 | (layer === 1 || layer === 3 ? layer : 0) << 5;
     const n = Math.ceil(path.length / 3 / k), raw = new Uint8Array(8 + w * h + 2 + 6 * n + (flags ? 1 : 0)), v = new DataView(raw.buffer);
     if (flags) raw[raw.length - 1] = flags;
     [x, y, w, h].forEach((a, i) => v.setUint16(2 * i, a)); raw.set(greys, 8);
@@ -23,9 +25,9 @@
     const v = new DataView(raw.buffer, raw.byteOffset, raw.length), x = v.getUint16(0), y = v.getUint16(2), w = v.getUint16(4), h = v.getUint16(6), g = 8 + w * h;
     if (raw.length < g) throw new Error("cut short");
     const n = raw.length === g ? 0 : v.getUint16(g), end = g + 2 + 6 * n, flags = raw.length === end + 1 ? raw[end] : 0;
-    if (n > MAXN || (raw.length > g && raw.length !== end && !(flags >= 1 && flags <= 31))) throw new Error("bad path");
+    if (n > MAXN || (raw.length > g && raw.length !== end && flags < 1)) throw new Error("bad path");
     const path = []; for (let i = 0; i < 3 * n; i++) path.push(v.getUint16(g + 2 + 2 * i));
-    return { x, y, w, h, greys: raw.subarray(8, g), path, set: !!(flags & 1), joins: !!(flags & 2), kinds: flags >> 2 };
+    return { x, y, w, h, greys: raw.subarray(8, g), path, set: !!(flags & 1), joins: !!(flags & 2), kinds: flags >> 2 & 7, layer: flags >> 5 & 3 || 2 };
   }
   // A host's tools (LiveTools.java), not a change: the first eight bytes zero (no change is 0×0).
   const isTools = raw => raw.length >= 8 && raw.subarray(0, 8).every(b => b === 0);

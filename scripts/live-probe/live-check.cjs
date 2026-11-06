@@ -25,7 +25,7 @@ function jvmLayout(screens) {
   fs.mkdirSync(pkg, { recursive: true });
   fs.writeFileSync(path.join(pkg, "LayoutNumbers.java"), `package io.github.mpdairy.monopaint;
 public final class LayoutNumbers { public static void main(String[] a) { for (int i = 0; i < a.length; i += 2) { DrawLayout d = new DrawLayout(Integer.parseInt(a[i]), Integer.parseInt(a[i + 1]));
-  StringBuilder s = new StringBuilder("{\\"side\\":" + d.side + ",\\"slot\\":" + d.slot + ",\\"trays\\":" + d.trays + ",\\"pageBar\\":" + d.pageBar() + ",\\"pageWidth\\":" + d.pageWidth() + ",\\"canvasHeight\\":" + d.canvasHeight() + ",\\"box\\":" + d.box + ",\\"tops\\":[");
+  StringBuilder s = new StringBuilder("{\\"side\\":" + d.side + ",\\"slot\\":" + d.slot + ",\\"trays\\":" + d.trays + ",\\"pageBar\\":" + d.pageBar() + ",\\"pageWidth\\":" + d.pageWidth() + ",\\"canvasHeight\\":" + d.canvasHeight() + ",\\"box\\":" + d.box + ",\\"layers\\":" + d.layers + ",\\"tops\\":[");
   int[] t = d.tops(); for (int k = 0; k < t.length; k++) s.append(k > 0 ? "," : "").append(t[k]); System.out.println(s.append("]}")); } } }`);
   const java = p => path.join(process.env.JAVA_HOME || "/Applications/Android Studio.app/Contents/jbr/Contents/Home", "bin", p);
   execFileSync(java("javac"), ["-nowarn", "-d", dir, "-sourcepath", path.join(REPO, "app", "src", "main", "java"), path.join(pkg, "LayoutNumbers.java")], { stdio: ["ignore", "ignore", "inherit"] });
@@ -121,13 +121,14 @@ const status = url => new Promise((res, rej) => http.get(url, a => { a.resume();
     for (const [g, name, J] of [[A, "iPad portrait 820×1180", jvm[0]], [B, "phone portrait 390×844", jvm[1]]]) {
       const dom = await g.evaluate(() => {
         const r = el => { const b = el.getBoundingClientRect(); return [b.x, b.y, b.width, b.height]; };
-        return { rows: [...document.querySelectorAll("#column > button:not([data-m4]):not([data-x])")].map(r), box: r(document.getElementById("box")), view: r(document.getElementById("view")), parts: guest.L.parts };
+        return { rows: [...document.querySelectorAll("#column > button:not([data-m4]):not([data-x]):not(#layers)")].map(r), box: r(document.getElementById("box")), view: r(document.getElementById("view")), parts: guest.L.parts, layers: r(document.getElementById("layers")) };
       });
-      const tray = J.tops[dom.parts.indexOf("TRAY")], tools = J.tops[dom.parts.indexOf("TOOLS")], faces = J.tops[dom.parts.indexOf("FACES")];
-      // The slots, then the smudge tool's row and the eraser's (M4).
-      const rowsOk = dom.rows.length === J.trays + 2 && dom.rows.slice(0, J.trays).every((r, i) => r[1] === tray + i * J.slot && r[3] === J.slot) && dom.rows[J.trays][1] === tools && dom.rows[J.trays + 1][1] === tools + J.slot;
+      const tray = J.tops[dom.parts.indexOf("TRAY")], tools = J.tops[dom.parts.indexOf("TOOLS")], faces = J.tops[dom.parts.indexOf("FACES")], layers = J.tops[dom.parts.indexOf("LAYERS")];
+      // The slots, then Fill in's row, the smudge tool's and the eraser's (M4).
+      const rowsOk = dom.rows.length === J.trays + 3 && dom.rows.slice(0, J.trays).every((r, i) => r[1] === tray + i * J.slot && r[3] === J.slot) && [0, 1, 2].every(k => dom.rows[J.trays + k][1] === tools + k * J.slot);
       const rest = dom.view[0] === J.side && dom.view[1] === J.pageBar && dom.view[2] === J.pageWidth && dom.view[3] === J.canvasHeight && dom.box[3] === J.box && dom.box[1] > faces;
-      ok(rowsOk && rest, `${name}: the column as DrawLayout lays it on the JVM (${J.trays} slots of ${J.slot} dp from ${tray}, the eraser at ${tools + J.slot}, the box ${J.box} dp, the page ${J.pageWidth}×${J.canvasHeight} under a ${J.pageBar} dp bar)`);
+      const layerRow = dom.layers[1] === layers && dom.layers[3] === J.layers && J.layers > 0;
+      ok(rowsOk && rest && layerRow, (rowsOk ? "" : "rows off ") + (rest ? "" : "rest off ") + (layerRow ? "" : "layers at " + dom.layers + " ") + `${name}: the column as DrawLayout lays it on the JVM (${J.trays} slots of ${J.slot} dp from ${tray}, the eraser at ${tools + 2 * J.slot}, the box ${J.box} dp, the layer button ${J.layers} dp at ${layers}, the page ${J.pageWidth}×${J.canvasHeight} under a ${J.pageBar} dp bar)`);
     }
     // Strokes: the iPad's pen, the phone's finger.
     const box = p => p.evaluate(() => { const r = document.getElementById("view").getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
@@ -179,7 +180,7 @@ const status = url => new Promise((res, rej) => http.get(url, a => { a.resume();
     const vB = await dark(B, ...bRegion), vA = await dark(A, ...bRegion);
     ok(Math.abs(rB - fB) < fB / 20 && rA > fA * .9 && vB < fB / 10 && vA < fA / 10, `a three-finger tap redoes it on both (phone ${uB} → ${rB}, iPad ${uA} → ${rA}), two fingers take it back again (${vB}, ${vA})`);
     // The eraser on the iPad, across its own stroke: lighter on both.
-    await A.evaluate(() => guest.choose(10));
+    await A.evaluate(() => guest.choose(guest.L.c.ERASER));
     await pen(A, line(.2, .27, .8, .29));
     await sleep(1500);
     const eA = await dark(A, ...region), eB = await dark(B, ...region);
@@ -262,6 +263,35 @@ const status = url => new Promise((res, rej) => http.get(url, a => { a.resume();
       return { tones: [guest.S[i], guest.S[i + 1]], shown: [d[0], d[4]], shade: [guest.E.T.shade(180), guest.E.T.shade(250)] }; });
     ok(toned.tones.join() === "180,250" && toned.shown.join() === toned.shade.join() && toned.shown[0] < 140 && toned.shown[1] < 255,
       `greys show as on the Manta: tones ${toned.tones} on the page shown ${toned.shown} (its curve: ${toned.shade})`);
+    // The three layers (2026-11-06): the column's layer button, a tap's top third layer 3 on the iPad alone (each person picks
+    // a layer for themselves); the iPad's stroke goes saying layer 3 and shows on the phone, whose own layer stays 2; the
+    // Manta's change on layer 1 and an older app's (no layer: 2) show too; the browser's own Undo goes on its stroke's layer.
+    const layerOf = g => g.evaluate(() => ({ layer: guest.E.T.layer(guest.P.id), said: document.getElementById("layers").getAttribute("aria-label") }));
+    const third = async (g, k) => { await g.bringToFront(); const r = await g.evaluate(() => { const b = document.getElementById("layers").getBoundingClientRect(); return [b.x + b.width / 2, b.y, b.height]; }); await g.mouse.click(r[0], r[1] + r[2] * (k + .5) / 3); await sleep(200); };
+    const l0 = [await layerOf(A), await layerOf(B)];
+    await third(A, 0);
+    const l1 = [await layerOf(A), await layerOf(B)];
+    ok(l0.every(l => l.layer === 2 && l.said === "Layer 2 of 3") && l1[0].layer === 3 && l1[0].said === "Layer 3 of 3" && l1[1].layer === 2,
+      `the layer button: layer 2 at first, a tap on its top third picks layer 3 on the iPad (${l1[0].said}), the phone's stays ${l1[1].layer}`);
+    await A.evaluate(() => guest.choose(0));
+    const sentBefore = (await heard(PORT)).length;
+    const [lx0, ly0] = await toPage(A, .2, .38), [lx1, ly1] = await toPage(A, .45, .4), lRegion = [Math.floor(lx0) - 30, Math.floor(ly0) - 30, Math.ceil(lx1) + 30, Math.ceil(ly1) + 30];
+    const blankL = [await dark(A, ...lRegion), await dark(B, ...lRegion)];
+    await pen(A, line(.2, .38, .45, .4));
+    await sleep(1200);
+    const fromA = (await heard(PORT)).slice(sentBefore).map(b => { try { return Live.parse(zlib.inflateSync(LC.open(KEY, b))); } catch (e) { return null; } }).filter(c => c && c.w);
+    const onB = await dark(B, ...lRegion), onA = await dark(A, ...lRegion), lB = await layerOf(B);
+    ok(fromA.length > 0 && fromA.every(c => c.layer === 3) && onA > 100 && onB > onA * .9 && lB.layer === 2,
+      `the iPad's stroke on layer 3 goes saying so (${fromA.map(c => c.layer)}) and shows on the phone (${onA} dark px, ${onB} there), the phone still on layer ${lB.layer}`);
+    await A.evaluate(() => guest.undo()); await sleep(900);
+    const undoneB = await dark(B, ...lRegion), undoneA = await dark(A, ...lRegion), undoLayer = (await heard(PORT)).slice(-1).map(b => Live.parse(zlib.inflateSync(LC.open(KEY, b))).layer)[0];
+    ok(undoneA - blankL[0] < onA / 10 && undoneB - blankL[1] < onB / 10 && undoLayer === 3, `its Undo takes it back on both (${blankL} before it, ${onA} → ${undoneA}, phone ${onB} → ${undoneB}), on layer ${undoLayer}`);
+    await post(PORT, zlib.deflateSync(Live.encode(1300, 120, 60, 20, new Uint8Array(1200).fill(0), [], false, false, 1, 1)));
+    await post(PORT, zlib.deflateSync(Live.encode(1300, 160, 60, 20, new Uint8Array(1200).fill(0), [])));
+    await sleep(900);
+    const hostOn = [await dark(A, 1300, 120, 1360, 140), await dark(B, 1300, 120, 1360, 140), await dark(A, 1300, 160, 1360, 180), await dark(B, 1300, 160, 1360, 180)], own = [await layerOf(A), await layerOf(B)];
+    ok(hostOn.every(k => k === 1200) && own[0].layer === 3 && own[1].layer === 2, `the Manta's change on layer 1 and an older app's show on both (${hostOn}), each guest's own layer kept (${own.map(l => l.layer)})`);
+    await third(A, 1);
     // Timing on the iPad, a stroke each with a few of the host's slots: an input event's samples drawn and shown, the lift;
     // then relay → shown on the phone (drawing on, 200 to 600 ms, included).
     console.log("\ntiming (this Mac's headless Chrome; ms): slot, an input event drawn and shown median / 95th / worst, lift");
@@ -390,7 +420,7 @@ const status = url => new Promise((res, rej) => http.get(url, a => { a.resume();
     ok(empty && noted && r0[0] > 100 && r0[1] === 0 && r1[0] > 100 && r1[1] > r1[0] * .9 && r2[0] > 100 && r2[1] > r2[0] * .9 && !meet.length,
       `a refused change let go with a note (${noted}; ${r0[0]} dark px on the phone, ${r0[1]} on the iPad), the next goes (${r1}); one meeting a network failure goes again (${r2})`);
     await B.cdp.send("Fetch.disable");
-    errs.splice(0, errs.length, ...errs.filter(e => !/^403 .*\/send\?/.test(e)));  // the refusals above
+    errs.splice(0, errs.length, ...errs.filter(e => !/^403 .*\/send\?/.test(e) && !/^40[34] .*\/drawable\/tip_[a-z0-9_]*\.xml$/.test(e)));  // the refusals above; a picture tip asked as a drawing first (vector; LiveHost refuses what it hasn't)
     ok(!errs.length, "no console errors" + (errs.length ? ": " + errs.slice(0, 3).join(" | ") : ""));
   } finally { await b.close(); relays.forEach(r => r.kill()); }
   console.log(`${n - fail} of ${n} passed`);

@@ -10,8 +10,8 @@ import java.util.*;
 public final class LiveChangeChecks {
     public static void main(String[] args) throws IOException {
         if (args.length == 5 && args[0].equals("parts")) { parts(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4])); return; }
-        roundTrip(); refused(); shown(); path(); set(); kinds(); areas(); live(); composite(); washSettles(); ticksReach(); hostParts();
-        System.out.println("PASS: live change: written and read back the same, clear pixels clear, its path kept; the form without a path read as no path; larger than a page, cut short, too long a path or with bytes after it, refused; what the page shows read as a change, white kept white; a pen stroke's samples as a path; an Undo's change marked set, the rest not; only what differs from what was sent goes, set when lighter or not sent yet, a lost one sent again; a stroke's later part marked as joining the one before; its marks' kind kept, laid on its plane showing the grey sent, Show Kinds hiding it; areas apart sent as one change clear between them, cut to the page; the page's blocks written since last asked, runs joined; a block's tones as each pixel's; a Watercolour washy stroke and its settling sent change by change rebuild the page exactly; the owner's oil moving after the lift and a Fading mark's steps reach a guest as they go, batched, its page the host's in 16 greys; the Manta's own stroke sent in parts while drawn, of its kind, its page the guest's after each and after the lift, kind by kind");
+        roundTrip(); refused(); shown(); path(); set(); kinds(); areas(); live(); composite(); washSettles(); ticksReach(); hostParts(); layers();
+        System.out.println("PASS: live change: written and read back the same, clear pixels clear, its path kept; the form without a path read as no path; larger than a page, cut short, too long a path or with bytes after it, refused; what the page shows read as a change, white kept white; a pen stroke's samples as a path; an Undo's change marked set, the rest not; only what differs from what was sent goes, cut to the box round it, set when lighter or not sent yet, a lost one sent again; a stroke's later part marked as joining the one before; its marks' kind kept, laid on its plane showing the grey sent, Show Kinds hiding it; areas apart sent as one change clear between them, cut to the page; the page's blocks written since last asked, runs joined; a block's tones as each pixel's; a Watercolour washy stroke and its settling sent change by change rebuild the page exactly; the owner's oil moving after the lift and a Fading mark's steps reach a guest as they go, batched, its page the host's in 16 greys; the Manta's own stroke sent in parts while drawn, of its kind, its page the guest's after each and after the lift, kind by kind; the layer a change was drawn on (1 and 3 round trip, 2 written as an older app writes it, none read as 2, bit 7 ignored) laid there, a one-pair page made three first, the guest's own layer in use kept, a layer it hides taking it all the same; a lightening change on one layer leaves the others' marks, the eraser's takes every layer; a layer's step never sent; the whole page for a guest joining a layer and a kind at a time, each mark on its layer; a change's layer its Undo steps' (Vector Ink's own pair), a part's the gesture's, and Vector Ink's change lands on the guest's top layer, under its own lines there");
     }
 
     static void path() throws IOException {
@@ -41,7 +41,8 @@ public final class LiveChangeChecks {
         LiveChange both = LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 0, 3}));
         check(both.joins && both.set, "flags 3: a later part that lightens, joins and set");
         check(!LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 0, 1})).joins, "an Undo's change doesn't join");
-        refused(() -> LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 0, 32})), "an unknown flag");
+        LiveChange high = LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 0, (byte) 0x80}));
+        check(!high.set && !high.joins && high.kinds == 0 && high.layer == 2, "bit 7, none yet: ignored");
         since();
     }
     /** A change's marks' kind (the owner, 2026-11-05: Show Kinds did nothing to the Manta's marks in a browser): kept, and laid on its plane. */
@@ -86,7 +87,7 @@ public final class LiveChangeChecks {
         erased.forget(room, 3);
         check((room[0] & 255) == 255 && (room[1] & 255) == 255 && (room[2] & 255) == 254 && (room[3] & 255) == 100, "lost: its pixels not sent, the rest kept");
         LiveChange again = new LiveChange(0, 0, 3, 1, new int[]{254, 254, 254}).since(room, 3);
-        check(again != null && again.set && Arrays.equals(again.greys, new int[]{254, 254, -1}), "the next change there sends them again, set: " + (again == null ? null : Arrays.toString(again.greys)));
+        check(again != null && again.set && again.x == 0 && again.w == 2 && Arrays.equals(again.greys, new int[]{254, 254}), "the next change there sends them again, set, cut to them: " + (again == null ? null : Arrays.toString(again.greys)));
     }
     static void areas() throws IOException {
         int[][] page = {{0, 255, 128, 9}, {255, 255, 3, 7}};
@@ -341,6 +342,112 @@ public final class LiveChangeChecks {
     static int off(int[] a, int[] b) { int n = 0; for (int i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 8 && Math.round(a[i] / 17f) != Math.round(b[i] / 17f)) n++; return n; }
     static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
 
+    /**
+     * The three layers (2026-11-06): a change says the layer it was drawn on and lands there, wherever the guest draws.
+     * Laid as the browser lays one (WebEngine.lay) and the Manta (LiveProbe.laySlice): {@link #layOn}.
+     */
+    static void layers() throws IOException {
+        for (int l = 1; l <= 3; l++) {
+            LiveChange c = new LiveChange(0, 0, 1, 1, new int[]{9}, LiveChange.NO_PATH, true, false);
+            c.kinds = ToneDocument.KIND_PEN; c.layer = l;
+            LiveChange back = LiveChange.read(c.write());
+            check(back.layer == l && back.kinds == ToneDocument.KIND_PEN && back.set, "layer " + l + " read back: " + back.layer);
+        }
+        check(inflated(new LiveChange(0, 0, 1, 1, new int[]{9}).write()).length == 11, "layer 2 written as an older app writes it: no flags");
+        LiveChange three = new LiveChange(0, 0, 1, 1, new int[]{9}); three.layer = 3;
+        byte[] raw = inflated(three.write());
+        check(raw.length == 12 && raw[11] == 3 << 5, "layer 3 in the flags' bits 5 and 6: " + raw[raw.length - 1]);
+        check(LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 0, 1})).layer == 2 && LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7})).layer == 2, "an older app's change: layer 2");
+        check(three.part(true).layer == 3 && three.since(new byte[]{(byte) 255}, 1).layer == 3, "kept as a part and going out");
+
+        // A one-pair page receiving a layer 3 change: three pairs first, the mark on the top one, its own layer 2 kept.
+        ToneDocument guest = InkWashLayers.blank(6, 1);
+        layOn(guest, change(3, false, -1, -1, -1, -1, -1, 0));
+        check(InkWashLayers.pairs(guest) == 3 && InkWashLayers.layer(guest) == 2, "made three pairs, its layer in use kept: " + InkWashLayers.pairs(guest) + ", " + InkWashLayers.layer(guest));
+        check(marked(guest, 2) && !marked(guest, 1) && !marked(guest, 0), "the mark on layer 3");
+        // Its own layer 3 picked: an older app's change (none: layer 2) on layer 2, a layer 1 change on layer 1, its own 3 kept.
+        InkWashLayers.pickLayer(guest, 3);
+        layOn(guest, change(2, false, -1, -1, 60, -1, -1, -1));
+        layOn(guest, change(1, false, 100, 100, -1, -1, -1, -1));
+        check(marked(guest, 1) && marked(guest, 0) && InkWashLayers.layer(guest) == 3, "each on its layer, its own kept");
+        int[] sees = PictureImport.liveTones(guest, 0, 0, 6, 1), one = tonesUpTo(guest, 0);
+        check(Arrays.equals(sees, new int[]{100, 100, 60, 255, 255, 0}) && Arrays.equals(one, new int[]{100, 100, 255, 255, 255, 255}), "showing what was sent, layer 1 its own: " + Arrays.toString(sees) + " " + Arrays.toString(one));
+        // A layer the guest hides takes a change all the same and stays hidden: a layer's step is each screen's own.
+        InkWashLayers.setStep(guest, 1, NotebookOptions.HIDDEN);
+        layOn(guest, change(1, false, -1, -1, -1, 30, -1, -1));
+        check(tonesUpTo(guest, 0)[3] == 30 && InkWashLayers.stepOf(guest, 1) == NotebookOptions.HIDDEN, "laid on a hidden layer, still hidden");
+        InkWashLayers.setStep(guest, 1, NotebookOptions.FULL);
+
+        // A lightening change of layer 3's (its Lasso moved away, an Undo of its stroke): layer 1 under it stays; the
+        // eraser's (white) takes every layer. Before, every layer went where it lightened, layer 1's grey moved to layer 3.
+        layOn(guest, change(3, false, 0, -1, -1, -1, -1, -1));
+        check(PictureImport.liveTones(guest, 0, 0, 6, 1)[0] == 0 && tonesUpTo(guest, 0)[0] == 100, "layer 3's black over layer 1's grey");
+        layOn(guest, change(3, true, 100, 254, -1, -1, -1, -1));
+        int[] after = PictureImport.liveTones(guest, 0, 0, 6, 1), under = tonesUpTo(guest, 0);
+        check(after[0] == 100 && under[0] == 100 && after[1] == 255 && under[1] == 255, "layer 1 kept under a lightening of layer 3, the eraser everything: " + Arrays.toString(after) + " " + Arrays.toString(under));
+
+        // A layer's step is never sent: hiding or fading a layer changes nothing that goes.
+        ToneDocument host = InkWashLayers.blank(4, 1);
+        InkWashLayers.pickLayer(host, 3);
+        layOn(host, change(3, false, 0, -1, -1, -1));
+        layOn(host, change(1, false, -1, 80, -1, -1));
+        byte[] room = new byte[4];
+        Arrays.fill(room, (byte) 255);
+        LiveChange.shown(Collections.singletonList(new int[]{0, 0, 4, 1}), 4, 1, host::liveTones, LiveChange.NO_PATH).since(room, 4);
+        InkWashLayers.setStep(host, 3, NotebookOptions.HIDDEN); InkWashLayers.setStep(host, 1, NotebookOptions.HALF);
+        int[] screen = new int[4];
+        host.compositeTones(0, 0, 4, 1, screen, 0, 4);
+        check(screen[0] == 255 && screen[1] > 80, "the host's screen hides and fades them: " + Arrays.toString(screen));
+        check(LiveChange.shown(Collections.singletonList(new int[]{0, 0, 4, 1}), 4, 1, host::liveTones, LiveChange.NO_PATH).since(room, 4) == null, "nothing goes for it");
+
+        // A guest joining: the whole page a layer and a kind at a time, each mark on its layer, the page as the host's.
+        ToneDocument joins = InkWashLayers.blank(4, 1);
+        Arrays.fill(room, (byte) 255);
+        List<Integer> sent = new ArrayList<>();
+        LiveChange.whole(host, (c, last) -> { LiveChange d = c.since(room, 4); if (d != null) { sent.add(d.layer); layOn(joins, d); } });
+        check(sent.contains(1) && sent.contains(3) && InkWashLayers.pairs(joins) == 3 && InkWashLayers.layer(joins) == 2, "layers 1 and 3 sent as such: " + sent);
+        check(Arrays.equals(PictureImport.liveTones(joins, 0, 0, 4, 1), PictureImport.liveTones(host, 0, 0, 4, 1)) && marked(joins, 0) && marked(joins, 2) && !marked(joins, 1),
+                "its page the host's, layers 1 and 3 its own: " + Arrays.toString(PictureImport.liveTones(joins, 0, 0, 4, 1)));
+
+        // The layer a change was drawn on: its Undo steps' (a stroke on layer 1 while layer 3 is picked again after), else the
+        // layer in use (a part while drawn: its gesture's). Vector Ink draws on its own pair, the top one, then the pair picked.
+        WatercolorSession session = new WatercolorSession();
+        ToneDocument vi = InkWashLayers.blank(200, 120);
+        VectorInkChecks.draw(vi, session, VectorInkChecks.preset("Steady line"), 6, 1, new float[][]{{20, 100}, {30, 30}, {.5f, .5f}});
+        long top = vi.top();
+        VectorInkChecks.draw(vi, session, VectorInkChecks.vector(), 6, 1, new float[][]{{20, 100, 180}, {60, 60, 60}, {.5f, .5f, .5f}});
+        int drawnOn = LiveChange.layerOf(vi, vi.stepsAfter(top));
+        check(InkWashLayers.pairs(vi) == 2 && drawnOn == 3 && LiveChange.layerOf(vi, Collections.emptyList()) == 2, "Vector Ink on the pair put on top: layer 3, the layer in use 2: " + drawnOn);
+        LiveChange line = LiveChange.shown(Collections.singletonList(new int[]{0, 40, 200, 80}), 200, 120, vi::liveTones, LiveChange.NO_PATH);
+        line.layer = drawnOn;
+        ToneDocument plain = InkWashLayers.blank(200, 120);
+        layOn(plain, line);
+        check(InkWashLayers.pairs(plain) == 3 && marked(plain, 2) && plain.compositeTone(100, 60) < 128, "a guest's top layer, as on the host");
+        // A guest whose top layer holds Vector Ink lines of its own: the change goes under them, as the host's own pen's.
+        ToneDocument lined = InkWashLayers.blank(200, 120);
+        InkWashLayers.pickLayer(lined, 3);
+        VectorInkChecks.draw(lined, session, VectorInkChecks.vector(), 6, 1, new float[][]{{20, 180}, {100, 100}, {.5f, .5f}});
+        int lines = VectorInk.lined(lined);
+        layOn(lined, line);
+        check(lined.compositeTone(100, 60) < 128 && lined.lines(lines) != null && VectorInkChecks.drawn(lined, lines), "under the guest's own lines, their layer theirs alone");
+    }
+    /** Change {@code c} laid as WebEngine.lay and LiveProbe.laySlice lay one: on its layer ({@link InkWashLayers#drawOn}). */
+    static void layOn(ToneDocument d, LiveChange c) {
+        int[] greys = c.greys.clone();
+        InkWashLayers.drawOn(d, c.layer, () -> {
+            if (c.set) PictureImport.lay(d, c.x, c.y, c.w, c.h, greys, false, true, false, c.kinds);
+            else WebParity.lay(d, c.x, c.y, c.w, c.h, greys, c.kinds);
+        });
+    }
+    /** A change on {@code layer}, {@code set}, of these greys (−1 clear), one row from the page's top left. */
+    static LiveChange change(int layer, boolean set, int... greys) { LiveChange c = new LiveChange(0, 0, greys.length, 1, greys, LiveChange.NO_PATH, set); c.layer = layer; return c; }
+    static boolean marked(ToneDocument d, int pair) { return d.layerMarked(InkWashLayers.washOf(d, pair)) || d.layerMarked(InkWashLayers.inkOf(d, pair)); }
+    /** A one-row page as every screen shares it up to pair {@code pair}. */
+    static int[] tonesUpTo(ToneDocument d, int pair) { int[] out = new int[d.width]; d.liveTones(0, 0, d.width, 1, out, 0, d.width, pair, 0); return out; }
+    static byte[] inflated(byte[] bytes) throws IOException {
+        try (java.util.zip.InflaterInputStream in = new java.util.zip.InflaterInputStream(new ByteArrayInputStream(bytes))) { return in.readAllBytes(); }
+    }
+
     static void roundTrip() throws IOException {
         int[] greys = {-1, 0, 128, 247, -1, 30};
         LiveChange back = LiveChange.read(new LiveChange(1900, 2550, 3, 2, greys).write());
@@ -366,7 +473,7 @@ public final class LiveChangeChecks {
         byte[] pathed = new LiveChange(0, 0, 1, 1, new int[]{7}, new int[]{1, 2, 3}).write();
         refused(() -> LiveChange.read(Arrays.copyOf(pathed, pathed.length - 3)), "path cut short");
         refused(() -> LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 1, 0, 1, 0, 2})), "a sample cut short");
-        refused(() -> LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 1, 0, 1, 0, 2, 0, 3, 32})), "bytes after the path");
+        refused(() -> LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0, 1, 0, 1, 0, 2, 0, 3, 32, 1})), "bytes after the path");
         refused(() -> LiveChange.read(deflated(new byte[]{0, 0, 0, 0, 0, 1, 0, 1, 7, 0x4e, 0x21})), "more than 20000 samples");
         refused(() -> new LiveChange(0, 0, 1, 1, new int[1], new int[]{1, 2}), "not samples of three");
     }

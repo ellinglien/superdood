@@ -68,7 +68,7 @@ FILES = {"/": ("text/html; charset=utf-8", lambda: read(HERE, "probe.html").enco
 if os.path.isdir(RES):  # not on the server (public), where only relay.py and pack's files are
     FILES.update({"/fonts/" + f: ("font/ttf", raw(RES, "font", f)) for f in os.listdir(os.path.join(RES, "font")) if f.endswith(".ttf")})
     FILES.update({"/drawable/" + f: ("application/xml", raw(RES, "drawable", f)) for f in os.listdir(os.path.join(RES, "drawable"))
-                  if re.fullmatch(r"((tip_|tool_|shape_box_|ic_ph_|ic_part_|ic_cover_)[a-z0-9_]*|ic_finger|ic_shape_oval|ic_brush_pen|ic_sand_timer|ic_drop_dashed|ic_hair_dryer)\.xml", f)})
+                  if re.fullmatch(r"((tip_|tool_|shape_box_|ic_ph_|ic_part_|ic_cover_|layer_)[a-z0-9_]*|ic_finger|ic_shape_oval|ic_brush_pen|ic_sand_timer|ic_drop_dashed|ic_hair_dryer)\.xml", f)})
     FILES.update({"/drawable/" + f: ("image/png", raw(RES, "drawable-nodpi", f)) for f in os.listdir(os.path.join(RES, "drawable-nodpi")) if re.fullmatch(r"(tip_[a-z0-9_]*|splash_drawing)\.png", f)})
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".wasm": "application/wasm", ".ttf": "font/ttf",
          ".xml": "application/xml", ".png": "image/png"}  # LiveHost.type's

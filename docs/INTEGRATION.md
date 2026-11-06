@@ -5784,3 +5784,23 @@ older readers. Superdood's own: `NotebookStrip` (the name, unstar), `NotebookScr
 | `DrawingBook` | +~55 −10 | Each page's mark (`faves`, beside `surfaces`, moving with its page through add, delete, move, layers, `take`/`restore`); `copyStack` and `append` (a stack into another book, its bytes its own); `Taken.fave`; the snapshot's `pageFaves`. |
 | `BookCodec` | +2 −1 | Writes and reads the marks (`Covers.pageFaves`). |
 | `DocumentStore` | +40 −10 | `rewrite` takes a change that may delete the notebook instead; `favourite` (made at the first star) and `unfavourite`, on the IO queue. |
+
+## Draw Together on three layers (2026-11-06, branch `live-layers`): upstream files touched
+
+A live change says the layer it was drawn on (`LiveChange.layer`, flags bits 5 and 6, 0 for layer 2, so a layer 2 change
+is byte for byte an older app's); the receiver lays it there (`InkWashLayers.drawOn`: a one-pair page made three first by
+the first switch's `make`, every layer shown meanwhile, its own layer picked again after). Everything live compares and
+sends the page as every screen shares it (`ToneDocument.liveTones`: each layer Full), so a layer's step is never sent.
+A lightening change erases the layer drawn on first, the others only where that is not enough (`PictureImport.lay`).
+The whole page for a guest joining goes a layer and a kind at a time (`LiveChange.whole`); `LiveChange.since` cuts a
+change to the box round what differs. Browser: `WebEngine.lay`/`picture` take the layer, `layer`, `layerSaid`,
+`layerAt`, `pickLayer`; live.html's layer button (res/drawable/layer_*.xml, relay.py serves them). Checks:
+`LiveChangeChecks.layers`, live-check.cjs's layer button and layer 3 stroke.
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` | +25 −4 | `compositeTones` gains a private core with `liveTones` (every layer Full; pairs above one left out, its kinds at steps); `withEveryLayer` (a hidden layer takes a guest's change, no step); `stepLayer` (the layer an Undo step drew on). |
+| `PictureImport` | +35 −15 | `lay`'s `lighter`: `liveTones`, the layer drawn on erased first, the others where still too dark; `erase`, `liveTones` helpers. |
+
+Generic: none (live only). Engine boundary unchanged. Shortcut: the greys are all layers together, so a mark laid under
+a darker one of a higher layer reaches others only on joining (`LiveChange.whole`), not live.

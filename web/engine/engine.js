@@ -20,8 +20,10 @@
 //   page.changed()                              the rect changed since the last call (any E.T call on the page: a shape, the Lasso)
 //   page.tones(x, y, w, h)                      the page as it shows, a byte a pixel (0 to 255)
 //   page.ground(code, size, dark, x, y, w, h, greys)   marks under a brush's strokes, on its own layer and kind (pictures)
-//   page.lay(x, y, w, h, greys, set, kinds)            a live change received, as the Manta lays one; page.picture(x, y, w, h, greys)
-//                                               the rect made a plain picture of greys (255 paper): this page's own Undo
+//   page.lay(x, y, w, h, greys, set, kinds, layer)     a live change received, as the Manta lays one, on its layer (1 to 3;
+//                                               2 when left out, an older app's); page.picture(x, y, w, h, greys, layer)
+//                                               the rect made a plain picture of greys (255 paper): this page's own Undo, on
+//                                               the layer its change was drawn on (the layer in use when left out)
 //   page.undo(), page.redo(), page.free(); page.canUndo, page.canRedo: whether either has anything to do
 //   page.sharp(k, x, y, w, h)                   sharp dry brushes: page px x, y, w × h drawn k points a pixel (2, 4 or 8;
 //                                               E.T.sharpStep(scale) picks it), (w k) × (h k) greys row by row, −1 where the
@@ -66,8 +68,8 @@
         dry() { T.dry(n); return took(); },
         tones: (x, y, w, h) => u8(T.tones(n, x, y, w, h)).slice(),
         ground(code, size, dark, x, y, w, h, greys) { return T.ground(n, code, size, dark, x, y, w, h, i8(greys)); },
-        lay(x, y, w, h, greys, set, kinds) { T.lay(n, x, y, w, h, i8(greys), !!set, kinds | 0); return took(); },
-        picture(x, y, w, h, greys) { T.picture(n, x, y, w, h, i8(greys)); return took(); },
+        lay(x, y, w, h, greys, set, kinds, layer = 2) { T.lay(n, x, y, w, h, i8(greys), !!set, kinds | 0, layer | 0); return took(); },
+        picture(x, y, w, h, greys, layer = 0) { T.picture(n, x, y, w, h, i8(greys), layer | 0); return took(); },
         sharp: (k, x, y, w, h) => new Int32Array(T.sharpArea(n, k, x, y, w, h)),
         sharpTile: (k, tx, ty) => new Int32Array(T.sharpTile(n, k, tx, ty)),
         undo() { T.undo(n); return took(); },

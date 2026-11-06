@@ -176,11 +176,9 @@ public final class WebParity {
     /** As above, a mark of {@code kinds} ({@link PictureImport#lay}'s): on its kind's plane. */
     static void lay(ToneDocument d, int x, int y, int w, int h, int[] greys, int kinds) {
         VectorInk.under(d);
-        int[] shown = new int[w * h];
-        java.util.Arrays.fill(shown, 255);
-        // The stack looked up once, as PictureImport.lay's lighter: a pixel at a time slowed a guest's catch-up (planes).
-        int x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(d.width, x + w), y1 = Math.min(d.height, y + h);
-        if (x0 < x1 && y0 < y1) d.compositeTones(x0, y0, x1 - x0, y1 - y0, shown, (y0 - y) * w + x0 - x, w);
+        // The stack looked up once, as PictureImport.lay's lighter: a pixel at a time slowed a guest's catch-up (planes);
+        // every layer Full, as every screen shares the page (a layer's step is each screen's own).
+        int[] shown = PictureImport.liveTones(d, x, y, w, h);
         for (int i = 0; i < greys.length; i++) if (greys[i] >= 0) greys[i] = PictureImport.inked(greys[i], shown[i], d.layerTone(x + i % w, y + i / w, kinds));
         PictureImport.lay(d, x, y, w, h, greys, false, false, false, kinds);
     }

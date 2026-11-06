@@ -305,25 +305,48 @@ public final class WebEngine {
      * Greys from another page (a live page's change: what that page showed) laid as the Manta lays them (WebParity.lay:
      * LiveProbe.onLayer, then {@link PictureImport#lay}), only where they darken; {@code set} (one that lightens): the
      * page made to show them, lighter too ({@link PictureImport#lay}'s {@code lighter}). One Undo step. {@code kinds}: the
-     * marks' kind (a live change's), laid on its plane so Show Kinds fades them; 0 none, on the layer's base.
+     * marks' kind (a live change's), laid on its plane so Show Kinds fades them; 0 none, on the layer's base. {@code layer}:
+     * the layer it was drawn on, 1 to 3 (LiveChange.layer), as the Manta lays it ({@link InkWashLayers#drawOn}): the
+     * three pairs made first on a page of one, this page's own layer in use kept.
      */
-    @JSExport public static void lay(int p, int x, int y, int w, int h, @JSByRef byte[] greys, boolean set, int kinds) {
+    @JSExport public static void lay(int p, int x, int y, int w, int h, @JSByRef byte[] greys, boolean set, int kinds, int layer) {
         Page g = at(p);
         g.session.settleNow(g.d);
-        if (!set) { WebParity.lay(g.d, x, y, w, h, ints(greys), kinds); return; }
-        PictureImport.lay(g.d, x, y, w, h, ints(greys), false, true, false, kinds);
+        int[] all = ints(greys);
+        InkWashLayers.drawOn(g.d, layer < 1 || layer > InkWashLayers.LAYERS ? 2 : layer, () -> {
+            if (!set) WebParity.lay(g.d, x, y, w, h, all, kinds);
+            else PictureImport.lay(g.d, x, y, w, h, all, false, true, false, kinds);
+        });
     }
     /**
      * The page made to show {@code greys} over the whole rect (255 paper), as a set change is laid ({@link #lay}) but exact
      * ({@link PictureImport#lay}'s {@code exact}): a live page's own Undo, its pixels must show as they were, those it
-     * shows already left as they are. One Undo step.
+     * shows already left as they are. One Undo step. On {@code layer} (1 to 3), the one the change taken back was drawn
+     * on ({@link InkWashLayers#drawOn}); else the layer in use.
      */
-    @JSExport public static void picture(int p, int x, int y, int w, int h, @JSByRef byte[] greys) {
+    @JSExport public static void picture(int p, int x, int y, int w, int h, @JSByRef byte[] greys, int layer) {
         Page g = at(p);
         g.session.settleNow(g.d);
         int[] all = new int[greys.length];
         for (int i = 0; i < all.length; i++) all[i] = Math.min(254, greys[i] & 255);
-        PictureImport.lay(g.d, x, y, w, h, all, false, true, true);
+        InkWashLayers.drawOn(g.d, layer < 1 || layer > InkWashLayers.LAYERS ? layer(p) : layer, () -> PictureImport.lay(g.d, x, y, w, h, all, false, true, true));
+    }
+    /** The layer button ({@link DrawLayout#LAYERS_ROW}): page {@code p}'s layer in use, 1 to 3 ({@link InkWashLayers#layer}; 1 for an old four-pair page's lowest). */
+    @JSExport public static int layer(int p) { return Math.max(1, InkWashLayers.layer(at(p).d)); }
+    /** What the layer button says, "Layer 2 of 3" ({@link DrawLayout#layerSaid}; this page hides none). */
+    @JSExport public static String layerSaid(int p) { return DrawLayout.layerSaid(layer(p), false); }
+    /** The layer a tap {@code y} down the layer button {@code height} tall picks ({@link DrawLayout#layerAt}): its top third 3. */
+    @JSExport public static int layerAt(double y, double height) { return DrawLayout.layerAt((float) y, 0, (float) height); }
+    /**
+     * The layer button's tap, as the Manta's ({@code PaintActivity.pickLayer}): layer {@code layer} drawn on, a page of fewer
+     * than three pairs made three first, one Undo step, a wash still settling laid first; this browser's alone (each person
+     * picks a layer for themselves). Its note, "Layer 3"; "" when it is in use.
+     */
+    @JSExport public static String pickLayer(int p, int layer) {
+        Page g = at(p);
+        if (InkWashLayers.layer(g.d) == layer) return "";
+        if (InkWashLayers.pairs(g.d) < InkWashLayers.LAYERS) g.session.settleNow(g.d);
+        return InkWashLayers.pickLayer(g.d, layer) ? DrawLayout.layerNote(layer) : "";
     }
     /** The drawing screen's Undo (a floating bath's last stroke first) and Redo; whether anything changed. */
     @JSExport public static boolean undo(int p) { Page g = at(p); return g.session.undo(g.d); }
@@ -346,7 +369,7 @@ public final class WebEngine {
          .k("icon").v(d.icon).k("gap").v(d.gap).k("slot").v(d.slot).k("face").v(d.face).k("wet").v(d.wet).k("box").v(d.box).k("spare").v(d.spare)
          .k("fit").v(d.fit).k("menuRow").v(d.menuRow()).k("pageBar").v(d.pageBar()).k("pageWidth").v(d.pageWidth()).k("pageHeight").v(d.pageHeight())
          .k("canvasHeight").v(d.canvasHeight()).k("footHeight").v(d.footHeight()).k("columnHeight").v(d.columnHeight()).k("lineStart").v(d.lineStart())
-         .k("faceSide").v(d.faceSide()).k("zoomButton").v(DrawLayout.zoomButton()).k("trackTop").v(DrawLayout.trackTop()).k("trackFoot").v(DrawLayout.trackFoot(d.box));
+         .k("faceSide").v(d.faceSide()).k("layers").v(d.layers).k("zoomButton").v(DrawLayout.zoomButton()).k("trackTop").v(DrawLayout.trackTop()).k("trackFoot").v(DrawLayout.trackFoot(d.box));
         j.k("tops").a(); for (int t : d.tops()) j.v(t); j.e();
         j.k("parts").a(); for (DrawLayout.Part p : DrawLayout.COLUMN) j.v(p.name()); j.e();
         j.k("strip").a(); for (int x : d.stripPlaces(d.pageWidth(), false)) j.v(x); j.e();
@@ -354,7 +377,7 @@ public final class WebEngine {
          .k("BAR_INSET").v(DrawLayout.BAR_INSET).k("FACE_GAP").v(DrawLayout.FACE_GAP).k("PAIR_PAD").v(DrawLayout.PAIR_PAD).k("FACE_MARK").v(DrawLayout.FACE_MARK)
          .k("FACE_MARK_GAP").v(DrawLayout.FACE_MARK_GAP).k("STRIP_MARK").v(DrawLayout.STRIP_MARK).k("READOUT_ROWS").v(DrawLayout.READOUT_ROWS)
          .k("TIP_TRIM").v(DrawLayout.TIP_TRIM).k("ZOOM_LOCK").v(DrawLayout.ZOOM_LOCK).k("ZOOM_GAP").v(DrawLayout.ZOOM_GAP).k("ZOOM_PAD").v(DrawLayout.ZOOM_PAD)
-         .k("LINE_PAD").v(DrawLayout.LINE_PAD).k("LINE_NAME").v(DrawLayout.LINE_NAME).k("BRUSH_LINE").v(DrawLayout.BRUSH_LINE).k("PAGE_RULE").v(DrawLayout.PAGE_RULE).k("UNDO_BUTTON").v(UNDO_BUTTON)
+         .k("LINE_PAD").v(DrawLayout.LINE_PAD).k("LINE_NAME").v(DrawLayout.LINE_NAME).k("BRUSH_LINE").v(DrawLayout.BRUSH_LINE).k("PAGE_RULE").v(DrawLayout.PAGE_RULE).k("UNDO_BUTTON").v(UNDO_BUTTON).k("LAYERS_ICON").v(DrawLayout.LAYERS_ICON)
          .k("SHADE_END").v(ShadeStrip.END).k("CAPTION").v(TypeStyle.CAPTION.sp).k("LABEL").v(TypeStyle.LABEL.sp).k("ERASER").v(ToolSlots.ERASER).k("COUNT").v(ToolSlots.COUNT).k("SMUDGE").v(ToolSlots.SMUDGE).k("STAMP").v(ToolSlots.STAMP).k("FILL").v(ToolSlots.FILL)
          .k("PINCH_SLOP").v(PinchPan.SLOP_DP).k("LEAST_SPAN").v(PinchPan.LEAST_SPAN_DP).k("FINGER_TRAVEL").v(FingerTool.PRESSURE_TRAVEL)
          .k("HOVER_MIN").v(HoverNib.MIN_RADIUS).k("HOVER_SHOWN").v(HoverNib.SHOWN_MS).k("HOVER_AWAY").v(HoverNib.AWAY_MS).k("TICK_SIDE").v(HoverNib.TICK_SIDE).k("ERASER_LEAST").v(ToolSwatches.ERASER_LEAST)

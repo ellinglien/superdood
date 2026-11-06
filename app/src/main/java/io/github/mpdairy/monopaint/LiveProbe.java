@@ -311,7 +311,7 @@ final class LiveProbe {
             app.pad.finishStroke(); app.pad.settleDrying(); changed();
             if (a.page == sentPage) c.into(room, a.page.width);  // everyone lays it too
         }
-        if (a.shown == null) { a.shown = new int[c.w * c.h]; a.page.compositeTones(c.x, c.y, c.w, c.h, a.shown, 0, c.w); }
+        if (a.shown == null) a.shown = PictureImport.liveTones(a.page, c.x, c.y, c.w, c.h);
         // Strokes in a row each show as they come, not after the drawing on of every one before (Elling: "only the first one shows").
         int[] part = rest || !waiting.isEmpty() ? rest(a) : a.slices[a.next++];
         // A stroke's later part (sent while it is drawn) joins its sender's part before it, as a change's slices join.
@@ -319,8 +319,9 @@ final class LiveProbe {
         boolean joined = after != null && after == a.page.lastStep();
         laying = true;
         long top = a.page.top();  // a set change is a step a layer and plane it erased, then its own
+        // On the layer it was drawn on (InkWashLayers.drawOn: made first on a page of one pair), this tablet's own kept in use.
         // Ink on Vector Ink's layer goes on a pair under it first, as the host's own pen's (VectorInk.under), its step the guest's too; then the greys as that layer takes them.
-        try { app.layerChange(() -> { if (darkens(part, a.shown)) VectorInk.under(a.page); if (PictureImport.lay(a.page, c.x, c.y, c.w, c.h, onLayer(a, part), joined, c.set, false, c.kinds)) { laidSteps.addAll(a.page.stepsAfter(top)); a.step = a.page.lastStep(); } }); }
+        try { app.layerChange(() -> InkWashLayers.drawOn(a.page, c.layer, () -> { if (darkens(part, a.shown)) VectorInk.under(a.page); if (PictureImport.lay(a.page, c.x, c.y, c.w, c.h, onLayer(a, part), joined, c.set, false, c.kinds)) { laidSteps.addAll(a.page.stepsAfter(top)); a.step = a.page.lastStep(); } })); }
         finally { laying = false; a.page.takeLive(); }
         if (a.step != null) { partFrom = a.from; partStep = a.step; }
         if (a.next < a.slices.length) { main.postAtTime(slice, a.start + a.due[a.next]); return; }
@@ -414,18 +415,8 @@ final class LiveProbe {
         // Then this tablet's tools, so a browser that joins makes its page this size and draws with them (LiveTools):
         // always, as the relay's history may start again at the page message.
         sendTools(page, true);
-        // A kind at a time, as the page stacks them (the base, Dry Media, Paint, Pen), each with its kind (LiveChange.kinds):
-        // a guest's Show Kinds fades what was drawn before it joined too. Each goes as what it adds (LiveChange.since).
-        int[] kinds = {0, ToneDocument.KIND_PENCIL, ToneDocument.KIND_PAINT, ToneDocument.KIND_PEN};
-        for (int k = 0; k < kinds.length; k++) {
-            int hidden = 0;
-            for (int c = 1; c < kinds.length - k; c++) hidden = EraseKind.withStep(hidden, c, NotebookOptions.HIDDEN);  // Pen, Paint, Dry Media's columns
-            final int shown = hidden;
-            LiveChange whole = LiveChange.shown(java.util.Collections.singletonList(new int[]{0, 0, page.width, page.height}), page.width, page.height,
-                    (x, y, w, h, out, offset, stride) -> page.compositeTones(x, y, w, h, out, offset, stride, shown), LiveChange.NO_PATH);
-            whole.kinds = kinds[k];
-            send(k == kinds.length - 1 ? withMagnets(page, whole) : whole, 0, start);
-        }
+        // A layer and a kind at a time (LiveChange.whole), each going as what it adds (LiveChange.since); the magnets with the last.
+        LiveChange.whole(page, (c, last) -> send(last ? withMagnets(page, c) : c, 0, start));
     }
 
     /**
@@ -442,7 +433,7 @@ final class LiveProbe {
         java.util.List<int[]> areas = page.takeLive();
         java.util.List<Object> steps = page.stepsAfter(seen);
         steps.removeAll(laidSteps); laidSteps.clear(); seen = page.top();
-        if (takenBack != null) { sendTakenBack(page); return; }
+        if (takenBack != null) { sendTakenBack(page, steps); return; }
         own.made(steps);
         long start = SystemClock.uptimeMillis();
         // A stroke sent in parts while drawn: the lift's rest is its last part, laid at once; else it draws itself on along its path.
@@ -452,8 +443,9 @@ final class LiveProbe {
         StrokeLog.Entry stroke = page.newestStroke();
         int[] path = later || stroke == null || stroke == sentStroke ? LiveChange.NO_PATH : LiveChange.path(stroke);
         areas.addAll(lost); lost.clear();
-        LiveChange change = LiveChange.shown(areas, page.width, page.height, page::compositeTones, path);
+        LiveChange change = LiveChange.shown(areas, page.width, page.height, page::liveTones, path);
         if (change == null) return;
+        change.layer = LiveChange.layerOf(page, steps);
         // The marks' kind, so a guest's Show Kinds fades them (LiveChange.kinds): the stroke's; on its own after the lift, wet paint's.
         change.kinds = later ? partKinds : path.length > 0 ? StrokeLog.medium(stroke.code, stroke.px, stroke.darkness) : ticking ? ToneDocument.KIND_PAINT : 0;
         if (stroke != null) sentStroke = stroke;
@@ -474,8 +466,9 @@ final class LiveProbe {
         long now = SystemClock.uptimeMillis();
         if (now - partAt < LiveChange.PART_MS) return;
         partAt = now;
-        LiveChange c = LiveChange.shown(page.takeLive(), page.width, page.height, page::compositeTones, LiveChange.NO_PATH);
+        LiveChange c = LiveChange.shown(page.takeLive(), page.width, page.height, page::liveTones, LiveChange.NO_PATH);
         if (c == null) return;
+        c.layer = LiveChange.layerOf(page, java.util.Collections.emptyList());  // the stroke's: the layer its gesture draws on
         // The stroke's kind, as the lift's (LiveChange.kinds): a guest lays every part on that kind's plane.
         if (parts == 0) { StrokeLog.Recorder r = app.pad.recording(); partKinds = r == null ? 0 : r.medium(); }
         c.kinds = partKinds;
@@ -538,15 +531,19 @@ final class LiveProbe {
         return true;
     }
 
-    /** What the page shows where an Undo or Redo took pixels back, as one change. */
-    private void sendTakenBack(ToneDocument page) {
+    /** What the page shows where an Undo or Redo took pixels back (in {@code steps}), as one change. */
+    private void sendTakenBack(ToneDocument page, java.util.List<Object> steps) {
         java.util.BitSet bits = takenBack;
         takenBack = null;
         int w = page.width, x0 = w, y0 = page.height, x1 = -1, y1 = -1;
         for (int i = bits.nextSetBit(0); i >= 0; i = bits.nextSetBit(i + 1)) { int x = i % w, y = i / w; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
         if (x1 < 0) return;
         long start = SystemClock.uptimeMillis();
-        send(LiveChange.shown(x0, y0, x1 - x0 + 1, y1 - y0 + 1, (x, y) -> bits.get(y * w + x) ? page.compositeTone(x, y) : -1, LiveChange.NO_PATH, takenBackSet), 0, start);
+        int bw = x1 - x0 + 1, left = x0, top = y0;
+        int[] tones = PictureImport.liveTones(page, x0, y0, bw, y1 - y0 + 1);
+        LiveChange c = LiveChange.shown(x0, y0, bw, y1 - y0 + 1, (x, y) -> bits.get(y * w + x) ? tones[(y - top) * bw + x - left] : -1, LiveChange.NO_PATH, takenBackSet);
+        c.layer = LiveChange.layerOf(page, steps);
+        send(c, 0, start);
     }
 
     /**

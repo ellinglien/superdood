@@ -154,9 +154,11 @@ final class InkWashLayers {
      * The layer in use, 1 to 3: a one-pair page is layer 2, a two-pair page layers 2 and 3; on four pairs (old pages, left
      * as they are) the top three, 0 the pair under them.
      */
-    static int layer(ToneDocument document) {
+    static int layer(ToneDocument document) { return layerOfPair(document, current(document)); }
+    /** Pair {@code pair}'s layer, as {@link #layer} numbers them. */
+    static int layerOfPair(ToneDocument document, int pair) {
         int pairs = pairs(document);
-        return Math.max(0, current(document) + (pairs < LAYERS ? 2 : LAYERS + 1 - pairs));
+        return Math.max(0, pair + (pairs < LAYERS ? 2 : LAYERS + 1 - pairs));
     }
     /**
      * Layer {@code layer}'s pair ({@link #layer}'s inverse): on a page of three pairs or more the top three's; on fewer, a
@@ -175,6 +177,21 @@ final class InkWashLayers {
         if (layer < 1 || layer > LAYERS || layer(document) == layer) return false;
         if (pairs(document) >= LAYERS) { select(document, pairOfLayer(document, layer)); return true; }
         return make(document, layer);
+    }
+    /**
+     * Draw Together: {@code action} (another screen's change laid, {@code PictureImport.lay}) on layer {@code layer} (1 to
+     * 3, the one it was drawn on, {@code LiveChange.layer}): a page without it made three pairs first, as the first switch
+     * makes them ({@link #make}, its own Undo step, the layer in use kept); every layer shown meanwhile, a layer's step
+     * being each screen's own ({@link ToneDocument#withEveryLayer}); then the layer in use picked again, no step.
+     */
+    static void drawOn(ToneDocument document, int layer, Runnable action) {
+        int mine = layer(document), pair = pairOfLayer(document, layer);
+        if (pair < 0 || pair >= pairs(document)) { make(document, Math.max(1, mine)); pair = pairOfLayer(document, layer); }
+        int on = pair;
+        document.withEveryLayer(() -> {
+            select(document, on);
+            try { action.run(); } finally { select(document, pairOfLayer(document, mine)); }
+        });
     }
     /** A page of fewer than three pairs made three, the blank ones under it and over a one-pair page, layer {@code layer} selected: one undoable step. */
     private static boolean make(ToneDocument document, int layer) {
