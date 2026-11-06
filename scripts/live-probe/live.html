@@ -1376,7 +1376,7 @@ function tools_(json) {
     prev.style.width = next.style.width = Lt.PAGE_BUTTON + "px"; find.append(prev, count, next);
   }
   const chips = tall(el("div", "chips"), Lt.chips); chips.style.gap = Lt.chipGap + "px";
-  tp.chips.forEach((c, i) => chips.appendChild(chip(c.label, c.on, () => { confirming = -1; searchOpen = false; tools_(T.toolsChip(i)); }, Lt)));
+  tp.chips.forEach(c => chips.appendChild(chip(c.label, c.on, () => { confirming = -1; searchOpen = false; tools_(T.toolsChip(c.i)); }, Lt)));
   const grid = el("div", "grid"); grid.style.marginTop = Lt.gap + "px";
   if (!tp.cards.length) { const e = el("div", "empty", tp.empty); e.style.font = font("BODY"); grid.appendChild(e); }
   for (let r = 0; r * Lt.columns < tp.cards.length; r++) {

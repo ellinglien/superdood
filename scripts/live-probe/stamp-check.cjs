@@ -69,7 +69,7 @@ const shot = (p, name) => SHOTS ? p.screenshot({ path: path.join(REPO, "docs", "
     // ---- The Stamp in slot 3, its picker's Stamp ▾ and its menu ----
     // The Stamp is on the shelf, not in the picker (pare-down, 2026-11-05): Library, More Brushes, its card, Back.
     await hold(p, await centre(p, "#column > button", 2));
-    await tap(p, await byText(p, ".pop .mrow", "Library"));
+    await tap(p, await byText(p, ".pop .mrow", "Full Library"));
     await tap(p, await byText(p, "#screen .chip", "More Brushes"));
     for (let i = 0; i < 8 && !await byText(p, "#screen .grid .tname", "Stamp"); i++) await tap(p, await byText(p, "#screen button", "Next page"));
     await tap(p, await byText(p, "#screen .grid .tname", "Stamp"));
@@ -218,7 +218,7 @@ const shot = (p, name) => SHOTS ? p.screenshot({ path: path.join(REPO, "docs", "
 
     // ---- The Tools page: no Cut Stamp of its own since 2026-11-03 (Stamp ▾ and Brush Lab have it) ----
     await hold(p, await centre(p, "#column > button", 2));
-    await tap(p, await byText(p, ".pop .mrow", "Library"));
+    await tap(p, await byText(p, ".pop .mrow", "Full Library"));
     ok(await p.evaluate(() => guest.shown === "tools") && !(await byText(p, "#screen .lb", "Make Stamp")), "The Tools page on a Stamp offers no Cut Stamp");
     await tap(p, await byText(p, "#screen .bar .lb", "Back"));
 

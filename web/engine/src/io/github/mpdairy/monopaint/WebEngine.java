@@ -715,7 +715,8 @@ public final class WebEngine {
         if (page.edited() == null) j.raw("null"); else j.v(DrawLayout.RESET);
         j.k("room").v(page.edited() != null ? l.nameRoom(true) : l.nameRoom() * 2 / 3);
         j.e().k("searching").v(page.searching()).k("search").v(page.search()).k("chips").a();
-        for (ToolsPage.Chip c : ToolsLayout.rowChips()) j.o().k("label").v(c.label).k("on").v(c == page.filter() && !page.searching()).e();
+        // Each chip's index for toolsChip is its own: the row leaves out a kind no shown tool is under (Odd Ones).
+        for (ToolsPage.Chip c : ToolsLayout.rowChips()) j.o().k("label").v(c.label).k("on").v(c == page.filter() && !page.searching()).k("i").v(c.ordinal()).e();
         // More Brushes, beside Search (its chip's index for toolsChip: the last).
         ToolsPage.Chip more = ToolsPage.Chip.MORE;
         j.e().k("more").o().k("label").v(more.label).k("on").v(more == page.filter() && !page.searching()).k("i").v(more.ordinal()).e();
