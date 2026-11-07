@@ -134,12 +134,10 @@ final class PicturePlacer {
         PopupWindow shown = bar;
         RectF panel = new RectF(bounds); PanelCoordinates.fromView(app.root).mapRect(panel);
         bar.setOnDismissListener(() -> {
-            host.cover(null);
             app.pad.uncovered("picture", panel);
             // Dismissed by Android (the screen left): the picture goes too.
             if (bar == shown) cancel();
         });
-        host.cover(panel);
         Popups.show(bar, app.root, bounds);
     }
     /** Button {@code step} of {@link PictureImport#STEPS} (Lighter, Darker, More or Less Contrast): one step, the picture shown again with it, one clean refresh where it lies. */

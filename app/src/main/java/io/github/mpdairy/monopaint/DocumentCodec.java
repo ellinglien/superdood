@@ -68,9 +68,19 @@ final class DocumentCodec {
      * plane its tones and coverages ({@code w × h} each), a flag and its shares if it keeps any ({@link
      * ToneDocument.Layer#keeps}), a flag and its print tone if it has some. A layer with no planes writes 0 and its own
      * pixels as ever. Written only when a plane holds paint; a page without writes as before, byte for byte. Plane opacity
-     * isn't kept.
+     * isn't kept. The four planes before Vector Ink's ({@link #FILE_PLANES}): Vector Ink's pixels go as the Pen plane, over
+     * any other pen's there ({@link #filePlanes}), as every version before it reads them.
      */
     private static final int PLANES_TAG = 0x504c4e53; // PLNS
+    /**
+     * Inkwash: a section, written only where a layer holds both Vector Ink's pixels and other pens' marks (Vector Ink on
+     * the layer in use, 2026-11-06): for each such layer its index (a byte), its Pen plane without Vector Ink's (tones,
+     * coverages, a flag and shares, a flag and print tone, as {@link #PLANES_TAG}'s) and its Vector Ink plane (tones,
+     * coverages). A reader before it skips it and reads the {@link #PLANES_TAG} Pen plane, both as one, as Vector Ink's.
+     */
+    private static final int LINE_PEN_TAG = 0x4c50454e; // LPEN
+    /** Inkwash: the kind planes a file's {@link #PLANES_TAG} holds: those before {@link ToneDocument#PLANE_LINES}. */
+    private static final int FILE_PLANES = ToneDocument.PLANE_LINES;
     /**
      * Inkwash: a section: the page's mirrors ({@link Mirrors#encode}: their lines, on or off, the style and the side
      * kept), written only when it has some. A reader without it skips it and opens the drawing without them.
@@ -155,8 +165,11 @@ final class DocumentCodec {
         for(ToneDocument.Layer layer:snapshot.layers) prints|=layer.prints();
         boolean kinded=false;
         for(ToneDocument.Layer layer:snapshot.layers) kinded|=layer.kinded();
-        boolean planed=false;
-        for(ToneDocument.Layer layer:snapshot.layers) planed|=planes(layer)!=0;
+        // Inkwash: each layer's planes as the file keeps them (Vector Ink's in the Pen plane), and those it keeps apart too.
+        int count=snapshot.layers.size();
+        ToneDocument.Layer[][] files=new ToneDocument.Layer[count][];
+        boolean planed=false, apart=false;
+        for(int i=0;i<count;i++) { ToneDocument.Layer layer=snapshot.layers.get(i); files[i]=filePlanes(layer); planed|=planes(files[i])!=0; apart|=apart(layer); }
         boolean wax=snapshot.mask!=null&&snapshot.mask.keeps(), words=!snapshot.magnets.isEmpty(), shaded=snapshot.paper!=255, mirrored=!snapshot.mirrors.isEmpty(), timed=snapshot.clock.kept(), fading=holds(snapshot.fades,false), media=holds(snapshot.fades,true), replay=!snapshot.log.isEmpty(), worn=snapshot.wear!=null, paced=snapshot.sections.started(), shown=snapshot.kindsShown!=0, typed=!snapshot.texts.isEmpty(), lined=lined(snapshot.layers), sections=lined||keeps||wax||words||typed||shaded||prints||kinded||planed||mirrored||timed||fading||media||replay||worn||paced||shown;
         DataOutputStream header=new DataOutputStream(stream);
         header.writeInt(sections ? SECTIONS_MAGIC : snapshot.mask != null ? MASK_MAGIC : OPACITY_MAGIC); header.writeInt(snapshot.width); header.writeInt(snapshot.height);
@@ -166,9 +179,10 @@ final class DocumentCodec {
             CRC32 crc=new CRC32();
             DataOutputStream data=new DataOutputStream(new java.util.zip.CheckedOutputStream(compressed,crc));
             data.writeInt(snapshot.layers.size()); data.writeInt(snapshot.active);
-            for(ToneDocument.Layer layer:snapshot.layers) {
+            for(int i=0;i<count;i++) {
+                ToneDocument.Layer layer=snapshot.layers.get(i);
                 data.writeUTF(layer.name); data.writeBoolean(layer.visible); data.writeByte(layer.opacity);
-                if(planes(layer)!=0) look(data,layer,snapshot.width); else { data.write(layer.tones); data.write(layer.alpha); }
+                if(planes(files[i])!=0) look(data,layer,snapshot.width); else { data.write(layer.tones); data.write(layer.alpha); }
             }
             if(sections) data.writeBoolean(snapshot.mask!=null);
             if(snapshot.mask!=null) { data.write(snapshot.mask.tones); data.write(snapshot.mask.alpha); }
@@ -202,25 +216,34 @@ final class DocumentCodec {
             }
             if(planed) {
                 long length=0; int pixels=snapshot.width*snapshot.height;
-                for(ToneDocument.Layer layer:snapshot.layers) {
+                for(int i=0;i<count;i++) {
+                    ToneDocument.Layer layer=snapshot.layers.get(i);
                     length++;
-                    int set=planes(layer);
+                    int set=planes(files[i]);
                     if(set!=0&&layer.covers()) length+=2L*pixels;
-                    for(int p=0;p<ToneDocument.PLANES;p++) if((set>>p&1)!=0) { ToneDocument.Layer plane=layer.planes[p]; length+=2L*pixels+2+(plane.keeps()?pixels:0)+(plane.prints()?pixels:0); }
+                    for(int p=0;p<FILE_PLANES;p++) if((set>>p&1)!=0) length+=planeBytes(files[i][p],pixels);
                 }
                 data.writeInt(PLANES_TAG); data.writeInt((int)length);
-                for(ToneDocument.Layer layer:snapshot.layers) {
-                    int set=planes(layer);
+                for(int i=0;i<count;i++) {
+                    ToneDocument.Layer layer=snapshot.layers.get(i);
+                    int set=planes(files[i]);
                     boolean base=set!=0&&layer.covers();
                     data.writeByte(set|(base?BASE:0));
                     if(base) { data.write(layer.tones); data.write(layer.alpha); }
-                    for(int p=0;p<ToneDocument.PLANES;p++) if((set>>p&1)!=0) {
-                        ToneDocument.Layer plane=layer.planes[p];
-                        data.write(plane.tones); data.write(plane.alpha);
-                        boolean kept=plane.keeps(), printed=plane.prints();
-                        data.writeBoolean(kept); if(kept) data.write(plane.share);
-                        data.writeBoolean(printed); if(printed) data.write(plane.print);
-                    }
+                    for(int p=0;p<FILE_PLANES;p++) if((set>>p&1)!=0) writePlane(data,files[i][p]);
+                }
+            }
+            if(apart) {
+                long length=0; int pixels=snapshot.width*snapshot.height;
+                for(ToneDocument.Layer layer:snapshot.layers) if(apart(layer)) length+=1+planeBytes(layer.plane(ToneDocument.PLANE_PEN),pixels)+2L*pixels;
+                data.writeInt(LINE_PEN_TAG); data.writeInt((int)length);
+                for(int i=0;i<count;i++) {
+                    ToneDocument.Layer layer=snapshot.layers.get(i);
+                    if(!apart(layer)) continue;
+                    ToneDocument.Layer lines=layer.plane(ToneDocument.PLANE_LINES);
+                    data.writeByte(i); writePlane(data,layer.plane(ToneDocument.PLANE_PEN));
+                    // Lines all erased: a blank plane.
+                    data.write(lines==null?ToneDocument.paper(snapshot.width,snapshot.height):lines.tones); data.write(lines==null?new byte[pixels]:lines.alpha);
                 }
             }
             if(mirrored) { byte[] mirrors=snapshot.mirrors.encode(); data.writeInt(MIRRORS_TAG); data.writeInt(mirrors.length); data.write(mirrors); }
@@ -252,7 +275,41 @@ final class DocumentCodec {
     /** Inkwash: whether a layer holds Vector Ink lines ({@link #LINES_TAG}). */
     private static boolean lined(java.util.List<ToneDocument.Layer> layers) { for(ToneDocument.Layer l:layers) if(l.lines!=null) return true; return false; }
     /** Inkwash: {@link #PLANES_TAG}'s bit for a layer whose base holds paint. */
-    private static final int BASE=1<<ToneDocument.PLANES;
+    private static final int BASE=1<<FILE_PLANES;
+    /** Inkwash: a plane as {@link #PLANES_TAG} writes it: its tones and coverages, a flag and its shares, a flag and its print tone. */
+    private static void writePlane(DataOutputStream data,ToneDocument.Layer plane) throws IOException {
+        data.write(plane.tones); data.write(plane.alpha);
+        boolean kept=plane.keeps(), printed=plane.prints();
+        data.writeBoolean(kept); if(kept) data.write(plane.share);
+        data.writeBoolean(printed); if(printed) data.write(plane.print);
+    }
+    /** Inkwash: how many bytes {@link #writePlane} writes of {@code plane}. */
+    private static long planeBytes(ToneDocument.Layer plane,int pixels) { return 2L*pixels+2+(plane.keeps()?pixels:0)+(plane.prints()?pixels:0); }
+    /** Inkwash: whether a plane holds paint, or print tone: one a file keeps. */
+    private static boolean kept(ToneDocument.Layer plane) { return plane!=null&&(plane.covers()||plane.prints()); }
+    /**
+     * Inkwash: {@code layer}'s planes as {@link #PLANES_TAG} keeps them ({@link #FILE_PLANES} of them): its own, but the
+     * Pen plane, which holds Vector Ink's pixels over the other pens' marks ({@link ToneDocument#sheet}, their shares and
+     * print tone), as the page shows them and every version before Vector Ink's plane reads them.
+     */
+    private static ToneDocument.Layer[] filePlanes(ToneDocument.Layer layer) {
+        ToneDocument.Layer[] out=new ToneDocument.Layer[FILE_PLANES];
+        if(layer.planes!=null) System.arraycopy(layer.planes,0,out,0,FILE_PLANES);
+        ToneDocument.Layer pen=layer.plane(ToneDocument.PLANE_PEN), lines=layer.plane(ToneDocument.PLANE_LINES);
+        if(lines==null||!lines.covers()) return out;
+        if(!kept(pen)) { out[ToneDocument.PLANE_PEN]=lines; return out; }
+        byte[] t=pen.tones.clone(), a=pen.alpha.clone();
+        for(int i=0;i<a.length;i++) if(lines.alpha[i]!=0) { int s=ToneDocument.sheet(lines.tones[i]&255,lines.alpha[i]&255,t[i]&255,a[i]&255); t[i]=(byte)(s==0?255:s>>>8); a[i]=(byte)s; }
+        ToneDocument.Layer both=new ToneDocument.Layer(pen.name,true,t,a);
+        both.share=pen.share; both.print=pen.print;
+        out[ToneDocument.PLANE_PEN]=both;
+        return out;
+    }
+    /**
+     * Inkwash: whether {@code layer} holds Vector Ink's lines and other pens' marks, kept apart ({@link #LINE_PEN_TAG}):
+     * a reader takes a lined layer's Pen plane without it as Vector Ink's pixels alone.
+     */
+    private static boolean apart(ToneDocument.Layer layer) { return layer.lines!=null&&kept(layer.plane(ToneDocument.PLANE_PEN)); }
     /** Inkwash: {@code layer}'s look ({@link ToneDocument#sheets}), its tones then its coverages, a row at a time. */
     private static void look(DataOutputStream data,ToneDocument.Layer layer,int width) throws IOException {
         byte[] row=new byte[width];
@@ -261,10 +318,10 @@ final class DocumentCodec {
             data.write(row);
         }
     }
-    /** Inkwash: the kind planes of {@code layer} a file keeps, a bit each: those holding paint (or print tone). */
-    private static int planes(ToneDocument.Layer layer) {
+    /** Inkwash: the kind planes a file keeps of a layer's {@code planes} ({@link #filePlanes}; null: none), a bit each: those holding paint (or print tone). */
+    private static int planes(ToneDocument.Layer[] planes) {
         int set=0;
-        for(int p=0;p<ToneDocument.PLANES;p++) { ToneDocument.Layer plane=layer.plane(p); if(plane!=null&&(plane.covers()||plane.prints())) set|=1<<p; }
+        if(planes!=null) for(int p=0;p<FILE_PLANES;p++) if(kept(planes[p])) set|=1<<p;
         return set;
     }
     /** {@code n} zero bytes to {@code out}, a block at a time (not a page-sized array for nothing). */
@@ -330,11 +387,13 @@ final class DocumentCodec {
         long most=ToneDocument.MAX_LAYERS*(1+ToneDocument.PLANES*(4L*pixels+2));
         boolean erasable=false, wax=false, words=false, typed=false, shaded=false, printed=false, kinded=false, planed=false, mirrored=false, timed=false, fading=false, media=false, replay=false;
         byte[] sharp=null;
+        // Inkwash: the lined layers' Pen and Vector Ink planes kept apart (LINE_PEN_TAG), by layer; null: no such section.
+        ToneDocument.Layer[][] apart=null;
         for(int sections=0;;sections++) {
             if(sections>64) throw new IOException("Too many painting sections");
             int tag=data.readInt();
-            // Inkwash: the sharp strokes marked on the log as read, whichever came first.
-            if(tag==END_TAG) { if(sharp!=null) log[0]=log[0].withSharp(sharp); return; }
+            // Inkwash: the sharp strokes marked on the log as read, whichever came first; Vector Ink's planes, its lines and planes read.
+            if(tag==END_TAG) { if(sharp!=null) log[0]=log[0].withSharp(sharp); if(layers!=null) linePlanes(layers,apart); return; }
             int length=data.readInt();
             if(length<0||length>most) throw new IOException("Invalid painting section");
             if(tag==MASK_SHARE_TAG) {
@@ -454,6 +513,32 @@ final class DocumentCodec {
                 paper[0]=data.readUnsignedByte(); consume(data,length-1);
                 continue;
             }
+            if(tag==LINE_PEN_TAG) {
+                if(apart!=null) throw new IOException("Repeated painting section");
+                apart=new ToneDocument.Layer[count][];
+                long left=length;
+                while(left>0) {
+                    if((left-=1+2L*pixels+1)<0) throw new IOException("Short lines section");
+                    int index=data.readUnsignedByte();
+                    if(index>=count||apart[index]!=null) throw new IOException("Invalid lines section");
+                    boolean keep=layers!=null;
+                    byte[] tones=keep?new byte[pixels]:null, alpha=keep?new byte[pixels]:null;
+                    if(keep) { data.readFully(tones); data.readFully(alpha); } else consume(data,2*pixels);
+                    byte[] share=flagged(data,pixels,keep);
+                    if(share!=null&&(left-=pixels)<0) throw new IOException("Short lines section");
+                    if((left-=1)<0) throw new IOException("Short lines section");
+                    byte[] print=flagged(data,pixels,keep);
+                    if(print!=null&&(left-=pixels)<0) throw new IOException("Short lines section");
+                    if((left-=2L*pixels)<0) throw new IOException("Short lines section");
+                    byte[] lineTones=keep?new byte[pixels]:null, lineAlpha=keep?new byte[pixels]:null;
+                    if(keep) { data.readFully(lineTones); data.readFully(lineAlpha); } else consume(data,2*pixels);
+                    if(!keep) { apart[index]=new ToneDocument.Layer[0]; continue; }
+                    ToneDocument.Layer pen=new ToneDocument.Layer(ToneDocument.planeName(ToneDocument.PLANE_PEN),true,tones,alpha);
+                    pen.kinds=(byte)ToneDocument.KIND_PEN; pen.share=share; pen.print=print;
+                    apart[index]=new ToneDocument.Layer[]{pen,new ToneDocument.Layer(ToneDocument.planeName(ToneDocument.PLANE_LINES),true,lineTones,lineAlpha)};
+                }
+                continue;
+            }
             if(tag==PLANES_TAG) {
                 if(planed) throw new IOException("Repeated painting section");
                 planed=true;
@@ -472,7 +557,7 @@ final class DocumentCodec {
                         }
                         if(layer!=null) { layer.tones=tones; layer.alpha=alpha; }
                     }
-                    for(int p=0;p<ToneDocument.PLANES;p++) {
+                    for(int p=0;p<FILE_PLANES;p++) {
                         if((set>>p&1)==0) continue;
                         if((left-=2L*pixels+1)<0) throw new IOException("Short plane section");
                         byte[] tones=layer==null?null:new byte[pixels], alpha=layer==null?null:new byte[pixels];
@@ -523,6 +608,24 @@ final class DocumentCodec {
             if(print) printed=true; else erasable=true;
             byte[][] planes=perLayer(data,length,count,pixels,layers!=null,print?"print":"erasable");
             if(layers!=null) for(int i=0;i<count;i++) if(planes[i]!=null) { if(print) layers.get(i).print=planes[i]; else layers.get(i).share=planes[i]; }
+        }
+    }
+    /**
+     * Inkwash: Vector Ink's pixels on their own plane ({@link ToneDocument#PLANE_LINES}) as the file read them: a lined
+     * layer's Pen and Vector Ink planes kept apart ({@code apart}, by layer; null: none) where it holds other pens' marks
+     * too, else its Pen plane, Vector Ink's alone (as every version before the plane wrote it). A layer whose lines this
+     * version couldn't read keeps them as pixels.
+     */
+    private static void linePlanes(java.util.List<ToneDocument.Layer> layers,ToneDocument.Layer[][] apart) {
+        for(int i=0;i<layers.size();i++) {
+            ToneDocument.Layer layer=layers.get(i), pen=layer.plane(ToneDocument.PLANE_PEN), lines;
+            ToneDocument.Layer[] two=apart==null?null:apart[i];
+            if(layer.lines==null||two==null&&pen==null) continue;
+            if(layer.planes==null) layer.planes=new ToneDocument.Layer[ToneDocument.PLANES];
+            if(two!=null) { layer.planes[ToneDocument.PLANE_PEN]=two[0]; lines=two[1]; }
+            else { layer.planes[ToneDocument.PLANE_PEN]=null; lines=pen; }
+            lines.name=ToneDocument.planeName(ToneDocument.PLANE_LINES); lines.kinds=(byte)ToneDocument.KIND_PEN;
+            layer.planes[ToneDocument.PLANE_LINES]=lines;
         }
     }
     /** Inkwash: a flag byte and, if set, a byte a pixel ({@link #PLANES_TAG}'s shares and print tone); null when unset, an empty array when set and not {@code retain}ed. */

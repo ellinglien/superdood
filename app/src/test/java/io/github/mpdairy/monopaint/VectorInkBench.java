@@ -39,7 +39,7 @@ public final class VectorInkBench {
             for (int i = 0; i < 400; i++) {
                 double u = i / 399.0;
                 er.sample((float) (100 + 1720 * (i % 40 < 20 ? (i % 20) / 20.0 : 1 - (i % 20) / 20.0)), (float) (100 + 2360 * u), 1, 0, 0);
-                if (zoomed && i % 4 == 3) VectorInk.shown(e, 1 << VectorInk.lined(e), er);
+                if (zoomed && i % 4 == 3) VectorInk.shown(e, 1 << VectorInk.layer(e), er);
             }
             long t1 = System.nanoTime();
             er.finish();

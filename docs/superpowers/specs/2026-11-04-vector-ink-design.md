@@ -268,3 +268,35 @@ else on the page stays its pixels.
   under them nearly blank).
 - Not checked yet: how the Supernote's own PDF reader draws the round caps and the clips, and its speed on a page of
   many lines.
+
+## On the layer in use (2026-11-06, branch `vector-layers`)
+
+The owner: "Vector Ink follows the chosen layer" (the three layers, `docs/superpowers/specs/2026-11-06-three-layers-design.md`
+on `three-layers-note`). Replaces "How a pair becomes Vector Ink's", "Refused on its layer" and "A new layer when one fills".
+- **Where it draws:** the layer in use's ink half, like any pen (`VectorInk.layer`). Other inks there stay where they are;
+  nothing goes under it and no pair is added for it. Refused only when that layer's lines are full ("Vector ink full").
+  "Layers full" and "Vector ink only" are gone: the Lasso, Paste, pictures, Shapes and Make Ink of other brushes work on
+  its layer as on any.
+- **Its pixels:** on a plane of the half's own (`ToneDocument.PLANE_LINES`), apart from the other pens' marks (the Pen
+  plane), stacked right over them and under opaque paint; Pen to the eraser and Show Kinds. Drawn again from the lines
+  where they change (`relay`), so a cut or a Lasso move never touches the other marks.
+- **Zoomed:** the page is composed without the shown layers' Vector Ink planes; each layer's lines are drawn in their
+  place (`VectorInk.Stacked`): where something above them in the page's order (a higher layer, opaque paint on its pair)
+  holds a mark, that pixel is composed again with the lines in theirs, so the mark covers them; elsewhere the lines go
+  over the view as before (sharp dry brushes' tiles kept). Layers stacked above the page (tracing paper) stay under
+  the lines (2026-11-04's call). A layer shown at Half or Faint, or hidden, keeps its lines' pixels (hidden: neither).
+- **Eraser:** cuts the lines of every shown layer it erases (a hidden layer's kept, as its pixels are), one Undo step.
+- **Lasso:** lifts the selected layer's lines with its other marks, and lays them on the layer it is put down on.
+- **Copies:** the PDF draws a layer's lines as vectors when nothing lies over its Vector Ink plane (its own pen's marks
+  under them don't count); the picture leaves out that plane alone. PNG High Res draws them in their place; Layers
+  (PSD) has a "Vector Ink" layer of a pair beside its "Pen".
+- **Draw Together:** a change of Vector Ink carries the layer it was drawn on, as another ink's; a guest's ink lands
+  beside the lines on that layer; its eraser cuts them there.
+- **File:** `PLNS` keeps its four planes, the Pen plane holding Vector Ink's pixels over the pen's (as every older version
+  reads them); where a lined layer holds both, a new section `LPEN` keeps them apart (older versions pass it by). A lined
+  layer without `LPEN` reads its Pen plane as Vector Ink's alone: every page before opens as it was, and one without
+  other pens on its lines' layer writes byte for byte as before.
+- **Old pages:** a page with Vector Ink's own pair on top (two or four pairs) opens unchanged and shows the same. Drawn on
+  later, that top pair is layer 3: a pen picked there goes beside the lines (no longer on a pair under them), Vector Ink
+  on layer 2 or 1 goes on that layer. A four-pair page offers Merge Old (pairs past three), which flattens the lines into
+  pixels as before.

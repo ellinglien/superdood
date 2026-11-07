@@ -86,7 +86,7 @@ Java_io_github_mpdairy_monopaint_ViewportBitmap_nativeRender(JNIEnv *env,jclass 
  * 8 layers, each with up to four kind planes (Inkwash, ToneDocument.stacked: 40 in all), and, on an Inkwash notebook
  * cover, its paper pixels as one more under them, and tracing paper's ghost plane over that and, over the page's
  * layers, the layers above it in its stack (Inkwash, GhostPlane). */
-#define MAX_COMPOSED (8*5+3)
+#define MAX_COMPOSED (8*6+3)
 JNIEXPORT void JNICALL
 Java_io_github_mpdairy_monopaint_ViewportBitmap_nativeCompose(JNIEnv *env,jclass clazz,
         jobject target,jobjectArray tones,jobjectArray alpha,jintArray opacity,jint count,jint paper,jintArray dots,

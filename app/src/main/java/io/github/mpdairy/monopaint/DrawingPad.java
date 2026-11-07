@@ -198,8 +198,6 @@ final class DrawingPad extends View {
     final PicturePlacer placer;
     /** Inkwash: the Text tool and the page's text boxes over it ({@link TextMode}). */
     final TextMode text;
-    /** The panel area Words' bin covers, which the canvas never presents over; empty when it's closed. */
-    private final RectF coveredPanel = new RectF();
 
     DrawingPad(PaintActivity app) {
         super(app); this.app = app; landscapeTilt = app.device.landscapeTilt;
@@ -212,7 +210,6 @@ final class DrawingPad extends View {
             @Override public void present() { flush(true); }
             @Override public void fastPreview(boolean on) { if (on) beginFastPreview(); else endFastPreview(); }
             @Override public void refresh(String reason, Rect pageArea) { refreshArea(reason, pageArea, 0); }
-            @Override public void cover(RectF panelArea) { if (panelArea == null) coveredPanel.setEmpty(); else coveredPanel.set(panelArea); }
             @Override public boolean dots() { return viewportBitmap == null; }
         };
         words = new WordsMode(app, host);
@@ -267,6 +264,7 @@ final class DrawingPad extends View {
         if (fittedTurn != app.appRotation) viewport.reset();
         fittedTurn = app.appRotation;
         viewport.cover = app.zen;
+        viewport.tall = app.barHidden;
         viewport.configure(getWidth(), getHeight(), width, height);
         float scale = viewport.scale();
         place(pageToView, scale, viewport.x, viewport.y);
@@ -444,19 +442,24 @@ final class DrawingPad extends View {
     /**
      * Inkwash: the layers whose Vector Ink lines the zoomed view draws sharp, as bits ({@link VectorInk#sharpLayers}), left out of
      * {@link #display}; 0 at 100% (the page's pixels are the lines there), while a pinch or pan moves the view (each frame
-     * would draw them again). Over the layers shown above the page too (tracing paper), the owner's call, 2026-11-04.
+     * would draw them again). Over the layers shown above the page (tracing paper), the owner's call, 2026-11-04.
      */
     private int sharp() {
         return viewportBitmap == null || navigating || document == null ? 0 : VectorInk.sharpLayers(document, layerSteps, own(stroke));
     }
     /** What {@link #display} was composed without: when {@link #sharp} says otherwise, the whole page renders again. */
     private int composedSharp = 0;
-    /** The lines drawn sharp over the zoomed view: the sharp layer's, as the stroke in progress shows them; null for none. */
-    private VectorLines sharpLines() {
+    /**
+     * The lines drawn sharp in the zoomed view, each in its layer's place: the sharp layers', as the stroke in progress
+     * shows them; null for none. Over the layers stacked above the page (tracing paper) as before: they aren't a place.
+     */
+    private VectorInk.Stacked sharpLines() {
         int layers = sharp();
         if (layers == 0) return null;
+        GhostPlane.Planes under = ghost == null ? null : new GhostPlane.Planes(ghost.under, null, null);
         // A Lasso piece floating: its lines where it lies (LassoPlanes.shownLines).
-        return selection != null && selection.planes != null ? selection.planes.shownLines(selection, document, layers, own(stroke)) : VectorInk.shown(document, layers, own(stroke));
+        return selection != null && selection.planes != null ? selection.planes.shownLines(selection, document, layers, own(stroke), layerSteps, under)
+                : VectorInk.stacked(document, layers, layerSteps, under, n -> VectorInk.shownOf(document, n, own(stroke)), null);
     }
     /** Draws the masking fluid's hatching over the freshly composed {@code area} of the page. */
     private void drawMask(Rect area) { drawMask(document, display, area); }
@@ -1260,12 +1263,12 @@ final class DrawingPad extends View {
         wrote(area);
         Log.i(ProbeActivity.TAG, "Area refresh (" + reason + "): " + area);
     }
-    /** Inkwash: what Words' bin and Zen's open fan cover in the presented raster, {left, top, right, bottom} each, or null. */
+    /** Inkwash: what every open popup (a menu, the tray, Words' bin) and Zen's open fan cover in the presented raster, {left, top, right, bottom} each, or null. */
     private java.util.List<int[]> covered() {
-        // The fast display writes under Android's views: off Zen's open fan too, its shape in steps, so strokes beside it
-        // still show (drying paint took bits of it); closing it shows what it covered.
-        java.util.List<RectF> panel = new java.util.ArrayList<>();
-        if (!coveredPanel.isEmpty()) panel.add(new RectF(coveredPanel));
+        // The fast display writes under Android's views: off every open popup ({@link Popups#covering}), and off Zen's
+        // open fan, its shape in steps, so strokes beside it still show (drying paint took bits of it); closing either
+        // shows what it covered.
+        java.util.List<RectF> panel = Popups.covering();
         java.util.List<RectF> fan = app.zenFanMask();
         if (fan != null) panel.addAll(fan);
         if (panel.isEmpty()) return null;
@@ -2050,7 +2053,6 @@ final class DrawingPad extends View {
         String vector = VectorInk.shapeRefusal(document, app.inkWash.brush(slot));
         if (vector != null) { app.sayVector(vector); return; }
         finishStroke(); settleDrying();
-        VectorInk.under(document, app.inkWash.brush(slot));
         FillRegion.Room letters = TextBoxes.ink(document.texts().get(i), document.width, document.height);
         if (letters == null) return;
         ToneDocument page = document;

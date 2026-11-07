@@ -20,6 +20,12 @@ final class CanvasViewport {
      * sideways on the Manta; a pinch out still reaches the whole page.
      */
     boolean wide;
+    /**
+     * The page bar hidden (the menu's Page Bar; Zen Mode has {@link #cover}): fitted, an upright page fills the room's
+     * height, a little of its sides cropped (the owner, 2026-11-06; the Manta's 1785 x 2387 page at 103%, 1841 x 2462,
+     * 28 px off each side), and a pinch out stops there, as sideways.
+     */
+    boolean tall;
     private float width, height, pageWidth, pageHeight;
 
     void configure(float width, float height, float pageWidth, float pageHeight) {
@@ -30,7 +36,8 @@ final class CanvasViewport {
         // it's horizontal i want the top part of the page to show... and vertical it should fit perfectly"), past 100% if
         // that's what fills it ("that % should be the max percent, whatever it is").
         filled=cover || (!whole || wide) && fillsWidth(width,height,pageWidth,pageHeight);
-        fitScale=cover ? Math.max(width/pageWidth,height/pageHeight) : filled ? width/pageWidth : Math.min(whole ? Float.MAX_VALUE : 1,Math.min(width/pageWidth,height/pageHeight));
+        fitScale=cover ? Math.max(width/pageWidth,height/pageHeight) : filled ? width/pageWidth : tall ? height/pageHeight
+                : Math.min(whole ? Float.MAX_VALUE : 1,Math.min(width/pageWidth,height/pageHeight));
         // Fitted (the owner, 2026-10-26: "let's make it fit neatly in both"): the whole page, centred in this view, the
         // room the bars leave, fitted again whenever that room changes (Zen Mode, a turn) until a pinch or pan.
         if(untouched) { zoom=1; x=Math.round((width-pageWidth*fitScale)/2); y=filled ? 0 : Math.round((height-pageHeight*fitScale)/2); return; }
@@ -46,7 +53,7 @@ final class CanvasViewport {
      * below the width filled sideways (the owner, 2026-10-29: "you cant go LOWER % zoom than 136 on horizontal"); in
      * the browser ({@link #whole}), not below the whole page (filling the width there too, {@link #wide}).
      */
-    float minZoom() { return whole && filled ? Math.min(1,height*pageWidth/(width*pageHeight)) : filled || whole ? 1 : 1/fitScale; }
+    float minZoom() { return whole && filled ? Math.min(1,height*pageWidth/(width*pageHeight)) : filled || whole || tall ? 1 : 1/fitScale; }
     int percent() { return Math.round(scale()*100); }
     /** Back to the fitted view ({@link #configure}). */
     void reset() { heldLayout=false; zoom=1; x=y=0; untouched=true; }

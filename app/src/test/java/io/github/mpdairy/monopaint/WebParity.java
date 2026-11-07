@@ -168,14 +168,12 @@ public final class WebParity {
         return d;
     }
     /**
-     * A change received from another page laid as the Manta lays it (LiveProbe.laySlice, Android-only: {@link
-     * VectorInk#under}, then onLayer, then {@link PictureImport#lay}): each grey its layer's look scaled by how much darker
-     * the page must get there.
+     * A change received from another page laid as the Manta lays it (LiveProbe.laySlice, Android-only: onLayer, then
+     * {@link PictureImport#lay}): each grey its layer's look scaled by how much darker the page must get there.
      */
     static void lay(ToneDocument d, int x, int y, int w, int h, int[] greys) { lay(d, x, y, w, h, greys, 0); }
     /** As above, a mark of {@code kinds} ({@link PictureImport#lay}'s): on its kind's plane. */
     static void lay(ToneDocument d, int x, int y, int w, int h, int[] greys, int kinds) {
-        VectorInk.under(d);
         // The stack looked up once, as PictureImport.lay's lighter: a pixel at a time slowed a guest's catch-up (planes);
         // every layer Full, as every screen shares the page (a layer's step is each screen's own).
         int[] shown = PictureImport.liveTones(d, x, y, w, h);

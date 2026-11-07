@@ -35,8 +35,8 @@ public final class ZenFanChecks {
         System.out.println("PASS: Zen Mode's fan on the four screens, both hands, 1 to " + ToolSlots.COUNT + " slots, 4.7 cm across: the X at Zen's icon, the fan's point tucked " + Math.round(ZenFan.TUCK) + " dp from it, the X's target clear of the fan's; one stroke width; size along the side edge (its marker where the wedge is as wide as the line at 100%, up to " + Math.round(ZenFan.truest()) + " px) and grey along the foot "
                 + "with a white gap as wide as the band past them (" + Math.round(ZenFan.BAND) + " dp) hitting nothing, the column's tools round the arc in its order (slots, Fill in, Smudge, Eraser; "
                 + mm(Math.PI / 2 * (ZenFan.LINE + ZenFan.OUTER) / 2 / manta.items()) + " by " + mm(ZenFan.OUTER + ZenFan.REACH - ZenFan.LINE) + " mm each on the Manta), their butts on the arc but the Eraser's; the toolbar's size and grey steps, "
-                + "round-tripping through their markers; mirrored exactly; inside the screen; the layer button, the droplet and the Lasso in the gap between the wedges ("
-                + Math.round(ZenFan.LAYERS_SIDE) + " and " + Math.round(ZenFan.CELL) + " dp squares, the Lasso inside the wedges' radius), clear of it and the X, inside its mask; the mask " + manta.mask().size() + " rectangles hugging its paper, strokes beside it showing");
+                + "round-tripping through their markers; mirrored exactly; inside the screen; the Lasso, the droplet and the layer button in the gap between the wedges ("
+                + Math.round(ZenFan.LAYERS_SIDE) + " and " + Math.round(ZenFan.CELL) + " dp squares, the layer button inside the wedges' radius), clear of it and the X, inside its mask; the mask " + manta.mask().size() + " rectangles hugging its paper, strokes beside it showing");
     }
 
     /** What each part's middle hits, and the order along the arc. */
@@ -92,7 +92,7 @@ public final class ZenFanChecks {
 
     /**
      * In the gap (the owner, 2026-11-06: "putting the layers, droplet and lasso between the two wedges, with the new
-     * space you're making"): the layer button, the droplet and the Lasso out from the point along the diagonal, each a
+     * space you're making"): the Lasso, the droplet and the layer button out from the point along the diagonal, each a
      * square centred on it, wholly in the gap (all of it hits nothing of the fan's own), clear of the X's target, the
      * dot's square and one another, inside {@link ZenFan#bounds} (the fast display's mask), on the screen.
      */
@@ -115,10 +115,10 @@ public final class ZenFanChecks {
             for (float x = c[0] + .25f; x < c[2]; x += .5f) for (float y = c[1] + .25f; y < c[3]; y += .5f)
                 check(fan.hit(x, y) == ZenFan.NONE, at + ": cell " + i + " in the gap at " + x + "," + y + " (" + fan.hit(x, y) + ")");
         }
-        // The Lasso's outer corner no further out than where the wedges' arcs would meet on the diagonal (the owner, 2026-11-06).
-        float[] lasso = cells[ZenFan.LASSO];
+        // The layer button's outer corner no further out than where the wedges' arcs would meet on the diagonal (the owner, 2026-11-06).
+        float[] lasso = cells[ZenFan.LAYERS];
         double far = Math.hypot((fan.right ? lasso[0] : lasso[2]) - fan.px, lasso[1] - fan.py);
-        check(far <= ZenFan.WEDGE, at + ": the Lasso's outer corner " + far + " dp out, inside the wedges' " + ZenFan.WEDGE);
+        check(far <= ZenFan.WEDGE, at + ": the layer button's outer corner " + far + " dp out, inside the wedges' " + ZenFan.WEDGE);
         check(ZenFan.LAYERS_SIDE == .85f * ZenFan.CELL && ZenFan.side(ZenFan.WET) == ZenFan.CELL && ZenFan.side(ZenFan.LASSO) == ZenFan.CELL, "the layer button 85% of the droplet's and the Lasso's cells");
         // A little white between each cell's corners and the wedges' outlines.
         check(ZenFan.CELL / Math.sqrt(2) + ZenFan.STROKE < ZenFan.BAND / 2, "the cells' corners clear of the wedges' outlines");

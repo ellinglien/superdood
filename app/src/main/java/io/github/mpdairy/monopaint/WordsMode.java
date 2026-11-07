@@ -48,8 +48,6 @@ final class WordsMode {
         void fastPreview(boolean on);
         /** One clean refresh of {@code pageArea} of the page, where nothing covers it. */
         void refresh(String reason, Rect pageArea);
-        /** The panel area the canvas must not present over, or null: the bin. */
-        void cover(RectF panelArea);
         /** Whether the raster is in the panel's dots (else plain greys, for a zoomed view to scale): what a picture placed is drawn in ({@link PicturePlacer}). */
         boolean dots();
     }
@@ -114,10 +112,8 @@ final class WordsMode {
         RectF covered = new RectF(binPanel);
         popup.setOnDismissListener(() -> {
             if (popup == shown) { popup = null; bin = null; }
-            host.cover(null);
             app.pad.uncovered("words", covered);
         });
-        host.cover(binPanel);
         Popups.show(popup, app.root, binBounds);
     }
     /** Closes the bin (Done, Words again, a menu, leaving the screen), dropping a magnet the pen still holds. */

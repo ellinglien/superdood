@@ -81,12 +81,14 @@ final class ViewportBitmap {
         bitmap.setHasAlpha(false);
     }
     Rect update(Bitmap tones, Matrix pageToView, Rect dirty) { return update(tones,pageToView,dirty,null,pageToView,tones.getWidth(),tones.getHeight(),null,0); }
-    /** As above with Vector Ink's {@code lines} (null: none) drawn sharp at the view's scale over the page that leaves them out ({@link VectorInk#sharpLayer}). */
-    Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorLines lines) { return update(tones,pageToView,dirty,lines,pageToView,tones.getWidth(),tones.getHeight(),null,0); }
-    /** As above with sharp dry brushes' tiles ({@code view}'s at grid {@code k}; null or 0: none) where they are drawn, under the lines. */
-    Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorLines lines, SharpView view, int k) { return update(tones,pageToView,dirty,lines,pageToView,tones.getWidth(),tones.getHeight(),view,k); }
+    /**
+     * As above with Vector Ink's {@code lines} (null: none) drawn sharp at the view's scale in their place over the page
+     * that leaves their pixels out ({@link VectorInk#sharpLayers}), and sharp dry brushes' tiles ({@code view}'s at grid
+     * {@code k}; null or 0: none) where they are drawn, under the lines.
+     */
+    Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorInk.Stacked lines, SharpView view, int k) { return update(tones,pageToView,dirty,lines,pageToView,tones.getWidth(),tones.getHeight(),view,k); }
     /** As above, the lines' page ({@code width × height}) mapped by {@code linesToView}: a bigger copy's tones are scaled already. */
-    private Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorLines lines, Matrix linesToView, int width, int height, SharpView view, int k) {
+    private Rect update(Bitmap tones, Matrix pageToView, Rect dirty, VectorInk.Stacked lines, Matrix linesToView, int width, int height, SharpView view, int k) {
         Rect area;
         if(dirty==null) area=new Rect(0,0,bitmap.getWidth(),bitmap.getHeight());
         else {
@@ -101,7 +103,7 @@ final class ViewportBitmap {
         double scale=m[0], ox=m[2], oy=m[5];
         boolean straight=m[1]==0&&m[3]==0&&scale>0&&Math.abs(m[0]-m[4])<=.001*scale;
         double left=(area.left-ox)/scale, top=(area.top-oy)/scale, right=(area.right-ox)/scale, bottom=(area.bottom-oy)/scale;
-        boolean sharp=straight&&lines!=null&&!lines.isEmpty()&&lines.meets(left,top,right,bottom);
+        boolean sharp=straight&&lines!=null&&lines.meets(left,top,right,bottom);
         // Inkwash: sharp dry brushes' tiles drawn over this area (SharpView), the page's pixels where none is yet.
         boolean tiled=straight&&view!=null&&k>0&&view.shows(k,(int)Math.floor(left),(int)Math.floor(top),(int)Math.ceil(right),(int)Math.ceil(bottom));
         nativeRender(tones,bitmap,values,sharp||tiled?PLAIN:DOTS,area.left,area.top,area.right,area.bottom,backdrop);
@@ -115,7 +117,7 @@ final class ViewportBitmap {
      * {@code y * scale + oy}), within the page ({@code width × height}); then the area's dots, as {@link #nativeRender}
      * gives them. A band of rows at a time ({@code DrawingPad.bandRows}'s budget).
      */
-    private void sharpen(VectorLines lines,SharpView view,int k,double scale,double ox,double oy,Rect area,int width,int height) {
+    private void sharpen(VectorInk.Stacked lines,SharpView view,int k,double scale,double ox,double oy,Rect area,int width,int height) {
         int w=area.width(), rows=Math.max(1,Math.min(area.height(),(1<<18)/Math.max(1,w)));
         if(band.length<w*rows) { band=new int[w*rows]; inner=new int[w*rows]; cover=new byte[w*rows]; }
         // The lines stay on the page: past its edge is the backdrop.

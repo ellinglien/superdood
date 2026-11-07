@@ -161,7 +161,8 @@ final class NotebookExport {
         byte[] vectors = null;
         if (!lined.isEmpty()) {
             StringBuilder ops = new StringBuilder();
-            for (ToneDocument.Layer layer : lined) { layer.lines.pdf(ops, DotPattern::exportGray); layer.visible = false; }
+            // Their Vector Ink planes left out of the picture (the copy's own layers; their other marks stay).
+            for (ToneDocument.Layer layer : lined) { layer.lines.pdf(ops, DotPattern::exportGray); layer.planes = layer.planes.clone(); layer.planes[ToneDocument.PLANE_LINES] = null; }
             ByteArrayOutputStream zipped = new ByteArrayOutputStream();
             try (DeflaterOutputStream zip = new DeflaterOutputStream(zipped)) { zip.write(ops.toString().getBytes(StandardCharsets.ISO_8859_1)); }
             vectors = zipped.toByteArray();
@@ -170,9 +171,9 @@ final class NotebookExport {
     }
     /**
      * The layers of {@code page} (a stack flattened) whose lines its PDF draws as vectors, bottom first: each holding Vector
-     * Ink's lines and shown at full strength, with no mark of another layer over it in the page's order ({@link
-     * ToneDocument#stacked}). One with a mark over it (opaque paint on its wash half, a page stacked on it) or faded stays
-     * pixels, as do those under it. Magnets ({@code tiles}), text boxes and a mirror's reflection show over every mark.
+     * Ink's lines and shown at full strength, with no mark over its Vector Ink plane in the page's order ({@link
+     * ToneDocument#stacked}). One with a mark over it (opaque paint on its pair, a higher layer, a page stacked on it) or
+     * faded stays pixels, as do those under it. Magnets ({@code tiles}), text boxes and a mirror's reflection show over every mark.
      */
     static List<ToneDocument.Layer> vectorLayers(ToneDocument.Snapshot page, Magnets.Tiles tiles) {
         List<ToneDocument.Layer> out = new ArrayList<>();
@@ -186,9 +187,8 @@ final class NotebookExport {
             if (entry == null) continue;
             ToneDocument.Layer owner = page.layers.get(ToneDocument.stackOwner(k));
             if (!owner.visible || !entry.covers()) continue;
-            boolean lines = owner.lines != null && !owner.lines.isEmpty();
-            if (lines && !over && ToneDocument.stackOpacity(owner, entry) == 100) { if (!out.contains(owner)) out.add(0, owner); continue; }
-            out.remove(owner);
+            boolean lines = ToneDocument.stackPlane(k) == ToneDocument.PLANE_LINES && owner.lines != null && !owner.lines.isEmpty();
+            if (lines && !over && ToneDocument.stackOpacity(owner, entry) == 100) { out.add(0, owner); continue; }
             over = true;
         }
         return out;

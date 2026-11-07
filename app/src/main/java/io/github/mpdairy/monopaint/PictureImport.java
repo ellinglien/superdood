@@ -204,7 +204,7 @@ final class PictureImport {
                 if (more && erase(page, x, y, w, h, rest, pair, false, link || changed)) { changed = true; now = liveTones(page, x, y, w, h); }
                 link |= changed;
                 // Vector Ink's lines cut there too, as the eraser cuts them: else the zoomed view drew them where they were erased, and the next eraser near them drew their pixels back.
-                if (VectorInk.cut(page, x, y, w, h, VectorInk.layer(page) >= 0 ? erased : rest)) { changed = link = true; page.linkSince(mark); }
+                if (VectorInk.cut(page, x, y, w, h, erased, rest, pair)) { changed = link = true; page.linkSince(mark); }
                 // The grey laid on the layer drawn on, now blank there, as ink over what the others show.
                 for (int i = 0; i < rest.length; i++) if (erased[i] != 0) { int g = greys[i] >= 254 ? -1 : inked(greys[i], now[i], 255); greys[i] = g >= 255 ? -1 : g; }
             } finally { page.selectLayer(active); }

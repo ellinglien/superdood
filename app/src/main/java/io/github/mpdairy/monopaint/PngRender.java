@@ -106,16 +106,15 @@ final class PngRender {
     /**
      * High Res: {@code page} at {@code k} to a pixel as the zoomed screen shows it, in greys, into {@code png} (its size
      * the page's times {@code k}): each page pixel of {@code raw} (the page's composite, its tones uncalibrated, without
-     * the layers {@code without} sets) laid k × k, sharp dry brushes' tiles over it ({@link SharpView#drawRow}, {@link
-     * SharpView#over}), then those layers' Vector Ink lines ({@link VectorInk#shown}), then calibrated; where {@code
+     * the Vector Ink planes of the layers {@code without} sets) laid k × k, sharp dry brushes' tiles over it ({@link SharpView#drawRow}, {@link
+     * SharpView#over}), then those layers' Vector Ink lines, each in its place ({@link VectorInk#stacked}), then calibrated; where {@code
      * shown} (the copy's greys of that composite, magnets on) holds something over it, that pixel as it is there. A tile
      * row at a time: about {@code page.width × k × TILE × k} ints at once.
      */
     static void high(ToneDocument page, int k, int without, byte[] raw, byte[] shown, Strips png) throws IOException {
         int pw = page.width, ph = page.height, w = pw * k;
         SharpView view = new SharpView(rect -> { });
-        VectorLines lines = without == 0 ? null : VectorInk.shown(page, without, null);
-        if (lines != null && lines.isEmpty()) lines = null;
+        VectorInk.Stacked lines = without == 0 ? null : VectorInk.stacked(page, without, 0, null, page::lines, null);
         int[] band = new int[w * SharpView.TILE * k];
         byte[] cover = lines == null ? null : new byte[band.length];
         for (int ty = 0; ty * SharpView.TILE < ph; ty++) {

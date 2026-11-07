@@ -5,6 +5,18 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+- **The page fills the screen with the page bar hidden** (fit-and-mask, 2026-11-06): upright, the page fills the room's
+  height, about 3% larger, a sliver of each side cropped, with no bands above and below; the zoom button's fit and a
+  pinch out come back to it. Sideways and Zen Mode as before.
+- **Wet paint stays off every menu** (fit-and-mask, 2026-11-06): drying or spreading paint no longer draws over an open
+  menu, Play, System Settings, the tray, Show Kinds, the Lasso's bar or any other popup; closing it shows the page there.
+- **Zen Mode's fan: Lasso, droplet, layers** (zen-fan-5, 2026-11-06, the owner's mockup). The three buttons between the pickers now run from the corner outward: Lasso, droplet, layer button, the layer button inside where the pickers' arcs would meet.
+
+- **Vector Ink follows the chosen layer** (vector-layers, 2026-11-06, the owner: "Vector Ink follows the chosen layer"):
+  Vector Ink draws on the layer in use, like any pen, beside the other pens' marks there. It no longer moves other inks
+  to a layer under it or adds layers of its own. Zoomed in, each layer's sharp lines sit in their place: a higher
+  layer's marks cover them. The eraser, the Lasso, Undo, Show Layers, the PDF, PNG and Layers copies and Draw Together
+  follow the layer. Old pages open as they were; the notes "Layers full" and "Vector ink only" are gone.
 - **Draw Together on three layers** (live-layers, 2026-11-06): a mark drawn on layer 1, 2 or 3 lands on that layer for
   everyone, the Manta and the browser alike; a page of one layer makes the other two first. Each person picks their own
   layer, and showing or hiding a layer stays on that screen. An eraser, a Lasso move or an Undo on one layer leaves the

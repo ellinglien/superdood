@@ -83,7 +83,7 @@ public final class PngRenderChecks {
         d.surface = BrushTexture.COLD_PRESS;
         WatercolorSession s = new WatercolorSession();
         SharpChecks.draw(d, s, SharpChecks.preset("HB pencil"), 4, 1, SharpChecks.hand(new Random(3), 40, 30, 90, 10, false), 1);
-        // The lines over it (a pair of their own on top, as Vector Ink puts them over other marks).
+        // The lines over it, on its layer (Vector Ink's plane over the pencil's).
         VectorInkChecks.draw(d, s, VectorInkChecks.vector(), 6, 1, VectorInkChecks.hand(50, 11));
         int ink = -1;
         for (int i = 0; i < d.layerCount(); i++) if (d.lines(i) != null && !d.lines(i).isEmpty()) ink = i;
@@ -101,9 +101,9 @@ public final class PngRenderChecks {
         StringBuilder expected = new StringBuilder();
         d.lines(ink).pdf(expected, DotPattern::exportGray);
         check(new String(raw, 0, n, java.nio.charset.StandardCharsets.ISO_8859_1).equals(expected.toString()), "the form holds the lines' paths");
-        // The picture: High Res of the page without the lines' layer (neither their pixels nor their sharp lines).
+        // The picture: High Res of the page without the lines' plane (neither their pixels nor their sharp lines), the pencil kept.
         ToneDocument.Snapshot hidden = d.layerSnapshot();
-        hidden.layers.get(ink).visible = false;
+        hidden.layers.get(ink).planes[ToneDocument.PLANE_LINES] = null;
         int[] got = new int[2], without = read(PngRender.high(hidden, false, null, false, 1, null), got), shown = pdf.image(page), with = high(d, NotebookTemplate.BLANK);
         check(Arrays.equals(shown, without) && !Arrays.equals(shown, with), "the picture leaves the lines out");
         check(finer(shown, d) > 100, "its pencil edges finer than the page's pixels");
@@ -145,13 +145,13 @@ public final class PngRenderChecks {
     /** Layers at each size (the owner, 2026-11-05): read back by the PSD reader, its merged image that size's PNG, its layers within a few greys of it; High Res sharp. */
     static void layers() throws Exception {
         ToneDocument d = SharpChecks.page(BrushTexture.COLD_PRESS);
-        // A Vector Ink pair over the pencil, and a magnet, so every kind of layer is there.
+        // Vector Ink over the pencil on its layer (a layer of the copy of its own), and a magnet, so every kind of layer is there.
         VectorInkChecks.draw(d, new WatercolorSession(), VectorInkChecks.vector(), 6, 1, VectorInkChecks.hand(50, 11));
         for (boolean magnet : new boolean[]{false, true}) {
             // A magnet's soft edge over a kept stroke: the PNG keeps that pixel doubled, the layers keep the stroke sharp under it.
             if (magnet) d.placeMagnets(Magnets.of(java.util.Collections.singletonList(new Magnets.Magnet("ink", 220, 150, 0, 0))));
             PageExportChecks.Psd page = PageExportChecks.read(copy(d, PageExport.LAYERS, ExportSize.PAGE, NotebookTemplate.LINED));
-            check(page.names.contains("Layer 1 Dry Media") && page.names.contains("Layer 2 Pen") && page.names.contains(PageExport.MAGNETS) == magnet, "the page's layers: " + page.names);
+            check(page.names.contains("Dry Media") && page.names.contains("Vector Ink") && page.names.contains(PageExport.MAGNETS) == magnet, "the page's layers: " + page.names);
             for (ExportSize size : new ExportSize[]{ExportSize.SOCIAL, ExportSize.HIGH}) {
                 int[] wh = size.of(d.width, d.height), got = new int[2];
                 PageExportChecks.Psd psd = PageExportChecks.read(copy(d, PageExport.LAYERS, size, NotebookTemplate.LINED), size == ExportSize.HIGH ? 600 : 300);
@@ -170,14 +170,14 @@ public final class PngRenderChecks {
         PageExportChecks.Psd social = PageExportChecks.read(copy(manta, PageExport.LAYERS, ExportSize.SOCIAL, NotebookTemplate.LINED), 182);
         check(social.width == 1080 && social.height == 1444 && social.names.size() > 4, "a Manta page's Social Layers 1080 × 1444: " + social.names);
         PageExportChecks.compare(social, read(copy(manta, PageExport.PNG, ExportSize.SOCIAL, NotebookTemplate.LINED), new int[2]), "a Manta page's Social", .005);
-        // High Res: the pencil's layer and the lines' Pen finer than their pixels doubled; a layer that isn't, exactly its pixels doubled.
+        // High Res: the pencil's layer and the lines' finer than their pixels doubled; a layer that isn't, exactly its pixels doubled.
         PageExportChecks.Psd high = PageExportChecks.read(copy(d, PageExport.LAYERS, ExportSize.HIGH, NotebookTemplate.LINED), 600);
         for (int l = 0; l < high.names.size(); l++) {
             String name = high.names.get(l);
             int[] a = new int[high.alpha.get(l).length];
             for (int i = 0; i < a.length; i++) a[i] = high.alpha.get(l)[i] & 255;
             int edges = finer(a, d);
-            if (name.equals("Layer 1 Dry Media") || name.equals("Layer 2 Pen")) check(edges > 200, name + " finer than its pixels doubled at High Res: " + edges);
+            if (name.equals("Dry Media") || name.equals("Vector Ink")) check(edges > 200, name + " finer than its pixels doubled at High Res: " + edges);
             else check(edges > 0 ? !name.equals(PageExport.PAPER) && !name.equals(PageExport.TEMPLATE) && !name.equals(PageExport.MAGNETS) : doubled(high, page, l, d), name + " at High Res is its pixels doubled");
         }
         check(Arrays.equals(PageExport.sizeWords(PageExport.LAYERS, 1785, 2387), new String[]{"Social, 1080 × 1444", "Page, 1785 × 2387", "High Res, 3570 × 4774, sharp, large file"})

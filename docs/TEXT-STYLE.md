@@ -338,9 +338,9 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   blurb "A smooth line that stays sharp however far you zoom in.", its personality "A smooth pen whose lines stay sharp
   however far you zoom in."): its layer has no name of its own on screen; a layer made for it on top says nothing (2026-11-04, the owner:
   it just works). Its notes show beside the tool in use (the label, as Cut Stamp's words), never at the brush line's
-  right, which is Draw Together's connection status's (the owner, 2026-11-04): "Layers full" (no room for its layer),
-  "Vector ink only" (a picture placed on its layer; the Lasso and Paste take its lines since 2026-11-04), "Vector ink full" (four layers, the top one's lines at their cap; a full layer gives way to a new one since 2026-11-04), "Not
-  in Vector ink" (a shape or Make Ink with it). "Top layer only" and "Needs a fresh layer" went the same day.
+  right, which is Draw Together's connection status's (the owner, 2026-11-04): "Vector ink full" (the layer in use's
+  lines at their cap), "Not in Vector ink" (a shape or Make Ink with it). "Top layer only" and "Needs a fresh layer"
+  went the same day; "Layers full" and "Vector ink only" on 2026-11-06, when it began drawing on the layer in use.
 - **effect** (the owner, 2026-11-02: "the brushes that don't leave a mark, an initial mark, they should use the word
   'effect' in their name to make it clear they affect stuff on the page already"): a brush that only reworks the marks
   there (`WildSample.reworks`: a smudge laying little paint of its own, or clear water) is shown with "effect" after its

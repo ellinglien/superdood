@@ -93,6 +93,21 @@ if git rev-parse -q --verify "$vector_ref^{commit}" >/dev/null 2>&1; then
 else
   echo "SKIP: the check against the version before Vector Ink needs git and commit $vector_ref"
 fi
+# The version before Vector Ink followed the layer in use (1f0d16e8): this one opens its four-pair page with Vector Ink's
+# own pair on top unchanged; it opens this one's page of Vector Ink beside a pen's marks on one layer as saved.
+layers_ref=1f0d16e8
+if git rev-parse -q --verify "$layers_ref^{commit}" >/dev/null 2>&1; then
+  old_src=$(mktemp -d) old_classes=$(mktemp -d)
+  git archive "$layers_ref" "$main" | tar -x -C "$old_src"
+  javac -nowarn -d "$old_classes" -sourcepath "$old_src/app/src/main/java" "$test/OlderLayersCheck.java" 2>&1 | grep -v "^Note:" || true
+  hash=$(java -cp "$old_classes" io.github.mpdairy.monopaint.OlderLayersCheck write "$old_classes/old.mpaint")
+  java -cp "$classes" io.github.mpdairy.monopaint.VectorInkChecks old-layers "$old_classes/old.mpaint" "$hash"
+  hash=$(java -cp "$classes" io.github.mpdairy.monopaint.VectorInkChecks mixed-write "$old_classes/mixed.mpaint")
+  java -cp "$old_classes" io.github.mpdairy.monopaint.OlderLayersCheck read "$old_classes/mixed.mpaint" "$hash"
+  rm -rf "$old_src" "$old_classes"
+else
+  echo "SKIP: the check against the version before Vector Ink followed the layer needs git and commit $layers_ref"
+fi
 # The version before every edit was logged (56dad77f) opens a page whose log (version 2) holds eraser, smudge and Lasso
 # entries as saved, without a replay (the notebook incident of 2026-11-02: the log is extra, the pixels are the page).
 replay_ref=56dad77f

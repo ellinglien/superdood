@@ -490,7 +490,7 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   8 steps each side of the X's row, at most 32 dp past it, and the line), the ring with it, so strokes beside the
   open fan still show.
   Since zen-fan-3 (2026-11-06): the gap and the band 60 dp (31 before), as wide as the thin arc's top end is from the
-  Manta's edge, the wedges 183 dp (212) so the tools stay put; the layer button, the droplet and the Lasso are lent
+  Manta's edge, the wedges 183 dp (212) so the tools stay put; the Lasso, the droplet and the layer button (zen-fan-5; layers first before) are lent
   into the gap between the wedges (the owner: "putting the layers, droplet and lasso between the two wedges"), squares
   centred on the diagonal 40, 97 and 154 dp out from the point (`ZenFan.cell`; 48, 114 and 180 until zen-fan-4, the
   Lasso now inside the wedges' radius), the droplet and the Lasso 40 dp, the layer button 34 (85%); no line under the fan.

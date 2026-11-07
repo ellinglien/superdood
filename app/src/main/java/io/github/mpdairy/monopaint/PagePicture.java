@@ -230,7 +230,7 @@ final class PagePicture {
          * ({@link ToneDocument#stacked}; none: its paper and guides): a layer of a page's Layers copy ({@link PageExport}).
          */
         static Composite printed(ToneDocument.Snapshot page, int from, int to) { return printed(page, from, to, 0); }
-        /** As above, without the layers whose bits {@code without} sets: High Res's Layers copy, Vector Ink's lines drawn in their place. */
+        /** As above, without the Vector Ink planes of the layers whose bits {@code without} sets: High Res's Layers copy, Vector Ink's lines drawn in their place. */
         static Composite printed(ToneDocument.Snapshot page, int from, int to, int without) {
             return new Composite(page.width, page.height, page.layers, page.paper, page.shownPaper(), page.mirrors == null ? null : page.mirrors.view(), from, to, without);
         }
@@ -238,7 +238,7 @@ final class PagePicture {
         Composite(int width, List<ToneDocument.Layer> layers, int paper) { this(width, 0, layers, paper, null, null); }
         /**
          * Inkwash: {@code page}'s whole composite as a copy shows it (its guides under its marks when {@code guides}, as
-         * {@link #printed(ToneDocument.Snapshot)}), without the layers whose bits {@code without} sets (0: none): High
+         * {@link #printed(ToneDocument.Snapshot)}), without the Vector Ink planes of the layers whose bits {@code without} sets (0: none): High
          * Res's page under Vector Ink's sharp lines ({@link PngRender#png}).
          */
         static Composite of(ToneDocument.Snapshot page, boolean guides, int without) {
@@ -259,7 +259,7 @@ final class PagePicture {
                 ToneDocument.Layer entry = ToneDocument.stacked(layers, k);
                 if (entry == null) continue;
                 ToneDocument.Layer layer = layers.get(ToneDocument.stackOwner(k));
-                if (layer.visible && (without >> ToneDocument.stackOwner(k) & 1) == 0) { tones[n] = entry.tones; alpha[n] = entry.alpha; opacity[n++] = ToneDocument.stackOpacity(layer, entry); }
+                if (layer.visible && !ToneDocument.linesPlace(k, without)) { tones[n] = entry.tones; alpha[n] = entry.alpha; opacity[n++] = ToneDocument.stackOpacity(layer, entry); }
             }
             visible = n;
         }

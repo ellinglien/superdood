@@ -737,8 +737,8 @@ final class InkWashBar {
     private View anchor(int tool) { return anchor(tools[tool]); }
     /** What {@code button}'s menus open beside: the button, or Zen Mode's fan, so they never cover it. */
     private View anchor(View button) { return zenAnchor != null ? zenAnchor : button; }
-    /** The buttons Zen Mode's fan shows in the gap between its wedges, in {@link ZenFan#cell}'s order: the layer button, the droplet, the Lasso. */
-    private View[] zenStrip() { return new View[]{layers, wet, lasso}; }
+    /** The buttons Zen Mode's fan shows in the gap between its wedges, in {@link ZenFan#cell}'s order: the Lasso, the droplet, the layer button. */
+    private View[] zenStrip() { return new View[]{lasso, wet, layers}; }
     /** Where each lent button was ({@link #lend}): its row, its place in it, its layout; null while home. */
     private final android.view.ViewGroup[] lentFrom = new android.view.ViewGroup[ZenFan.CELLS];
     private final int[] lentAt = new int[ZenFan.CELLS];

@@ -36,8 +36,8 @@ final class PageExport {
     static final String[] CHOICES = {PDF, PNG, LAYERS};
     /** The note when a copy couldn't be made (Export Now's too). */
     static final String FAILED = "Export failed";
-    /** A page's layers' kinds as the Layers copy names them, in {@link ToneDocument#stacked}'s order: the base, then each plane ({@link ToneDocument#PLANE_DRY} …). */
-    static final String[] KINDS = {"Old Paint", "Dry Media", "Washes", "Pen", "Paint"};
+    /** A page's layers' kinds as the Layers copy names them, in {@link ToneDocument#stacked}'s order: the base, then each plane ({@link ToneDocument#STACK_PLANES}). */
+    static final String[] KINDS = {"Old Paint", "Dry Media", "Washes", "Pen", "Vector Ink", "Paint"};
     static final String PAPER = "Paper", TEMPLATE = "Template", MAGNETS = "Magnets";
 
     /** {@code choice}'s file ending. */
@@ -161,7 +161,7 @@ final class PageExport {
         for (int p = 0; p < pairs; p++) for (int kind = 0; kind < kinds; kind++) {
             int from = p * 2 * kinds + 2 * kind;
             PagePicture.Composite marks = PagePicture.Composite.printed(page, from, from + 2, without);
-            PsdWriter.Rows rows = high ? new Sharp(page, doc, marks, from, kind == 1 + ToneDocument.PLANE_PEN, without, kept, grey)
+            PsdWriter.Rows rows = high ? new Sharp(page, doc, marks, from, ToneDocument.slotPlane(kind) == ToneDocument.PLANE_LINES, without, kept, grey)
                     : sized(size, w, h, (y, g, a) -> { marks.marks(y, row, cover); for (int x = 0; x < w; x++) pixel(row[x], cover[x], page.paper, grey, g, a, x); });
             layers.add(PsdWriter.layer((pairs > 1 ? "Layer " + (p + 1) + " " : "") + KINDS[kind], ow, oh, rows));
         }
@@ -216,7 +216,7 @@ final class PageExport {
      * them): its pixels doubled, a tile row at a time ({@link SharpView#TILE}), except where a plane of it holds just
      * what its kept dry strokes lay ({@link SharpView#holds}) and the layer shows just those planes there (no reflection,
      * no other mark): there the strokes are drawn again at 2 × ({@link SharpView#drawn}), as High Res's PNG draws them.
-     * The Pen of a Vector Ink pair takes its lines, drawn at 2 × ({@link VectorLines#over}), in place of their pixels.
+     * A pair's Vector Ink ({@code pen}: its kind) takes its lines, drawn at 2 × ({@link VectorLines#over}), in place of their pixels.
      */
     private static final class Sharp implements PsdWriter.Rows {
         private final int k = ExportSize.HIGH_SCALE, w, h, ow, side = SharpView.TILE;
@@ -242,7 +242,7 @@ final class PageExport {
                 kept.add(on);
                 if (entry == null) continue;
                 ToneDocument.Layer layer = page.layers.get(owner);
-                if ((without >> owner & 1) != 0) { if (pen) { VectorLines own = doc.lines(owner); if (own != null) drawn = drawn.with(own); } continue; }
+                if (pen && (without >> owner & 1) != 0) { VectorLines own = doc.lines(owner); if (own != null) drawn = drawn.with(own); continue; }
                 if (!layer.visible) continue;
                 entries[e] = entry; opacity[e] = ToneDocument.stackOpacity(layer, entry);
                 for (SharpView.Kept s : all) { ToneDocument.Layer plane = doc.addressed(s.e.plane); if (plane != null && plane.tones == entry.tones) on.add(s); }

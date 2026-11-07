@@ -1017,19 +1017,27 @@ public final class DrawLayoutChecks {
                             && source("PaintActivity").contains("java.util.List<RectF> mask = zenFan.mask();") && pad.split("MagnetDrag\\.minus\\(").length == 5 && pad.split(", covered\\(\\)\\)").length == 3
                             && source("PaintActivity").contains("RectF area = zenFanPanel();\n        if (area == null) return;\n        zenFan.setVisibility(View.GONE);"),
                     "Zen Mode's open fan: the fast display keeps off its shape, in steps (drying paint took bits of it, the owner 2026-11-06), every write through the mask; closing it shows what it covered");
+            // Every open popup too (2026-11-06: wet paint drew over the menu, Play, the tray...): one path, Popups'.
+            String popups = source("Popups");
+            check(pad.contains("java.util.List<RectF> panel = Popups.covering();\n        java.util.List<RectF> fan = app.zenFanMask();")
+                            && popups.contains("if (Color.alpha(background) != 0) opaque.put(popup, new RectF());")
+                            && popups.contains("RectF window = new RectF(bounds); PanelCoordinates.fromView(root).mapRect(window);\n        RectF covers = opaque.get(popup);\n        if (covers != null) covers.set(window);")
+                            && popups.contains("if (open.getKey().isShowing() && !open.getValue().isEmpty()) areas.add(new RectF(open.getValue()));")
+                            && !pad.contains("coveredPanel") && !source("WordsMode").contains("void cover(") && !source("TextMode").contains("host.cover(") && !source("PicturePlacer").contains("host.cover("),
+                    "Every open opaque popup (the menu, Play, System Settings, the tray, Show Kinds, the Lasso's bar, Words' bin, Text, a picture's bar) keeps the fast display off it, through Popups alone; closing one cleans its area as before");
             // In the gap between the fan's wedges (the owner, 2026-11-06: "putting the layers, droplet and lasso between the
             // two wedges"): the column's own buttons lent, in ZenFan.cell's order, laid over its cells inside the fan's view
             // (its area, the fast display's mask), the layer button's icon sized to its cell, and home as it closes; no
             // Menu, Zoom, Dropper or page turner in it.
             String fanView = source("ZenFanView");
-            check(bar.contains("private View[] zenStrip() { return new View[]{layers, wet, lasso}; }") && !source("PageTurner").contains("turnParts")
+            check(bar.contains("private View[] zenStrip() { return new View[]{lasso, wet, layers}; }") && !source("PageTurner").contains("turnParts")
                             && bar.contains("sizeLayers(Ui.dpOf(app, Math.round(cells[ZenFan.LAYERS].height())));") && bar.contains("sizeLayers(fitted.layers);\n        wet.changed();")
                             && bar.contains("stage.addView(button, index + i, at);") && bar.contains("lentFrom[i].addView(buttons[i], lentAt[i], lentPlace[i]);")
                             && app.contains("for (int i = 0; i < cells.length; i++) cells[i] = zenFan.cell(i);\n        inkWashBar.lend((ViewGroup) stage, ((ViewGroup) stage).indexOfChild(zenFan) + 1, cells);")
                             && app.contains("zenFan.setVisibility(View.GONE);\n        inkWashBar.giveBack();")
                             && fanView.contains("RectF area() { return px(bounds); }") && fanView.contains("RectF cell(int cell) { return px(fan.cell(cell)); }")
                             && source("ZenFan").contains("for (int i = 0; i < CELLS; i++) {\n            float[] c = cell(i);\n            box[0] = Math.min(box[0], c[0]);"),
-                    "Zen Mode's fan: a small layer button, the droplet and the Lasso in the gap between its wedges, the column's own, lent while it is open, inside the fan's masked area, home as it closes");
+                    "Zen Mode's fan: the Lasso, the droplet and a small layer button in the gap between its wedges, the column's own, lent while it is open, inside the fan's masked area, home as it closes");
             // The Lasso's menu opens beside the fan, not over it; the hand's change lays the column out again, the buttons home first.
             check(bar.contains("() -> app.fileMenu(menu[0])") && bar.contains("app.menu(anchor(lasso), \"lasso menu\"")
                             && bar.contains("private View anchor(View button) { return zenAnchor != null ? zenAnchor : button; }")

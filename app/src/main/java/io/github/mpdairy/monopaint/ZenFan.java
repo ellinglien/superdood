@@ -10,7 +10,7 @@ package io.github.mpdairy.monopaint;
  * stand out in its order from the side edge (the slots, then Fill in, Smudge and Eraser), each its own sector. The gap
  * hits nothing ({@link #NONE}). Only a tap on Zen's circle ({@link #LEAVE}) closes it, a hold there leaves Zen Mode
  * (the owner, 2026-11-06: "Keep tray open when drawing - press to close"; picking a tool keeps it open, 2026-11-04);
- * the column's layer button, droplet and Lasso in the gap ({@link #cell}). Mirrored from the bottom-right corner with the column on the right. Sizes and greys are the
+ * the column's Lasso, droplet and layer button in the gap ({@link #cell}). Mirrored from the bottom-right corner with the column on the right. Sizes and greys are the
  * toolbar's own steps ({@link ToolSwatches#sizeAt}, {@link ShadeStrip}). All in dp, screen coordinates (y down). Pure,
  * checked on the desktop ({@code ZenFanChecks}); the browser's too, through the engine.
  */
@@ -165,12 +165,12 @@ final class ZenFan {
      * The column's buttons in the gap between the wedges, lent while the fan is open ({@code InkWashBar.lend}; the owner,
      * 2026-11-06: "the key change was putting the layers, droplet and lasso between the two wedges, with the new space
      * you're making"; beside the dot or along the foot earlier that day, two strips that morning): out from the point,
-     * the layer button, the droplet and the Lasso, each a square centred on the diagonal ({@link #side}), {@link #STEP}
-     * apart, their corners inside the gap ({@link #BAND}), the Lasso's outer corner inside the wedges' radius (the owner,
+     * the Lasso, the droplet and the layer button (the owner's mockup; the layer button first until zen-fan-5), each a square centred on the diagonal ({@link #side}), {@link #STEP}
+     * apart, their corners inside the gap ({@link #BAND}), the layer button's outer corner inside the wedges' radius (the owner,
      * 2026-11-06: "so it doesn't go out beyond where the arcs of the two wedges would connect"; 48, 114 and 180 dp out
      * until then).
      */
-    static final int LAYERS = 0, WET = 1, LASSO = 2, CELLS = 3;
+    static final int LASSO = 0, WET = 1, LAYERS = 2, CELLS = 3;
     /**
      * dp: a cell's side, what the gap holds with a little white each side ({@code CELL * sqrt 2 < BAND}); the layer
      * button's, 85% of it (the owner: "can the layers picker be a bit smaller, like 85% what it is now? to match the

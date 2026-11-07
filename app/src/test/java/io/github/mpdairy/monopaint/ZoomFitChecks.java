@@ -41,7 +41,38 @@ final class ZoomFitChecks {
         // 2401 px tall until layout v3 (2026-10-26), whose brush line grew from 18 dp to 32 with its preview.
         check(manta[0] == 1785 && manta[1] == 2387, "the Manta's pad: " + manta[0] + " x " + manta[1]);
         backdrop(manta);
+        pageBarHidden(manta);
         System.out.println("PASS: the page whole and centred in the room the bars leave (the Manta's 1785 x 2387 px), Manta and Nomad either way up, pages from either turn and from Zen Mode; the double tap and leaving Zen Mode come back to exactly that fit; a pinch still never below 100%; the lines beyond the page at every zoom, never in a copy; in the browser the whole page any way up, 2.5 times about the fingers, a pinch out back to the whole page; a desktop's wide window the width filled, a pinch out to the whole page");
+    }
+    /**
+     * The page bar hidden (the menu's Page Bar; the owner, 2026-11-06: fill the room's height): upright, the Manta's page
+     * fills the room's height, its sides cropped evenly, and that is the fit (a double tap, a pinch out); sideways it
+     * still fills the width; Zen Mode's own fit wins.
+     */
+    static void pageBarHidden(int[] manta) {
+        int[] room = {manta[0], manta[1] + px(new DrawLayout(DrawLayoutChecks.SCREENS[0][0], DrawLayoutChecks.SCREENS[0][1]).pageBar())};
+        check(room[0] == 1785 && room[1] == 2462, "the Manta's room with the page bar hidden: " + room[0] + " x " + room[1]);
+        CanvasViewport v = new CanvasViewport();
+        v.tall = true; v.reset(); v.configure(room[0], room[1], manta[0], manta[1]);
+        int w = Math.round(manta[0] * v.scale()), crop = Math.round(-v.x);
+        check(v.scale() == room[1] / (float) manta[1] && v.y == 0 && Math.round(manta[1] * v.scale()) == room[1], "the room's height filled");
+        check(crop == 28 && w == 1841 && v.percent() == 103 && Math.abs(w - room[0] - 2 * crop) <= 1, "its sides cropped evenly: " + w + " px wide, " + crop + " px off each side, " + v.percent() + "%");
+        float scale = v.scale(), x = v.x;
+        v.gesture(.01f, 0, 0, 0, 0);
+        check(v.scale() == scale && v.x == x, "a pinch out stays at the filled fit");
+        v.gesture(3, room[0] / 2f, room[1] / 2f, room[0] / 3f, room[1] / 3f); v.gesture(.01f, 0, 0, 0, 0);
+        check(Math.abs(v.scale() - scale) < 1e-4, "a pinch out stops at the filled fit");
+        v.reset(); v.configure(room[0], room[1], manta[0], manta[1]);
+        check(v.scale() == scale && v.x == x && v.y == 0, "the double tap comes back to the filled fit");
+        v.tall = false; v.reset(); v.configure(room[0], room[1], manta[0], manta[1]);
+        check(v.scale() == 1 && v.y > 0, "the bar shown: whole, centred");
+        int[] turned = pad(new int[]{DrawLayoutChecks.SCREENS[0][1], DrawLayoutChecks.SCREENS[0][0]});
+        v.tall = true; v.reset(); v.configure(turned[0], turned[1], manta[0], manta[1]);
+        check(v.scale() == turned[0] / (float) manta[0] && v.x == 0 && v.y == 0, "sideways, the width filled as before");
+        int[] zen = panel(DrawLayoutChecks.SCREENS[0]);
+        v.cover = true; v.reset(); v.configure(zen[0], zen[1], manta[0], manta[1]);
+        check(v.scale() == Math.max(zen[0] / (float) manta[0], zen[1] / (float) manta[1]), "Zen Mode keeps its own fit");
+        System.out.println("PASS: the page bar hidden, the Manta's upright page fills the room's height (" + w + " x " + room[1] + " px at " + Math.round(scale * 100) + "%, " + crop + " px off each side), the fit for the double tap and a pinch out; sideways and Zen Mode as before");
     }
     /**
      * The backdrop (the owner, 2026-10-27: "a background for when the canvas is < 100% and you can see it ... (lines)"):

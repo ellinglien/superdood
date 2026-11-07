@@ -27,12 +27,26 @@ final class Popups {
         popup.setBackgroundDrawable(new ColorDrawable(background));
         popup.setOutsideTouchable(focusable); popup.setElevation(0); popup.setAnimationStyle(0);
         popup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+        // A see-through popup (the bar's words) lets the page show under it: not kept off.
+        if (Color.alpha(background) != 0) opaque.put(popup, new RectF());
         boolean openedByFinger = Ui.fingerPress();
         popup.setTouchInterceptor((panel, event) -> {
             Ui.notePress(event);
             return focusable && Ui.restingOutside(panel, event, openedByFinger);
         });
         return popup;
+    }
+    /** Every opaque popup made here and where it was last shown, panel pixels ({@link #covering}). */
+    private static final java.util.Map<PopupWindow, RectF> opaque = new java.util.WeakHashMap<>();
+    /**
+     * What every open opaque popup covers, panel pixels: the fast display writes under Android's windows, so the page's
+     * paint, drying paint too, keeps off them ({@code DrawingPad.covered}); a closed one's area is cleaned as it closes.
+     */
+    static java.util.List<RectF> covering() {
+        java.util.List<RectF> areas = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<PopupWindow, RectF> open : opaque.entrySet())
+            if (open.getKey().isShowing() && !open.getValue().isEmpty()) areas.add(new RectF(open.getValue()));
+        return areas;
     }
     static PopupWindow create(View content, int turn) { return create(content, turn, true, Color.WHITE); }
 
@@ -57,6 +71,8 @@ final class Popups {
     /** Shows, or moves, the popup over {@code bounds} given in the root's app coordinates. */
     static void show(PopupWindow popup, View root, RectF bounds) {
         RectF window = new RectF(bounds); PanelCoordinates.fromView(root).mapRect(window);
+        RectF covers = opaque.get(popup);
+        if (covers != null) covers.set(window);
         int left = Math.round(window.left), top = Math.round(window.top);
         int width = Math.round(window.width()), height = Math.round(window.height());
         if (popup.isShowing()) { popup.update(left, top, width, height); return; }

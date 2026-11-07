@@ -590,7 +590,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     boolean allowStroke(int tool) {
         String refused = NotebookRules.refusal(rules(), pageLocked(), tool, inkWash.brush(tool));
         if (refused != null) { note(refused); return false; }
-        // Vector Ink: its own pair on top, made when needed; refused only with no room for it.
+        // Vector Ink: on the layer in use; refused only when that layer's lines are full.
         String vector = pad.document == null ? null : VectorInk.refusal(pad.document, inkWash.brush(tool));
         if (vector != null) { sayVector(vector); return false; }
         // Show Kinds: nothing is drawn, or erased, unseen; nor on a hidden layer (the layer button's hold, 2026-11-06).
@@ -966,10 +966,11 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** Whether Zen Mode is on: no column, no brush line, no page bar. Not kept: a new launch has the bars. */
     boolean zen;
     /** The menu's Page Bar ({@link DrawLayout#PAGE_BAR}): the page bar hidden, Zen Mode or not (leaving it, the bar is as Page Bar left it). A session's, as Zen Mode. */
-    private boolean barHidden;
+    boolean barHidden;
     /**
      * Page Bar's tap: the page bar hidden or shown. The pad's new room refits the page as Zen Mode's does
-     * ({@link CanvasViewport#configure}: fitted again while untouched, a zoom kept), then one refresh, forced as a zoom's.
+     * ({@link CanvasViewport#configure}: fitted again while untouched, upright filling the room's height, {@link
+     * CanvasViewport#tall}; a zoom kept), then one refresh, forced as a zoom's.
      */
     void togglePageBar() {
         if (inkWashBar == null) return;
@@ -2237,8 +2238,6 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** {@code picture} shown over the page drawn on, to move and size, then Place or Cancel. */
     private void placePicture(android.graphics.Bitmap picture) {
         if (destroyed || book == null || busy() || pageLocked()) { picture.recycle(); return; }
-        String vector = pad.document == null ? null : VectorInk.shapeRefusal(pad.document, null);
-        if (vector != null) { sayVector(vector); picture.recycle(); return; }
         dismissPanels(); pad.words.close(); pad.text.close(); pad.finishStroke();
         pad.placer.begin(picture, this::lay);
     }

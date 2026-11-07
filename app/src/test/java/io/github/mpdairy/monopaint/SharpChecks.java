@@ -161,9 +161,9 @@ public final class SharpChecks {
         check(kept == 75 && pixels.equals(java.util.List.of("Riso", "Pixel pen", "Stitch pen")), kept + " Basic tools kept sharp; pixels: " + pixels);
     }
     /**
-     * A page with two Vector Ink layers (a full one and the next on top, VectorInk.room) and HB pencil under and over
-     * them: the zoomed view leaves the Vector Ink layers out (their bitset, VectorInk.sharpLayers), the pencil's plane
-     * stays in, its kept strokes match and draw finer there.
+     * A page with Vector Ink on two layers (layer 2's full, layer 3's) and HB pencil on each, under and over the lines:
+     * the zoomed view leaves the Vector Ink planes out (their layers' bitset, VectorInk.sharpLayers), the pencil's planes
+     * stay in, its kept strokes match and draw finer there.
      */
     static void vectorLayers() {
         ToneDocument d = InkWashLayers.blank(1920, 2560);
@@ -171,19 +171,21 @@ public final class SharpChecks {
         WatercolorSession s = new WatercolorSession();
         Random r = new Random(21);
         Brush hb = preset("HB pencil");
+        InkWashLayers.pickLayer(d, 1); InkWashLayers.pickLayer(d, 2);
         for (int k = 0; k < 4; k++) draw(d, s, hb, 6, 1, hand(r, 50, 100 + 60 * k, 100, 10, false), 1);
-        // Vector ink over the pencil: a pair of its own on top; that one filled (its lines at the cap), the next stroke another.
+        // Vector ink over the pencil on layer 2; that one filled (its lines at the cap), the next stroke on layer 3.
         VectorInkChecks.draw(d, s, VectorInkChecks.vector(), 6, 1, VectorInkChecks.scribble(10));
-        int ink = InkWashLayers.inkOf(d, InkWashLayers.pairs(d) - 1);
+        int ink = VectorInk.layer(d);
         VectorLines filled = VectorLines.NONE.with(VectorInkChecks.line(0, 30, 1900, 30, 2, 1, VectorLines.MOST_POINTS));
         VectorInk.relay(d, ink, filled, 0, 0, 1920, 2560, null); d.finish();
         d.changeLines(ink, filled, 0);
+        InkWashLayers.pickLayer(d, 3);
         VectorInkChecks.draw(d, s, VectorInkChecks.vector(), 6, 1, VectorInkChecks.scribble(10));
         for (int k = 0; k < 4; k++) draw(d, s, hb, 6, 1, hand(r, 50, 100 + 60 * k, 160, 10, k % 2 == 0), 1);
         int without = VectorInk.sharpLayers(d, 0, null);
-        check(Integer.bitCount(without) == 2, "two Vector Ink layers left out zoomed: " + Integer.toBinaryString(without));
+        check(Integer.bitCount(without) == 2, "two Vector Ink layers' planes left out zoomed: " + Integer.toBinaryString(without));
         int pencils = 0;
-        for (StrokeLog.Entry e : d.replay()) if (e.sharp()) { pencils++; check((without >> (e.plane & 15) & 1) == 0, "a pencil's plane stays in the zoomed view"); }
+        for (StrokeLog.Entry e : d.replay()) if (e.sharp()) { pencils++; check((e.plane >> 4) != 1 + ToneDocument.PLANE_LINES, "a pencil's plane stays in the zoomed view"); }
         check(pencils == 8, "the pencil strokes kept: " + pencils);
         int[] m = mismatched(d, 4, null, without);
         check(m[2] > 1000 && m[0] == 0, m[0] + " of " + m[2] + " pencil pixels differ beside two Vector Ink layers");

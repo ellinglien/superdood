@@ -320,8 +320,8 @@ final class LiveProbe {
         laying = true;
         long top = a.page.top();  // a set change is a step a layer and plane it erased, then its own
         // On the layer it was drawn on (InkWashLayers.drawOn: made first on a page of one pair), this tablet's own kept in use.
-        // Ink on Vector Ink's layer goes on a pair under it first, as the host's own pen's (VectorInk.under), its step the guest's too; then the greys as that layer takes them.
-        try { app.layerChange(() -> InkWashLayers.drawOn(a.page, c.layer, () -> { if (darkens(part, a.shown)) VectorInk.under(a.page); if (PictureImport.lay(a.page, c.x, c.y, c.w, c.h, onLayer(a, part), joined, c.set, false, c.kinds)) { laidSteps.addAll(a.page.stepsAfter(top)); a.step = a.page.lastStep(); } })); }
+        // Then the greys as that layer takes them (beside Vector Ink's lines there, as the host's own pen's).
+        try { app.layerChange(() -> InkWashLayers.drawOn(a.page, c.layer, () -> { if (PictureImport.lay(a.page, c.x, c.y, c.w, c.h, onLayer(a, part), joined, c.set, false, c.kinds)) { laidSteps.addAll(a.page.stepsAfter(top)); a.step = a.page.lastStep(); } })); }
         finally { laying = false; a.page.takeLive(); }
         if (a.step != null) { partFrom = a.from; partStep = a.step; }
         if (a.next < a.slices.length) { main.postAtTime(slice, a.start + a.due[a.next]); return; }
@@ -344,12 +344,6 @@ final class LiveProbe {
             if (greys[i] >= 0 && !c.set) greys[i] = PictureImport.inked(greys[i], a.shown[i], a.page.layerTone(c.x + i % c.w, c.y + i / c.w, c.kinds));
         }
         return greys;
-    }
-
-    /** Whether any of {@code greys} is darker than the page showed there ({@code shown}): ink to lay, a set change's too. */
-    private static boolean darkens(int[] greys, int[] shown) {
-        for (int i = 0; i < greys.length; i++) if (greys[i] >= 0 && greys[i] < shown[i]) return true;
-        return false;
     }
 
     /** The slices of {@code a} not yet laid, as one. */

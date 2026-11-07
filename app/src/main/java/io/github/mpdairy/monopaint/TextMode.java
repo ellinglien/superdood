@@ -268,14 +268,13 @@ final class TextMode {
                     float need = Math.min(pageArea.bottom, shown.top + field.getLineCount() * field.getLineHeight() + 2 * fine + field.getLineHeight());
                     if (need <= shown.bottom || editor != popup) return;
                     shown.bottom = need;
-                    panel.set(shown); PanelCoordinates.fromView(app.root).mapRect(panel); host.cover(panel);
+                    panel.set(shown); PanelCoordinates.fromView(app.root).mapRect(panel);
                     Popups.show(popup, app.root, shown);
                 });
             }
         });
         popup.setOnDismissListener(() -> {
             editor = null;
-            host.cover(null);
             app.pad.uncovered("text", new RectF(panel));
             if (host.page() != page) return;
             TextBoxes.Box typed = b.withText(TextBoxes.clean(field.getText().toString()));
@@ -283,7 +282,7 @@ final class TextMode {
             change(page, next);
         });
         editor = popup;
-        panel.set(shown); PanelCoordinates.fromView(app.root).mapRect(panel); host.cover(panel);
+        panel.set(shown); PanelCoordinates.fromView(app.root).mapRect(panel);
         Popups.show(popup, app.root, shown);
         field.requestFocus();
         field.postDelayed(() -> {

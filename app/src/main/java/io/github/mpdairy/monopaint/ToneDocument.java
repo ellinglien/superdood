@@ -38,11 +38,23 @@ final class ToneDocument {
     static final int KIND_OPAQUE = 8;
     /**
      * Inkwash: a layer's kind planes ({@link Layer#planes}), bottom to top, the owner's order (2026-10-27): dry media, washes,
-     * pen, opaque paint; {@link #PLANE_KINDS} the kind each holds.
+     * pen, opaque paint; {@link #PLANE_KINDS} the kind each holds. {@link #PLANE_LINES}: Vector Ink's lines' pixels at 100%
+     * ({@link Layer#lines}) apart from other pens' marks, so the zoomed view draws the lines in their place; Pen to the
+     * eraser, stacked right over the Pen plane ({@link #STACK_PLANES}). The file keeps the first four ({@code DocumentCodec}).
      */
-    static final int PLANE_DRY = 0, PLANE_WASH = 1, PLANE_PEN = 2, PLANE_OPAQUE = 3, PLANES = 4;
-    static final int[] PLANE_KINDS = {KIND_PENCIL, KIND_PAINT, KIND_PEN, KIND_PAINT};
-    private static final String[] PLANE_NAMES = {"Dry media", "Wash", "Pen", "Opaque"};
+    static final int PLANE_DRY = 0, PLANE_WASH = 1, PLANE_PEN = 2, PLANE_OPAQUE = 3, PLANE_LINES = 4, PLANES = 5;
+    static final int[] PLANE_KINDS = {KIND_PENCIL, KIND_PAINT, KIND_PEN, KIND_PAINT, KIND_PEN};
+    private static final String[] PLANE_NAMES = {"Dry media", "Wash", "Pen", "Opaque", "Vector ink"};
+    /** The kind planes bottom to top, as {@link #stacked} lays them: Vector Ink's over the pen's, under opaque paint. */
+    static final int[] STACK_PLANES = {PLANE_DRY, PLANE_WASH, PLANE_PEN, PLANE_LINES, PLANE_OPAQUE};
+    /** The plane at slot {@code slot} of a layer's places in {@link #stacked} (1 to {@link #PLANES}; 0, its base: -1). */
+    static int slotPlane(int slot) { return slot == 0 ? -1 : STACK_PLANES[slot - 1]; }
+    /** Plane {@code p}'s slot ({@link #slotPlane}'s inverse). */
+    static int planeSlot(int p) { for (int s = 1; s <= PLANES; s++) if (STACK_PLANES[s - 1] == p) return s; return 0; }
+    /** The plane place {@code k} of {@link #stacked} is (-1: a layer's base). */
+    static int stackPlane(int k) { return slotPlane(k % (2 * (1 + PLANES)) / 2); }
+    /** Whether place {@code k} of {@link #stacked} is the Vector Ink plane of a layer whose bit {@code layers} sets: what a page composed under the sharp lines leaves out. */
+    static boolean linesPlace(int k, int layers) { return (layers >> stackOwner(k) & 1) != 0 && stackPlane(k) == PLANE_LINES; }
     /** Plane {@code p}'s name (never shown). */
     static String planeName(int p) { return PLANE_NAMES[p]; }
     /** Inkwash: the most places a page composites ({@link #stacked}): every layer's base and planes. */
@@ -69,8 +81,8 @@ final class ToneDocument {
         int n = stackOwner(k);
         if (n >= layers.size()) return null;
         Layer layer = layers.get(n);
-        int slot = k % (2 * (1 + PLANES)) / 2;
-        return slot == 0 ? layer : layer.plane(slot - 1);
+        int p = stackPlane(k);
+        return p < 0 ? layer : layer.plane(p);
     }
     /** The opacity, percent, place {@code entry} of layer {@code owner} composites at: the layer's, times a plane's own. */
     static int stackOpacity(Layer owner, Layer entry) { return entry == owner ? owner.opacity : owner.opacity * entry.opacity / 100; }
@@ -138,8 +150,8 @@ final class ToneDocument {
          */
         Layer[] planes;
         /**
-         * Inkwash: Vector Ink's lines on this layer ({@link VectorLines}), its pixels their drawing at 100%; null on a layer
-         * that holds none (any but a top pair's ink drawn with Vector Ink). Immutable, shared by copies and Undo steps.
+         * Inkwash: Vector Ink's lines on this layer ({@link VectorLines}), its {@link #PLANE_LINES} plane their drawing at
+         * 100%; null on a layer that holds none (a pair's ink drawn with Vector Ink holds them). Immutable, shared by copies and Undo steps.
          */
         VectorLines lines;
         volatile boolean shared;
@@ -759,15 +771,6 @@ final class ToneDocument {
         for(java.util.Iterator<Edit> i=undo.descendingIterator();i.hasNext();) { Edit e=i.next(); if(e==mark) break; after.add(e); }
         for(int k=0;k<after.size()-1;k++) after.get(k).linked=true;
     }
-    /** The step {@link #linkToNext} named; null for none. */
-    private Edit joinNext;
-    /**
-     * Inkwash: the last Undo step (a layer put in for a stroke, {@code VectorInk.under}) undone and redone with the next
-     * step made while it is still the last, whenever that comes (a stroke's finish, a shape's, Make Ink's).
-     */
-    void linkToNext() { joinNext=undo.peekLast(); }
-    /** Whether a step about to be made goes with the one before it ({@link #linkToNext}); asked once a step. */
-    private boolean joins() { boolean joins=joinNext!=null&&joinNext==undo.peekLast(); joinNext=null; return joins; }
     /**
      * Inkwash: a stroke's change to its layer as each pixel's darkening ({@link #darkeningSince}), to lay again elsewhere
      * ({@link #layAgain}): the factor its tone over white was multiplied by, 1 where it is as it was, NaN where it found
@@ -970,8 +973,10 @@ final class ToneDocument {
      * flattened ({@code overTones}, {@code overAlpha}; null: none) over its own: they cover it, as layers do.
      */
     int visibleLayers(byte[][] tones,byte[][] alpha,int[] opacity,byte[] ghost,int layerSteps,byte[] overTones,byte[] overAlpha) { return visibleLayers(tones,alpha,opacity,ghost,layerSteps,overTones,overAlpha,0); }
-    /** As above without the layers whose bits {@code without} sets (0: none): the zoomed view's page under Vector Ink's sharp lines ({@link VectorInk#sharpLayers}). */
-    int visibleLayers(byte[][] tones,byte[][] alpha,int[] opacity,byte[] ghost,int layerSteps,byte[] overTones,byte[] overAlpha,int without) {
+    /** As above without the Vector Ink planes of the layers whose bits {@code without} sets (0: none): the zoomed view's page under Vector Ink's sharp lines ({@link VectorInk#sharpLayers}). */
+    int visibleLayers(byte[][] tones,byte[][] alpha,int[] opacity,byte[] ghost,int layerSteps,byte[] overTones,byte[] overAlpha,int without) { return visibleLayers(tones,alpha,opacity,ghost,layerSteps,overTones,overAlpha,without,null); }
+    /** As above, into {@code at} (by layer; null: not wanted) how many of the places given lie under each plane left out: where its lines go ({@link VectorInk.Stacked}). */
+    int visibleLayers(byte[][] tones,byte[][] alpha,int[] opacity,byte[] ghost,int layerSteps,byte[] overTones,byte[] overAlpha,int without,int[] at) {
         int count=0, drawing=active/2;
         byte[] under=pixels();
         if(under!=null) { tones[count]=under; alpha[count]=opaque(under.length); opacity[count++]=100; }
@@ -981,8 +986,8 @@ final class ToneDocument {
             Layer entry=stacked(layers,k);
             if(entry==null) continue;
             int n=stackOwner(k), pair=n/2, shown=stackOpacity(layers.get(n),entry);
-            if((without>>n&1)!=0) continue;
-            if(entry!=layers.get(n)) shown=shown*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(layerSteps>>>KIND_STEPS,PLANE_KINDS[k%(2*(1+PLANES))/2-1])]/100;
+            if(linesPlace(k,without)) { if(at!=null) at[n]=count; continue; }
+            if(entry!=layers.get(n)) shown=shown*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(layerSteps>>>KIND_STEPS,PLANE_KINDS[stackPlane(k)])]/100;
             if(layers.get(n).visible) { tones[count]=entry.tones; alpha[count]=entry.alpha; opacity[count++]=pair==drawing?shown:shown*TracingPaper.layerStrength(layerSteps,pair)/100; }
         }
         if(overTones!=null&&overAlpha!=null&&overAlpha.length==width*height) { tones[count]=overTones; alpha[count]=overAlpha; opacity[count++]=100; }
@@ -1018,7 +1023,7 @@ final class ToneDocument {
         Layer layer=layers.get(index);
         if(layer.lines==next) return;
         Edit edit=!undo.isEmpty()&&top()!=since&&undo.peekLast().linesLayer==null?undo.peekLast():null;
-        if(edit==null) { if(!redo.isEmpty()) log=log.upTo(top()); for(Edit e:redo) historyBytes-=e.bytes; redo.clear(); edit=new Edit(new ArrayList<>(),layer); edit.linked=joins(); undo.addLast(edit); }
+        if(edit==null) { if(!redo.isEmpty()) log=log.upTo(top()); for(Edit e:redo) historyBytes-=e.bytes; redo.clear(); edit=new Edit(new ArrayList<>(),layer); undo.addLast(edit); }
         edit.linesLayer=layer; edit.linesBefore=layer.lines; edit.linesAfter=next;
         layer.lines=next; revision++;
     }
@@ -1321,7 +1326,7 @@ final class ToneDocument {
     private void addEdit(Edit edit) {
         for(Edit discarded:redo) historyBytes-=discarded.bytes;
         if(!redo.isEmpty()) log=log.upTo(top());
-        redo.clear(); edit.linked|=joins(); undo.addLast(edit); historyBytes+=edit.bytes; trimHistory();
+        redo.clear(); undo.addLast(edit); historyBytes+=edit.bytes; trimHistory();
     }
     /** Bottom-to-top source-over composition on the page's {@linkplain #paperTone paper}. Brushes read only the active layer. */
     int compositeTone(int x,int y) { return compositeToneWithout(x,y,0,-1); }
@@ -1355,7 +1360,7 @@ final class ToneDocument {
             Layer layer=stacked(layers,k); int n=stackOwner(k);
             if(layer==null||(live<0?!layers.get(n).visible:n/2>live)) continue;
             byte[] t=layer.tones,al=layer.alpha; int opacity=live<0?stackOpacity(layers.get(n),layer):layer==layers.get(n)?100:layer.opacity;
-            if(kindsShown!=0&&layer!=layers.get(n)&&(live<0||n/2==live)) opacity=opacity*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(kindsShown,PLANE_KINDS[k%(2*(1+PLANES))/2-1])]/100;
+            if(kindsShown!=0&&layer!=layers.get(n)&&(live<0||n/2==live)) opacity=opacity*NotebookOptions.GUIDE_STRENGTH[EraseKind.stepOf(kindsShown,PLANE_KINDS[stackPlane(k)])]/100;
             for(int row=0;row<h;row++) for(int c=0,o=offset+row*stride,i=(y+row)*width+x;c<w;c++,o++,i++) {
                 int a=al[i]&255;
                 if(a==0) continue;  // leaves it as it is, as compositeTone's sum does
@@ -1365,13 +1370,11 @@ final class ToneDocument {
         }
     }
     /** {@link #compositeTone} without layers {@code from} to {@code to} (inclusive): the page were they clear. */
-    int compositeToneWithout(int x,int y,int from,int to) { return compositeToneWithout(x,y,from,to,0); }
-    /** As above without the layers whose bits {@code also} sets too (0: none): the Lasso's hole, Vector Ink's lines lifted with the pair's ({@link LassoPlanes}). */
-    int compositeToneWithout(int x,int y,int from,int to,int also) {
+    int compositeToneWithout(int x,int y,int from,int to) {
         int i=y*width+x, result=paperAt(i);
         for(int k=0,end=stackSize(layers.size());k<end;k++) {
             Layer layer=stacked(layers,k); int n=stackOwner(k);
-            if(layer==null||!layers.get(n).visible||n>=from&&n<=to||(also>>n&1)!=0) continue;
+            if(layer==null||!layers.get(n).visible||n>=from&&n<=to) continue;
             int a=((layer.alpha[i]&255)*stackOpacity(layers.get(n),layer)+50)/100;
             result=((layer.tones[i]&255)*a+result*(255-a)+127)/255;
         }
@@ -1413,26 +1416,25 @@ final class ToneDocument {
      * As {@link #compositeToneKept(int, int, int, int)}, for an eraser limited to {@code kinds} ({@link #eraseKinds}): a pixel it
      * doesn't take is kept whole. {@link #KIND_ALL} is the Everything eraser, which takes every pixel whole (the owner, 2026-10-22).
      */
-    int compositeToneKept(int x,int y,int from,int to,int kinds) { return compositeToneKept(x,y,from,to,kinds,0); }
-    /** As above, the layers whose bits {@code also} sets (0: none) gone too: Vector Ink's, whose pixels an eraser of another pair takes at its lift ({@link VectorInk.Cut}). */
-    int compositeToneKept(int x,int y,int from,int to,int kinds,int also) {
+    int compositeToneKept(int x,int y,int from,int to,int kinds) {
         int[] out=new int[1];
-        compositeTonesKept(x,y,1,from,to,kinds,also,new byte[]{1},out,0);
+        compositeTonesKept(x,y,1,from,to,kinds,new byte[]{1},out,0);
         return out[0];
     }
     /**
-     * {@link #compositeToneKept(int, int, int, int, int, int)} of the {@code w} pixels of row {@code y} from {@code x} where
+     * {@link #compositeToneKept(int, int, int, int, int)} of the {@code w} pixels of row {@code y} from {@code x} where
      * {@code at} is non-zero, into {@code out} from {@code offset}; the rest left as they are. The eraser's preview, a
-     * frame's area at a time: the shown layers gathered once, a pixel passing by what holds nothing there.
+     * frame's area at a time: the shown layers gathered once, a pixel passing by what holds nothing there. Vector Ink's
+     * pixels go as the pen's (their plane is Pen), the cut drawing what is left of them again at the lift ({@link VectorInk.Cut}).
      */
-    void compositeTonesKept(int x,int y,int w,int from,int to,int kinds,int also,byte[] at,int[] out,int offset) {
+    void compositeTonesKept(int x,int y,int w,int from,int to,int kinds,byte[] at,int[] out,int offset) {
         // Inkwash: the Everything eraser rubs a cover's design off too (rubDesign).
         byte[] bare=kinds==0||kinds==KIND_ALL?bare():null;
         int end=stackSize(layers.size()), m=0;
         Layer[] shown=new Layer[end]; int[] owner=new int[end], opacity=new int[end];
         for(int k=0;k<end;k++) {
             Layer layer=stacked(layers,k); int n=stackOwner(k);
-            if(layer==null||!layers.get(n).visible||(also>>n&1)!=0) continue;
+            if(layer==null||!layers.get(n).visible) continue;
             shown[m]=layer; owner[m]=n; opacity[m++]=stackOpacity(layers.get(n),layer);
         }
         int row=y*width+x;
@@ -1817,7 +1819,9 @@ final class ToneDocument {
      */
     static int sheets(Layer layer, int i) {
         int t = layer.tones[i] & 255, a = layer.alpha[i] & 255;
-        if (layer.planes != null) for (Layer p : layer.planes) if (p != null && p.alpha[i] != 0) {
+        if (layer.planes != null) for (int q : STACK_PLANES) {
+            Layer p = layer.planes[q];
+            if (p == null || p.alpha[i] == 0) continue;
             int s = sheet(p.tones[i] & 255, p.alpha[i] & 255, t, a);
             t = s == 0 ? 255 : s >>> 8; a = s & 255;
         }
@@ -2040,7 +2044,7 @@ final class ToneDocument {
         return made;
     }
     /** Inkwash: each kind's opacity on this page, percent ({@link #setKindOpacity}); planes made later take it. */
-    private final int[] kindOpacity={100,100,100,100};
+    private final int[] kindOpacity={100,100,100,100,100};
     /**
      * Inkwash: shows plane {@code p}'s kind at {@code value} percent on this page (100 shown, 0 hidden), every layer's plane of
      * it and those made later: the step-2 row's (Pen, Paint, Dry Media). Not an Undo step, not kept in the file.
@@ -2575,7 +2579,6 @@ final class ToneDocument {
             // Inkwash: a continuation stays the step it continues (its serial too), so what holds that step (Live pages'
             // own changes, a fading mark's steps, a stroke's mark) holds its later tiles: live Undo left wet oils' ridge.
             if (previous != null) { previous.tiles.clear(); previous.tiles.addAll(tiles); previous.bytes = edit.bytes; edit = previous; }
-            edit.linked |= joins();
             undo.addLast(edit); historyBytes += edit.bytes;
         }
         trimHistory();
@@ -2607,7 +2610,7 @@ final class ToneDocument {
     private void sinkUnder(Layer plane,ArrayList<TileEdit> tiles) {
         int address=address(layers,plane), n=address&15, slot=address>>4;
         if(address<0||slot==0) return;
-        int start=n/2*2*(1+PLANES), end=start+2*(1+PLANES), from=start+2*slot+n%2;
+        int start=n/2*2*(1+PLANES), end=start+2*(1+PLANES), from=start+2*planeSlot(slot-1)+n%2;
         Layer target=null; int opacity=0;
         for(int k=start+1;k>=start&&target==null;k--) { Layer l=stacked(layers,k); if(l!=null&&l.visible) { target=l; opacity=l.opacity; } }
         if(target==null) return;
@@ -2615,7 +2618,8 @@ final class ToneDocument {
         for(int k=from+1;k<end;k++) {
             Layer q=stacked(layers,k), owner=q==null?null:layers.get(stackOwner(k));
             // The pair's ink is never covered by its own wash (InkWashLayers): a mark on the wash half sinks only that half's.
-            if(q==null||stackOwner(k)>n||!owner.visible||stackOpacity(owner,q)!=opacity||fadesOn(q)) continue;
+            // Vector Ink's pixels stay with their lines (drawn again from them).
+            if(q==null||stackOwner(k)>n||!owner.visible||stackOpacity(owner,q)!=opacity||fadesOn(q)||stackPlane(k)==PLANE_LINES) continue;
             above.add(q);
         }
         if(above.isEmpty()) return;

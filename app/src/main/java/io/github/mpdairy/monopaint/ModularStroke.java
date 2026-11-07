@@ -504,8 +504,9 @@ final class ModularStroke implements LiftingStroke {
             java.util.List<int[]> out = new java.util.ArrayList<>();
             for (int layer : wash == ink ? new int[]{ink} : new int[]{wash, ink}) {
                 if (!document.layerVisible(layer)) continue;
+                // Not Vector Ink's plane: its pixels are its lines' (drawn again from them).
                 for (int p = -1; p < ToneDocument.PLANES; p++)
-                    if ((p < 0 || document.hasPlane(layer, p)) && !(layer == own && p == ownPlane)) out.add(new int[]{layer, ToneDocument.kindsOf(p)});
+                    if ((p < 0 || document.hasPlane(layer, p)) && p != ToneDocument.PLANE_LINES && !(layer == own && p == ownPlane)) out.add(new int[]{layer, ToneDocument.kindsOf(p)});
             }
             return out.toArray(new int[0][]);
         }

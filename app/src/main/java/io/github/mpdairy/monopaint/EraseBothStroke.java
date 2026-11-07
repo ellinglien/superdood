@@ -38,8 +38,6 @@ final class EraseBothStroke implements DrawingStroke {
     private float lastX = Float.NaN, lastY = Float.NaN, lastSize = Float.NaN;
     /** The layer selected before, and the selected pair's ink: erased as it moves, every other shown layer at lift. */
     private final int restore, inkLayer;
-    /** Vector Ink's layers ({@link VectorInk#linedMask}): their pixels are drawn again from the lines ({@link #cut}), and hold no other mark. */
-    private final int lined;
     /**
      * Inkwash: what it erases as it moves, where Tone's dots are: the ink layer's Paint plane ({@link ToneDocument#PLANE_WASH})
      * when it takes paint and the layer has one (textures are Paint since 2026-10-29), else its Pen plane ({@link
@@ -82,7 +80,6 @@ final class EraseBothStroke implements DrawingStroke {
         ones = new int[document.width]; java.util.Arrays.fill(ones, 1); fresh = new byte[document.width];
         inkLayer = InkWashLayers.inkOf(document, InkWashLayers.current(document));
         cut = VectorInk.Cut.of(document, kinds);
-        lined = VectorInk.linedMask(document);
         // Unless masking fluid shields paint (a page whose fluid has all been lifted previews again).
         previews = !masked;
         document.selectLayer(inkLayer);
@@ -152,16 +149,16 @@ final class EraseBothStroke implements DrawingStroke {
     /**
      * For the {@code w} by {@code h} block at {@code left, top}, row by row into {@code out}: the tone the page
      * will show once the eraser lifts wherever it went (every shown layer at what it keeps there,
-     * {@link ToneDocument#compositeTonesKept}, Vector Ink's lines gone too), -1 elsewhere and on a Tone dot it left.
+     * {@link ToneDocument#compositeTonesKept}, Vector Ink's lines' pixels too), -1 elsewhere and on a Tone dot it left.
      */
     void erasedTones(int left, int top, int w, int h, int[] out) {
         if (fresh.length < w) throw new IllegalArgumentException("Wider than the page");
-        int to = document.layerCount() - 1, lines = cut == null ? 0 : cut.mask();
+        int to = document.layerCount() - 1;
         for (int y = 0; y < h; y++) {
             coverage.levels(left, top + y, w, 1, fresh);
             // A Tone dot the scrape left shows as it is.
             for (int x = 0; x < w; x++) if (fresh[x] == 0 || kinds == 0 && dot(left + x, top + y)) { fresh[x] = 0; out[y * w + x] = -1; }
-            document.compositeTonesKept(left, top + y, w, 0, to, takes, lines, fresh, out, y * w);
+            document.compositeTonesKept(left, top + y, w, 0, to, takes, fresh, out, y * w);
         }
     }
     /** {left, top, right, bottom} of the pixels erased since the last call, right and bottom exclusive; null for none. */
@@ -200,10 +197,10 @@ final class EraseBothStroke implements DrawingStroke {
             }
             // Inkwash: every shown layer's planes it takes, base first, each a gesture of its own (a gesture binds one
             // plane), one Undo step with the rest. A plane of another kind is left whole, a hidden layer too (the screen
-            // doesn't show it), and Vector Ink's: the cut draws their pixels again from the lines.
+            // doesn't show it). Vector Ink's plane goes as the pen's, the cut drawing what is left of its lines again.
             // The cost: a pass over the pixels it went over per plane, at lift only; a blank pixel is passed by at once.
             for (int layer = 0; layer < document.layerCount(); layer++) {
-                if (!document.layerVisible(layer) || (lined >> layer & 1) != 0) continue;
+                if (!document.layerVisible(layer)) continue;
                 document.selectLayer(layer);
                 for (int p = -1; p < ToneDocument.PLANES; p++) {
                     if (layer == inkLayer && p == live || p >= 0 && (ToneDocument.PLANE_KINDS[p] & takes) == 0) continue;

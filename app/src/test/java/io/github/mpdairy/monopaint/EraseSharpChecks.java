@@ -60,7 +60,7 @@ public final class EraseSharpChecks {
     }
     /**
      * The owner's page (2026-11-05, "I'm not able to erase the HB pencil", on Everything, a page drawn on before): Vector
-     * Ink, the pencil (on a pair under it), Vector Ink again, then Undo, which selects Vector Ink's pair; the page left and
+     * Ink, the pencil (beside it on its layer, 2026-11-06; on a pair under it before), Vector Ink again, then Undo; the page left and
      * reopened keeps it so. The eraser still takes the pencil.
      */
     static void undone(int kinds, boolean finger) throws Exception {
@@ -73,7 +73,7 @@ public final class EraseSharpChecks {
             for (int k = 0; k < 3; k++) SharpChecks.draw(d, s, SharpChecks.preset("HB pencil"), 6, 1, SharpChecks.hand(r, 40, 80 + 25 * k, 100, 10, false), 1);
             VectorInkChecks.draw(d, s, VectorInkChecks.vector(), 6, 1, VectorInkChecks.scribble(4));
             d.undo();
-            check(VectorInk.layer(d) >= 0, "Undo of Vector Ink selects its pair");
+            check(d.activeLayer() == VectorInk.layer(d), "Undo of Vector Ink leaves its layer in use");
             if (reopened) {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 DocumentCodec.write(out, d.layerSnapshot());
@@ -99,24 +99,27 @@ public final class EraseSharpChecks {
         ToneDocument d = InkWashLayers.blank(300, 200);
         d.surface = BrushTexture.COLD_PRESS;
         WatercolorSession s = new WatercolorSession();
+        // Layer 1 (pair 0) the pencil and a wash, layer 3 (pair 2) Vector Ink and a wash.
+        InkWashLayers.pickLayer(d, 1);
         for (int k = 0; k < 4; k++) SharpChecks.draw(d, s, SharpChecks.preset("HB pencil"), 6, 1, line(40 + 40 * k), 1);
         SharpChecks.draw(d, s, SharpChecks.preset("Soft wash"), 30, .5, line(60), 1);
+        InkWashLayers.pickLayer(d, 3);
         SharpChecks.draw(d, s, VectorInkChecks.vector(), 6, 1, line(100), 1);
-        // Undo and Redo of Vector Ink select its pair (as after 8b42d83c's report): the next wash goes on it.
+        // Undo and Redo of Vector Ink keep its layer in use (as after 8b42d83c's report): the next wash goes on it.
         check(d.undo() && d.redo(), "Vector Ink's stroke undone and redone");
         SharpChecks.draw(d, s, SharpChecks.preset("Soft wash"), 30, .5, line(140), 1);
         String on = "every pair, " + (kinds == 0 ? "Everything" : "Dry Media") + (finger ? ", a finger" : ", the pen");
-        check(InkWashLayers.pairs(d) == 2 && InkWashLayers.current(d) == 1 && d.lines(3) != null, on + ": Vector Ink on a pair of its own, selected: " + InkWashLayers.pairs(d) + " pairs, " + d.activeLayer() + " active");
+        check(InkWashLayers.pairs(d) == 3 && InkWashLayers.current(d) == 2 && d.lines(5) != null, on + ": Vector Ink on layer 3, in use: " + InkWashLayers.pairs(d) + " pairs, " + d.activeLayer() + " active");
         int[] left = {0, 0, 100, 200}, right = {200, 0, 300, 200};
-        for (int[] a : new int[][]{left, right}) check(covered(d, 1, ToneDocument.PLANE_DRY, a) > 100 && covered(d, 0, -2, a) > 100 && covered(d, 2, -2, a) > 100 && covered(d, 3, -2, a) > 100,
+        for (int[] a : new int[][]{left, right}) check(covered(d, 1, ToneDocument.PLANE_DRY, a) > 100 && covered(d, 0, -2, a) > 100 && covered(d, 4, -2, a) > 100 && covered(d, 5, -2, a) > 100,
                 on + ": pencil below, a wash on each pair and Vector Ink above, left and right");
         java.util.List<byte[]> before = planes(d);
-        int lines = d.lines(3).size();
+        int lines = d.lines(5).size();
         erase(d, s, kinds, finger, 120);
         check(covered(d, 1, ToneDocument.PLANE_DRY, left) == 0, on + ": pencil left on the lower pair");
         if (kinds == 0) check(dark(d, left) == 0, on + ": marks left under the eraser: " + dark(d, left));
-        else check(covered(d, 0, -2, left) > 100 && covered(d, 2, -2, left) > 100 && covered(d, 3, -2, left) > 100 && d.lines(3).size() == lines, on + ": the washes and Vector Ink stay");
-        check(covered(d, 1, ToneDocument.PLANE_DRY, right) > 100 && covered(d, 0, -2, right) > 100 && covered(d, 2, -2, right) > 100 && covered(d, 3, -2, right) > 100, on + ": the right keeps every mark");
+        else check(covered(d, 0, -2, left) > 100 && covered(d, 4, -2, left) > 100 && covered(d, 5, -2, left) > 100 && d.lines(5).size() == lines, on + ": the washes and Vector Ink stay");
+        check(covered(d, 1, ToneDocument.PLANE_DRY, right) > 100 && covered(d, 0, -2, right) > 100 && covered(d, 4, -2, right) > 100 && covered(d, 5, -2, right) > 100, on + ": the right keeps every mark");
         for (int k : new int[]{2, 4, 8}) check(points(d, k, left) == 0, on + ": sharp tile points at " + k + " to a pixel after erasing");
         // The file, then a replay of the page's log on a blank copy: the same page.
         ByteArrayOutputStream out = new ByteArrayOutputStream();

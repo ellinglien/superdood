@@ -39,7 +39,6 @@ final class StrokeStart {
         InkWashLayers.showSelected(document);
         document.paintMaskingFluid(false);
         session.dry("shape");
-        VectorInk.under(document, Brush.of(parts));
         ModularStroke.selectLayer(document, parts);
     }
 
@@ -61,8 +60,6 @@ final class StrokeStart {
         session.dry(brush != null ? brush.name() + " stroke" : "eraser stroke");
         if (brush == null) return EraseBothStroke.pen(document, (float) look.px, eraseKinds);
         if (VectorInk.is(brush)) return new VectorInk.Pen(document, brush.parts, look.px, look.darkness);
-        // Another ink on Vector Ink's pair goes under it.
-        VectorInk.under(document, brush);
         return QuickStroke.start(document, parts, look.px, look.darkness, session);
     }
 

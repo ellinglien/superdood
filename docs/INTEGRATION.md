@@ -5804,3 +5804,31 @@ change to the box round what differs. Browser: `WebEngine.lay`/`picture` take th
 
 Generic: none (live only). Engine boundary unchanged. Shortcut: the greys are all layers together, so a mark laid under
 a darker one of a higher layer reaches others only on joining (`LiveChange.whole`), not live.
+
+## Vector Ink on the layer in use (2026-11-06, branch `vector-layers`): upstream files touched
+
+The owner: "Vector Ink follows the chosen layer". Vector Ink draws on the layer in use's ink half, beside the other
+pens' marks; its pixels go on a kind plane of their own, `ToneDocument.PLANE_LINES` (Pen to the eraser, index 4, so
+`PLANES` is 5; stacked right over the Pen plane, `STACK_PLANES`, under opaque paint), drawn again from the lines
+(`VectorInk.relay`). Whatever left out "Vector Ink's layers" now leaves out that plane alone (`ToneDocument.linesPlace`).
+The zoomed view and High Res draw each layer's lines in their place in the page's order (`VectorInk.Stacked`: where a
+place over the lines holds a mark, the target pixel is composed again from the places, the lines in theirs; elsewhere
+the lines over the target as before). No pair is added and nothing moved under (`room`, `under`, `ADD`, `linkToNext`
+gone). File: `PLNS` keeps four planes, the Pen plane holding Vector Ink's pixels over the pen's (every version reads it
+as drawn); a new section `LPEN` keeps the two apart where a lined layer holds both (an older reader passes it by). A
+lined layer without it reads its Pen plane as Vector Ink's alone: old pages open unchanged.
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` | +46 −42 | `PLANE_LINES`, `STACK_PLANES`, `slotPlane`, `planeSlot`, `stackPlane`, `linesPlace`; `stacked`, `sheets`, `sinkUnder` in the stack's order; `visibleLayers(…, without, at)`; `compositeToneWithout`/`Kept` lose `also`; `linkToNext` gone. |
+| `DocumentCodec` | +127 −24 | `filePlanes` (Pen with Vector Ink's over it), `LPEN` written and read, `linePlanes` at the end tag. |
+| `viewport_bitmap.c` | +1 −1 | `MAX_COMPOSED` for six places a layer. |
+| `ViewportBitmap`, `DrawingPad` | +9 −7, +9 −5 | `update` takes `VectorInk.Stacked`; `sharpLines` makes it (tracing paper above stays under the lines). |
+| `EraseBothStroke` | +5 −8 | Erases every plane of a shown layer, Vector Ink's too; the cut draws what is left again. |
+| `LassoPlanes` | +37 −63 | Lifts the selected pair's lines and pixels together (Vector Ink's plane a role for the look only); lays them on the pair it is put down on. |
+| `PictureImport`, `LiveProbe`, `StrokeStart`, `PaintActivity` | small | Guest and own inks no longer moved under Vector Ink; the live cut per layer. |
+| `ModularStroke` | +2 −1 | A blur or reprint leaves Vector Ink's plane (its lines draw it). |
+| `PagePicture`, `PageExport`, `PngRender`, `NotebookExport` | small | `without` the plane; PSD's "Vector Ink" layer; the PDF's vector rule by the plane's place. |
+
+Generic: none. Engine boundary unchanged (pure Java, the browser's the same code). Check against the version before
+(`1f0d16e8`, `OlderLayersCheck`): both read the other's pages as drawn.
