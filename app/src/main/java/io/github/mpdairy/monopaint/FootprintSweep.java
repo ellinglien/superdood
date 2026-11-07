@@ -189,6 +189,17 @@ abstract class FootprintSweep {
         }
         return marks;
     }
+    /**
+     * {@code r}'s typical drawn width, page px: its marks at rest ({@link #atRest(ResolvedBrush)}), each its longer side,
+     * or a split nib's or rake's lines across ({@link #placedAcross}), the widest; 0 with none. What the size readouts
+     * show, the line the hand usually draws rather than the size dial alone (the owner, 2026-11-07: "typical drawn
+     * width please").
+     */
+    static double typicalWidth(ResolvedBrush r) {
+        double wide = 0;
+        for (double[] m : atRest(r)) wide = Math.max(wide, 2 * Math.max(m[0], m[1]));
+        return Math.max(wide, placedAcross(r, HoverNib.TYPICAL));
+    }
     /** {@code r}'s line ({@code isLine}) or body at rest as {@link #atRest(ResolvedBrush)}, at pressure travel {@code p}, the pen tilted {@code tiltX}° toward the page's right: {a, b, cos, sin}. */
     static double[] atRest(ResolvedBrush r, boolean isLine, double p, double tiltX) {
         return new FootprintSweep(r, rest(p, tiltX), 1, 1, isLine, flat(), false) { @Override void write(int y) {} }.ellipseAt(1).clone();

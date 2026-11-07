@@ -5,6 +5,12 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+- **The fan round the nib preview** (2026-11-07, the owner: "make the circle midpoint to be the center of the nib
+  preview"): the arc, the ring of 13 previews, the tools and the white behind them now centre on the nib preview in the
+  corner, a little larger; the tools and previews run from clear of the page strip to above the brush line.
+- **Sizes as drawn** (2026-11-07): the column's size dot, the fan's nib preview and its size marker show the line the
+  brush typically draws, its nib and other settings in, rather than the size setting alone.
+
 ## 1.1 (2026-11-07)
 
 - **The fan is the way in** (zen-fan, 2026-11-07, the owner's sketch): the app opens in Zen Mode with its fan open. The

@@ -64,8 +64,15 @@ final class SwatchReadout extends View {
      * area it works, not a grey it lays (2026-11-01).
      */
     void show(ToolSwatches.Look look, Brush brush, boolean greys) {
-        show(look.px, greys && brush != null && !WildSample.reworks(brush.parts) ? ModularSizes.swatch(brush.parts, look.darkness) : -1,
-                brush == null ? null : FootprintSweep.atRest(ResolvedBrush.of(brush.parts, look.px, look.darkness)));
+        ResolvedBrush r = brush == null ? null : ResolvedBrush.of(brush.parts, look.px, look.darkness);
+        show(drawnWidth(look, brush), greys && brush != null && !WildSample.reworks(brush.parts) ? ModularSizes.swatch(brush.parts, look.darkness) : -1,
+                r == null ? null : FootprintSweep.atRest(r));
+    }
+    /** {@code look} as {@code brush} typically draws it, page px ({@link FootprintSweep#typicalWidth}); the size itself for the eraser, the smudge tool, or a brush with no mark at rest. */
+    static double drawnWidth(ToolSwatches.Look look, Brush brush) {
+        if (brush == null) return look.px;
+        double wide = FootprintSweep.typicalWidth(ResolvedBrush.of(brush.parts, look.px, look.darkness));
+        return wide > 0 ? wide : look.px;
     }
 
     @Override protected void onDraw(Canvas canvas) {

@@ -19,6 +19,20 @@ public final class HoverNibChecks {
     private static void atRest() {
         for (String round : new String[]{"Ballpoint", "Round marker", "Soft wash"}) near(restAspect(round, 24), 1, round + " shows round in the readout");
         for (String shaped : new String[]{"Chisel marker", "Wet hake"}) check(restAspect(shaped, 24) > 1.5, shaped + " shows its shape in the readout, not a circle (" + restAspect(shaped, 24) + ")");
+        // The readouts' size is the line a hand typically draws (2026-11-07): every preset a mark at rest, as wide as its
+        // widest mark's long side, growing with the size, a rake's lines across.
+        for (ToolPresets.Preset p : ToolPresets.all()) {
+            double small = FootprintSweep.typicalWidth(ResolvedBrush.of(p.brush().parts, 12, .8)), big = FootprintSweep.typicalWidth(ResolvedBrush.of(p.brush().parts, 48, .8));
+            check(small >= 0 && big >= small && Double.isFinite(big), p.name + ": a typical width that grows with the size (" + small + ", " + big + ")");
+        }
+        for (String round : new String[]{"Ballpoint", "Round marker"}) {
+            ResolvedBrush r = ResolvedBrush.of(preset(round).parts, 24, .8);
+            double widest = 0;
+            for (double[] m : FootprintSweep.atRest(r)) widest = Math.max(widest, 2 * m[0]);
+            near(FootprintSweep.typicalWidth(r), Math.max(widest, FootprintSweep.placedAcross(r, HoverNib.TYPICAL)), round + ": its typical width its mark's across");
+        }
+        ResolvedBrush rake = ResolvedBrush.of(ModularCodeChecks.fixture("rake"), 16, 1);
+        check(FootprintSweep.typicalWidth(rake) >= FootprintSweep.placedAcross(rake, HoverNib.TYPICAL), "a rake: its lines across");
     }
     private static void eraser() {
         for (InkWashSizes.Preset preset : InkWashSizes.Preset.values()) {

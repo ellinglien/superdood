@@ -177,6 +177,8 @@ final class PageTurner {
     }
     /** The page and its count as the bar's number draws them, {@code size} px tall words in {@code color}, centred in a box {@code width × height} px from (0, 0): Zen Mode's fan's strip ({@link ZenFan#strip}). */
     void drawNumber(Canvas canvas, float width, float height, float size, int color) { number.draw(canvas, width, height, size, color); }
+    /** How many pages the number counts. */
+    int pages() { return count; }
     /** Whether ‹ (or › when {@code forward}) turns: not past the front cover, nor the back. */
     boolean turns(boolean forward) { return forward ? index != DrawingBook.BACK : index != DrawingBook.FRONT; }
     /** ‹ or ›, as the bar's: the page before, or after ({@code forward}). */
