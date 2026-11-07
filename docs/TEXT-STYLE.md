@@ -95,9 +95,17 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   (2026-11-06, screen-reader action **Layer Visibility**): **Layer 3**, **Layer 2**, **Layer 1** top to bottom, the one
   drawn on marked, each with Show Kinds' eye (**Full**, **Half**, **Faint**, **Hidden**), said and noted "Layer 1 half";
   a stroke on a hidden layer is refused, "Layer 1 is hidden".
-- **Page Bar** (2026-11-06, Iconoir open-book; the owner: "a book icon to hide or show the top notebook pages bar", then
-  "we can move that to the dropdown"): the menu's row after Show Kinds, marked while the bar shows (a book under the
-  layer button that morning, said "Page Bar", "Page Bar, hidden").
+- **Send to the Fridge** (2026-11-06, Iconoir post; `Fridge`, `FridgeWindow`): the menu's row after Export Page, the
+  Manta's alone, none on a cover. The first time a window headed **Send to the Fridge**, its words `Fridge.ABOUT`
+  (where, who sees it, Take it down, Nothing else is sent), **Send** and **Not Now**; System Settings' row **The
+  Fridge** (**On**, **Off**, "Off asks before sending"). Its window, headed the same: the page's preview, the fields
+  **Name** and **Caption**, the ticks **My Fridge** (the tablet's own unlisted page) and **The Fridge** (the shared
+  door), **Send** ("Sending" while it goes), **Cancel**, **Sent Pages** while any are kept. My Fridge's first time: headed
+  **My Fridge**, "A short name for its link", **Name**, its link under it as typed (else "3 to 24 letters or digits"),
+  **Make**, **Cancel**. Sent: headed **Sent**, "On My Fridge now.", "On My Fridge now. On The Fridge once approved." or
+  "Waiting for approval.", the links, **Copy Link** ("Copied"), **Close**. The list headed **Sent to the Fridge**, a card
+  "Harbour, page 5, Nov 6, 2026" over its links, **Take Down** (asked "Take Down?", "This can't be undone."). Notes "Send
+  failed", "Too large", "Taken down", "Take down failed", or the server's own short words ("Try again later", "Name taken").
 - **The page bar**: the page and its count as "3 / 24", a cover as **Cover** or **Back**; screen-reader text "Page 3 of
   24", "Front cover", "Back cover". Its buttons **Previous page**, **Next page**, **Notebook** and **New page** (the + tile after the last page,
   2026-10-24, its note in a full notebook "Notebook full, 250 pages"). On the
@@ -237,7 +245,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
 - **The drawing screen's menu** (groups since the refocus, 2026-10-24, the owner: "it's chaotic"; a grey-400 line
   between them; the owner's four since 2026-11-06): **Notebook Explorer** (to the shelf), **Notebook Settings**; **Export Page** (2026-11-02, the
   owner: "it'd be good to have an export in the dropdown menu"; the page shown's, Page Settings' menu, none on a cover; the
-  browser's Menu the same), **Import** (Import PDF and Import Image until 2026-10-29), **Show Kinds**, **Page Bar** (marked while shown); **Draw Together**
+  browser's Menu the same), **Import** (Import PDF and Import Image until 2026-10-29), **Show Kinds** (**Page Bar** after it until 2026-11-07); **Draw Together**
   (live branch), **Sand Timer** (while it can be set), **Play**; **Left-Handed** (marked
   while on: the column on the right), **System Settings** (2026-11-04, the owner's name for it; Iconoir settings) last: a popup where the menu was
   (2026-11-06; its own page with a bar ‹ **Back** until then), the title **System Settings** (no job line, "For every notebook." gone, 2026-11-06); its rows **Automatic Refresh** (**On**, **Off**; under it "After

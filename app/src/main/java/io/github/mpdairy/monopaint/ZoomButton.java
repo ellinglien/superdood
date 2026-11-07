@@ -29,34 +29,47 @@ final class ZoomButton {
         button.setBackground(null);  // plain, as the bar's other buttons (the owner, 2026-10-21)
         button.overlay = (canvas, b) -> draw(canvas);
         button.setOnTouchListener(new ZoomButtonTouch(app, button));
-        locked = app.getDrawable(R.drawable.ic_ph_lock); open = app.getDrawable(R.drawable.ic_ph_lock_open);
+        locked = app.getDrawable(R.drawable.ic_ph_lock).mutate(); open = app.getDrawable(R.drawable.ic_ph_lock_open).mutate();
         text.setColor(Theme.INK); text.setTypeface(Theme.face(700));
         text.setTextSize(app.getResources().getDisplayMetrics().density * LabText.em(TypeStyle.CAPTION.sp));
         shownLocked = app.navigationLocked;
         describe();
     }
 
-    /** The zoom changed ({@code DrawingPad.updateViewport}): the percentage follows, through the fast path while fingers pinch. */
+    /** The zoom changed ({@code DrawingPad.updateViewport}): the percentage follows, through the fast path while fingers pinch; Zen Mode's fan's strip too. */
     void refresh() {
         int now = app.pad == null ? 100 : app.pad.viewport.percent();
         if (now == percent) return;
         Runnable change = () -> { percent = now; describe(); };
-        if (app.pad != null && app.pad.navigating && button.getWidth() > 0) app.selectionFeedback.update(button, change);
-        else { change.run(); button.invalidate(); }
+        app.zenChanged(() -> {
+            if (app.pad != null && app.pad.navigating && button.getWidth() > 0) app.selectionFeedback.update(button, change);
+            else { change.run(); button.invalidate(); }
+        });
     }
-    /** {@code change} locks or unlocks: the padlock follows, through the fast path. */
+    /** {@code change} locks or unlocks: the padlock follows, through the fast path; Zen Mode's fan's strip too. */
     void lockChanged(Runnable change) {
-        app.selectionFeedback.update(button, () -> { change.run(); shownLocked = app.navigationLocked; describe(); });
+        app.zenChanged(() -> app.selectionFeedback.update(button, () -> { change.run(); shownLocked = app.navigationLocked; describe(); }));
     }
-    private void describe() { button.setContentDescription(PinchPan.describe(percent, shownLocked)); }
-    /** The padlock beside the percentage, the two centred together in the button. */
-    private void draw(Canvas canvas) {
+    /** The percentage and padlock shown, for Zen Mode's fan's strip ({@link ZenFan#strip}). */
+    int percent() { return percent; }
+    boolean locked() { return shownLocked; }
+    /** The padlock beside the percentage, centred together in a box {@code width × height} px from (0, 0), the words {@code size} px (0: the button's): the button's, the fan's strip's. */
+    void draw(Canvas canvas, float width, float height, float size, int color) {
+        float own = text.getTextSize();
+        if (size > 0) text.setTextSize(size);
+        text.setColor(color); locked.setTint(color); open.setTint(color);
+        try { drawAt(canvas, width, height); } finally { text.setTextSize(own); text.setColor(Theme.INK); locked.setTint(Theme.INK); open.setTint(Theme.INK); }
+    }
+    private void drawAt(Canvas canvas, float width, float height) {
         int lock = app.dp(DrawLayout.ZOOM_LOCK), gap = app.dp(DrawLayout.ZOOM_GAP);
         String words = PinchPan.caption(percent);
-        float left = (button.getWidth() - (lock + gap + text.measureText(words))) / 2f, middle = button.getHeight() / 2f;
+        float left = (width - (lock + gap + text.measureText(words))) / 2f, middle = height / 2f;
         Drawable padlock = shownLocked ? locked : open;
         padlock.setBounds(Math.round(left), Math.round(middle - lock / 2f), Math.round(left + lock), Math.round(middle + lock / 2f));
         padlock.draw(canvas);
         canvas.drawText(words, left + lock + gap, middle - (text.ascent() + text.descent()) / 2, text);
     }
+    private void describe() { button.setContentDescription(PinchPan.describe(percent, shownLocked)); }
+    /** The padlock beside the percentage, the two centred together in the button. */
+    private void draw(Canvas canvas) { draw(canvas, button.getWidth(), button.getHeight(), 0, Theme.INK); }
 }

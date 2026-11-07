@@ -16,7 +16,7 @@ public final class HoldSnapChecks {
         Assets.install(Assets.folder(Assets.FOLDER));
         boolean verbose = args.length > 0 && args[0].equals("verbose");
         accuracy(verbose);
-        pause(); carried(); dragged();
+        pause(); carried(); dragged(); followed(); rastered();
         redrawn("Swell brush", 14); redrawn("Compressed", 24); redrawn("Soft wash", 70); redrawn("Wet blooms", 60); redrawn("Wet gouache", 40); redrawn("2B pencil", 10);
         // Wet paint laid just before, apart from the snap, moves and dries on as with no snap (WetCanvas.forget); where
         // the rough stroke crossed it, the Undo took its water there (measured, not held).
@@ -26,7 +26,7 @@ public final class HoldSnapChecks {
             check(apart < .05, b + ": a wet stroke apart from the snap dries as with none (" + apart + " grey a pixel off)");
             crossing.append(String.format("%s%s %.2f", crossing.length() == 0 ? "" : ", ", b, intoWet(b, 50, true)));
         }
-        System.out.println("PASS: Hold to Snap " + summary + "; a pause under the hold never asks, a long one over a scribble draws on; the clean samples keep the rough ones' pressure, tilt and time, in order; a snapped line's end moved keeps its start and each sample's share of the way, pressure, tilt and time (a circle doesn't move); "
+        System.out.println("PASS: Hold to Snap " + summary + "; a pause under the hold never asks, a long one over a scribble draws on; the clean samples keep the rough ones' pressure, tilt and time, in order; a snapped line's end moved keeps its start and each sample's share of the way, pressure, tilt and time; a circle, an arc, a polygon and a polyline follow the pen (a circle round about its fixed centre, an arc's start and bulge kept, a polygon turned and scaled, a polyline's last point); the followed path rastered as row spans; "
                 + "drawn again as the pad does it (Swell brush, Compressed, the wet watercolours Soft wash and Wet blooms, Wet gouache, 2B pencil), the page is the clean stroke alone (byte for byte for dry media, wet ones within a twentieth of a grey a pixel), one Undo leaves it blank, nothing to redo; "
                 + "wet paint laid just before dries on as with no snap; where the rough stroke crossed it, its water there is gone (mean grey a pixel off: " + crossing + ")");
     }
@@ -274,7 +274,7 @@ public final class HoldSnapChecks {
 
     /**
      * A snapped line's end moved ({@link HoldSnap#to}, the pad's drag): the start kept, the end where the pen is, and each
-     * sample the same share of the way along as on the snapped line, its pressure, tilt and time kept. Only a line moves.
+     * sample the same share of the way along as on the snapped line, its pressure, tilt and time kept.
      */
     static void dragged() {
         double[][] rough = shape("line", new Random(11));
@@ -283,7 +283,6 @@ public final class HoldSnapChecks {
         double[] last = rough[rough.length - 1];
         check(h.due((long) last[5] + HoldSnap.HOLD_MS), "line due");
         double[][] clean = h.snap();
-        check(h.line(), "a snapped line moves");
         check(!h.moved(last[0], last[1]) && h.moved(last[0] + HoldSnap.STILL_PX + 1, last[1]), "the pen at its rest is still, a few px off it moves");
         double[] a = clean[0], b = clean[clean.length - 1];
         double ex = a[0] + .4 * (b[1] - a[1]), ey = a[1] - .7 * (b[0] - a[0]);
@@ -298,10 +297,95 @@ public final class HoldSnapChecks {
             check(Math.abs(share - moving) < 1e-9, "the same share of the way (" + share + ", " + moving + ")");
             check(Math.abs((moved[i][0] - a[0]) * (ey - a[1]) - (moved[i][1] - a[1]) * (ex - a[0])) / now < 1e-6, "on the moved line");
         }
-        HoldSnap o = new HoldSnap(1);
-        double[][] circle = shape("circle", new Random(11));
-        for (double[] p : circle) o.sample(p[0], p[1], p[2], p[3], p[4], (long) p[5]);
-        check(o.due((long) circle[circle.length - 1][5] + HoldSnap.HOLD_MS) && o.snap() != null && !o.line(), "a circle doesn't move");
+    }
+
+    /**
+     * Every other shape follows the pen ({@link HoldSnap#follow}): a circle and a polygon turned and scaled about their
+     * centre so the point the pen rested on is at the pen (a circle still round, its centre kept); an arc about its
+     * start, its end at the pen, its bulge over its chord kept; a polyline's last point at the pen, the rest kept.
+     */
+    static void followed() {
+        for (String kind : new String[]{"circle", "pentagon", "arc", "polyline"}) {
+            HoldSnap h = snapped(kind);
+            HoldSnap.Shape s = h.snapped;
+            int m = s.x.length;
+            double px = h.ax + 37, py = h.ay - 81;
+            HoldSnap.Shape f = h.follow(px, py);
+            check(f.kind == s.kind && f.x.length == m, kind + ": the same kind");
+            double[][] moved = h.to(px, py);
+            check(moved.length == h.to(h.ax, h.ay).length, kind + ": as many samples");
+            if (s.kind == HoldSnap.Kind.POLYLINE) {
+                for (int i = 0; i < m - 1; i++) check(f.x[i] == s.x[i] && f.y[i] == s.y[i], kind + ": the corners before the last kept");
+                check(f.x[m - 1] == px && f.y[m - 1] == py, kind + ": the last point at the pen");
+                check(moved[moved.length - 1][0] == px && moved[moved.length - 1][1] == py, kind + ": the last sample at the pen");
+                continue;
+            }
+            boolean open = s.kind == HoldSnap.Kind.ARC;
+            double cx, cy, ax = open ? s.x[m - 1] : h.ax, ay = open ? s.y[m - 1] : h.ay;
+            if (open) { cx = s.x[0]; cy = s.y[0]; }
+            else if (s.kind == HoldSnap.Kind.CIRCLE) { double[] c = HoldSnap.circle(s.x, s.y); cx = c[0]; cy = c[1]; }
+            else { double[] b = box(s.x, s.y); cx = (b[0] + b[2]) / 2; cy = (b[1] + b[3]) / 2; }
+            // One turn and one scale about the centre (an arc's start) taking the rest (an arc's end) to the pen.
+            double ux = ax - cx, uy = ay - cy, vx = px - cx, vy = py - cy, d = ux * ux + uy * uy;
+            double re = (vx * ux + vy * uy) / d, im = (vy * ux - vx * uy) / d;
+            for (int i = 0; i < m; i++) {
+                double dx = s.x[i] - cx, dy = s.y[i] - cy;
+                check(Math.hypot(f.x[i] - (cx + dx * re - dy * im), f.y[i] - (cy + dx * im + dy * re)) < 1e-6, kind + ": turned and scaled about its centre, the rest at the pen (point " + i + ")");
+            }
+            if (s.kind == HoldSnap.Kind.CIRCLE) {
+                double[] was = HoldSnap.circle(s.x, s.y), now = HoldSnap.circle(f.x, f.y);
+                check(Math.hypot(now[0] - was[0], now[1] - was[1]) < 1e-6, kind + ": its centre kept");
+                check(now[3] < 1e-6 * now[2] && Math.abs(now[2] / was[2] - Math.hypot(vx, vy) / Math.hypot(ux, uy)) < 1e-9, kind + ": still round, scaled with the pen");
+            }
+            if (open) {
+                check(f.x[0] == s.x[0] && f.y[0] == s.y[0] && Math.hypot(f.x[m - 1] - px, f.y[m - 1] - py) < 1e-9, kind + ": the start kept, the end at the pen");
+                check(Math.abs(bulge(f) - bulge(s)) < 1e-9 && Math.abs(bulge(s)) > .05, kind + ": the bulge over the chord kept (" + bulge(s) + ")");
+                check(moved[0][0] == s.x[0] && moved[0][1] == s.y[0] && Math.hypot(moved[moved.length - 1][0] - px, moved[moved.length - 1][1] - py) < 1e-9, kind + ": the samples from the start to the pen");
+            }
+        }
+    }
+    /** A rough {@code kind} drawn and held over (the first seed that snaps to it). */
+    static HoldSnap snapped(String kind) {
+        for (int seed = 1; seed < 60; seed++) {
+            double[][] rough = shape(kind, new Random(seed));
+            HoldSnap h = new HoldSnap(1);
+            for (double[] p : rough) h.sample(p[0], p[1], p[2], p[3], p[4], (long) p[5]);
+            if (h.due((long) rough[rough.length - 1][5] + HoldSnap.HOLD_MS) && h.snap() != null && h.snapped.kind.name().equalsIgnoreCase(kind.equals("pentagon") ? "polygon" : kind)) return h;
+        }
+        throw new AssertionError(kind + " never snaps");
+    }
+    static double[] box(double[] x, double[] y) {
+        double[] b = {x[0], y[0], x[0], y[0]};
+        for (int i = 1; i < x.length; i++) { b[0] = Math.min(b[0], x[i]); b[1] = Math.min(b[1], y[i]); b[2] = Math.max(b[2], x[i]); b[3] = Math.max(b[3], y[i]); }
+        return b;
+    }
+    /** An open shape's sagitta over its chord: the farthest point from the chord, signed, a share of it. */
+    static double bulge(HoldSnap.Shape s) {
+        int m = s.x.length;
+        double cx = s.x[m - 1] - s.x[0], cy = s.y[m - 1] - s.y[0], c = Math.hypot(cx, cy), far = 0;
+        for (int i = 0; i < m; i++) { double g = ((s.x[i] - s.x[0]) * cy - (s.y[i] - s.y[0]) * cx) / c; if (Math.abs(g) > Math.abs(far)) far = g; }
+        return far / c;
+    }
+
+    /**
+     * The followed shape as the pad previews it ({@link ShapeGeometry#path}): a circle's row through its centre is two
+     * intervals the stroke's width, either side; a zigzag crossing a row more than six times keeps six, in order.
+     */
+    static void rastered() {
+        int w = 400, h = 400, r = 100;
+        double[] x = new double[97], y = new double[97];
+        for (int i = 0; i <= 96; i++) { x[i] = 200 + r * Math.cos(2 * Math.PI * i / 96); y[i] = 200 + r * Math.sin(2 * Math.PI * i / 96); }
+        int[] spans = new int[h * ShapeGeometry.PATH_ROW];
+        ShapeGeometry.path(x, y, 10, w, spans);
+        int o = 200 * ShapeGeometry.PATH_ROW;
+        check(Math.abs(spans[o] - 95) <= 1 && Math.abs(spans[o + 1] - 105) <= 1 && Math.abs(spans[o + 2] - 295) <= 1 && Math.abs(spans[o + 3] - 305) <= 1 && spans[o + 4] == spans[o + 5],
+                "a circle's middle row: two intervals 10 wide (" + spans[o] + ", " + spans[o + 1] + ", " + spans[o + 2] + ", " + spans[o + 3] + ")");
+        check(spans[(200 - r - 6) * ShapeGeometry.PATH_ROW + 1] == 0 && spans[(200 - r + 2) * ShapeGeometry.PATH_ROW + 1] > 0, "nothing above it, its top drawn");
+        double[] zx = new double[9], zy = new double[9];
+        for (int i = 0; i < 9; i++) { zx[i] = 20 + 40 * i; zy[i] = i % 2 == 0 ? 50 : 350; }
+        ShapeGeometry.path(zx, zy, 4, w, spans);
+        for (int q = 0; q + 2 < ShapeGeometry.PATH_ROW; q += 2) check(spans[o + q] < spans[o + q + 1] && spans[o + q + 1] < spans[o + q + 2], "six intervals in order, apart");
+        check(Math.abs(spans[o] - 38) <= 1 && Math.abs(spans[o + ShapeGeometry.PATH_ROW - 1] - 322) <= 1, "from the first crossing to the last");
     }
 
     /**

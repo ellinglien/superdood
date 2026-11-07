@@ -59,8 +59,10 @@ final class ToolButton extends Button {
     }
     private int dp(float value) { return Ui.dp(getContext(), value); }
 
+    /** In Zen Mode's fan: drawn in its grey ({@link ZenFanView#greyed}). */
+    boolean greyed;
     @Override public void draw(Canvas canvas) {
-        controlRaster.draw(canvas,this,super::draw,press.inverted && press.pressed);
+        ZenFanView.greyed(canvas, greyed, c -> controlRaster.draw(c,this,super::draw,press.inverted && press.pressed));
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {

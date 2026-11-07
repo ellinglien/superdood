@@ -5,6 +5,32 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.1 (2026-11-07)
+
+- **The fan is the way in** (zen-fan, 2026-11-07, the owner's sketch): the app opens in Zen Mode with its fan open. The
+  size and grey wedges sit in the fan's upper part; past them a ring of the page bar's previews, the page drawn on
+  with its tab (a tap goes to a page, a hold opens its Page Settings, + adds one; a short notebook's previews sit at the
+  + end); along the foot Menu (the three lines, the whole menu), the Dropper, the Lasso and the droplet, the layer
+  button over them; up the left edge ‹, the page and its count, › and Zoom's padlock and percentage; beside the stroke
+  preview the brush's name, where notes show too. Its words and buttons are grey, its paper a round arc past the tools,
+  each tool's picture fitted to the arc.
+- **Page turns in the fan stay clean** (zen-fan, 2026-11-07): turning a page leaves the fan as it is on the screen, no
+  blink and no old page left round it, and the ring moves only when the page leaves it.
+- **Zoom unlocked at first** (2026-11-07): two fingers pinch and pan from the start; the padlock still locks them.
+- **No Page Bar row** (2026-11-07): the menu's row that hid the page bar is gone; the bar hides in Zen Mode alone.
+- **Brush Studio's print demos show their patterns** (2026-11-07): the Guide's print shading tiles draw mid grey, so the
+  dots and lines show.
+- **Send to the Fridge** (fridge-app, 2026-11-06): the menu's new row, after Export Page, pins the page shown on
+  superdood.org/fridge. The first time, a few words say where it goes and that nothing else is sent (Send, Not Now;
+  System Settings' The Fridge, Off, asks again). Then a preview of the page as it goes (Export Page's PNG, at Social on
+  the Manta), an optional Name and Caption, and two ticks: **My Fridge** (an unlisted page of this tablet's own, shown at
+  once; the first time asks for its name) and **The Fridge** (the shared door, once Elling approves it). Sent, its links
+  and Copy Link. **Sent Pages** lists what went, each with **Take Down**.
+- **Every snapped shape follows the pen** (snap-follow, 2026-11-06, the owner: "lets make them similarly repositional"):
+  after Hold to Snap, moving the pen before lifting it moves the shape, as a snapped line's end already did. A circle,
+  oval or polygon grows, shrinks and turns about its centre, a circle staying round; an arc's end follows the pen, its
+  start fixed and its curve kept in proportion; a run of lines' last point follows the pen. The lift sets it, drawn
+  with the same brush, one Undo step. The browser page does the same, the line too.
 - **The page fills the screen with the page bar hidden** (fit-and-mask, 2026-11-06): upright, the page fills the room's
   height, about 3% larger, a sliver of each side cropped, with no bands above and below; the zoom button's fit and a
   pinch out come back to it. Sideways and Zen Mode as before.

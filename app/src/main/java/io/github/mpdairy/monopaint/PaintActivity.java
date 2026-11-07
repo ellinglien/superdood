@@ -73,7 +73,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     final MirrorsMenu mirrors = new MirrorsMenu(this);
     /** The shelf of notebooks and the inside of one, over the drawing screen (Inkwash's notebooks). */
     NotebookScreens notebooks;
-    boolean navigationLocked = true;
+    boolean navigationLocked;
 
     // App-only rotation: Android and the e-ink driver always remain in portrait.
     int appRotation = Surface.ROTATION_0;
@@ -97,6 +97,8 @@ public final class PaintActivity extends Activity implements ControlHost {
     final LiveProbe live = new LiveProbe(this);
     /** Share on Wi-Fi: the app's own live relay, for a browser on the same Wi-Fi. */
     final LiveShare share = new LiveShare(this);
+    /** Send to the Fridge's windows ({@link Fridge}). */
+    final FridgeWindow fridge = new FridgeWindow(this);
     RotationPrompt rotationPrompt;
     PageActionButton rotateButton;
 
@@ -191,7 +193,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         zenDot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         InkWashBar.partialGrey(zenDot);
         stage.addView(zenDot, new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
-        root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (r - l != or - ol || b - t != ob - ot) zenButton.post(() -> { closeZenFan(); placeZen(); }); });
+        root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (r - l != or - ol || b - t != ob - ot) zenButton.post(() -> { closeZenFan(); placeZen(); startInZen(); }); });
         stage.addView(notebooks.view);
         orientationFrame.addView(stage);
         orientationFrame.afterLayout = () -> { pad.disconnectDisplay(); pad.updateViewport(); pad.post(pad::connectDisplay); };
@@ -965,21 +967,8 @@ public final class PaintActivity extends Activity implements ControlHost {
 
     /** Whether Zen Mode is on: no column, no brush line, no page bar. Not kept: a new launch has the bars. */
     boolean zen;
-    /** The menu's Page Bar ({@link DrawLayout#PAGE_BAR}): the page bar hidden, Zen Mode or not (leaving it, the bar is as Page Bar left it). A session's, as Zen Mode. */
-    boolean barHidden;
-    /**
-     * Page Bar's tap: the page bar hidden or shown. The pad's new room refits the page as Zen Mode's does
-     * ({@link CanvasViewport#configure}: fitted again while untouched, upright filling the room's height, {@link
-     * CanvasViewport#tall}; a zoom kept), then one refresh, forced as a zoom's.
-     */
-    void togglePageBar() {
-        if (inkWashBar == null) return;
-        barHidden = !barHidden;
-        showPageBar();
-        if (pad != null) pad.refreshAsked("Page bar");
-    }
-    /** The page bar shown or not: Zen Mode hides it too. */
-    private void showPageBar() { inkWashBar.turner.view.setVisibility(!zen && !barHidden ? View.VISIBLE : View.GONE); }
+    /** The page bar shown, but in Zen Mode. */
+    private void showPageBar() { inkWashBar.turner.view.setVisibility(!zen ? View.VISIBLE : View.GONE); }
     private ToolButton zenButton;
     /** Zen Mode's fan ({@link ZenFanView}), open or GONE; the brush's dot over Zen's circle while it is open. */
     private ZenFanView zenFan;
@@ -1023,6 +1012,14 @@ public final class PaintActivity extends Activity implements ControlHost {
         zenDot.show(inkWash.look(tool), inkWash.brush(tool), DrawLayout.greys(tool));
         zenDot.invalidate();
     }
+    /** The app opens in Zen Mode, its fan open, once (the owner, 2026-11-07: "i'd like to have the fan menu be the default menu for the app... start with the zen mode with the fan open on load"). */
+    private boolean zenAtStart = true;
+    private void startInZen() {
+        if (!zenAtStart || inkWashBar == null) return;
+        zenAtStart = false;
+        setZen(true);
+        zenButton.post(this::openZenFan);
+    }
     /** A hold on Zen's circle: Zen Mode on or off. */
     void zenHeld() { if (!busy()) setZen(!zen); }
     /** A tap on Zen's button: off, the hint to hold it; on, its fan opened or closed (only a hold turns Zen Mode on or off). */
@@ -1064,6 +1061,23 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (!zen) message(DrawLayout.layerStepNote(layer, step));
     }
     boolean zenFanOpen() { return zenFan != null && zenFan.getVisibility() == View.VISIBLE; }
+    /** {@code change} turns the page, changes the pages or the zoom: with the fan open, its ring and strip follow in the same update ({@link ZenFanView#pagesChanged}). */
+    void zenChanged(Runnable change) { if (zenFanOpen()) zenFan.pagesChanged(change); else change.run(); }
+    /** Zen Mode's open fan's view, else null. */
+    ZenFanView zenFanView() { return zenFanOpen() ? zenFan : null; }
+    /** Zen Mode's open fan's round paper in panel pixels, {middle x, middle y, radius}, else null. */
+    float[] zenPaper() {
+        if (!zenFanOpen()) return null;
+        float[] paper = zenFan.paper();
+        android.graphics.Matrix toPanel = PanelCoordinates.fromView((View) zenFan.getParent());
+        float[] middle = {paper[0], paper[1]};
+        toPanel.mapPoints(middle);
+        return new float[]{middle[0], middle[1], toPanel.mapRadius(paper[2])};
+    }
+    /** The notebook screens' view, over the stage's others (the fan draws what lies over it but this). */
+    View notebooksView() { return notebooks.view; }
+    /** Previews made since the open fan's ring was drawn: drawn again (none were there to compare against). */
+    void zenPicturesArrived() { if (zenFanOpen()) zenFan.picturesArrived(); }
     /** Zen Mode's open fan's whole area in panel pixels, else null: cleaned as it closes. */
     RectF zenFanPanel() {
         if (!zenFanOpen()) return null;
@@ -1305,7 +1319,7 @@ public final class PaintActivity extends Activity implements ControlHost {
      * The menu (the owner, 2026-10-24: "tidy up the order of it, it's chaotic"), {@link DrawLayout#fileRows}' four groups
      * since 2026-11-06 (the owner's order), a grey-400 line between each: Notebook Explorer, Notebook Settings; Export Page
      * (2026-11-02), Import (a picture onto the page, or a PDF as a new notebook or one of its pages onto the page; Import
-     * PDF and the page's group, Import Image, until 2026-10-29), Show Kinds (its popup beside the column), Page Bar ({@link #togglePageBar}); Draw Together,
+     * PDF and the page's group, Import Image, until 2026-10-29), Show Kinds (its popup beside the column); Draw Together,
      * Sand Timer (its choices beside the countdown's row), Play ({@link #playMenu}; a row here from 2026-10-28, the
      * column's confetti button 2026-10-30 to 2026-11-06; the sand timer and Show Kinds the column's until then too);
      * Left-Handed, System Settings ({@link #systemSettings}), which holds Finger Action since 2026-11-06. Before then:
@@ -1318,9 +1332,9 @@ public final class PaintActivity extends Activity implements ControlHost {
     void fileMenu(View anchor) {
         // Show Kinds, the Sand Timer and Play the column's until 2026-11-06; Finger Action System Settings' since.
         boolean playing = DrawLayout.playOn(pad != null && (pad.words.open() || pad.text.on() || pad.shapesOn && !pad.lassoOn && !pad.dropperOn), mirrors.on());
-        List<DrawLayout.Row> rows = DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing, !barHidden);
+        List<DrawLayout.Row> rows = DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing);
         // A cover has no copy of its own (Page Settings is a page's alone): no Export Page there, as the browser's.
-        if (book == null || DrawingBook.isCover(book.index())) rows.removeIf(r -> "exportPage".equals(r.key));
+        if (book == null || DrawingBook.isCover(book.index())) rows.removeIf(r -> "exportPage".equals(r.key) || "fridge".equals(r.key));
         Runnable[] actions = new Runnable[rows.size()];
         for (int i = 0; i < actions.length; i++) {
             String key = rows.get(i).key;
@@ -1332,10 +1346,10 @@ public final class PaintActivity extends Activity implements ControlHost {
                 case "open": actions[i] = () -> pad.postDelayed(() -> { if (leaveDrawing()) leaveNotebook(); }, NotebookScreens.MENU_GONE_MS); break;
                 // Export Page: the page shown's copies, the menu Page Settings' button opens.
                 case "exportPage": actions[i] = () -> { if (book != null) exportMenu(anchor, book.stacks().of(book.index())); }; break;
+                case "fridge": actions[i] = () -> fridge.agreed(this::sendToFridge); break;
                 case "import": actions[i] = this::importFile; break;
                 case "sand": actions[i] = this::countdownTapped; break;
                 case "kinds": actions[i] = inkWashBar::kindsPopup; break;
-                case "pageBar": actions[i] = this::togglePageBar; break;
                 case "play": actions[i] = () -> { if (!busy()) playMenu(anchor); }; break;
                 // Share on Wi-Fi (live branch): marked while on; a tap its window (the link, Stop Sharing).
                 case "share": actions[i] = share::tapped; break;
@@ -1837,7 +1851,8 @@ public final class PaintActivity extends Activity implements ControlHost {
     void message(String text) {
         // On the drawing screen, at the brush line's right, where the canvas never covers it (the owner, 2026-10-22);
         // a toast on other screens, under a dialog's, and in Zen Mode.
-        boolean drawing = inkWashBar != null && !zen && (notebooks == null || !notebooks.shown())
+        // Zen Mode's fan open: there too, its brush line's (the owner, 2026-11-07).
+        boolean drawing = inkWashBar != null && (!zen || zenFanOpen()) && (notebooks == null || !notebooks.shown())
                 && (inkWashBar.brushLine.getWidth() <= 0 || hasWindowFocus());
         if (drawing && inkWashBar.note(text)) return;
         Toast toast = new Toast(this);
@@ -2306,6 +2321,12 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (book == null || drawingName.isEmpty() || busy() || loading || pad.document == null) return;
         leaving();
         share.send(book.snapshot(), DrawingFiles.name(drawingName), place);
+    }
+    /** Send to the Fridge ({@link FridgeWindow}): the page shown as it is now, wet paint set first, as Export Page. */
+    private void sendToFridge() {
+        if (book == null || drawingName.isEmpty() || busy() || DrawingBook.isCover(book.index())) return;
+        leaving();
+        fridge.open(book.snapshot(), DrawingFiles.name(drawingName), book.stacks().of(book.index()));
     }
     /** Export Page's sizes for the PNG or Layers (the owner, 2026-11-05), each with its size for the page: "Social, 1080 × 1444"; Layers' High Res says its file is large. */
     private void sizeMenu(View anchor, int place, String choice) {

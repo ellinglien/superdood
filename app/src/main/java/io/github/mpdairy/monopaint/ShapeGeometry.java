@@ -2,6 +2,8 @@ package io.github.mpdairy.monopaint;
 
 /** Shared exact row intervals for the screen preview and the committed shape. */
 final class ShapeGeometry {
+    /** Inkwash: {@link #path}'s ints a row: six intervals, as many as a six-sided polygon crosses a row. */
+    static final int PATH_ROW=12;
     private final ToolSettings settings;
     private final int width,height;
     private final float startX,startY;
@@ -92,5 +94,63 @@ final class ShapeGeometry {
             }
             if(first>=0) { next[y*4]=first;next[y*4+1]=last+1; }
         }
+    }
+    /**
+     * Inkwash: Hold to Snap's shape following the pen: the path {@code x, y} (page px), {@code width} wide with round ends
+     * and joins, as {@link #PATH_ROW} ints a row of {@code spans} (sorted, apart; the nearest merged past six).
+     */
+    static void path(double[] x,double[] y,double width,int pageWidth,int[] spans) {
+        java.util.Arrays.fill(spans,0);
+        int rows=spans.length/PATH_ROW,n=x.length;
+        double r=width/2,top=Double.POSITIVE_INFINITY,bottom=Double.NEGATIVE_INFINITY;
+        for(double v:y) { top=Math.min(top,v-r);bottom=Math.max(bottom,v+r); }
+        int[] iv=new int[2*n];
+        for(int row=Math.max(0,(int)Math.floor(top));row<Math.min(rows,(int)Math.ceil(bottom));row++) {
+            double c=row+.5;
+            int k=0;
+            for(int i=0;i+1<n || i==0&&n==1;i++) {
+                int j=Math.min(i+1,n-1);
+                if(c<Math.min(y[i],y[j])-r || c>Math.max(y[i],y[j])+r) continue;
+                double[] cut=capsule(x[i],y[i],x[j],y[j],r,c);
+                int a=Math.max(0,(int)Math.ceil(cut[0]-.5)),b=Math.min(pageWidth,(int)Math.ceil(cut[1]-.5));
+                if(a>=b) continue;
+                // In order, overlapping ones merged.
+                int at=k;
+                while(at>0 && iv[at-2]>a) at-=2;
+                System.arraycopy(iv,at,iv,at+2,k-at);iv[at]=a;iv[at+1]=b;k+=2;
+            }
+            int m=0;
+            for(int q=0;q<k;q+=2) {
+                if(m>0 && iv[q]<=iv[m-1]) iv[m-1]=Math.max(iv[m-1],iv[q+1]);
+                else { iv[m]=iv[q];iv[m+1]=iv[q+1];m+=2; }
+            }
+            // More than a row holds: the narrowest gaps closed.
+            while(m>PATH_ROW) {
+                int g=2;
+                for(int q=4;q<m;q+=2) if(iv[q]-iv[q-1]<iv[g]-iv[g-1]) g=q;
+                iv[g-1]=iv[g+1];System.arraycopy(iv,g+2,iv,g,m-g-2);m-=2;
+            }
+            System.arraycopy(iv,0,spans,row*PATH_ROW,m);
+        }
+    }
+    /** Where row centre {@code c} crosses the round-ended segment {@code a}–{@code b}, {@code r} about it: {left, right}, left past right for none. */
+    private static double[] capsule(double ax,double ay,double bx,double by,double r,double c) {
+        double lo=Double.POSITIVE_INFINITY,hi=Double.NEGATIVE_INFINITY;
+        for(int e=0;e<2;e++) {
+            double ex=e==0?ax:bx,dy=c-(e==0?ay:by);
+            if(Math.abs(dy)>r) continue;
+            double h=Math.sqrt(r*r-dy*dy);lo=Math.min(lo,ex-h);hi=Math.max(hi,ex+h);
+        }
+        // The band between the ends: the share along the segment in [0, 1] and the distance across within r, both linear in x.
+        double dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy,l=Math.sqrt(l2),w=c-ay;
+        if(l2>0) {
+            double from=Double.NEGATIVE_INFINITY,to=Double.POSITIVE_INFINITY;
+            if(dx!=0) { double u=ax-w*dy/dx,v=ax+(l2-w*dy)/dx;from=Math.min(u,v);to=Math.max(u,v); }
+            else if(w*dy<0 || w*dy>l2) from=to=Double.NaN;
+            if(dy!=0) { double u=ax+(w*dx-r*l)/dy,v=ax+(w*dx+r*l)/dy;from=Math.max(from,Math.min(u,v));to=Math.min(to,Math.max(u,v)); }
+            else if(Math.abs(w)>r) from=to=Double.NaN;
+            if(from<=to) { lo=Math.min(lo,from);hi=Math.max(hi,to); }
+        }
+        return new double[]{lo,hi};
     }
 }

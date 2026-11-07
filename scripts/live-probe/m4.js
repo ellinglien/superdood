@@ -432,22 +432,27 @@ export function install(G) {
       const clean = T.snapDue(lastT + performance.now() - lastWall);
       if (!clean.length) return;
       clearInterval(snapTimer);
-      // The rough stroke finished and taken back (as a finger's, live.html's cancel), the clean one drawn with the same tool.
-      pull(L.st.end()); T.snapBack(page()); pull(G.P.changed());
-      const [size, dk] = G.look(L.tool);
-      L.st = G.P.pen(L.tool, size, dk, 0, false);
-      for (let k = 0; k < clean.length; k += 6) T.sampleAt(page(), clean[k], clean[k + 1], clean[k + 2], clean[k + 5], clean[k + 3], clean[k + 4]);
-      T.present(page());
-      const r = pull(G.P.changed());
-      L.box = union(L.box, r); L.snapped = true; snaps++;
+      redraw(L, clean); L.snapped = true; snaps++;
     }, WD.tickMs);
   }
+  // The stroke finished and taken back (as a finger's, live.html's cancel), the clean one drawn with the same tool.
+  function redraw(L, clean) {
+    pull(L.st.end()); T.snapBack(page()); pull(G.P.changed());
+    const [size, dk] = G.look(L.tool);
+    L.st = G.P.pen(L.tool, size, dk, 0, false);
+    for (let k = 0; k < clean.length; k += 6) T.sampleAt(page(), clean[k], clean[k + 1], clean[k + 2], clean[k + 5], clean[k + 3], clean[k + 4]);
+    T.present(page());
+    L.box = union(L.box, pull(G.P.changed()));
+  }
+  // Snapped, the pen moved off its rest: the shape follows it (HoldSnap.to), drawn again at each move (a browser is fast
+  // enough for the brush itself; the Manta shows a preview); the lift sets it.
+  function follow(L, x, y) { const clean = T.snapTo(x, y); if (clean.length) redraw(L, clean); }
   let lastT = 0, lastWall = 0;
   function sampled(samples) { for (const q of samples) { T.snapSample(q[0], q[1], q[2], q[4], q[5], q[3]); lastT = q[3]; lastWall = performance.now(); } }
   function lifted() { clearInterval(snapTimer); T.snapEnd(); }
 
   // A tool chosen: the column's mode and Text put down (InkWashBar.selectTool).
   function chose() { if (mode) setMode(null); if (textOn) { closeText(); textOn = false; marks(); drawOver(); } }
-  return { arranged, viewChanged, down, move, up, chose, held, began, sampled, lifted, dropText, covers: () => mode !== null,
+  return { arranged, viewChanged, down, move, up, chose, held, began, sampled, lifted, follow, dropText, covers: () => mode !== null,
     get mode() { return mode; }, get textOn() { return textOn; }, get placing() { return placing; }, get zen() { return zen; }, get piece() { return piece; }, get snaps() { return snaps; }, drawOver };
 }

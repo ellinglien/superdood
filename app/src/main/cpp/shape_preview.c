@@ -34,11 +34,11 @@ static void span(Raster *r,int y,int left,int right,int paint) {
         out[x]=shown(value,x,y,r->dots);
     }
 }
-static void difference(Raster *r,int y,const jint *source,const jint *subtract,int paint) {
-    for(int part=0;part<4;part+=2) {
+static void difference(Raster *r,int y,const jint *source,const jint *subtract,int stride,int paint) {
+    for(int part=0;part<stride;part+=2) {
         int left=source[part],right=source[part+1];
         if(left>=right)continue;
-        for(int cut=0;cut<4 && left<right;cut+=2) {
+        for(int cut=0;cut<stride && left<right;cut+=2) {
             int a=subtract[cut],b=subtract[cut+1];
             if(a>=b || b<=left || a>=right)continue;
             if(a>left)span(r,y,left,a,paint);
@@ -58,10 +58,12 @@ Java_io_github_mpdairy_monopaint_ShapePreview_nativeApply(JNIEnv *env,jclass cla
     if(AndroidBitmap_getInfo(env,display,&info)!=ANDROID_BITMAP_RESULT_SUCCESS
             || info.format!=ANDROID_BITMAP_FORMAT_RGBA_8888) { fail(env,"Invalid shape preview");return; }
     if(!layers_find(env,&layers,tones,alpha,(size_t)info.width*info.height))return;
-    int count=layers.count;
+    int count=layers.count,rows=(int)info.height;
+    // Ints a row: two intervals for the Shapes tool's, more for Hold to Snap's path (ShapeGeometry.PATH_ROW).
+    int stride=rows>0?(*env)->GetArrayLength(env,previous)/rows:0;
     if(active<0 || active>=count || shade< -1 || shade>255 || (*env)->GetArrayLength(env,visible)!=count
-            || (*env)->GetArrayLength(env,previous)!=(int)info.height*4
-            || (*env)->GetArrayLength(env,next)!=(int)info.height*4
+            || stride<4 || stride%2 || (*env)->GetArrayLength(env,previous)!=rows*stride
+            || (*env)->GetArrayLength(env,next)!=rows*stride
             || (*env)->GetArrayLength(env,dots)!=256*64 || (*env)->GetArrayLength(env,dirty)!=4) {
         fail(env,"Invalid shape preview");return;
     }
@@ -81,8 +83,8 @@ Java_io_github_mpdairy_monopaint_ShapePreview_nativeApply(JNIEnv *env,jclass cla
     int ready=pattern!=NULL && layers_pin(env,&layers);
     r.dots=logical?NULL:pattern;
     if(ready)for(int y=0;y<(int)info.height;y++) {
-        difference(&r,y,old+y*4,current+y*4,0);
-        difference(&r,y,current+y*4,old+y*4,1);
+        difference(&r,y,old+y*stride,current+y*stride,stride,0);
+        difference(&r,y,current+y*stride,old+y*stride,stride,1);
     }
     layers_release(env,&layers);
     if(pattern)(*env)->ReleasePrimitiveArrayCritical(env,dots,pattern,JNI_ABORT);

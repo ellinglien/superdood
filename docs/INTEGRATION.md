@@ -5391,6 +5391,24 @@ is unchanged: it snaps as before, without the drag.
   while a shape is shown, for the Shapes tool's drag too).
 - **Checks:** `HoldSnapChecks.dragged` (the start kept, the end at the pen, each sample's share, pressure, tilt and time
   kept, the points on the new line; a circle doesn't move).
+## Every snapped shape follows the pen (2026-11-06, branch `snap-follow`): upstream files touched
+
+The owner: "lets make them similarly repositional". The line's drag above now takes every kind (`HoldSnap.follow`,
+used by `to`): a polyline's last point at the pen; a line or an arc turned and scaled about its start, its end at the
+pen (an arc's bulge in proportion); a circle, oval, polygon or box turned and scaled about its box's centre, the pen's
+rest at the pen (a circle stays round). The pad's drag, lift, Undo, Replay and Draw Together are the line's, unchanged.
+The preview is no longer the Shapes tool's `LINE`: `ShapeGeometry.path` rasters the followed path at the slot's size,
+round ends and joins, six intervals a row (`PATH_ROW`; the narrowest gaps closed past six), through `ShapePreview`'s
+new `Raster` constructor. The browser now follows too (it never dragged the line): `WebEngine.snapTo` and m4.js's
+`follow` draw the brush again at each move (fast enough there), the lift sending the whole box as a snap's.
+- **Upstream files touched:** `ShapePreview` (+8: `Raster`, a preview of any ints a row; the Shapes tool's is the
+  `ShapeGeometry` at 4, as before), `shape_preview.c` (the ints a row read from the arrays' length, not fixed at 4),
+  `ShapeGeometry` (+60: `path`, `capsule`), `DrawingPad` (`beginShape` takes the preview; `snapLine`/`liftSnapLine` are
+  `snapDrag`/`liftSnapDrag`; any snap drags).
+- **Checks:** `HoldSnapChecks.followed` (circle: centre kept, round, scaled and turned so the rest is at the pen;
+  pentagon: the same about its box's centre; arc: start kept, end at the pen, bulge over chord kept; polyline: the
+  corners kept, the last at the pen) and `rastered` (a circle's middle row two intervals the width; a zigzag's eight
+  crossings kept to six, in order).
 ## Zen Mode's fan (2026-11-04, branch `zen-fan`)
 
 The owner's sketch and mockup: in Zen Mode, the corner button shows the brush's dot (its size and grey, the column's

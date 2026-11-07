@@ -980,7 +980,7 @@ public final class WebEngine {
     @JSExport public static boolean columnRight() { return "1".equals(KEPT.get(TOOLBOX_RIGHT)); }
     private static final String TOOLBOX_RIGHT = "toolbox_right";
     /** The menu's rows ({@link DrawLayout#fileRows}): a guest's, with the Manta's notebook rows while the Manta shares them ({@code notebook}, books.js). As JSON. */
-    @JSExport public static String fileMenu(int sel, boolean notebook) { return rowsJson(DrawLayout.fileRows(notebook, finger(sel).row(WebEngine::brushName), columnRight(), null, false, false, false, false, true)); }
+    @JSExport public static String fileMenu(int sel, boolean notebook) { return rowsJson(DrawLayout.fileRows(notebook, finger(sel).row(WebEngine::brushName), columnRight(), null, false, false, false, false)); }
     /** The menu's row {@code key} tapped: the drawing hand turned over ("hand"); the Finger row opens its menu (the page's). */
     @JSExport public static void fileAct(String key) { if ("hand".equals(key)) KEPT.put(TOOLBOX_RIGHT, columnRight() ? "0" : "1"); }
     /** Finger Action's menu ({@code PaintActivity.fingerMenu}): each choice's words and the bar's tool it draws with (−1 Nothing), the one chosen marked. */
@@ -1279,16 +1279,24 @@ public final class WebEngine {
 
     /** Hold to Snap ({@link HoldSnap}): the stroke the pen holds still over, drawn again as the clean shape. One a guest. */
     private static HoldSnap snap;
+    /** The snapped shape follows the pen: it moved off its rest ({@link HoldSnap#moved}). */
+    private static boolean following;
     /** A stroke begins that may snap ({@code DrawingPad.snaps}: a slot's brush that doesn't build while held), at the view's {@code zoom}; whether it may. */
-    @JSExport public static boolean snapStart(int p, double zoom) { Page g = at(p); snap = g.stroke != null && !g.stroke.buildsWhileHeld() ? new HoldSnap(zoom) : null; return snap != null; }
+    @JSExport public static boolean snapStart(int p, double zoom) { Page g = at(p); snap = g.stroke != null && !g.stroke.buildsWhileHeld() ? new HoldSnap(zoom) : null; following = false; return snap != null; }
     @JSExport public static void snapSample(double x, double y, double travel, double tiltX, double tiltY, double ms) {
         if (snap != null) snap.sample(x, y, ToolSettings.pressure((float) travel), tiltX, tiltY, (long) ms);
     }
     /** At {@code now} ms: the clean shape's samples (x, y, pressure, tilt x, tilt y, ms, six a sample) once held long enough over one ({@link HoldSnap#due}, {@link HoldSnap#snap}), else none. */
     @JSExport @JSByRef public static double[] snapDue(double now) {
-        double[][] clean = snap != null && snap.due((long) now) ? snap.snap() : null;
+        return rows(snap != null && snap.due((long) now) ? snap.snap() : null);
+    }
+    /** After a snap, the pen at {@code x, y}: once it has moved off its rest, the shape's samples following it ({@link HoldSnap#to}), as {@link #snapDue}'s; else none. */
+    @JSExport @JSByRef public static double[] snapTo(double x, double y) {
+        following |= snap != null && snap.snapped != null && snap.moved(x, y);
+        return rows(following ? snap.to(x, y) : null);
+    }
+    private static double[] rows(double[][] clean) {
         if (clean == null) return new double[0];
-        snap = null;
         double[] out = new double[6 * clean.length];
         for (int k = 0; k < clean.length; k++) System.arraycopy(clean[k], 0, out, 6 * k, 6);
         return out;

@@ -53,6 +53,7 @@ final class PageTurner {
     private final ToolButton previous, next;
     /** Zoom and its lock on the drawing screen (else null). */
     final ZoomButton zoom;
+    private final Host host;
     private final Strip strip;
     private final Number number;
     private int index, count = 1;
@@ -66,7 +67,7 @@ final class PageTurner {
 
     /** The bar for {@code host}; {@code notebook}: the drawing screen's, with Zoom and the previews. */
     PageTurner(PaintActivity app, Host host, boolean notebook) {
-        this.app = app;
+        this.app = app; this.host = host;
         view = LabUi.row(app);
         view.setBackgroundColor(Theme.PAPER);
         // The paper gap on the page's side: under the drawing screen's bar, over a notebook's.
@@ -136,6 +137,11 @@ final class PageTurner {
      * SelectionFeedback#updateParts}). Pages added, deleted or moved, or another notebook: all of it again.
      */
     void show(int index, int count, boolean turned) {
+        // Zen Mode's fan open: its ring captured before the turn too, so only what the turn changes there goes to the
+        // panel, as the bar's own parts do (the owner, 2026-11-07: "changing the pages is quite clunky... a lot of blinking").
+        app.zenChanged(() -> showNow(index, count, turned));
+    }
+    private void showNow(int index, int count, boolean turned) {
         if (turned && strip != null && Math.max(1, count) == this.count && strip.keeps()) {
             app.selectionFeedback.updateParts(view, () -> {
                 // Captured as they show now, then compared once the turn is in them.
@@ -148,6 +154,35 @@ final class PageTurner {
         set(index, count);
         if (strip != null) strip.shown();
     }
+    /** The ring's + tile ({@link #ringPlace}): a page added. */
+    static final int PLUS = DrawingBook.NONE + 1;
+    /**
+     * Zen Mode's fan's ring of the bar's previews ({@link ZenFan#previews}; the owner, 2026-11-07): what its slot
+     * {@code slot} of {@code n} shows, the window round the page drawn on as the strip's: a place, {@link #PLUS}, or
+     * {@link DrawingBook#NONE} past the last.
+     */
+    int ringPlace(int slot, int n, int start) { return strip == null ? DrawingBook.NONE : strip.ringPlace(slot, n, start); }
+    /** The ring's first tile: {@code was} (-1: none yet) kept while the page drawn on is in its {@code n} slots, else round it. */
+    int ringStart(int n, int was) { return strip == null ? 0 : strip.ringStart(n, was); }
+    /** Place {@code place}'s preview (or {@link #PLUS}'s) in {@code box}, px, the strip's look, its tab under it; whether it is all drawn (false: a picture still being made). */
+    boolean drawRing(Canvas canvas, int place, RectF box) {
+        if (strip == null || place == DrawingBook.NONE) return true;
+        if (place == PLUS) { strip.drawPlus(canvas, box); return true; }
+        return strip.drawPlace(canvas, place, box);
+    }
+    /** A tap on the ring's {@code place}, as on the strip: turned to (the front cover, Notebook Settings), or a page added. */
+    void ringTap(int place) {
+        if (strip == null || place == DrawingBook.NONE) return;
+        if (place == PLUS) { if (!app.busy()) app.newPage(); } else strip.go(place);
+    }
+    /** The page and its count as the bar's number draws them, {@code size} px tall words in {@code color}, centred in a box {@code width × height} px from (0, 0): Zen Mode's fan's strip ({@link ZenFan#strip}). */
+    void drawNumber(Canvas canvas, float width, float height, float size, int color) { number.draw(canvas, width, height, size, color); }
+    /** Whether ‹ (or › when {@code forward}) turns: not past the front cover, nor the back. */
+    boolean turns(boolean forward) { return forward ? index != DrawingBook.BACK : index != DrawingBook.FRONT; }
+    /** ‹ or ›, as the bar's: the page before, or after ({@code forward}). */
+    void turn(boolean forward) { if (forward) host.next(); else host.previous(); }
+    /** A hold on the ring's {@code place}, as on the strip: its Page Settings. */
+    void ringHold(int place) { if (strip != null && place != PLUS) strip.options(place); }
     private void set(int index, int count) {
         this.index = index; this.count = Math.max(1, count);
         if (strip != null) {
@@ -177,7 +212,7 @@ final class PageTurner {
     /** The page drawn on changed: its preview is drawn again once it has been still a moment ({@link InkWashBar#THUMBNAILS_MS}), never under the pen. */
     void pageChanged() { if (strip != null) strip.pageChanged(); }
     /** A picture the previews or a riffle wait for is ready ({@link NotebookScreens}). */
-    void picturesArrived() { if (strip != null) strip.picturesArrived(); }
+    void picturesArrived() { if (strip != null) strip.picturesArrived(); app.zenPicturesArrived(); }
     /**
      * The timed page's state ({@link TimedPages}): whether it is {@code locked} (a padlock by its number) and whether its
      * number is {@code hidden} now (blinking). A change is drawn over the number's own square only, through the panel's
@@ -203,6 +238,8 @@ final class PageTurner {
         private final android.graphics.Rect digit = new android.graphics.Rect();
         /** The owner's slash at the digits' height, ink and clear ({@link Theme#shape}). */
         private android.graphics.Bitmap slash;
+        private final Paint slashTint = new Paint();
+        private int slashColor;
         Number() {
             super(app);
             text.setColor(Theme.INK);
@@ -210,9 +247,14 @@ final class PageTurner {
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             canvas.drawColor(Theme.PAPER);
+            draw(canvas, getWidth(), getHeight(), 0, Theme.INK);
+        }
+        /** The words centred in a box {@code width × height} px from (0, 0), {@code size} px (0: the bar's labels) in {@code color}, the padlock before them while locked. */
+        void draw(Canvas canvas, float width, float height, float size, int color) {
+            text.setColor(color);
             TypeStyle type = TypeStyle.LABEL;
             text.setTypeface(Theme.face(type.weight));
-            text.setTextSize(getResources().getDisplayMetrics().density * type.sp * LabText.SCALE);
+            text.setTextSize(size > 0 ? size : getResources().getDisplayMetrics().density * type.sp * LabText.SCALE);
             text.setLetterSpacing(type.tracking);
             String words = DrawLayout.pageWords(index, count).toUpperCase(java.util.Locale.ROOT);
             // "44 / 45": the words either side of the "/", the drawn slash between them (a cover's word has none).
@@ -225,16 +267,18 @@ final class PageTurner {
                 if (slash != null) slash.recycle();
                 slash = Theme.shape(app, R.drawable.shape_page_slash, wide, tall);
             }
-            float width = text.measureText(before) + wide + text.measureText(after), x = (getWidth() - width) / 2f;
-            float baseline = getHeight() / 2f - (text.ascent() + text.descent()) / 2;
+            float x = (width - (text.measureText(before) + wide + text.measureText(after))) / 2f;
+            float baseline = height / 2f - (text.ascent() + text.descent()) / 2;
             if (!hidden) {
                 canvas.drawText(before, x, baseline, text);
                 if (cut >= 0) {
-                    canvas.drawBitmap(slash, x + text.measureText(before), baseline - tall, null);
+                    // The slash in the words' colour (ink on the bar, the fan's grey on its strip).
+                    if (slashTint.getColorFilter() == null || slashColor != color) { slashColor = color; slashTint.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN)); }
+                    canvas.drawBitmap(slash, x + text.measureText(before), baseline - tall, slashTint);
                     canvas.drawText(after, x + text.measureText(before) + wide, baseline, text);
                 }
             }
-            if (locked) padlock(canvas, x - app.dp(4), getHeight() / 2f);
+            if (locked) padlock(canvas, x - app.dp(4), height / 2f);
         }
         /** A small closed padlock, ink, its right edge at {@code right}, centred on {@code middle}: a body and a shackle, 2 dp strokes as the bar's icons. */
         private void padlock(Canvas canvas, float right, float middle) {
@@ -329,6 +373,29 @@ final class PageTurner {
         private int start() { return held >= 0 ? held : round(); }
         /** The first tile of the window: the page drawn on centred, held at the ends. */
         private int round() { return book() == null ? 0 : StripGesture.round(here(), count(), shownCount()); }
+        /**
+         * The ring's window ({@link PageTurner#ringPlace}): {@code n} slots round the page drawn on; fewer tiles than
+         * slots, they sit at the foot's end, the + side, the slots before them empty (the owner, 2026-11-07: "when there
+         * aren't many pages in the notebook... reduce the number of pages visible. anchor it by the + add page side").
+         */
+        private int ringPlace(int slot, int n, int start) {
+            if (book() == null) return DrawingBook.NONE;
+            int shown = Math.min(n, tiles());
+            slot -= n - shown;
+            if (slot < 0) return DrawingBook.NONE;
+            return slot == StripGesture.plusSlot(start, shown, count()) ? PLUS : StripGesture.placeAt(start + slot, count());
+        }
+        /**
+         * The ring's first tile: {@code was} while the page drawn on is still in its {@code n} slots (the owner, 2026-11-07:
+         * "the fan is still blinking away whenever the page changes": a window re-centred at every turn moved every
+         * preview), else round the page as the strip's ({@link StripGesture#round}).
+         */
+        private int ringStart(int n, int was) {
+            if (book() == null) return 0;
+            int shown = Math.min(n, tiles()), tile = StripGesture.tileOf(here(), count());
+            if (was >= 0 && tile >= was && tile < was + shown && was + shown <= tiles()) return was;
+            return StripGesture.round(here(), count(), shown);
+        }
         /** Whether a turn can go to the panel as one fast update of what it changes: the strip laid out as it is, no gesture holding the window. */
         boolean keeps() { return book() != null && drawnBook == book() && held < 0 && getChildCount() > 0 && !isLayoutRequested(); }
         /** The first preview's left, px: the previews sit against the number. */
@@ -542,6 +609,61 @@ final class PageTurner {
             super.dispatchDraw(canvas);
         }
 
+        /**
+         * Place {@code place}'s preview in {@code box} (px), framed, its tab under it if it is the page drawn on: a
+         * preview's look, the strip's and Zen Mode's fan's ring's ({@link PageTurner#drawRing}).
+         */
+        private boolean drawPlace(Canvas canvas, int place, RectF box) {
+            DrawingBook book = book();
+            if (place == DrawingBook.NONE || book == null) return true;
+            boolean current = place == here();
+            // Every edge one hairline, a pixel (the owner, 2026-10-24: "use same stroke size for page outlines on top", then
+            // "strokes around pages on top toolbar should be hairline"; 2 dp until then): the page drawn on is told by its
+            // ink edges and its tab under it.
+            float stroke = 1;
+            RectF inside = new RectF(box.left + stroke, box.top + stroke, box.right - edge(), box.bottom - edge());
+            // Its layers' pictures over each other; the page sampled last (the page drawn on, or the one just left) from
+            // its sample over its stack's other layers. A page turned to with no sample shows its picture, as it did, so a
+            // turn changes only the marks; so does the page left, if its sample missed its last strokes.
+            boolean cover = DrawingBook.isCover(place);
+            int layer = cover ? DrawingBook.NONE : current ? drawn() : place == livePlace ? liveLayer : DrawingBook.NONE;
+            boolean sampled = live != null && layer != DrawingBook.NONE && place == livePlace && layer == liveLayer;
+            boolean fresh = sampled && (current || liveOf.revision() == liveRevision);
+            boolean whole = !fresh && layer != DrawingBook.NONE && book.picture(layer) != null && app.notebooks != null
+                    && app.notebooks.drawStackPreview(canvas, book, place, inside, DrawingBook.NONE);
+            boolean drawn = whole || app.notebooks == null || app.notebooks.drawStackPreview(canvas, book, place, inside, cover && current ? place : layer);
+            if (!whole && sampled) canvas.drawBitmap(live, null, NotebookScreens.fitted(book, inside), multiply);
+            edges(canvas, box, current ? Theme.INK : Theme.GREY_400);
+            float tab = box.bottom + app.dp(DrawLayout.STRIP_TAB_GAP);
+            // Hidden: the preview at LayerThumbnail.DIMMED, paper laid over it (spec, "The bottom strip").
+            if (hidden(place)) canvas.drawRect(inside, dimmed);
+            if (current) canvas.drawRect(box.left, tab, box.right, tab + app.dp(DrawLayout.STRIP_TAB), ink);
+            else if (ghosting(place)) canvas.drawRect(box.left, tab, box.right, tab + app.dp(DrawLayout.GHOST_TAB), ghostTab);
+            if (current && !cover && !whole && !sampled) pageChanged();
+            return drawn;
+        }
+        /**
+         * A preview's frame: a line ({@link #edge}) along its right side and its foot only, a page's edge (the owner, 2026-10-26:
+         * "instead of full stroke for each page preview on the top bar, let's just have a line on the right side and the bottom").
+         */
+        private void edges(Canvas canvas, RectF box, int color) {
+            float w = edge();
+            frame.setStrokeWidth(w); frame.setColor(color);
+            canvas.drawLine(box.right - w / 2, box.top, box.right - w / 2, box.bottom, frame);
+            canvas.drawLine(box.left, box.bottom - w / 2, box.right, box.bottom - w / 2, frame);
+        }
+        /** The right and foot lines' width, px: a pixel and 1 dp (the owner, 2026-10-27: "slightly thicker lines on right and bottom of preview pages at top"; 3 px on the Manta, as a pixel alone is too faint on e-ink). */
+        private float edge() { return 1 + app.dp(1); }
+        /** The + tile in {@code box} (px): a preview's hairline edges, the Phosphor plus centred in it. */
+        private void drawPlus(Canvas canvas, RectF box) {
+            edges(canvas, box, Theme.GREY_400);
+            Drawable icon = app.getDrawable(R.drawable.ic_ph_plus).mutate();
+            icon.setTint(Theme.INK);
+            int size = Math.round(Math.min(box.width(), box.height())) * 2 / 3, cx = Math.round(box.centerX()), cy = Math.round(box.centerY());
+            icon.setBounds(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
+            icon.draw(canvas);
+        }
+
         /** One preview: the place at its tile, framed; the page drawn on in ink with a tab under it. */
         @SuppressLint("ViewConstructor")
         private final class Preview extends View {
@@ -564,57 +686,9 @@ final class PageTurner {
                 setContentDescription(DrawLayout.pageSaid(place, count()) + (place == here() ? ", drawing" : ghosting(place) ? ", ghost" : hidden(place) ? ", hidden" : ""));
             }
             @Override protected void onDraw(Canvas canvas) {
-                int place = place();
-                DrawingBook book = book();
-                if (plus()) { drawPlus(canvas); return; }
-                if (place == DrawingBook.NONE) return;
-                boolean current = place == here();
-                // Every edge one hairline, a pixel (the owner, 2026-10-24: "use same stroke size for page outlines on top", then
-                // "strokes around pages on top toolbar should be hairline"; 2 dp until then): the page drawn on is told by its
-                // ink edges and its tab under it.
-                float stroke = 1, top = app.dp(DrawLayout.STRIP_EDGE);
+                float top = app.dp(DrawLayout.STRIP_EDGE);
                 RectF box = new RectF(0, top, getWidth(), top + app.dp(at.previewHeight()));
-                RectF inside = new RectF(box.left + stroke, box.top + stroke, box.right - edge(), box.bottom - edge());
-                // Its layers' pictures over each other; the page sampled last (the page drawn on, or the one just left) from
-                // its sample over its stack's other layers. A page turned to with no sample shows its picture, as it did, so a
-                // turn changes only the marks; so does the page left, if its sample missed its last strokes.
-                boolean cover = DrawingBook.isCover(place);
-                int layer = cover ? DrawingBook.NONE : current ? drawn() : place == livePlace ? liveLayer : DrawingBook.NONE;
-                boolean sampled = live != null && layer != DrawingBook.NONE && place == livePlace && layer == liveLayer;
-                boolean fresh = sampled && (current || liveOf.revision() == liveRevision);
-                boolean whole = !fresh && layer != DrawingBook.NONE && book.picture(layer) != null && app.notebooks != null
-                        && app.notebooks.drawStackPreview(canvas, book, place, inside, DrawingBook.NONE);
-                if (!whole && app.notebooks != null) app.notebooks.drawStackPreview(canvas, book, place, inside, cover && current ? place : layer);
-                if (!whole && sampled) canvas.drawBitmap(live, null, NotebookScreens.fitted(book, inside), multiply);
-                edges(canvas, box, current ? Theme.INK : Theme.GREY_400);
-                float tab = box.bottom + app.dp(DrawLayout.STRIP_TAB_GAP);
-                // Hidden: the preview at LayerThumbnail.DIMMED, paper laid over it (spec, "The bottom strip").
-                if (hidden(place)) canvas.drawRect(inside, dimmed);
-                if (current) canvas.drawRect(box.left, tab, box.right, tab + app.dp(DrawLayout.STRIP_TAB), ink);
-                else if (ghosting(place)) canvas.drawRect(box.left, tab, box.right, tab + app.dp(DrawLayout.GHOST_TAB), ghostTab);
-                if (current && !cover && !whole && !sampled) Strip.this.pageChanged();
-            }
-            /**
-             * A preview's frame: a line ({@link #edge}) along its right side and its foot only, a page's edge (the owner, 2026-10-26:
-             * "instead of full stroke for each page preview on the top bar, let's just have a line on the right side and the bottom").
-             */
-            private void edges(Canvas canvas, RectF box, int color) {
-                float w = edge();
-                frame.setStrokeWidth(w); frame.setColor(color);
-                canvas.drawLine(box.right - w / 2, box.top, box.right - w / 2, box.bottom, frame);
-                canvas.drawLine(box.left, box.bottom - w / 2, box.right, box.bottom - w / 2, frame);
-            }
-            /** The right and foot lines' width, px: a pixel and 1 dp (the owner, 2026-10-27: "slightly thicker lines on right and bottom of preview pages at top"; 3 px on the Manta, as a pixel alone is too faint on e-ink). */
-            private float edge() { return 1 + app.dp(1); }
-            /** The + tile: a preview's size and hairline edges, the Phosphor plus centred in it. */
-            private void drawPlus(Canvas canvas) {
-                float top = app.dp(DrawLayout.STRIP_EDGE), h = app.dp(at.previewHeight());
-                edges(canvas, new RectF(0, top, getWidth(), top + h), Theme.GREY_400);
-                Drawable icon = app.getDrawable(R.drawable.ic_ph_plus).mutate();
-                icon.setTint(Theme.INK);
-                int size = Math.min(getWidth(), Math.round(h)) * 2 / 3, cx = getWidth() / 2, cy = Math.round(top + h / 2);
-                icon.setBounds(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
-                icon.draw(canvas);
+                if (plus()) drawPlus(canvas, box); else drawPlace(canvas, place(), box);
             }
             // Without dragging (spec, "Accessibility"): go, move the page either way, its options.
             @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {

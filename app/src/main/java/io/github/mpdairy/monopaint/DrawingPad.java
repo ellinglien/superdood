@@ -264,7 +264,6 @@ final class DrawingPad extends View {
         if (fittedTurn != app.appRotation) viewport.reset();
         fittedTurn = app.appRotation;
         viewport.cover = app.zen;
-        viewport.tall = app.barHidden;
         viewport.configure(getWidth(), getHeight(), width, height);
         float scale = viewport.scale();
         place(pageToView, scale, viewport.x, viewport.y);
@@ -356,13 +355,14 @@ final class DrawingPad extends View {
         placing = Placing.NONE;
         sectionRects = null; sectionActive = -1; sectionFlash = null;
         PageTurnDisplay turn = null;
+        long started = SystemClock.uptimeMillis(), rendered = 0;
         // Same-sized fitted pages share a transform. Snapshot the old panel
         // background before rendering the next page, even with Pages open.
         if (document != null && display != null && page.width == document.width && page.height == document.height
                 && viewport.untouched() && app.resumed && hasWindowFocus() && !isLayoutRequested() && !app.notebookShown()
                 && !app.root.isLayoutRequested() && !app.previewFrame.isLayoutRequested()
                 && app.rotateButton.getVisibility() != View.VISIBLE) {
-            try { turn = new PageTurnDisplay(this, presented(), viewportBitmap == null ? pageToView : new Matrix(), app.pagePanel); }
+            try { turn = new PageTurnDisplay(this, presented(), viewportBitmap == null ? pageToView : new Matrix(), app.pagePanel, zenFanKept()); }
             catch (RuntimeException | LinkageError error) { Log.w(ProbeActivity.TAG, "Page update uses Android display", error); }
         }
         boolean presented = false;
@@ -370,11 +370,13 @@ final class DrawingPad extends View {
             document = page; ghost = mirrorShow.ghost = app.ghosts.plane(page); layerSteps = app.layerSteps(page);
             if (carried != null) { selection = carried; selectionShown.set(pageRect(carried.bounds())); }
             fadeToNow(); viewport.reset(); ensureDisplay(); updateViewport(); renderAll(); lassoBar();
+            rendered = SystemClock.uptimeMillis();
             if (turn != null) {
-                try { if (presented = turn.present(presented())) wrote(new Rect(0, 0, presented().getWidth(), presented().getHeight())); }
+                try { if (presented = turn.present(presented())) { wrote(new Rect(0, 0, presented().getWidth(), presented().getHeight())); zenFanRim(); } }
                 catch (RuntimeException error) { Log.w(ProbeActivity.TAG, "Page update uses Android display", error); }
             }
         } finally { if (turn != null) turn.close(); }
+        Log.i(ProbeActivity.TAG, "Page shown: rendered " + (rendered - started) + " ms, on the panel " + (SystemClock.uptimeMillis() - rendered) + " ms" + (presented ? "" : " (Android redraw)"));
         if (presented) {
             pagePresentCount++;
             app.selectionFeedback.retainForNextDraw(this, new Rect(0, 0, getWidth(), getHeight()));
@@ -1060,7 +1062,12 @@ final class DrawingPad extends View {
             try {
                 Matrix toPanel = new Matrix(); toPanel.setTranslate(area.left, area.top);
                 blank = DirectEink.forPanel(white, toPanel, 1, 9);
-                blank.refresh(white, new Rect(0, 0, area.width(), area.height()));
+                // Not over Zen's open fan, which the fast pen never draws under (its mask, ZenFan#mask).
+                java.util.List<int[]> off = new java.util.ArrayList<>();
+                java.util.List<RectF> fan = app.zenFanMask();
+                if (fan != null) for (RectF m : fan) { Rect r = new Rect(); m.roundOut(r); r.offset(-area.left, -area.top); off.add(new int[]{r.left, r.top, r.right, r.bottom}); }
+                for (int[] part : MagnetDrag.minus(new int[]{0, 0, area.width(), area.height()}, off))
+                    blank.refresh(white, new Rect(part[0], part[1], part[2], part[3]));
             } catch (RuntimeException | LinkageError error) {
                 Log.w(ProbeActivity.TAG, "Fast ink stays until the canvas redraws", error);
             } finally {
@@ -1080,8 +1087,10 @@ final class DrawingPad extends View {
         Bitmap source = presented();
         if (!area.intersect(0, 0, source.getWidth(), source.getHeight())) { fastInk.setEmpty(); return; }
         flush(true);
-        // Forced: the software pixels are unchanged, only the panel's are stale.
-        if (direct.refresh(source, area) < 0) { postDelayed(this::refreshFastInk, 8); return; }
+        // Forced: the software pixels are unchanged, only the panel's are stale. Not under an open popup or Zen's fan (the
+        // owner, 2026-11-07: the fan blinked away at every page turn; a turn's suspend refreshed the whole page over it).
+        for (int[] part : MagnetDrag.minus(new int[]{area.left, area.top, area.right, area.bottom}, covered()))
+            if (direct.refresh(source, new Rect(part[0], part[1], part[2], part[3])) < 0) { postDelayed(this::refreshFastInk, 8); return; }
         wrote(area);
         fastInk.setEmpty(); fastInkRefreshes++;
     }
@@ -1095,7 +1104,7 @@ final class DrawingPad extends View {
     private void beginFastPreview() {
         if (direct == null || previewDirect != null || !DirectEink.fastBinaryControls()) return;
         flush(true);
-        try { previewDirect = DirectEink.forView(this, presented(), viewportBitmap == null ? pageToView : new Matrix(), 1, 9); }
+        try { previewDirect = DirectEink.forView(this, presented(), viewportBitmap == null ? pageToView : new Matrix(), 1, 9); fastPlaneUsed = true; }
         catch (RuntimeException | LinkageError error) { Log.w(ProbeActivity.TAG, "Previews use gray display", error); }
     }
     /** A pen stroke shows through {@link StrokePanel}'s fast update while the pen is down; {@link #endStrokePreview} ends it. */
@@ -1103,6 +1112,7 @@ final class DrawingPad extends View {
         if (direct == null || previewDirect != null || quietPanel) return;
         flush(true);
         previewDirect = StrokePanel.open(this, presented(), viewportBitmap == null ? pageToView : new Matrix());
+        fastPlaneUsed = true;
     }
     /**
      * Ends a pen stroke's fast preview before its last render: the session stops showing, and once the page is rendered
@@ -1162,6 +1172,8 @@ final class DrawingPad extends View {
      * whole window blanked left the column, the page bar and the Zen button white, as nothing redraws them unless a page
      * turn's flash follows (the owner, 2026-11-03, after the Template eye: "the toolbar disappeared").
      */
+    /** The page's fast pen plane (mode 9) has drawn since {@link #suspend} last blanked it: a stroke's preview, a Spiro's ring. */
+    private boolean fastPlaneUsed = true;
     private void suspend(boolean staying) {
         layLiveNow();
         words.cancel(); placer.cancel(); text.cancel(); finishStroke(); settleDrying();
@@ -1170,7 +1182,12 @@ final class DrawingPad extends View {
         // Going to sleep: no blank, or the sleep screen keeps a washed-out page (the owner, 2026-11-02: "much lighter... as if
         // there was a flash"); waking, connectDisplay blanks and redraws the whole window anyway.
         boolean sleeping = !app.getSystemService(android.os.PowerManager.class).isInteractive();
-        if (DirectEink.fastBinaryControls() && app.previewFrame.isAttachedToWindow() && !sleeping) eraseFastInk(staying ? pageArea() : windowArea());
+        // Staying (a page turned): only once the page's fast pen plane has drawn since it was last blanked; just turning
+        // pages left the blank and its forced refresh to run over and over, ~95 panel writes a turn with Zen's fan open.
+        if (DirectEink.fastBinaryControls() && app.previewFrame.isAttachedToWindow() && !sleeping && (fastPlaneUsed || !staying)) {
+            eraseFastInk(staying ? pageArea() : windowArea());
+            fastPlaneUsed = false;
+        }
         disconnectDisplay();
     }
     /** This view, the page's room, in panel pixels. */
@@ -1262,6 +1279,62 @@ final class DrawingPad extends View {
             }
         wrote(area);
         Log.i(ProbeActivity.TAG, "Area refresh (" + reason + "): " + area);
+    }
+    /**
+     * Inkwash: what a page turn leaves alone on the panel, raster {left, top, right, bottom} each: Zen Mode's open fan's
+     * shape ({@link ZenFan#mask}), so it stays as it is, no blink (the owner, 2026-11-07); null with the fan closed.
+     */
+    private java.util.List<int[]> zenFanKept() {
+        java.util.List<RectF> fan = app.zenFanMask();
+        Matrix fromPanel = new Matrix();
+        if (fan == null || !rasterToPanel().invert(fromPanel)) return null;
+        java.util.List<int[]> kept = new java.util.ArrayList<>();
+        for (RectF mapped : fan) {
+            fromPanel.mapRect(mapped);
+            Rect area = new Rect(); mapped.roundOut(area);
+            kept.add(new int[]{area.left, area.top, area.right, area.bottom});
+        }
+        return kept;
+    }
+    /**
+     * Inkwash: after a page turn that kept off Zen's open fan ({@link #zenFanKept}), the page put on the panel where the
+     * mask's steps reach past the fan's round paper (the owner, 2026-11-07: the old page's corners stayed there in steps
+     * round the arc): each step's parts beyond the paper's disc, from the page with the fan and what lies over it drawn
+     * in, so the fan's own pixels there go out unchanged.
+     */
+    private void zenFanRim() {
+        java.util.List<RectF> mask = app.zenFanMask();
+        float[] paper = app.zenPaper();
+        ZenFanView fan = app.zenFanView();
+        Matrix fromPanel = new Matrix();
+        if (mask == null || paper == null || fan == null || !rasterToPanel().invert(fromPanel)) return;
+        float cx = paper[0], cy = paper[1], r = paper[2];
+        java.util.List<Rect> parts = new java.util.ArrayList<>();
+        for (RectF m : mask) {
+            // The disc's width at the band's row nearest its edge: the band beyond that, either side, is past the paper.
+            float dy = Math.max(Math.abs(m.top - cy), Math.abs(m.bottom - cy));
+            float half = dy >= r ? 0 : (float) Math.sqrt(r * r - dy * dy);
+            for (RectF side : new RectF[]{new RectF(m.left, m.top, Math.min(m.right, cx - half), m.bottom), new RectF(Math.max(m.left, cx + half), m.top, m.right, m.bottom)}) {
+                if (side.width() <= 0 || side.height() <= 0) continue;
+                fromPanel.mapRect(side);
+                Rect area = new Rect(); side.roundOut(area);
+                if (area.intersect(0, 0, presented().getWidth(), presented().getHeight())) parts.add(area);
+            }
+        }
+        if (parts.isEmpty()) return;
+        Bitmap shown = presented().copy(Bitmap.Config.ARGB_8888, true);
+        Canvas canvas = new Canvas(shown);
+        Matrix toRaster = PanelCoordinates.fromView(fan);
+        toRaster.postConcat(fromPanel);
+        canvas.concat(toRaster);
+        canvas.clipRect(0, 0, fan.getWidth(), fan.getHeight());
+        fan.drawWithOver(canvas);
+        DirectEink rim = null;
+        try {
+            rim = DirectEink.forView(this, shown, viewportBitmap == null ? pageToView : new Matrix(), 0, 7);
+            for (Rect area : parts) if (rim.present(shown, area) >= 0) wrote(area);
+        } catch (RuntimeException | LinkageError error) { Log.w(ProbeActivity.TAG, "The fan's rim stays as it was", error); }
+        finally { if (rim != null) rim.close(); shown.recycle(); }
     }
     /** Inkwash: what every open popup (a menu, the tray, Words' bin) and Zen's open fan cover in the presented raster, {left, top, right, bottom} each, or null. */
     private java.util.List<int[]> covered() {
@@ -1574,8 +1647,8 @@ final class DrawingPad extends View {
     private int snapTool;
     /** The stroke snapped: the rest of the touch draws nothing more, and the lift finishes the clean stroke. */
     private boolean snapped;
-    /** A snapped line whose end the pen moved off ({@link #dragSnap}): the Shapes preview shows it, the lift draws it ({@link #liftSnapLine}). */
-    private HoldSnap snapLine;
+    /** A snapped shape the pen moved off ({@link #dragSnap}): the Shapes preview shows it following, the lift draws it ({@link #liftSnapDrag}). */
+    private HoldSnap snapDrag;
     /** While a snap draws again, nothing goes to the panel: the rough stroke's end and Undo and the clean stroke show as one update. */
     private boolean quietPanel;
     private final Runnable snapTick = this::snapTick;
@@ -1611,7 +1684,7 @@ final class DrawingPad extends View {
         } finally { quietPanel = false; }
         flush(true);
         snapped = true;
-        // A line's end may yet follow the pen (dragSnap).
+        // The shape may yet follow the pen (dragSnap).
         holdSnap = snap;
     }
     /** The pen's stroke finished and taken back ({@link WatercolorSession#takeBack}), the page shown without it on the next update. */
@@ -1631,35 +1704,38 @@ final class DrawingPad extends View {
         presentInput(false, -1);
     }
     /**
-     * The pen moved off a snapped line's end, still down: the brush's line is taken back as the rough stroke was, and
-     * the line from its start to the pen shows as a Shapes line does ({@link ShapePreview}, the panel's fast update, the
-     * slot's size and grey), its end following the pen ({@link #continueShape}). Redrawing the brush at every move is
-     * too slow for the panel (a wet brush's whole stroke each time); the lift draws it once ({@link #liftSnapLine}).
+     * The pen moved off a snapped shape, still down: the brush's shape is taken back as the rough stroke was, and the
+     * shape following the pen ({@link HoldSnap#follow}) shows as a Shapes shape does ({@link ShapePreview}, the panel's
+     * fast update, the slot's size and grey; {@link #continueShape}). Redrawing the brush at every move is too slow for
+     * the panel (a wet brush's whole stroke each time); the lift draws it once ({@link #liftSnapDrag}).
      */
     private void dragSnap() {
-        HoldSnap line = holdSnap;
+        HoldSnap snap = holdSnap;
         int id = pointer, tool = snapTool;
         float x = samplePoint[0], y = samplePoint[1];
         quietPanel = true;
         try { takeBackStroke(); } finally { quietPanel = false; }
-        snapLine = line; pointer = id;
+        snapDrag = snap; pointer = id;
         getParent().requestDisallowInterceptTouchEvent(true);
-        double[] start = line.to(x, y)[0];
         ToolSwatches.Look look = app.inkWash.look(tool);
+        int width = DrawLayout.shapeOutline(shapes, look.px).outlineWidth, page = document.width;
         samplePoint[0] = x; samplePoint[1] = y;
-        beginShape(DrawLayout.shapeOutline(shapes.shape(ToolSettings.Shape.LINE), look.px), ToolSwatches.tone(look.darkness), (float) start[0], (float) start[1]);
+        beginShape(new ShapePreview(document, ToolSwatches.tone(look.darkness), ShapeGeometry.PATH_ROW, (px, py, spans) -> {
+            HoldSnap.Shape s = snap.follow(px, py);
+            ShapeGeometry.path(s.x, s.y, width, page, spans);
+        }));
     }
-    /** The pen lifted from a dragged snapped line ({@link #dragSnap}): the preview gone and the line drawn by the brush to where it lifted, one update and one Undo step, as a snap. */
-    private void liftSnapLine() {
-        HoldSnap line = snapLine;
+    /** The pen lifted from a dragged snapped shape ({@link #dragSnap}): the preview gone and the shape drawn by the brush where it lifted, one update and one Undo step, as a snap. */
+    private void liftSnapDrag() {
+        HoldSnap snap = snapDrag;
         int id = pointer;
-        snapLine = null;
+        snapDrag = null;
         quietPanel = true;
         try {
             endFastPreview();
             renderShape(shapeStroke.cancel(display, viewportBitmap != null)); shapeStroke = null;
             renderShapeShown();
-            drawAgain(line.to(shapeX, shapeY), snapTool, id);
+            drawAgain(snap.to(shapeX, shapeY), snapTool, id);
         } finally { quietPanel = false; }
         if (!liftQuick()) finishStroke();
     }
@@ -1812,6 +1888,7 @@ final class DrawingPad extends View {
         if (direct == null || previewDirect != null) return;
         flush(true);
         ringDirect = StrokePanel.open(this, presented(), viewportBitmap == null ? pageToView : new Matrix());
+        fastPlaneUsed = true;
         if (ringDirect != null) presentRing();
     }
     /**
@@ -1926,9 +2003,9 @@ final class DrawingPad extends View {
         return true;
     }
     private void sampleEvent(MotionEvent event, int pointerIndex, int history) {
-        // Snapped: the pen held on draws nothing more; moved off a line's end, the end follows it (dragSnap).
+        // Snapped: the pen held on draws nothing more; moved off its rest, the shape follows it (dragSnap).
         if (snapped) {
-            if (history < 0 && holdSnap != null && holdSnap.line()) {
+            if (history < 0 && holdSnap != null) {
                 pagePoint(event.getX(pointerIndex), event.getY(pointerIndex));
                 if (holdSnap.moved(samplePoint[0], samplePoint[1])) dragSnap();
             }
@@ -1974,7 +2051,7 @@ final class DrawingPad extends View {
 
     /** Ends or cancels whatever gesture is running, committing finished work. */
     void finishStroke() {
-        holdSnap = null; snapLine = null; snapped = false; removeCallbacks(snapTick);
+        holdSnap = null; snapDrag = null; snapped = false; removeCallbacks(snapTick);
         // The pen lifted, a tool or size changed, or a panel opens: hovering brings the ring back, worked out again.
         hideOutline(); hoverTool = -1;
         if (navigating) touchBlocked = true;
@@ -2117,14 +2194,14 @@ final class DrawingPad extends View {
         ToolSwatches.Look look = app.inkWash.shape(document);
         pointer = id;
         getParent().requestDisallowInterceptTouchEvent(true);
-        beginShape(DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness), samplePoint[0], samplePoint[1]);
+        beginShape(new ShapePreview(document, DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness), samplePoint[0], samplePoint[1]));
         return true;
     }
-    /** A shape from {@code x, y} to the pen ({@link #samplePoint}), shown until the lift. */
-    private void beginShape(ToolSettings settings, int shade, float x, float y) {
+    /** A shape {@code preview} with the pen at {@link #samplePoint}, shown until the lift. */
+    private void beginShape(ShapePreview preview) {
         renderDirty(); shapeShown.setEmpty();
         shapeX = samplePoint[0]; shapeY = samplePoint[1];
-        shapeStroke = new ShapePreview(document, settings, shade, x, y);
+        shapeStroke = preview;
         beginFastPreview(); drawPreviewFrame();
     }
     private void continueShape(MotionEvent event) {
@@ -2138,7 +2215,7 @@ final class DrawingPad extends View {
         }
         if (!up) return;
         drawPreviewFrame();
-        if (snapLine != null) { liftSnapLine(); return; }
+        if (snapDrag != null) { liftSnapDrag(); return; }
         endFastPreview();
         StrokeLog.Shape logged = shapeStroke.logged(shapeX, shapeY);
         boolean changed = shapeStroke.finish(); shapeStroke = null; pointer = -1;

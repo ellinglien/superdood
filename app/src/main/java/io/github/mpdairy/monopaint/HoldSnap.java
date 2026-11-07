@@ -10,7 +10,8 @@ import java.util.List;
  * oval, a polygon (a box squared), or an open run of straight lines. The pad draws it again with the same brush along
  * the clean path ({@link #along}): each rough sample's pressure, tilt and time go to the point the same share of the
  * way along, so a charcoal line is still charcoal and a watercolour oval still a watercolour oval. When unsure, nothing
- * snaps. A pause shorter than the hold never asks. A line's end then follows the pen until it lifts ({@link #to}).
+ * snaps. A pause shorter than the hold never asks. The shape then follows the pen until it lifts ({@link #to}), as
+ * QuickShape's: a line's or an arc's end, a polyline's last point; a closed shape scaled and turned about its centre.
  * Pure: {@link DrawingPad} feeds it the pen's samples and asks at its ticks; checked on the desktop ({@code HoldSnapChecks}).
  */
 final class HoldSnap {
@@ -64,11 +65,11 @@ final class HoldSnap {
     private int n;
     private final double zoom;
     /** Where the pen came to rest, since when, the sample then; the rest already asked about. */
-    private double ax, ay;
+    double ax, ay;
     private long anchorT = PenSpeed.UNTIMED, asked = PenSpeed.UNTIMED;
     private int anchorK;
-    /** The last snap's shape, null for none, and how many samples it carried: a line's end may move yet ({@link #to}). */
-    private Shape snapped;
+    /** The last snap's shape, null for none, and how many samples it carried: it may follow the pen yet ({@link #to}). */
+    Shape snapped;
     private int carried;
 
     /** {@code zoom}: glass px a page px, as {@link DrawingStroke#zoom}. */
@@ -99,16 +100,40 @@ final class HoldSnap {
         snapped = s; carried = k;
         return s == null ? null : along(s, x, y, p, tx, ty, t, k);
     }
-    /** Whether the last snap made a line, whose end follows the pen while it stays down ({@link #to}). */
-    boolean line() { return snapped != null && snapped.kind == Kind.LINE; }
     /** Whether {@code x, y} (page px) is off the pen's rest, as {@link #sample} tells a moving pen from a still one. */
     boolean moved(double x, double y) { return Math.hypot(x - ax, y - ay) * zoom > STILL_PX; }
     /**
-     * The snapped line ({@link #line}) from its start to {@code x, y} instead: the same samples carried along it, each the
-     * same share of the way ({@link #along}), so the brush's pressure, tilt and time go with the line wherever it turns.
+     * The snapped shape following the pen to {@code x, y} ({@link #follow}): the same samples carried along it, each the
+     * same share of the way ({@link #along}), so the brush's pressure, tilt and time go with the shape wherever it turns.
      */
-    double[][] to(double x, double y) {
-        return along(new Shape(Kind.LINE, new double[]{snapped.x[0], x}, new double[]{snapped.y[0], y}, true), this.x, this.y, p, tx, ty, t, carried);
+    double[][] to(double x, double y) { return along(follow(x, y), this.x, this.y, p, tx, ty, t, carried); }
+    /**
+     * The snapped shape with the pen at {@code x, y}: a polyline's last point there; a line or an arc turned and scaled
+     * about its start so its end is there (an arc's bulge kept in proportion); a closed shape turned and scaled about its
+     * centre (its box's) so the point the pen rested on is there, a circle still a circle.
+     */
+    Shape follow(double x, double y) {
+        Shape s = snapped;
+        int m = s.x.length;
+        double[] fx = s.x.clone(), fy = s.y.clone();
+        if (s.kind == Kind.POLYLINE) { fx[m - 1] = x; fy[m - 1] = y; return new Shape(s.kind, fx, fy, s.sharp); }
+        // Fixed point o, and the point f that goes to the pen.
+        double ox, oy, f0, f1;
+        if (s.kind == Kind.LINE || s.kind == Kind.ARC) { ox = fx[0]; oy = fy[0]; f0 = fx[m - 1]; f1 = fy[m - 1]; }
+        else {
+            double x0 = fx[0], x1 = fx[0], y0 = fy[0], y1 = fy[0];
+            for (int i = 1; i < m; i++) { x0 = Math.min(x0, fx[i]); x1 = Math.max(x1, fx[i]); y0 = Math.min(y0, fy[i]); y1 = Math.max(y1, fy[i]); }
+            ox = (x0 + x1) / 2; oy = (y0 + y1) / 2; f0 = ax; f1 = ay;
+        }
+        // Each point z goes to o + (z - o)(pen - o)/(f - o), as complex numbers: one turn and one scale.
+        double ux = f0 - ox, uy = f1 - oy, d = ux * ux + uy * uy, vx = x - ox, vy = y - oy;
+        if (d == 0) return s;
+        double re = (vx * ux + vy * uy) / d, im = (vy * ux - vx * uy) / d;
+        for (int i = 0; i < m; i++) {
+            double dx = s.x[i] - ox, dy = s.y[i] - oy;
+            fx[i] = ox + dx * re - dy * im; fy[i] = oy + dx * im + dy * re;
+        }
+        return new Shape(s.kind, fx, fy, s.sharp);
     }
 
     // ---- recognition ----

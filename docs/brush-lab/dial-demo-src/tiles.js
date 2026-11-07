@@ -25,7 +25,8 @@ const AFTER = [0, 500, 1000, 2000, 4000, 8000];
 const SLOW = { medium: ["wash", { wet: .95, pool: .3, bloom: .3 }], paper: ["cold press", { tooth: .6 }] };
 // Float's tiles in ink: a wash's drops fill the tile.
 const FLOAT = { medium: ["ink"], paper: ["plain"] };
-const SCREENED = v => ({ medium: ["ink", { screen: v }], tip: ["round", { weight: 1.5 }] });
+// A screen prints a tone as dots or lines, so its tiles draw mid grey: at full black the pattern is solid and shows nothing.
+const SCREENED = v => ({ shade: .5, base: { medium: ["ink", { screen: v }], tip: ["round", { weight: 1.5 }] } });
 const SETUP = {
   "tip.soft": { base: { medium: WET_WASH } },
   "tip.flick": { pace: "fast" },
@@ -55,12 +56,12 @@ const SETUP = {
   "medium.chaos": { base: { medium: ["ink", { wet: .6 }] } },
   "medium.erase": { rub: true, base: { tip: ["round", { weight: 1.5 }] } },
   "medium.blend": { base: { tip: ["round", { weight: 1.5 }] } },
-  "medium.screen": { base: SCREENED(0) },
-  "medium.cell": { base: SCREENED(1) },
-  "medium.sangle": { base: SCREENED(2) },
-  "medium.mis": { base: SCREENED(1) },
-  "medium.gain": { base: SCREENED(1) },
-  "medium.uneven": { base: SCREENED(1) },
+  "medium.screen": SCREENED(0),
+  "medium.cell": SCREENED(1),
+  "medium.sangle": SCREENED(2),
+  "medium.mis": SCREENED(1),
+  "medium.gain": SCREENED(1),
+  "medium.uneven": SCREENED(1),
   "medium.fling": { pace: "stop" },
   "medium.cover": { shade: .25 }, "medium.impasto": { shade: .25 }, "medium:cover": { shade: .25 },
   "medium:wash": { base: { tip: ["round", { soft: .3 }] } },

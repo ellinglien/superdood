@@ -95,6 +95,9 @@ final class WetIndicator extends View {
         setContentDescription(WetLook.said(shown));
     }
     @Override protected void onDetachedFromWindow() { super.onDetachedFromWindow(); removeCallbacks(sync); removeCallbacks(blow); blowing = -1; }
+    /** In Zen Mode's fan: drawn in its grey ({@link ZenFanView#greyed}). */
+    boolean greyed;
+    @Override public void draw(Canvas canvas) { ZenFanView.greyed(canvas, greyed, super::draw); }
     @Override protected void onDraw(Canvas canvas) {
         canvas.drawColor(Theme.PAPER);
         if (blowing >= 0) {

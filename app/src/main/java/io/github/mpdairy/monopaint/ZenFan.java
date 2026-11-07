@@ -3,32 +3,43 @@ package io.github.mpdairy.monopaint;
 /**
  * Zen Mode's fan (the owner's sketch and mockup, 2026-11-04): a quarter circle whose point sits {@link #corner} up and in
  * from Zen Mode's icon ({@link DrawLayout#zenCell}), where the X that leaves Zen is ({@link #LEAVE}), just outside the
- * point. The quarter is split along its diagonal (the point to the arc's middle) by a white gap {@link #BAND} wide into
- * two wedges: along the side edge the size ({@link #SIZE}, white, broader further from the point, its marker on the
- * side edge where the wedge is as wide as the line, {@link #sizeUp}), along the foot the grey ({@link #SHADE}, white at the point to black at its arc, its marker on the foot).
- * Past the wedges a white band as wide as the gap, then a thin arc ({@link #LINE}); just outside it the column's tools
+ * point. Its two wedges lie in the quarter's upper part, from the side edge to {@link #LOW} degrees (the owner's sketch,
+ * 2026-11-07: "the two wedges are limited to the first quarter of the space they both occupy now"), split along {@link
+ * #SPLIT} degrees by a white gap {@link #CLEAR} wide: along the side edge the size ({@link #SIZE}, white, broader further
+ * from the point, its marker on the side edge where the wedge is as wide as the line, {@link #sizeUp}), then the grey
+ * ({@link #SHADE}, white at the point to black at its arc, its marker beside its lower edge). Past the wedges, as far
+ * from them as they are from each other ("equidistant"), a ring of the page bar's previews, the page drawn on with its
+ * tab ({@link #PAGES}, {@link #preview}; "the same size page previews from the top bar, with the same marker"), then as
+ * far again the thin arc ({@link #LINE}); under the wedges, along the foot, the column's Dropper, Lasso, droplet and
+ * layer button in a row, and Zoom over them ({@link #cell}). Just outside the arc the column's tools
  * stand out in its order from the side edge (the slots, then Fill in, Smudge and Eraser), each its own sector. The gap
  * hits nothing ({@link #NONE}). Only a tap on Zen's circle ({@link #LEAVE}) closes it, a hold there leaves Zen Mode
- * (the owner, 2026-11-06: "Keep tray open when drawing - press to close"; picking a tool keeps it open, 2026-11-04);
- * the column's Lasso, droplet and layer button in the gap ({@link #cell}). Mirrored from the bottom-right corner with the column on the right. Sizes and greys are the
+ * (the owner, 2026-11-06: "Keep tray open when drawing - press to close"; picking a tool keeps it open, 2026-11-04).
+ * Mirrored from the bottom-right corner with the column on the right. Sizes and greys are the
  * toolbar's own steps ({@link ToolSwatches#sizeAt}, {@link ShadeStrip}). All in dp, screen coordinates (y down). Pure,
  * checked on the desktop ({@code ZenFanChecks}); the browser's too, through the engine.
  */
 final class ZenFan {
-    /** What a point is over ({@link #hit}): these, or a tool ({@code 0..slots-1}, {@link ToolSlots#FILL}, {@link ToolSlots#SMUDGE}, {@link ToolSlots#ERASER}). */
-    static final int OUTSIDE = -1, SIZE = -2, SHADE = -3, LEAVE = -4, NONE = -5;
+    /** What a point is over ({@link #hit}): these, the ring's previews ({@link #PAGES}, which one {@link #preview}), or a tool ({@code 0..slots-1}, {@link ToolSlots#FILL}, {@link ToolSlots#SMUDGE}, {@link ToolSlots#ERASER}). */
+    static final int OUTSIDE = -1, SIZE = -2, SHADE = -3, LEAVE = -4, NONE = -5, PAGES = -6, PREVIOUS = -7, NEXT = -8, ZOOM = -9;
     /**
      * dp (160 an inch, 63 a centimetre, as {@link DrawLayout#ZEN_ROOM}), the owner's mockup (2026-11-04) at 4.7 cm
      * across (3 cm, "the whole fan, tools included", then a quarter larger twice: "i think it can be enlarged a bit...
-     * maybe by 25%?", "another 25% larger i think. they're a bit teeny for finger use"): the X's radius (a 56 dp target, not scaled); the wedges' radius; the white between the wedges and between
-     * them and the thin arc (the owner: equidistant), as wide as the thin arc's top end is from the screen's edge on the
-     * Manta, 60 dp (the owner, 2026-11-06: "i would like to increase it so that that space equals the width of the space
-     * from the end of the top arc on the top left to the screen edge"; 31 until then, the wedges 212 dp, the tools kept
-     * where they were; the room for the layer button, the droplet and the Lasso in the gap, {@link #cell}); the thin
-     * arc's radius; the tools' outer reach; how far past it a tool still takes a tap; the room beside each wedge's edge
-     * for its marker, which takes the pen too.
+     * maybe by 25%?", "another 25% larger i think. they're a bit teeny for finger use"): the X's radius (a 56 dp target,
+     * not scaled); the thin arc's radius, as far from the screen's edge on the Manta as its top end (60 dp, the owner,
+     * 2026-11-06); the one white space the fan keeps between its wedges, between them and the ring of previews, and
+     * between the ring and the arc (the owner, 2026-11-07: "wedges are equidistant from each other and the outer arc");
+     * the tools' outer reach; how far past it a tool still takes a tap; the room beside each wedge's edge for its marker,
+     * which takes the pen too.
      */
-    static final float LEAVE_R = 28, WEDGE = 183, BAND = 60, LINE = WEDGE + BAND, OUTER = 295, REACH = 19, MARK_ROOM = 19;
+    static final float LEAVE_R = 28, LINE = 243, CLEAR = 14, OUTER = 295, REACH = 19, MARK_ROOM = 19;
+    /** A preview in the ring, dp: the page bar's on the Manta ({@link DrawLayout#ROOMY_PREVIEW_WIDTH}), its gap, and its tab's room under it. */
+    static final float PREVIEW_W = DrawLayout.ROOMY_PREVIEW_WIDTH, PREVIEW_H = DrawLayout.ROOMY_PREVIEW_HEIGHT, PREVIEW_GAP = DrawLayout.ROOMY_PREVIEW_GAP,
+            PREVIEW_TAB = DrawLayout.STRIP_TAB_GAP + DrawLayout.STRIP_TAB;
+    /** The ring's previews' middles' radius, dp, their tops {@link #CLEAR} inside the arc; the wedges' radius, {@link #CLEAR} inside the tabs; the band between them and the arc. */
+    static final float RING = LINE - CLEAR - PREVIEW_H / 2, WEDGE = RING - PREVIEW_H / 2 - PREVIEW_TAB - CLEAR, BAND = LINE - WEDGE;
+    /** Degrees from the side edge: the gap's middle between the wedges, and the grey wedge's lower edge, the row and Zoom under it (the owner's sketch). */
+    static final double SPLIT = 26, LOW = 52;
     /**
      * dp: a tool's picture's length out from the arc, its butt on the arc (the owner, 2026-11-04: no gap), the Eraser's
      * {@link #ERASER_GAP} out; the selected one's bar {@link #MARK_GAP} past its tip, as the column's side bar, {@link
@@ -88,16 +99,34 @@ final class ZenFan {
 
     /** ({@code sx}, {@code sy}) from the point: {out along the foot toward the screen's middle, up the side edge}. */
     private float[] local(float sx, float sy) { return new float[]{right ? px - sx : sx - px, py - sy}; }
-    /** Each wedge's corner, dp from the point along its edge: where the gap's side meets it. */
-    static float wedgeStart() { return BAND / (float) Math.sqrt(2); }
-    /** Where the size wedge's arc meets the gap, dp from the point: {out, up}; the grey wedge's is the same turned, {up, out}. */
+    /** The gap's half width, dp, and its middle's direction's sine and cosine. */
+    private static final double HALF = CLEAR / 2, SIN = Math.sin(Math.toRadians(SPLIT)), COS = Math.cos(Math.toRadians(SPLIT));
+    /** The size wedge's corner, dp up the side edge from the point: where the gap's side meets it. */
+    static float wedgeStart() { return (float) (HALF / SIN); }
+    /** The grey wedge's corner, dp out along its lower edge from the point. */
+    static float greyStart() { return (float) (HALF / Math.sin(Math.toRadians(LOW - SPLIT))); }
+    /** Where the size wedge's arc meets the gap, dp from the point: {out, up}. */
     static float[] wedgeEnd() {
-        float c = wedgeStart(), out = (float) (-c + Math.sqrt(2 * WEDGE * WEDGE - c * c)) / 2;
-        return new float[]{out, out + c};
+        double t = Math.sqrt(WEDGE * WEDGE - HALF * HALF);
+        return new float[]{(float) (t * SIN - HALF * COS), (float) (t * COS + HALF * SIN)};
+    }
+    /** Where the grey wedge's arc meets the gap, dp from the point: {out, up}. */
+    static float[] greyEnd() {
+        double t = Math.sqrt(WEDGE * WEDGE - HALF * HALF);
+        return new float[]{(float) (t * SIN + HALF * COS), (float) (t * COS - HALF * SIN)};
+    }
+    /** How far ({@code out}, {@code up}) is from the ray {@code degrees} from the side edge, dp, toward the foot. */
+    private static double below(double out, double up, double degrees) {
+        double a = Math.toRadians(degrees);
+        return out * Math.cos(a) - up * Math.sin(a);
     }
 
     /** What ({@code sx}, {@code sy}) is over: {@link #LEAVE}, {@link #SIZE}, {@link #SHADE}, a tool, {@link #NONE} or {@link #OUTSIDE}. */
-    int hit(float sx, float sy) { return Math.hypot(sx - x, sy - y) < LEAVE_R ? LEAVE : fanHit(sx, sy); }
+    int hit(float sx, float sy) {
+        if (Math.hypot(sx - x, sy - y) < LEAVE_R) return LEAVE;
+        int strip = stripHit(sx, sy);
+        return strip != OUTSIDE ? strip : fanHit(sx, sy);
+    }
     /** As {@link #hit} but for the X: the fan's own parts. */
     int fanHit(float sx, float sy) {
         float[] p = local(sx, sy);
@@ -107,12 +136,25 @@ final class ZenFan {
         // Beside the quarter's edges, only the wedges' marker rooms; the tools take a tap a little past their pictures, the nearest by angle.
         boolean behind = dx < 0 || dy < 0;
         if (r >= LINE) return behind ? OUTSIDE : tool(Math.min(items() - 1, (int) (Math.toDegrees(Math.atan2(dx, dy)) * items() / 90)));
-        if (r > WEDGE) return behind ? OUTSIDE : NONE;
-        // Across the diagonal, dp: the gap's half each side of it hits nothing.
-        double off = (dy - dx) / Math.sqrt(2);
-        if (Math.abs(off) < BAND / 2) return NONE;
-        if (off > 0) return dy < 0 ? OUTSIDE : SIZE;
-        return dx < 0 ? OUTSIDE : SHADE;
+        // The ring: its previews, their tabs and a little white each side.
+        if (r > WEDGE) return behind ? OUTSIDE : r >= WEDGE + CLEAR / 2 ? PAGES : NONE;
+        // Across the gap's middle, dp: its half each side hits nothing.
+        double off = below(dx, dy, SPLIT);
+        if (Math.abs(off) < HALF) return NONE;
+        // Short of each wedge's corner, nothing (the X's target is there).
+        if (off < 0) return dy < 0 ? OUTSIDE : dy < wedgeStart() ? NONE : SIZE;
+        if (dy < 0) return OUTSIDE;
+        // Under the grey wedge: its marker's room beside its lower edge, then the row's (its buttons take their own touches).
+        return r >= greyStart() && below(dx, dy, LOW) < MARK_ROOM ? SHADE : NONE;
+    }
+    /** How many previews the ring holds: as many as the page bar's spacing fits round it. */
+    static int previews() { return (int) ((Math.PI / 2 * RING + PREVIEW_GAP) / (PREVIEW_W + PREVIEW_GAP)); }
+    /** Preview {@code slot}'s middle, degrees from the side edge: the window's first next to it. */
+    static double previewAngle(int slot) { return (slot + .5) * 90 / previews(); }
+    /** The ring's preview nearest ({@code sx}, {@code sy}) by angle: the ring is one target, as the bar's strip is. */
+    int preview(float sx, float sy) {
+        float[] p = local(sx, sy);
+        return Math.max(0, Math.min(previews() - 1, (int) (Math.toDegrees(Math.atan2(p[0], p[1])) * previews() / 90)));
     }
 
     /** Page px a dp: both tablets' 300 dpi panels at 160 dp an inch, so a line's page px at 100% are its screen px. */
@@ -122,7 +164,7 @@ final class ZenFan {
      * arc past its widest ({@link #wedgeEnd}). Its marker reads as the line's width there (the owner, 2026-11-04: "it
      * indicates the size of the tool... so it should be closer to the size actually shown").
      */
-    static double width(double up) { return up <= wedgeStart() || up >= WEDGE ? 0 : Math.min(up - wedgeStart(), Math.sqrt(WEDGE * WEDGE - up * up)); }
+    static double width(double up) { return up <= wedgeStart() || up >= WEDGE ? 0 : Math.min((up - wedgeStart()) * SIN / COS, Math.sqrt(WEDGE * WEDGE - up * up)); }
     /** The broadest line the wedge shows true, page px: its width where widest. */
     static double truest() { return wedgeEnd()[0] * PAGE_PX; }
     /**
@@ -132,19 +174,19 @@ final class ZenFan {
      */
     static float sizeUp(double px) {
         double most = truest(), top = wedgeEnd()[1];
-        if (px <= most) return (float) (wedgeStart() + Math.max(0, px) / PAGE_PX);
+        if (px <= most) return (float) (wedgeStart() + Math.max(0, px) / PAGE_PX * COS / SIN);
         return (float) (top + (WEDGE - top) * Math.min(1, Math.log(px / most) / Math.log(ModularSizes.MAX / most)));
     }
     /** The size at ({@code sx}, {@code sy}), page px: {@link #sizeUp}'s inverse at its height, to the toolbar slider's nearest step ({@link ToolSwatches#sizeAt}). */
     double size(float sx, float sy) {
         double up = Math.min(WEDGE, local(sx, sy)[1]), most = truest(), top = wedgeEnd()[1];
-        double px = up <= top ? (up - wedgeStart()) * PAGE_PX : most * Math.pow(ModularSizes.MAX / most, (up - top) / (WEDGE - top));
+        double px = up <= top ? (up - wedgeStart()) * SIN / COS * PAGE_PX : most * Math.pow(ModularSizes.MAX / most, (up - top) / (WEDGE - top));
         // At the wedge's corner and below it, the finest: a floor, so the finest sizes stay a tap away.
         return ToolSwatches.sizeAt(ToolSwatches.position(Math.max(ModularSizes.MIN, px)));
     }
 
     /** The grey wedge's length, dp, and its solid ends' ({@link ShadeStrip#endpoint}). */
-    private int length() { return Math.round(WEDGE - wedgeStart()); }
+    private int length() { return Math.round(WEDGE - greyStart()); }
     private int endpoint() { return ShadeStrip.endpoint(length(), ShadeStrip.END); }
     /** The grey at ({@code sx}, {@code sy}), darkness 0–1: the toolbar strip's {@link ShadeStrip#LEVELS} steps, white at the wedge's corner to black at its arc. */
     double darkness(float sx, float sy) {
@@ -152,9 +194,9 @@ final class ZenFan {
         return darknessAt(Math.hypot(p[0], p[1]));
     }
     /** The grey {@code r} dp from the point, darkness 0–1 (the grey wedge's fill). */
-    double darknessAt(double r) { return DrawLayout.shadeAt((float) r, wedgeStart(), length(), endpoint()); }
-    /** Where grey {@code darkness}'s marker sits, dp from the point along the foot. */
-    float shadeRadius(double darkness) { return wedgeStart() + length() - ShadeStrip.markerAt(ToolSwatches.tone(darkness), length(), endpoint()); }
+    double darknessAt(double r) { return DrawLayout.shadeAt((float) r, greyStart(), length(), endpoint()); }
+    /** Where grey {@code darkness}'s marker sits, dp from the point along the wedge's lower edge. */
+    float shadeRadius(double darkness) { return greyStart() + length() - ShadeStrip.markerAt(ToolSwatches.tone(darkness), length(), endpoint()); }
 
     /** The screen point {@code r} dp from the fan's point at {@code degrees} from the side edge toward the foot: {x, y}. */
     float[] point(float r, double degrees) {
@@ -162,28 +204,81 @@ final class ZenFan {
         return new float[]{px + (right ? -1 : 1) * (float) (r * Math.sin(a)), py - (float) (r * Math.cos(a))};
     }
     /**
-     * The column's buttons in the gap between the wedges, lent while the fan is open ({@code InkWashBar.lend}; the owner,
-     * 2026-11-06: "the key change was putting the layers, droplet and lasso between the two wedges, with the new space
-     * you're making"; beside the dot or along the foot earlier that day, two strips that morning): out from the point,
-     * the Lasso, the droplet and the layer button (the owner's mockup; the layer button first until zen-fan-5), each a square centred on the diagonal ({@link #side}), {@link #STEP}
-     * apart, their corners inside the gap ({@link #BAND}), the layer button's outer corner inside the wedges' radius (the owner,
-     * 2026-11-06: "so it doesn't go out beyond where the arcs of the two wedges would connect"; 48, 114 and 180 dp out
-     * until then).
+     * The column's buttons lent while the fan is open ({@code InkWashBar.lend}): under the grey wedge, a row along the
+     * foot, the arc's end's line, Menu, the Dropper, the Lasso and the droplet (the owner, 2026-11-07: "below, aligned in a
+     * line aligned with the end of the outer arc, a row of tools"; Menu first, "the same icon (three lines) as the top
+     * dropdown menu... to the left of the eye dropper", the fan the app's way in; in the gap between the wedges from 2026-11-06), the layer
+     * button over its outer end (the owner, 2026-11-07: "remove the lock and zoom level and place the layers picker where
+     * that was. spread out the other icons below").
      */
-    static final int LASSO = 0, WET = 1, LAYERS = 2, CELLS = 3;
+    static final int MENU = 0, DROPPER = 1, LASSO = 2, WET = 3, LAYERS = 4, TOOL_LINE = 5, CELLS = 6;
     /**
-     * dp: a cell's side, what the gap holds with a little white each side ({@code CELL * sqrt 2 < BAND}); the layer
-     * button's, 85% of it (the owner: "can the layers picker be a bit smaller, like 85% what it is now? to match the
-     * droplet and lasso"); the first cell's middle out from the point, and the next ones'.
+     * dp: the droplet's cell's side, the icons smaller than the column's (the owner, 2026-11-07: "the icons need to be
+     * smaller"); Menu's, the Dropper's and the Lasso's, a little larger ("SLIGHTLY larger as well, but very tiny amount"); the
+     * layer button's ("the layers is a little too small", then "a tiny bit bigger"); the first cell's middle out along
+     * the foot; the layer button's foot up from the foot, just over the row.
      */
-    static final float CELL = 40, LAYERS_SIDE = .85f * CELL, FIRST = 40, STEP = 57;
-    /** Cell {@code cell}'s side, dp. */
-    static float side(int cell) { return cell == LAYERS ? LAYERS_SIDE : CELL; }
+    static final float CELL = 26, PICKER = 28, LAYERS_SIDE = 38, FIRST = 58, LAYERS_FOOT = PICKER + 2;
+    /** Cell {@code cell}'s size, dp: {wide, high}. */
+    static float[] side(int cell) {
+        float side = cell == LAYERS ? LAYERS_SIDE : cell == WET ? CELL : PICKER;
+        return new float[]{side, side};
+    }
+    /** How far out a box {@code wide} by {@code high} dp, its foot {@code foot} dp up, has its middle when its far top corner is at the wedges' radius. */
+    private static float reaching(float wide, float high, float foot) { return (float) Math.sqrt(WEDGE * WEDGE - (foot + high) * (foot + high)) - wide / 2; }
+    /**
+     * Cell {@code cell}'s middle, dp from the point: {out, up}. The row's feet on the foot's line, its last with its far
+     * corner on the wedges' radius, so as far inside the ring as the ring is inside the arc (the owner, 2026-11-07: "equal
+     * distance from the top of the page previews to the outer arc as to the icons nestled underneath the pages"), the
+     * row's others evenly between; the layer button over the row midway between the Lasso and the droplet ("roughly in
+     * the middle of the lasso and droplet").
+     */
+    static float[] middle(int cell) {
+        if (cell == LAYERS) return new float[]{(middle(LASSO)[0] + middle(WET)[0]) / 2, LAYERS_FOOT + LAYERS_SIDE / 2};
+        float last = reaching(CELL, CELL, 0);
+        return new float[]{FIRST + cell * (last - FIRST) / WET, side(cell)[1] / 2};
+    }
+    /**
+     * The brush line's place while the fan is open ({@link #TOOL_LINE}; the owner, 2026-11-07: "the space directly to the
+     * right of the middle of the stroke preview for text about the current tool... also where any alerts or updates
+     * should show"): level with the X's middle, from the X's target to under the arc's foot end, the line's height; screen
+     * dp {left, top, right, bottom}, mirrored.
+     */
+    float[] line() {
+        float near = LEAVE_R, far = corner + LINE, half = DrawLayout.BRUSH_LINE / 2f;
+        return right ? new float[]{x - far, y - half, x - near, y + half} : new float[]{x + near, y - half, x + far, y + half};
+    }
+    /**
+     * The page strip along the fan's side edge (the owner, 2026-11-07: "rotated -90 degrees along the left side of the fan,
+     * aligned with the preview stroke, put in the page controls, lock and zoom amount"): {@link #STRIP} dp across, its
+     * middle the X's, from {@link #CLEAR} past the X's target up to the arc's top end; read upward, the page bar's ‹, the
+     * page and its count, ›, and at its top end Zoom (its padlock and percentage). Screen dp {left, top, right, bottom}.
+     */
+    static final float STRIP = 28;
+    float[] strip() { return new float[]{x - STRIP / 2, py - LINE, x + STRIP / 2, y - LEAVE_R - CLEAR}; }
+    /** An arrow's room along the strip, dp: the bar's caret and a little each side (the bar's 32 dp don't fit the strip). */
+    static final float STRIP_ARROW = 28;
+    /** The strip's parts' lengths along it from its foot, dp: ‹, the page and its count, ›, then Zoom at its top end, the number and Zoom without the bar's padding. */
+    static float[] stripParts() {
+        return new float[]{STRIP_ARROW, DrawLayout.pageNumber() - 2 * DrawLayout.PAGE_NUMBER_PAD, STRIP_ARROW, DrawLayout.zoomButton() - 2 * DrawLayout.ZOOM_PAD};
+    }
+    /** What ({@code sx}, {@code sy}) is over on the strip: {@link #PREVIOUS}, {@link #NEXT}, {@link #ZOOM}, {@link #NONE} (the page's words), or {@link #OUTSIDE}. */
+    int stripHit(float sx, float sy) {
+        float[] s = strip(), parts = stripParts();
+        if (sx < s[0] || sx > s[2] || sy < s[1] || sy > s[3]) return OUTSIDE;
+        float along = s[3] - sy;
+        if (along < parts[0]) return PREVIOUS;
+        if (along < parts[0] + parts[1]) return NONE;
+        if (along < parts[0] + parts[1] + parts[2]) return NEXT;
+        return along >= s[3] - s[1] - parts[3] ? ZOOM : NONE;
+    }
+
     /** Cell {@code cell}'s box on the screen, dp: {left, top, right, bottom}; mirrored with the column on the right. */
     float[] cell(int cell) {
-        float[] middle = point(FIRST + cell * STEP, 45);
-        float half = side(cell) / 2;
-        return new float[]{middle[0] - half, middle[1] - half, middle[0] + half, middle[1] + half};
+        if (cell == TOOL_LINE) return line();
+        float[] m = middle(cell), size = side(cell);
+        float cx = right ? px - m[0] : px + m[0], cy = py - m[1];
+        return new float[]{cx - size[0] / 2, cy - size[1] / 2, cx + size[0] / 2, cy + size[1] / 2};
     }
     /** How many steps each side of the X's row the paper's disc is stepped into for the mask ({@link #mask}). */
     static final int STEPS = 8;
@@ -195,26 +290,27 @@ final class ZenFan {
      */
     java.util.List<float[]> mask() {
         java.util.List<float[]> mask = new java.util.ArrayList<>();
-        float r = backdrop();
+        float r = paper();
         for (int k = 0; k < STEPS; k++) {
             double near = Math.toRadians(90.0 * (k + 1) / STEPS), far = Math.toRadians(90.0 * k / STEPS);
             float wide = (float) (r * Math.sin(near)), from = (float) (r * Math.cos(near)), to = (float) (r * Math.cos(far));
             for (int side = -1; side <= 1; side += 2) {
-                float top = side < 0 ? y - to : y + from, bottom = side < 0 ? y - from : y + to;
-                float[] step = {Math.max(0, x - wide), Math.max(0, top), Math.min(width, x + wide), Math.min(height, bottom)};
+                float top = side < 0 ? py - to : py + from, bottom = side < 0 ? py - from : py + to;
+                float[] step = {Math.max(0, px - wide), Math.max(0, top), Math.min(width, px + wide), Math.min(height, bottom)};
                 if (step[0] < step[2] && step[1] < step[3]) mask.add(step);
             }
         }
         for (int i = 0; i < CELLS; i++) mask.add(cell(i));
+        mask.add(strip()); mask.add(dot());
         return mask;
     }
     /** The dot over the X while the fan is open ({@code PaintActivity.showZenDot}): the X's target's square, dp {left, top, right, bottom}. */
     float[] dot() { return new float[]{x - LEAVE_R, y - LEAVE_R, x + LEAVE_R, y + LEAVE_R}; }
 
-    /** All it covers on the screen, dp: {left, top, right, bottom}: the paper's disc and the line (the fast display keeps off it all). */
+    /** All it draws or takes a touch on, dp: {left, top, right, bottom}: round its point out to its tools' reach, the line and its cells. */
     float[] bounds() {
-        float r = backdrop();
-        float[] box = {Math.max(0, x - r), Math.max(0, y - r), Math.min(width, x + r), Math.min(height, y + r)};
+        float r = OUTER + REACH;
+        float[] box = {Math.max(0, px - r), Math.max(0, py - r), Math.min(width, px + r), Math.min(height, py + r)};
         for (int i = 0; i < CELLS; i++) {
             float[] c = cell(i);
             box[0] = Math.min(box[0], c[0]); box[1] = Math.min(box[1], c[1]); box[2] = Math.max(box[2], c[2]); box[3] = Math.max(box[3], c[3]);
@@ -222,9 +318,10 @@ final class ZenFan {
         return box;
     }
     /**
-     * The paper under the open fan, a disc round the X out past the tools' reach, dp (the owner, 2026-11-04: "when fan is
-     * open, maybe obscure outward from the circle, hide the drawings underneath temporarily"): the page under the fan,
-     * between its tools and round the X hidden while it is open, shown again as it closes.
+     * The paper under the open fan, a disc round its point out past the tools' reach, dp: its edge an arc beside the fan's
+     * (the owner, 2026-11-07: "let's use a rounded arc of white instead of the chunky blocky white padding around the
+     * images"; the page behind the pictures that morning, a disc round the X from 2026-11-04): the page under the fan hidden
+     * while it is open, shown again as it closes.
      */
-    static float backdrop() { return TUCK + OUTER + REACH; }
+    static float paper() { return OUTER + REACH; }
 }

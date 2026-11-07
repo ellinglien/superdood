@@ -519,12 +519,6 @@ final class DrawLayout {
     }
     /** Whether Play has its side bar: a toy is on (the magnets' bin open, Text or Shapes taken up, {@code words}; mirrors on the page). */
     static boolean playOn(boolean words, boolean mirrors) { return words || mirrors; }
-    /**
-     * The menu's row that hides the page bar or shows it again (the owner, 2026-11-06: "top bar hide is great, but we can
-     * move that to the dropdown"; the column's book that morning; Iconoir open-book): marked while the bar shows, a
-     * session's as Zen Mode ({@code PaintActivity.togglePageBar}).
-     */
-    static final String PAGE_BAR = "Page Bar";
     /** Play's Text row ({@link TextBoxes}). */
     static final String TEXT = "Text", REPLAY_PAGE = "Replay Page";
 
@@ -542,28 +536,29 @@ final class DrawLayout {
     /**
      * The menu's rows ({@code PaintActivity.fileMenu}), in four groups (the owner, 2026-11-06), a line between each: the
      * notebook's, Notebook Explorer and Notebook Settings; then the page's, Export Page (the page shown's PDF, PNG or Layers,
-     * as Page Settings' button, 2026-11-02), Import, a guest's too (a picture placed reaches the host as any mark, in
-     * pixels; the browser's takes pictures only), Show Kinds and Page Bar ({@link #PAGE_BAR}, marked while the bar shows,
-     * {@code pageBar}); then Draw Together ({@code share}'s words, null for
+     * as Page Settings' button, 2026-11-02), Send to the Fridge (the Manta's, {@link Fridge}, 2026-11-06), Import, a guest's too (a picture placed reaches the host as any mark, in
+     * pixels; the browser's takes pictures only), Show Kinds (Page Bar, which hid the page bar, gone 2026-11-07: "remove the
+     * option to show or hide the page bar (this is unnecessary now)"); then Draw Together ({@code share}'s words, null for
      * none, marked while on, {@code sharing}), the Sand Timer while it can be set ({@code sand}: the countdown's row is its
      * and idle) and Play, marked while a toy is on ({@code playing}, {@link #playOn}); then the app's, Finger Action
      * ({@code fingerRow}; null for none: the Manta's is System Settings' row since 2026-11-06), the drawing hand, the row
      * naming the other hand ({@code right}: the column is on the right), and System Settings (2026-11-04, {@link
      * SystemSettings}) last. The notebook's rows are left out for a live page's guest ({@code notebook} false: the page is
-     * the host's); Show Kinds, Page Bar, the Sand Timer and Play are the Manta's alone ({@code column}: its column's buttons until
+     * the host's); Show Kinds, the Sand Timer and Play are the Manta's alone ({@code column}: its column's buttons until
      * 2026-11-06, the owner: "move the timer, visibility, and mischief tools to the dropdown").
      */
-    static java.util.List<Row> fileRows(boolean notebook, String fingerRow, boolean right, String share, boolean sharing, boolean column, boolean sand, boolean playing, boolean pageBar) {
+    static java.util.List<Row> fileRows(boolean notebook, String fingerRow, boolean right, String share, boolean sharing, boolean column, boolean sand, boolean playing) {
         java.util.List<Row> rows = new java.util.ArrayList<>();
         if (notebook) {
             rows.add(new Row("open", NotebookLayout.OPEN_NOTEBOOK, "ic_ph_book", false));
             rows.add(new Row("settings", NOTEBOOK_SETTINGS, "ic_ph_page_star", false));
             rows.add(Row.LINE);
             rows.add(new Row("exportPage", LibraryCard.EXPORT_PAGE, "ic_ph_upload_square", false));
+            // The Fridge (2026-11-06, Iconoir post): the Manta's alone, after Export Page, another way out for the page.
+            if (column) rows.add(new Row("fridge", Fridge.ROW, "ic_ph_post", false));
         }
         rows.add(new Row("import", PictureImport.IMPORT, "ic_ph_download", false));
         if (column) rows.add(new Row("kinds", EraseKind.SHOW_KINDS, "ic_ph_eye_fill", false));
-        if (column) rows.add(new Row("pageBar", PAGE_BAR, "ic_ph_open_book", pageBar));
         rows.add(Row.LINE);
         if (share != null) rows.add(new Row("share", share, "ic_ph_internet", sharing));
         if (column && sand) rows.add(new Row("sand", SandTimer.NAME, "ic_sand_timer", false));

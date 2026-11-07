@@ -225,13 +225,16 @@ final class SelectionFeedback {
      * mark is ink on the paper of the bar's room, so a slot pick no longer goes grey for the brush strokes of the rows
      * between (the whole patch was checked until 2026-10-25).
      */
-    void updateParts(View owner, Runnable change) {
+    void updateParts(View owner, Runnable change) { updateParts(owner, new Rect(0, 0, owner.getWidth(), owner.getHeight()), change); }
+    /** As {@link #updateParts(View, Runnable)}; a single view's patch only {@code area} of it (the part {@code change} can change: Zen Mode's fan's ring and strip on a turn). */
+    void updateParts(View owner, Rect area, Runnable change) {
         Rect whole = new Rect(0, 0, owner.getWidth(), owner.getHeight());
         if (gathering != null || !direct(owner, whole, owner.hasWindowFocus())) { updateBinary(owner, whole, change); return; }
         List<Part> mine = new ArrayList<>();
-        // A single view (Zen Mode's fan, ZenFanView): one patch, all of it, its changed pixels split into boxes as a group's are.
+        // A single view (Zen Mode's fan, ZenFanView): one patch, {@code area}, its changed pixels split into boxes as a group's are.
         boolean group = owner instanceof android.view.ViewGroup;
-        if (group) { parts = mine; gathering = owner; } else mine.add(new Part(owner, 0, 0, whole, capture(owner, whole)));
+        if (!area.intersect(whole)) { change.run(); return; }
+        if (group) { parts = mine; gathering = owner; } else mine.add(new Part(owner, 0, 0, area, capture(owner, area)));
         try { change.run(); } finally { gathering = null; parts = null; }
         if (mine.isEmpty()) return;
         Rect union = new Rect();
@@ -403,7 +406,9 @@ final class SelectionFeedback {
         bitmap.eraseColor(android.graphics.Color.WHITE);
         // Apply the scroll offset a parent would, so scrolled text lands inside the view.
         Canvas canvas = new Canvas(bitmap); canvas.translate(-area.left-owner.getScrollX(), -area.top-owner.getScrollY());
-        owner.draw(canvas); return bitmap;
+        // Zen Mode's fan with the buttons lent over it, as the panel shows them: its patches would put its own paper over them.
+        if (owner instanceof ZenFanView) ((ZenFanView) owner).drawWithOver(canvas); else owner.draw(canvas);
+        return bitmap;
     }
     /**
      * Inkwash: the changed pixels of {@code before} and {@code after} as boxes, each with the 2 px border {@link

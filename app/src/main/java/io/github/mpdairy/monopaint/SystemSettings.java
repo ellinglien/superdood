@@ -15,6 +15,8 @@ final class SystemSettings {
     static final String AUTO_REFRESH_NOTE = "After erasing and screen changes";
     /** The edge strip is the Manta's alone (the owner, 2026-11-05: "(manta only) is enough"). */
     static final String EDGE_HOLD_NOTE = "Manta only";
+    /** The Fridge ({@link Fridge}, 2026-11-06): On once its first time's words are agreed to; Off, they show again before the next send. */
+    static final String FRIDGE = Fridge.SHARED, FRIDGE_NOTE = "Off asks before sending";
     /**
      * The one gate for a flash (the firmware's full refresh, {@link Ui#flashWindow}), and for every clean redraw and forced grey pass
      * the app makes on its own: one {@code asked} for (Refresh, or a tap set to it) always flashes; one the app would make

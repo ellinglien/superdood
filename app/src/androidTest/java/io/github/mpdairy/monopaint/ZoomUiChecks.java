@@ -26,7 +26,7 @@ final class ZoomUiChecks {
         int gray=(Integer)get(get(activity,"paint"),"gray"), maximum=TestAccess.maximum(activity), rotation=(Integer)get(activity,"appRotation");
         boolean wet=(Boolean)get(get(activity,"paint"),"wetCanvas"), transparent=(Boolean)get(get(activity,"paint"),"transparentPaint"), erase=(Boolean)get(get(activity,"paint"),"eraseMode");
         SharedPreferences prefs=(SharedPreferences)get(activity,"preferences"); boolean right=prefs.getBoolean("toolbox_right",false);
-        boolean originalLock=(Boolean)get(activity,"navigationLocked"), hadLock=prefs.contains("navigation_locked");
+        boolean originalLock=(Boolean)get(activity,"navigationLocked"), hadLock=prefs.contains("zoom_locked");
         boolean zoomVisible=prefs.getBoolean("tool_visible_ZOOM",true), hadZoomVisible=prefs.contains("tool_visible_ZOOM");
         android.util.DisplayMetrics metrics=new android.util.DisplayMetrics(); activity.getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
         float density=activity.getResources().getDisplayMetrics().density;
@@ -34,7 +34,7 @@ final class ZoomUiChecks {
         try {
             main(test,() -> {
                 rasterChecks();
-                check(originalLock==prefs.getBoolean("navigation_locked",true),"Navigation defaults to locked and restores saved choice");
+                check(originalLock==prefs.getBoolean("zoom_locked",false),"Navigation defaults to unlocked and restores saved choice");
                 prefs.edit().putBoolean("tool_visible_ZOOM",true).apply();
                 ((android.view.OrientationEventListener)get(get(activity,"rotationPrompt"),"orientationSensor")).disable();
                 call(pad,"finishStroke");
@@ -69,7 +69,7 @@ final class ZoomUiChecks {
                     int submitted=feedback.submitted;
                     zoom.performClick();
                     check(feedback.submitted>submitted,"Lock icon updates through direct e-ink feedback");
-                    check(!prefs.getBoolean("navigation_locked",true),"Unlock is saved");
+                    check(!prefs.getBoolean("zoom_locked",true),"Unlock is saved");
                     float x=view.getWidth()/2f,y=view.getHeight()/2f;
                     if(quarter==0&&!hand) {
                         long began=System.nanoTime();
@@ -152,7 +152,7 @@ final class ZoomUiChecks {
                     zoom.performClick();set(pad,"penSeen",0L);
                     pinch(activity,pad,x,y);
                     check(locked.equals(get(pad,"pageToView")),"Lock preserves zoomed position and blocks both pinch and pan");
-                    check(prefs.getBoolean("navigation_locked",false),"Lock is saved");
+                    check(prefs.getBoolean("zoom_locked",false),"Lock is saved");
                     touch(activity,pad,MotionEvent.ACTION_DOWN,new int[]{0},new int[]{2},new float[]{x,y});
                     touch(activity,pad,MotionEvent.ACTION_MOVE,new int[]{0},new int[]{2},new float[]{x+30,y});
                     touch(activity,pad,MotionEvent.ACTION_UP,new int[]{0},new int[]{2},new float[]{x+30,y});
@@ -182,7 +182,7 @@ final class ZoomUiChecks {
                 set(activity,"drawingName",name);set(activity,"library",library);set(get(activity,"paint"),"gray",gray);TestAccess.setMaximum(activity,maximum);
                 set(get(activity,"paint"),"wetCanvas",wet);set(get(activity,"paint"),"transparentPaint",transparent);set(get(activity,"paint"),"eraseMode",erase);
                 SharedPreferences.Editor restore=prefs.edit().putBoolean("toolbox_right",right);
-                if(hadLock)restore.putBoolean("navigation_locked",originalLock);else restore.remove("navigation_locked");
+                if(hadLock)restore.putBoolean("zoom_locked",originalLock);else restore.remove("zoom_locked");
                 if(hadZoomVisible)restore.putBoolean("tool_visible_ZOOM",zoomVisible);else restore.remove("tool_visible_ZOOM");
                 restore.apply();set(activity,"navigationLocked",originalLock);
                 call(activity,"replaceBook",new Class<?>[]{DrawingBook.class},original);

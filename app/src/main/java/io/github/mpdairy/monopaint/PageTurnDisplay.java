@@ -6,12 +6,18 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.view.View;
 
-/** A one-shot page update. Preserve the previous pixels and never paint over the Pages panel. */
+/**
+ * A one-shot page update. Preserve the previous pixels and never paint over the Pages panel, nor over {@code kept}
+ * (raster rectangles {left, top, right, bottom}: Zen Mode's open fan, so a turn leaves it as it is on the panel, no
+ * blink; the owner, 2026-11-07: "why do we need to close and open the fan each time? it seems like it should stay").
+ */
 final class PageTurnDisplay implements AutoCloseable {
     private final DirectEink display;
     private final Rect bounds, covered;
+    private final java.util.List<int[]> kept;
 
-    PageTurnDisplay(View owner,Bitmap before,Matrix bitmapToView,View overlay) {
+    PageTurnDisplay(View owner,Bitmap before,Matrix bitmapToView,View overlay,java.util.List<int[]> kept) {
+        this.kept=kept;
         bounds=new Rect(0,0,before.getWidth(),before.getHeight());
         covered=new Rect();
         if(overlay!=null) {
@@ -26,6 +32,21 @@ final class PageTurnDisplay implements AutoCloseable {
         display=DirectEink.forView(owner,before,bitmapToView,0,7);
     }
     boolean present(Bitmap after) {
+        if(kept!=null&&!kept.isEmpty()) {
+            // First the page away from the kept shape's box, in a piece or two, so it shows at once; then the box round
+            // the shape, the strips its steps leave (each a panel update of its own, ~25 ms apiece).
+            int[] box=kept.get(0).clone();
+            for(int[] r:kept){box[0]=Math.min(box[0],r[0]);box[1]=Math.min(box[1],r[1]);box[2]=Math.max(box[2],r[2]);box[3]=Math.max(box[3],r[3]);}
+            java.util.List<int[]> off=new java.util.ArrayList<>(kept), first=new java.util.ArrayList<>();
+            first.add(box);
+            if(!covered.isEmpty()){int[] c={covered.left,covered.top,covered.right,covered.bottom};off.add(c);first.add(c);}
+            boolean okay=true;
+            for(int[] part:MagnetDrag.minus(new int[]{bounds.left,bounds.top,bounds.right,bounds.bottom},first))
+                okay=present(after,part[0],part[1],part[2],part[3])&&okay;
+            for(int[] part:MagnetDrag.minus(box,off))
+                okay=present(after,part[0],part[1],part[2],part[3])&&okay;
+            return okay;
+        }
         if(covered.isEmpty())return display.present(after,bounds)>=0;
         // Each region is disjoint; a busy submission falls back to an Android
         // redraw of the latest page instead of ever retrying a stale page.

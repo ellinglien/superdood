@@ -646,7 +646,8 @@ function sampleOf(e) {
   return live.finger ? [x, y, C.FINGER_TRAVEL, e.timeStamp, NaN, NaN] : pointerSample(e, live, x, y);
 }
 function add(events) {
-  if (live.snapped) return;  // Hold to Snap drew the clean shape: the pen's lift finishes it
+  // Hold to Snap drew the clean shape: it follows the pen (M4.follow), whose lift finishes it.
+  if (live.snapped) { if (M4) M4.follow(live, ...pagePoint(events[events.length - 1])); return; }
   const t = performance.now(), samples = events.map(sampleOf), r = pull(live.st.add(samples));
   if (M4) M4.sampled(samples);
   if (r) { live.box = union(live.box, r); live.part = union(live.part, r); }

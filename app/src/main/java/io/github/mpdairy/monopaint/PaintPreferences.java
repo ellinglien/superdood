@@ -52,6 +52,18 @@ final class PaintPreferences {
      */
     boolean autoRefresh() { return flag("auto_refresh", false); } // off at first (the owner, 2026-11-05: "it's seeming ok")
     void setAutoRefresh(boolean value) { setFlag("auto_refresh", value); }
+    /** The Fridge ({@link Fridge}): its first time's words agreed to (System Settings' The Fridge, On); Off asks again. */
+    boolean fridgeAgreed() { return flag("fridge_agreed", false); }
+    void setFridgeAgreed(boolean value) { setFlag("fridge_agreed", value); }
+    /** The cards sent from this tablet ({@link Fridge#encode}), so each can be taken down. */
+    String fridgeCards() { return store.getString("fridge_cards", ""); }
+    void setFridgeCards(String value) { store.edit().putString("fridge_cards", value).apply(); }
+    /** My Fridge's slug and key ({@link Fridge#own}), or null before it is made. The key stays here alone: never shown or logged. */
+    String[] fridgeOwn() {
+        String slug = store.getString("fridge_slug", null), key = store.getString("fridge_key", null);
+        return slug == null || key == null ? null : new String[]{slug, key};
+    }
+    void setFridgeOwn(String[] own) { store.edit().putString("fridge_slug", own[0]).putString("fridge_key", own[1]).apply(); }
     /** System Settings' Two-Finger Tap and Three-Finger Tap ({@link FingerTool.Tap}): Undo and Redo at first. */
     FingerTool.Tap twoFingerTap() { return FingerTool.Tap.saved(store.getString(FingerTool.TWO_TAP, ""), FingerTool.TWO_FIRST); }
     FingerTool.Tap threeFingerTap() { return FingerTool.Tap.saved(store.getString(FingerTool.THREE_TAP, ""), FingerTool.THREE_FIRST); }
@@ -74,8 +86,9 @@ final class PaintPreferences {
     /** Whether the last imported picture went on a new layer; the current layer at first. */
     boolean importNewLayer() { return flag("import_new_layer", false); }
     void setImportNewLayer(boolean value) { setFlag("import_new_layer", value); }
-    boolean navigationLocked() { return flag("navigation_locked", true); }
-    void setNavigationLocked(boolean value) { setFlag("navigation_locked", value); }
+    /** Zoom and pan locked: unlocked at first (the owner, 2026-11-07: "have zoom unlocked by default"; a new key, so a lock kept from before goes). */
+    boolean navigationLocked() { return flag("zoom_locked", false); }
+    void setNavigationLocked(boolean value) { setFlag("zoom_locked", value); }
     /** Whether the user has picked a shape, so Shapes shows that shape's icon. */
     boolean shapeChosen(boolean fallback) { return flag("shape_chosen", fallback); }
     /** Whether the toolbar's Brush pen selects the wet brush pen; the dry one at first. */

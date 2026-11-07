@@ -9,7 +9,10 @@ final class ShapePreview {
     private static native void nativeApply(Bitmap display,byte[][] tones,byte[][] alpha,int[] visible,
             int active,int shade,int[] previous,int[] next,int[] dots,boolean logical,int[] dirty);
     private final ToneDocument document;
+    /** Inkwash: what the preview shows with the pen at {@code x, y}: row intervals, {@code spans.length / height} ints a row. */
+    interface Raster { void raster(float x,float y,int[] spans); }
     private final ShapeGeometry geometry;
+    private final Raster raster;
     private final byte[][] tones,alpha;
     private final int[] visible;
     private final int active,shade;
@@ -17,8 +20,13 @@ final class ShapePreview {
     private final int[] dirty=new int[4];
     private boolean ended;
     ShapePreview(ToneDocument document,ToolSettings settings,int shade,float x,float y) {
+        this(document,shade,4,new ShapeGeometry(settings,document.width,document.height,x,y),null);
+    }
+    /** Inkwash: a preview {@code raster} lays, {@code perRow} ints a row (Hold to Snap's shape following the pen, {@link ShapeGeometry#path}). */
+    ShapePreview(ToneDocument document,int shade,int perRow,Raster raster) { this(document,shade,perRow,null,raster); }
+    private ShapePreview(ToneDocument document,int shade,int perRow,ShapeGeometry geometry,Raster raster) {
         this.document=document;this.shade=shade;
-        geometry=new ShapeGeometry(settings,document.width,document.height,x,y);
+        this.geometry=geometry;this.raster=raster!=null?raster:geometry::raster;
         ToneDocument.Snapshot source=document.layerSnapshot();
         // Inkwash: every layer's base and kind planes in the page's order; the shape goes on the selected layer's base.
         java.util.List<ToneDocument.Layer> entries=new java.util.ArrayList<>();
@@ -34,11 +42,11 @@ final class ShapePreview {
         active=base;
         tones=new byte[entries.size()][];alpha=new byte[tones.length][];visible=new int[tones.length];
         for(int i=0;i<tones.length;i++) { tones[i]=entries.get(i).tones;alpha[i]=entries.get(i).alpha;visible[i]=shown.get(i); }
-        previous=new int[document.height*4];next=new int[previous.length];
+        previous=new int[document.height*perRow];next=new int[previous.length];
     }
     Rect preview(float x,float y,Bitmap display,boolean logical) {
         if(ended || !Float.isFinite(x) || !Float.isFinite(y))return new Rect();
-        geometry.raster(x,y,next);
+        raster.raster(x,y,next);
         return apply(display,logical);
     }
     private Rect apply(Bitmap display,boolean logical) {

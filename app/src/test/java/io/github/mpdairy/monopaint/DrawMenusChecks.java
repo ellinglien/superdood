@@ -21,12 +21,12 @@ public final class DrawMenusChecks {
     }
 
     private static void menus() {
-        // The owner's order (2026-11-06): the notebook's; the page's with Show Kinds and Page Bar; Draw Together, the Sand Timer and Play; the hand and System Settings. Finger Action System Settings' on the Manta.
-        check(words(DrawLayout.fileRows(true, null, false, "Draw Together", true, true, true, true, true)).equals("Notebook Explorer;Notebook Settings;|;Export Page;Import;Show Kinds;Page Bar*;|;Draw Together*;Sand Timer;Play*;|;Left-Handed;System Settings;"),
+        // The owner's order (2026-11-06): the notebook's; the page's with Show Kinds (Page Bar gone 2026-11-07); Draw Together, the Sand Timer and Play; the hand and System Settings. Finger Action System Settings' on the Manta.
+        check(words(DrawLayout.fileRows(true, null, false, "Draw Together", true, true, true, true)).equals("Notebook Explorer;Notebook Settings;|;Export Page;Send to the Fridge;Import;Show Kinds;|;Draw Together*;Sand Timer;Play*;|;Left-Handed;System Settings;"),
                 "The Manta's menu: the notebook's rows, the page's, the shared and the toys, the app's, a line between each");
-        check(words(DrawLayout.fileRows(true, null, false, null, false, true, false, false, false)).equals("Notebook Explorer;Notebook Settings;|;Export Page;Import;Show Kinds;Page Bar;|;Play;|;Left-Handed;System Settings;"), "No Sand Timer row while it can't be set");
-        check(words(DrawLayout.fileRows(true, "Finger Action: Eraser", false, null, false, false, false, false, true)).equals("Notebook Explorer;Notebook Settings;|;Export Page;Import;|;Finger Action: Eraser;Left-Handed;System Settings;"), "The browser's menu with the Manta's notebook: its Finger Action row, no column rows");
-        check(words(DrawLayout.fileRows(false, "Finger Action: Eraser", true, null, false, false, false, false, true)).equals("Import;|;Finger Action: Eraser;Right-Handed;System Settings;"), "A guest's menu: Import, no notebook rows; the other hand named");
+        check(words(DrawLayout.fileRows(true, null, false, null, false, true, false, false)).equals("Notebook Explorer;Notebook Settings;|;Export Page;Send to the Fridge;Import;Show Kinds;|;Play;|;Left-Handed;System Settings;"), "No Sand Timer row while it can't be set");
+        check(words(DrawLayout.fileRows(true, "Finger Action: Eraser", false, null, false, false, false, false)).equals("Notebook Explorer;Notebook Settings;|;Export Page;Import;|;Finger Action: Eraser;Left-Handed;System Settings;"), "The browser's menu with the Manta's notebook: its Finger Action row, no column rows");
+        check(words(DrawLayout.fileRows(false, "Finger Action: Eraser", true, null, false, false, false, false)).equals("Import;|;Finger Action: Eraser;Right-Handed;System Settings;"), "A guest's menu: Import, no notebook rows; the other hand named");
         check(words(DrawLayout.playRows(true, false, true, true, true, false)).equals("Text*;Magnetic Poetry;Shapes*;Spirograph;Mirrors*;|;Replay Page;"), "Play: Text, Magnetic Poetry, Shapes, Spirograph, Mirrors, then Replay Page");
         check(words(DrawLayout.playRows(false, false, false, false, false, true)).equals("Text;Shapes;Mirrors;"), "A guest's Play: no Magnetic Poetry, Spirograph or Replay");
         // The release pare-down (2026-11-05): Play holds the five toys (Text, Magnetic Poetry, Shapes, Spirograph, Replay
@@ -35,7 +35,7 @@ public final class DrawMenusChecks {
         for (String toy : new String[]{DrawLayout.TEXT, DrawLayout.POETRY, DrawLayout.SHAPES, DrawLayout.SPIROGRAPH, DrawLayout.REPLAY_PAGE})
             check(play.contains(toy + ";"), "Play holds " + toy);
         check(ToolKits.preset(DrawLayout.SPIROGRAPH) != null, "Play's Spirograph is a Basic tool");
-        String menu = words(DrawLayout.fileRows(true, null, false, "Draw Together", false, true, true, false, true));
+        String menu = words(DrawLayout.fileRows(true, null, false, "Draw Together", false, true, true, false));
         for (String hidden : new String[]{"Brush Lab", DrawLayout.BRUSH_LAB, "Community", "Library", LibraryCard.PAGE_COLOUR, LibraryCard.SEE_THROUGH,
                 DrawLayout.TEXT, DrawLayout.POETRY, DrawLayout.SHAPES, DrawLayout.SPIROGRAPH, DrawLayout.REPLAY_PAGE, "Finger Action", "Prompt"})
             check(!menu.contains(hidden), "The menu has no " + hidden);

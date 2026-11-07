@@ -737,8 +737,10 @@ final class InkWashBar {
     private View anchor(int tool) { return anchor(tools[tool]); }
     /** What {@code button}'s menus open beside: the button, or Zen Mode's fan, so they never cover it. */
     private View anchor(View button) { return zenAnchor != null ? zenAnchor : button; }
-    /** The buttons Zen Mode's fan shows in the gap between its wedges, in {@link ZenFan#cell}'s order: the Lasso, the droplet, the layer button. */
-    private View[] zenStrip() { return new View[]{lasso, wet, layers}; }
+    /** The brush line's words' size, px: Zen Mode's fan's strip's too (the owner, 2026-11-07: "use the same font size along the left edge as the brush info"). */
+    float lineTextSize() { return brushName.getTextSize(); }
+    /** What Zen Mode's fan shows of the column's, in {@link ZenFan#cell}'s order: Menu, the Dropper, the Lasso, the droplet, the layer button, the brush line. */
+    private View[] zenStrip() { return new View[]{menu, swatches.dropper, lasso, wet, layers, brushLine}; }
     /** Where each lent button was ({@link #lend}): its row, its place in it, its layout; null while home. */
     private final android.view.ViewGroup[] lentFrom = new android.view.ViewGroup[ZenFan.CELLS];
     private final int[] lentAt = new int[ZenFan.CELLS];
@@ -761,8 +763,28 @@ final class InkWashBar {
             stage.addView(button, index + i, at);
         }
         sizeLayers(Ui.dpOf(app, Math.round(cells[ZenFan.LAYERS].height())));
+        // The Dropper's and the Lasso's faces their cells' size, smaller than the column's (the owner, 2026-11-07).
+        for (int i : new int[]{ZenFan.DROPPER, ZenFan.LASSO}) {
+            ToolButton b = (ToolButton) buttons[i];
+            b.iconHalf = b.iconHalfWidth = Ui.dpOf(app, Math.round(cells[i].height())) / 2;
+        }
+        for (View button : buttons) grey(button, true);
+        // The brush line shown in the fan (Zen Mode hides it), its name the line's room.
+        brushLine.setVisibility(View.VISIBLE);
+        brushName.getLayoutParams().width = Math.round(cells[ZenFan.TOOL_LINE].width()) - brushLine.getPaddingLeft() - brushLine.getPaddingRight();
+        brushName.requestLayout();
+        brushName.setTextColor(ZenFanView.WORDS); noteText.setTextColor(ZenFanView.WORDS);
+        // Menu's three lines the Lasso's size beside it.
+        menu.iconHalf = DrawLayout.ICON_SIDE * Ui.dpOf(app, Math.round(cells[ZenFan.MENU].height())) / (2 * (DrawLayout.ICON_SIDE + 2 * DrawLayout.TRAY_TOP));
         // Moved, the droplet dropped its next look (WetIndicator.onDetachedFromWindow): it looks again.
         wet.changed();
+    }
+    /** A lent button drawn in the fan's grey, or not ({@link ZenFanView#greyed}). */
+    private static void grey(View button, boolean greyed) {
+        if (button instanceof ToolButton) ((ToolButton) button).greyed = greyed;
+        else if (button instanceof WetIndicator) ((WetIndicator) button).greyed = greyed;
+        else return;
+        button.invalidate();
     }
     /** The lent buttons home again, each where it was, last first (should two share a row). */
     void giveBack() {
@@ -774,6 +796,13 @@ final class InkWashBar {
             lentFrom[i] = null; lentPlace[i] = null;
         }
         sizeLayers(fitted.layers);
+        for (View button : buttons) grey(button, false);
+        menu.iconHalf = DrawLayout.ICON_SIDE / 2;
+        brushName.getLayoutParams().width = app.dp(DrawLayout.LINE_NAME);
+        brushName.setVisibility(View.VISIBLE);
+        brushName.setTextColor(Theme.INK); noteText.setTextColor(Theme.INK);
+        brushLine.setVisibility(app.zen ? View.GONE : View.VISIBLE);
+        showModes();
         wet.changed();
     }
     /** Whether {@code tool} is on in this notebook ({@link #rulesChanged}). */
@@ -917,7 +946,10 @@ final class InkWashBar {
         if (text == null && noteText.getVisibility() != View.VISIBLE) return;
         int line = brushLine.getWidth() - brushLine.getPaddingLeft() - brushLine.getPaddingRight();
         updateLine(() -> {
-            if (line > 0) noteText.setMaxWidth(DrawLayout.noteWidth(line));
+            // In Zen Mode's fan the note takes the line over, the name gone while it shows (the owner, 2026-11-07: "it takes over the space when there is a message").
+            boolean fan = zenAnchor != null;
+            if (fan) brushName.setVisibility(text == null ? View.VISIBLE : View.GONE);
+            if (line > 0) noteText.setMaxWidth(fan ? line : DrawLayout.noteWidth(line));
             noteText.setText(text);
             noteText.setVisibility(text == null ? View.GONE : View.VISIBLE);
         });

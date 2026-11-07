@@ -116,9 +116,9 @@ public final class DrawLayoutChecks {
         // The menu (2026-10-30: Settings, Notebook Explorer, Import; Finger, Left-Handed; one group line; Export Page since
         // 2026-11-02, Draw Together on the live branch) fits the Nomad in landscape unscrolled.
         // The column's Sand Timer, Show Kinds and Play too since 2026-11-06, Finger Action out (System Settings'), four groups.
-        java.util.List<DrawLayout.Row> manta = DrawLayout.fileRows(true, null, false, "Draw Together", false, true, true, false, true);
+        java.util.List<DrawLayout.Row> manta = DrawLayout.fileRows(true, null, false, "Draw Together", false, true, true, false);
         int lines = java.util.Collections.frequency(manta, DrawLayout.Row.LINE), menuRows = manta.size() - lines;
-        check(menuRows == 11 && lines == 3 && menuRows * DrawLayout.MENU_ROW + lines * 9 + 2 <= 749 - 2 * DrawLayout.PAD && DrawLayout.LEFT_HANDED.equals("Left-Handed"), "The menu with Export Page, the column's three, Left-Handed and Draw Together fits every screen");
+        check(menuRows == 11 && lines == 3 && menuRows * DrawLayout.MENU_ROW + lines * 9 + 2 <= 749 - 2 * DrawLayout.PAD && DrawLayout.LEFT_HANDED.equals("Left-Handed"), "The menu with Export Page, Send to the Fridge, the column's three, Left-Handed and Draw Together fits every screen");
         try {
             String bar = source("InkWashBar"), app = source("PaintActivity"), ink = source("InkWash");
             check(bar.contains("app.showGuides(app.book.options().withNextGuidesStep().guidesShown)") && !app.contains("names.add(NotebookLayout.TEMPLATE)")
@@ -131,10 +131,10 @@ public final class DrawLayoutChecks {
             // The rows are DrawLayout.fileRows' (the browser's too, M4).
             java.util.List<String> rows = new java.util.ArrayList<>();
             for (DrawLayout.Row r : manta) rows.add(r.words == null ? "|" : r.words);
-            check(rows.equals(java.util.Arrays.asList(NotebookLayout.OPEN_NOTEBOOK, DrawLayout.NOTEBOOK_SETTINGS, "|", LibraryCard.EXPORT_PAGE, PictureImport.IMPORT, EraseKind.SHOW_KINDS, DrawLayout.PAGE_BAR, "|",
+            check(rows.equals(java.util.Arrays.asList(NotebookLayout.OPEN_NOTEBOOK, DrawLayout.NOTEBOOK_SETTINGS, "|", LibraryCard.EXPORT_PAGE, Fridge.ROW, PictureImport.IMPORT, EraseKind.SHOW_KINDS, "|",
                                     "Draw Together", SandTimer.NAME, DrawLayout.PLAY, "|", DrawLayout.LEFT_HANDED, SystemSettings.TITLE))
-                            && menu.contains("DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing, !barHidden)")
-                            && menu.contains("exportMenu(anchor, book.stacks().of(book.index()))") && menu.contains("DrawingBook.isCover(book.index())) rows.removeIf(r -> \"exportPage\".equals(r.key))")
+                            && menu.contains("DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing)")
+                            && menu.contains("exportMenu(anchor, book.stacks().of(book.index()))") && menu.contains("DrawingBook.isCover(book.index())) rows.removeIf(r -> \"exportPage\".equals(r.key) || \"fridge\".equals(r.key))")
                             && source("NotebookScreens").contains("app.exportMenu(export, place);") && app.split("\"export menu\"", -1).length == 2
                             && !app.contains("coverRows(") && app.contains("line.setBackgroundColor(Theme.GREY_400)"),
                     "The menu (the owner's order, 2026-11-06): Notebook Explorer and Notebook Settings; Export Page (the page shown's, Page Settings' one menu, none on a cover, 2026-11-02), Import (pictures and PDFs, one row since 2026-10-29) and Show Kinds; Draw Together, the Sand Timer while it can be set and Play, marked while a toy is on; Left-Handed and System Settings; a grey-400 line between each; no Finger Action (System Settings'), Export Now, Rename, Delete or Replay Page rows: " + rows);
@@ -190,7 +190,7 @@ public final class DrawLayoutChecks {
                     "The status corner: the live status, not tappable, hidden with the foot row in Zen Mode");
             check(DrawLayout.LINE_NAME >= 200 && DrawLayout.LINE_NAME + DrawLayout.NOTE_GAP <= 600 - DrawLayout.LINE_GAP,
                     "The name's room fits the narrowest brush line with the note's gap");
-            DrawLayout.Row left = DrawLayout.fileRows(false, "", false, null, false, false, false, false, true).get(3), right = DrawLayout.fileRows(false, "", true, null, false, false, false, false, true).get(3);  // after Import, its line and the browser's Finger Action
+            DrawLayout.Row left = DrawLayout.fileRows(false, "", false, null, false, false, false, false).get(3), right = DrawLayout.fileRows(false, "", true, null, false, false, false, false).get(3);  // after Import, its line and the browser's Finger Action
             check(left.words.equals(DrawLayout.LEFT_HANDED) && left.icon.equals("ic_ph_hand_pointing") && right.words.equals(DrawLayout.RIGHT_HANDED) && right.icon.equals("ic_ph_hand_pointing_mirrored")
                             && app.contains("prefs.setToolboxRight(!prefs.toolboxRight()); applyToolboxSide();") && DrawLayout.RIGHT_HANDED.equals("Right-Handed"),
                     "The menu's hand row names the other hand (Left-Handed, or Right-Handed with its hand mirrored), applied at once");
@@ -967,7 +967,7 @@ public final class DrawLayoutChecks {
             check(bar.contains("tools[app.inkWash.selected].mark(!on && !dropping && !shaping);"), "The slot gives its mark to Play's Shapes while Shapes draws with it");
             check(bar.contains("if (app.pad.lassoOn || app.pad.dropperOn || app.pad.shapesOn) { app.pad.shapesOn = false;")
                     && bar.contains("if (app.pad != null && (app.pad.lassoOn || app.pad.dropperOn || app.pad.shapesOn)) { app.pad.shapesOn = false;"), "Any tool chosen puts Shapes down");
-            check(pad.contains("ToolSwatches.Look look = app.inkWash.shape(document);") && pad.contains("beginShape(DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness), samplePoint[0], samplePoint[1]);")
+            check(pad.contains("ToolSwatches.Look look = app.inkWash.shape(document);") && pad.contains("beginShape(new ShapePreview(document, DrawLayout.shapeOutline(shapes, look.px), ToolSwatches.tone(look.darkness), samplePoint[0], samplePoint[1]));")
                     && ink.contains("StrokeStart.shape(document, brush.parts, session);") && source("StrokeStart").contains("ModularStroke.selectLayer(document, parts);"), "A shape lays the slot's grey at its size, on its layer");
         } catch (java.io.IOException e) { throw new AssertionError("the sources: " + e); }
     }
@@ -1005,16 +1005,16 @@ public final class DrawLayoutChecks {
             String pad = source("DrawingPad");
             check(pad.contains("if (target == previewDirect) previewArea.union(presenting);\n                    wrote(presenting);")
                             && pad.contains("if (result < 0) queueView(endingArea); else wrote(endingArea);")
-                            && pad.contains("if (direct.refresh(source, area) < 0) { postDelayed(this::refreshFastInk, 8); return; }\n        wrote(area);")
+                            && pad.contains("if (direct.refresh(source, new Rect(part[0], part[1], part[2], part[3])) < 0) { postDelayed(this::refreshFastInk, 8); return; }\n        wrote(area);")
                             && pad.contains("            }\n        wrote(area);\n        Log.i(ProbeActivity.TAG, \"Area refresh (\"")
-                            && pad.contains("if (presented = turn.present(presented())) wrote(")
+                            && pad.contains("app.pagePanel, zenFanKept()); }") && pad.contains("if (presented = turn.present(presented())) { wrote(") && pad.contains("if (rim.present(shown, area) >= 0) wrote(area);")
                             && pad.contains("if (zenWritten.isEmpty()) postDelayed(zenBack, CLOSED_MS);")
                             && pad.contains("app.redrawZen(zenWritten); zenWritten.setEmpty();")
                             && pad.split("app\\.redrawZen\\(").length == 3 && pad.split("direct\\.refresh\\(").length == 4
                             && pad.split("\\.present\\(presented\\(\\)").length == 3 && pad.split("\\.endFast\\(").length == 2,
                     "Zen Mode: strokes, the eraser's ring, wet paint, sharp tiles, a stroke's end, cleaned popups, area refreshes and page turns all put the button back after writing over it (wrote), no extra flash; no other panel write left out");
             check(pad.contains("java.util.List<RectF> fan = app.zenFanMask();\n        if (fan != null) panel.addAll(fan);") && !pad.contains("app.zenFanPanel()")
-                            && source("PaintActivity").contains("java.util.List<RectF> mask = zenFan.mask();") && pad.split("MagnetDrag\\.minus\\(").length == 5 && pad.split(", covered\\(\\)\\)").length == 3
+                            && source("PaintActivity").contains("java.util.List<RectF> mask = zenFan.mask();") && pad.split("MagnetDrag\\.minus\\(").length == 7 && pad.split(", covered\\(\\)\\)").length == 4
                             && source("PaintActivity").contains("RectF area = zenFanPanel();\n        if (area == null) return;\n        zenFan.setVisibility(View.GONE);"),
                     "Zen Mode's open fan: the fast display keeps off its shape, in steps (drying paint took bits of it, the owner 2026-11-06), every write through the mask; closing it shows what it covered");
             // Every open popup too (2026-11-06: wet paint drew over the menu, Play, the tray...): one path, Popups'.
@@ -1025,19 +1025,18 @@ public final class DrawLayoutChecks {
                             && popups.contains("if (open.getKey().isShowing() && !open.getValue().isEmpty()) areas.add(new RectF(open.getValue()));")
                             && !pad.contains("coveredPanel") && !source("WordsMode").contains("void cover(") && !source("TextMode").contains("host.cover(") && !source("PicturePlacer").contains("host.cover("),
                     "Every open opaque popup (the menu, Play, System Settings, the tray, Show Kinds, the Lasso's bar, Words' bin, Text, a picture's bar) keeps the fast display off it, through Popups alone; closing one cleans its area as before");
-            // In the gap between the fan's wedges (the owner, 2026-11-06: "putting the layers, droplet and lasso between the
-            // two wedges"): the column's own buttons lent, in ZenFan.cell's order, laid over its cells inside the fan's view
-            // (its area, the fast display's mask), the layer button's icon sized to its cell, and home as it closes; no
-            // Menu, Zoom, Dropper or page turner in it.
+            // Under the fan's wedges (the owner, 2026-11-07: "a row of tools: eye drop, lasso, droplet and layers all in a
+            // row, and the zoom level above it"; in the gap between them from 2026-11-06): the column's own buttons lent, in ZenFan.cell's order, laid over its cells inside the fan's view (its area, the fast
+            // display's mask), the layer button's icon sized to its cell, and home as it closes; no Menu or page turner in it.
             String fanView = source("ZenFanView");
-            check(bar.contains("private View[] zenStrip() { return new View[]{lasso, wet, layers}; }") && !source("PageTurner").contains("turnParts")
-                            && bar.contains("sizeLayers(Ui.dpOf(app, Math.round(cells[ZenFan.LAYERS].height())));") && bar.contains("sizeLayers(fitted.layers);\n        wet.changed();")
+            check(bar.contains("private View[] zenStrip() { return new View[]{menu, swatches.dropper, lasso, wet, layers, brushLine}; }") && !source("PageTurner").contains("turnParts")
+                            && bar.contains("sizeLayers(Ui.dpOf(app, Math.round(cells[ZenFan.LAYERS].height())));") && bar.contains("sizeLayers(fitted.layers);\n        for (View button : buttons) grey(button, false);\n        menu.iconHalf = DrawLayout.ICON_SIDE / 2;") && bar.contains("showModes();\n        wet.changed();")
                             && bar.contains("stage.addView(button, index + i, at);") && bar.contains("lentFrom[i].addView(buttons[i], lentAt[i], lentPlace[i]);")
                             && app.contains("for (int i = 0; i < cells.length; i++) cells[i] = zenFan.cell(i);\n        inkWashBar.lend((ViewGroup) stage, ((ViewGroup) stage).indexOfChild(zenFan) + 1, cells);")
                             && app.contains("zenFan.setVisibility(View.GONE);\n        inkWashBar.giveBack();")
                             && fanView.contains("RectF area() { return px(bounds); }") && fanView.contains("RectF cell(int cell) { return px(fan.cell(cell)); }")
                             && source("ZenFan").contains("for (int i = 0; i < CELLS; i++) {\n            float[] c = cell(i);\n            box[0] = Math.min(box[0], c[0]);"),
-                    "Zen Mode's fan: the Lasso, the droplet and a small layer button in the gap between its wedges, the column's own, lent while it is open, inside the fan's masked area, home as it closes");
+                    "Zen Mode's fan: Menu, the Dropper, the Lasso and the droplet in a row under its wedges, the layer button over them, lent while it is open, inside the fan's masked area, home as it closes");
             // The Lasso's menu opens beside the fan, not over it; the hand's change lays the column out again, the buttons home first.
             check(bar.contains("() -> app.fileMenu(menu[0])") && bar.contains("app.menu(anchor(lasso), \"lasso menu\"")
                             && bar.contains("private View anchor(View button) { return zenAnchor != null ? zenAnchor : button; }")
@@ -1152,7 +1151,7 @@ public final class DrawLayoutChecks {
             // menu"; the ghost on the page bar that morning, back in the column since 2026-10-28.
             String turner = source("PageTurner");
             String system = source("SystemSettingsPanel");
-            check(!app.contains("fingerMenu(") && !app.contains("case \"finger\"") && DrawLayout.fileRows(false, "", false, null, false, false, false, false, true).stream().anyMatch(r -> "finger".equals(r.key) && "ic_finger".equals(r.icon))
+            check(!app.contains("fingerMenu(") && !app.contains("case \"finger\"") && DrawLayout.fileRows(false, "", false, null, false, false, false, false).stream().anyMatch(r -> "finger".equals(r.key) && "ic_finger".equals(r.icon))
                             && app.contains("fingers[c.ordinal()] = inkWashBar.fingerName(c);") && app.contains("SystemSettingsPanel.rows(this, fingers)")
                             && system.contains("row(app, list, SystemSettings.FINGER, null, fingers, app.inkWash.finger().ordinal(), 3, i -> app.inkWash.finger(choices[i]));") && SystemSettings.FINGER.equals("Finger Action")
                             && bar.contains("app.iconButton(DrawLayout.REFRESH, R.drawable.ic_ph_ghost, () -> { if (app.pad != null) app.pad.refreshAsked(\"Refresh button\"); })")
@@ -1266,21 +1265,13 @@ public final class DrawLayoutChecks {
         } catch (java.io.IOException e) { throw new AssertionError(e); }
         book();
     }
-    /** Page Bar (the owner, 2026-11-06: "we can move that to the dropdown"; the column's book that morning): the menu's row after Show Kinds, marked while the bar shows, a session's toggle Zen Mode's hiding leaves as it was. */
+    /** No Page Bar row (the owner, 2026-11-07: "remove the option to show or hide the page bar (this is unnecessary now)"): the page bar shows but in Zen Mode. */
     static void book() {
         check(!java.util.Arrays.toString(DrawLayout.Part.values()).contains("BOOK"), "No book in the column");
-        java.util.List<DrawLayout.Row> rows = DrawLayout.fileRows(true, null, false, null, false, true, false, false, true);
-        int at = rows.indexOf(rows.stream().filter(r -> "pageBar".equals(r.key)).findFirst().orElse(null));
-        check(at > 0 && "kinds".equals(rows.get(at - 1).key) && rows.get(at + 1) == DrawLayout.Row.LINE && rows.get(at).words.equals("Page Bar")
-                        && "ic_ph_open_book".equals(rows.get(at).icon) && rows.get(at).marked && !DrawLayout.fileRows(true, null, false, null, false, true, false, false, false).get(at).marked
-                        && DrawLayout.fileRows(true, "", false, null, false, false, false, false, true).stream().noneMatch(r -> "pageBar".equals(r.key)),
-                "Page Bar the page's group's last row, after Show Kinds, the open book, marked while the bar shows; not the browser's");
+        check(DrawLayout.fileRows(true, null, false, null, false, true, false, false).stream().noneMatch(r -> "pageBar".equals(r.key)), "No Page Bar row");
         try {
-            String app = source("PaintActivity"), bar = source("InkWashBar"), fan = source("ZenFan");
-            check(!bar.contains("togglePageBar") && !fan.contains("pageBar") && app.contains("case \"pageBar\": actions[i] = this::togglePageBar;")
-                            && app.contains("inkWashBar.sandShown, playing, !barHidden)") && app.contains("!zen && !barHidden ? View.VISIBLE : View.GONE")
-                            && app.contains("barHidden = !barHidden;") && app.contains("pad.refreshAsked(\"Page bar\")") && !app.contains("prefs.setPageBar"),
-                    "One toggle, the menu's row alone (not Zen Mode's fan), Zen Mode's hiding on top of it, one forced refresh, not kept past the session");
+            String app = source("PaintActivity");
+            check(!app.contains("togglePageBar") && !app.contains("barHidden") && app.contains("setVisibility(!zen ? View.VISIBLE : View.GONE)"), "The page bar hidden by Zen Mode alone");
         } catch (java.io.IOException e) { throw new AssertionError(e); }
     }
 
