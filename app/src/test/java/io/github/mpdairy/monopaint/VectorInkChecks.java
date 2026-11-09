@@ -19,12 +19,34 @@ public final class VectorInkChecks {
         if (args.length > 0 && args[0].equals("older-page")) { System.out.println(shown(DocumentCodec.read(new java.io.FileInputStream(args[1])))); return; }
         if (args.length > 0 && args[0].equals("mixed-write")) { ToneDocument d = mixed(); try (java.io.FileOutputStream out = new java.io.FileOutputStream(args[1])) { DocumentCodec.write(out, d.layerSnapshot()); } System.out.println(shown(d)); return; }
         if (args.length > 0 && args[0].equals("old-layers")) { oldLayers(args[1], Integer.parseInt(args[2])); return; }
-        smoothing(); width(); scales(); cuts(); bytes(); onPage(); refusals(); medium(); lasso(); crumbs(); longErase(); guests();
+        smoothing(); width(); scales(); kept(); cuts(); bytes(); onPage(); refusals(); medium(); lasso(); crumbs(); longErase(); guests();
         System.out.println("PASS: Vector Ink: smoothing keeps a stroke's ends, the pen's jitter softened, its points thinned within " + VectorLines.STRAY + " px of its curve; the outline's width follows each point's share, the pen's share Control's pressure to size; a stroke covers the same area at 100% and 4×; "
                 + "a dab cuts a line in two at its edge (ends cut flat), takes an end or the whole, misses what it misses, cuts a segment it crosses between points; the lines and a page's LINE section read back as written; "
                 + "on a page the pen keeps the smoothed line and its pixels, Undo and Redo take both together, the eraser cuts in one step; Vector Ink on layers 1, 2 and 3 goes on the layer in use beside the other pens' marks (its own plane, nothing moved, no pair added), the zoomed view drawing each layer's lines in their place under a higher layer's marks, the eraser cutting the shown layers' lines (a hidden one's kept), refused only on a layer whose lines are full, a stroke over the cap ending as any; a replay's start draws Vector Ink; the medium: its codes read and write, the first code reads as the Basic tool, a brush switched to it sets aside smudge, drying, After, texture and any tip but Round, Brush Lab shows no choices or dials there (Tip its Size, Control its Response), no roll, Anything Goes or variation picks it, and one with it locked rolls only what it draws; fast eraser strokes, and a long one of a large eraser, over close lines leave no crumbs and no pixels of what they cut; the Lasso lifts Vector Ink's lines with the pen's pixels of their layer, cut at the loop, and puts them back moved, turned and scaled, sharp, Delete and Cut take them, Duplicate copies them, one Undo each; an eraser's dabs cut together as one at a time; a Draw Together guest's ink over Vector Ink goes on the layer beside the lines and its eraser cuts them, one Undo step");
     }
     static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
+    /** The lines alone from kept tiles ({@link VectorLines#alone}) as drawn afresh: across tiles' edges, twice (kept), at another offset (let go). */
+    static void kept() {
+        VectorLines lines = page().lines(InkWashLayers.INK);
+        for (double[] at : new double[][]{{4, 0, 0}, {4, 0, 0}, {3, -37.5, 12.25}}) {
+            int left = 90, top = 150, w = 300, h = 170, n = w * h;
+            int[] g = new int[n], c = new int[n], kg = new int[n], kc = new int[n];
+            lines.over(at[0], at[1], at[2], left, top, w, h, g, c, new byte[n]);
+            lines.alone(at[0], at[1], at[2], left, top, w, h, kg, kc);
+            check(java.util.Arrays.equals(g, kg) && java.util.Arrays.equals(c, kc) && java.util.Arrays.stream(c).anyMatch(v -> v > 0), "the kept tiles draw the lines as afresh at " + java.util.Arrays.toString(at));
+        }
+        // A finished stroke's lines (withKept) begin from these tiles, the stroke drawn over: as afresh, at the zoom kept and another.
+        float[][] h = hand(40, 5);
+        for (int k = 0; k < h[0].length; k++) { h[0][k] = 30 + h[0][k] * 1.4f; h[1][k] += 30; }
+        VectorLines next = lines.withKept(VectorLines.smoothed(200, 30, h[0], h[1], h[2], h[0].length));
+        for (double[] at : new double[][]{{3, -37.5, 12.25}, {3, -37.5, 12.25}, {4, 0, 0}}) {
+            int left = 90, top = 150, w = 300, h2 = 170, n = w * h2;
+            int[] g = new int[n], c = new int[n], kg = new int[n], kc = new int[n];
+            next.over(at[0], at[1], at[2], left, top, w, h2, g, c, new byte[n]);
+            next.alone(at[0], at[1], at[2], left, top, w, h2, kg, kc);
+            check(java.util.Arrays.equals(g, kg) && java.util.Arrays.equals(c, kc), "a finished stroke over the kept tiles draws as afresh at " + java.util.Arrays.toString(at));
+        }
+    }
 
     /** A wobbly line from (20, 50) to (180, 70), {@code n} samples. */
     static float[][] hand(int n, long seed) {

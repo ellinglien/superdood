@@ -301,7 +301,10 @@ final class LiveStrokeBench {
                 String[] q = c.split(":");
                 String style = q[0].replace("+smear", "").replace("+halftone", "");
                 PartChoice life = ModularPerfBench.lives(q[1])[0];
-                ModularBrush b = ModularPerfBench.brush(style, life);
+                // Vector Ink, its Basic tool's code (no style of its own); "Vector ink@2": zoomed 2× on the pad (its sharp view).
+                float zoom = style.contains("@") ? Float.parseFloat(style.substring(style.indexOf('@') + 1)) : 1;
+                String named = style.replaceAll("@.*", "");
+                ModularBrush b = named.equals("Vector ink") ? ModularCode.decode(VectorInk.CODE) : ModularPerfBench.brush(named, life);
                 if (q[0].contains("+smear")) b.set(BrushPart.CARRY, new ModularBrush.Part(PartChoice.SMUDGE));
                 // A halftone Screen (the mischief modules spec): pure black and white, for the "screen" panel mode.
                 if (q[0].contains("+halftone") && b.part(BrushPart.MEDIUM).has(PartDial.SCREEN)) b.part(BrushPart.MEDIUM).set(PartDial.SCREEN, 1);
@@ -336,9 +339,12 @@ final class LiveStrokeBench {
                         ink.slots.use(0, Brush.of(b));
                         ink.slots.swatches.setSize(ToolSlots.key(0), 2, px);
                         ink.select(0);
+                        call(pad, "fitPage");
+                        if (zoom != 1) call(pad, "zoomBy", new Class<?>[]{float.class}, zoom);
                     }
                 });
                 test.waitForIdleSync(); SystemClock.sleep(2000);
+                shrink = zoom;
                 Log.i("InkBench", "case " + w + " " + c + " begins");
                 long framesBefore = PanelFrames.count();
                 long lifted = strokeOn(test, pad, page, lab ? null : (Matrix)get(pad, "pageToView"), pressure, band);
@@ -351,12 +357,14 @@ final class LiveStrokeBench {
             String fh = args.getString("finalHoldMs");
             if (fh != null) { Log.i("InkBench", "holding the screen " + fh + " ms"); SystemClock.sleep(Long.parseLong(fh)); }
             main(test, () -> call(pad, "finishStroke"));
+            shrink = 1;
             setObject(StrokePanel.class, "bench", null); StrokePanel.redrive = true; StrokePanel.endNear = false;
             activity.finish();
             test.waitForIdleSync(); SystemClock.sleep(1000);
         }
     }
     private static int bands = 3;
+    private static float shrink = 1;
 
     /**
      * A long session on one page, for the heap (-e book "name" -e rounds 40 [-e holdMs 60000]): the bench library's
@@ -453,6 +461,8 @@ final class LiveStrokeBench {
         float[][] s = ModularPerfBench.path(1500);
         float kx = page[0] / 1920f, ky = page[1] / 2560f;
         if (band >= 0) for (float[] p : s) p[1] = (float)((band + .5) * 2560 / bands + (p[1] - 1280) / (1.07 * bands));
+        // Zoomed in about the page's middle: the curve drawn as much smaller there, so it stays on screen.
+        if (shrink != 1) for (float[] p : s) { p[0] = 960 + (p[0] - 960) / shrink; p[1] = 1280 + (p[1] - 1280) / shrink; }
         float[][] at = new float[s.length][2];
         main(test, () -> {
             Matrix toPanel = PanelCoordinates.fromView((View)pad);

@@ -69,10 +69,12 @@ final class SwatchReadout extends View {
                 r == null ? null : FootprintSweep.atRest(r));
     }
     /** {@code look} as {@code brush} typically draws it, page px ({@link FootprintSweep#typicalWidth}); the size itself for the eraser, the smudge tool, or a brush with no mark at rest. */
-    static double drawnWidth(ToolSwatches.Look look, Brush brush) {
-        if (brush == null) return look.px;
-        double wide = FootprintSweep.typicalWidth(ResolvedBrush.of(brush.parts, look.px, look.darkness));
-        return wide > 0 ? wide : look.px;
+    static double drawnWidth(ToolSwatches.Look look, Brush brush) { return drawnWidth(look.px, look.darkness, brush); }
+    /** As {@link #drawnWidth(ToolSwatches.Look, Brush)} at size {@code px} and grey {@code darkness}. */
+    static double drawnWidth(double px, double darkness, Brush brush) {
+        if (brush == null) return px;
+        double wide = FootprintSweep.typicalWidth(ResolvedBrush.of(brush.parts, px, darkness));
+        return wide > 0 ? wide : px;
     }
 
     @Override protected void onDraw(Canvas canvas) {

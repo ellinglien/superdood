@@ -24,11 +24,11 @@ public final class EraseKindChecks {
             System.out.println(pixelAt(mixed()));
             return;
         }
-        media(); tagging(); targeted(); paint(); everything(); oldPages(); ghost(); wet(); undo(); file(); planeless();
+        media(); tagging(); targeted(); paint(); everything(); layered(); oldPages(); ghost(); wet(); undo(); file(); planeless();
         System.out.println("PASS: Erase kind (" + checks + " checks): each Medium lays Pen, Paint or Pencil on its kind's plane, opaque paint on a plane of its own; "
                 + "Pen, Paint and Dry Media each erase their planes whole (permanent paint too) and leave the others byte for byte, pencil under ink coming off exactly; "
                 + "charcoal's ghost goes with Dry Media and stays under Pen; "
-                + "Everything takes every mark whole, permanent ink too, and its preview agrees; paint from before has no kind and erases as ever; a Slow wash and a Float print are on their planes; "
+                + "Everything takes every mark whole, permanent ink too, and its preview agrees; a layer's eraser takes that layer's marks and no other's, nothing on a layer not made, its preview agreeing; paint from before has no kind and erases as ever; a Slow wash and a Float print are on their planes; "
                 + "Undo and Redo bring strokes and erasing back with their kinds; the file keeps the planes, a drawing never drawn on with them is written as before, "
                 + "an older reader skips the sections, a corrupt one is refused; a layer of several kinds and no plane (a Lasso's picture, a merge) reopens as it was");
     }
@@ -105,7 +105,11 @@ public final class EraseKindChecks {
         }
         check(ResolvedBrush.of(ScreenChecks.screened(steady, 6), 8, .6).kind == ToneDocument.KIND_PAINT && ResolvedBrush.of(steady, 8, .6).kind == ToneDocument.KIND_PEN,
                 "Ben-Day ink lays Paint, the plain pen Pen");
-        check(EraseKind.LABELS.length == 4 && EraseKind.KINDS[0] == 0 && EraseKind.choiceOf(EraseKind.KINDS[3]) == 3 && EraseKind.LABELS[3].equals("Dry Media") && EraseKind.MARKS[0].isEmpty() && EraseKind.choiceOf(7) == 0, "four choices, Everything first");
+        check(EraseKind.LABELS.length == 4 && EraseKind.KINDS[0] == 0 && EraseKind.choiceOf(EraseKind.KINDS[3]) == 3 && EraseKind.LABELS[3].equals("Dry Media") && EraseKind.choiceOf(7) == 0, "Show Kinds' four columns, Everything first");
+        check(java.util.Arrays.asList(EraseKind.CHOICES).equals(java.util.Arrays.asList("Everything", "Layer 1", "Layer 2", "Layer 3")) && EraseKind.TARGETS[0] == 0 && EraseKind.MARKS[0].isEmpty() && EraseKind.MARKS[2].equals("2")
+                && EraseKind.choice(EraseKind.TARGETS[3]) == 3 && EraseKind.choice(ToneDocument.KIND_PEN) == 0 && EraseKind.layerOf(EraseKind.TARGETS[2]) == 2 && EraseKind.layerOf(0) == 0, "the eraser's four choices, Everything then the layers");
+        check(EraseKind.takes(EraseKind.TARGETS[2], ToneDocument.KIND_PEN) == (EraseKind.TARGETS[2] | ToneDocument.KIND_PAINT | ToneDocument.KIND_PENCIL) && EraseKind.takes(EraseKind.TARGETS[2], 0) == EraseKind.TARGETS[2]
+                && EraseKind.takes(EraseKind.TARGETS[1], ToneDocument.KIND_ALL) == 0, "Show Kinds limits a layer's eraser to the kinds shown, its layer kept; every kind hidden, it is refused");
     }
 
     /** Each kind's marks are on its plane, made when it first draws; the base and its bitmask stay as they were. */
@@ -222,6 +226,35 @@ public final class EraseKindChecks {
         int seen = 0, wrong = 0;
         for (int i = 0; i < shown.length; i++) if (shown[i] >= 0) { seen++; if (shown[i] != p.compositeTone(i % W, i / W)) wrong++; }
         check(seen > 1000 && wrong == 0, "Everything's preview is the page as erased, over " + seen + " pixels (" + wrong + " wrong)");
+    }
+
+    /** A layer's eraser (the owner, 2026-11-08): that layer's pair, every mark, none on the others; nothing on a layer the page hasn't made. */
+    static void layered() {
+        ToneDocument one = mixed(), kept = mixed();
+        erase(one, EraseKind.TARGETS[1]); erase(one, EraseKind.TARGETS[3]);
+        for (int n = 0; n < 2; n++) check(differ(layer(one, n), layer(kept, n)) == 0, "A one-pair page (layer 2): layers 1 and 3 aren't made, nothing goes, layer " + n);
+        erase(one, EraseKind.TARGETS[2]);
+        for (int n = 0; n < 2; n++) check(covered(layer(one, n)) <= STRAY, "Layer 2 is its drawing: every mark goes, layer " + n + ": " + covered(layer(one, n)));
+        ToneDocument d = mixed();
+        check(InkWashLayers.pickLayer(d, 3) && InkWashLayers.pairs(d) == 3, "three layers, layer 3 in use");
+        ErasableChecks.ink(d, ErasableChecks.preset("Steady line"));
+        ToneDocument.Layer[] before = new ToneDocument.Layer[d.layerCount()];
+        for (int n = 0; n < before.length; n++) before[n] = layer(d, n);
+        check(covered(before[2]) > 1000 && covered(before[3]) > 1000 && covered(before[5]) > 1000, "layer 2 holds the wash and the ink, layer 3 more ink");
+        erase(d, EraseKind.TARGETS[2]);
+        for (int n = 2; n < 4; n++) check(covered(layer(d, n)) <= STRAY, "Layer 2's every mark goes, engine layer " + n + ": " + covered(layer(d, n)));
+        for (int n : new int[]{0, 1, 4, 5}) check(differ(layer(d, n), before[n]) == 0, "the other layers byte for byte, engine layer " + n);
+        ToneDocument p = mixed();
+        InkWashLayers.pickLayer(p, 3);
+        ErasableChecks.ink(p, ErasableChecks.preset("Steady line"));
+        EraseBothStroke e = new EraseBothStroke(p, 120f, EraseKind.TARGETS[3]);
+        for (int x = 0; x <= W; x += 20) e.sample(x, 100, 1f, Float.NaN, Float.NaN);
+        int[] shown = new int[W * H];
+        e.erasedTones(0, 0, W, H, shown);
+        e.finish();
+        int seen = 0, wrong = 0;
+        for (int i = 0; i < shown.length; i++) if (shown[i] >= 0) { seen++; if (shown[i] != p.compositeTone(i % W, i / W)) wrong++; }
+        check(seen > 1000 && wrong == 0, "A layer's preview is the page as erased, the layers under it showing, over " + seen + " pixels (" + wrong + " wrong)");
     }
 
     /** Paint from before kinds has none: a chosen kind erases it as the eraser did, and a file of it is written as before. */

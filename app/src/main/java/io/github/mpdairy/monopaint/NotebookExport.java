@@ -323,9 +323,9 @@ final class NotebookExport {
      */
     static Done update(File folder, String name, List<PackedPage> pages, Magnets.Tiles tiles, Covers covers) throws IOException { return update(folder, name, pages, tiles, covers, NotebookOptions.DEFAULT); }
     /**
-     * As above, the pages' template guides ({@code options}) drawn under their marks in the PNGs and the PDF when the
-     * notebook prints them (the covers excepted). A PNG carries its page's CRC mixed
-     * with the template's ({@link #pageKey}), so changing the template draws the pages again and nothing else does.
+     * As above, under the pages' templates ({@code options}): the PNGs and the PDF leave the guides out (the owner,
+     * 2026-11-08), the template named in the PDF's words. A PNG carries its page's CRC mixed with the template's
+     * ({@link #pageKey}, then {@link #LEFT_OUT}), so changing the template writes the pages again and nothing else does.
      */
     static Done update(File folder, String name, List<PackedPage> pages, Magnets.Tiles tiles, Covers covers, NotebookOptions options) throws IOException { return update(folder, name, pages, tiles, covers, options, null); }
     /** As above, each page under its own template under Random ({@code pageTemplates}: each page's key, {@link NotebookOptions#pageTemplate}; null: none). */
@@ -334,7 +334,7 @@ final class NotebookExport {
     }
     /**
      * As above, a stack of layers ({@code tracing}'s stacks, {@link PageStacks}; null: every page its own) printed as one
-     * page, its layers flattened bottom first under the bottom page's guides, a Hidden layer left out: a PNG and a PDF page
+     * page, its layers flattened bottom first, a Hidden layer left out: a PNG and a PDF page
      * a stack. A page alone keeps its PNG's key (its CRC); a stack's mixes its layers'.
      */
     static Done update(File folder, String name, List<PackedPage> pages, Magnets.Tiles tiles, Covers covers, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing) throws IOException {
@@ -433,25 +433,23 @@ final class NotebookExport {
                 if (was != null && (plain || lined)) { sheet = was; vectors = lined ? 1 : 0; }
                 // A PNG from before the PDF said its words, or drew its lines as vectors: the page read once for them.
                 else try { synchronized (DocumentCodec.ONE_PAGE) {
-                    List<ToneDocument> layers = layers(all, stacks, i, tracing, templates[i]);
+                    List<ToneDocument> layers = layers(all, stacks, i, tracing, null);
                     sheet = said(crcs[i], named[i], layers);
                     ToneDocument.Snapshot page = flatten(layers, hidden(stacks, i, tracing));
-                    vectors = twin(page, crcs[i], tiles, templates[i].shared(page.width, page.height) != null, twin);
+                    vectors = twin(page, crcs[i], tiles, twin);
                 } }
                 catch (IOException | RuntimeException e) { sheet = new NotebookPdf.Sheet(crcs[i], 0, 0, false, named[i], java.util.Collections.emptyList()); }
             } else synchronized (DocumentCodec.ONE_PAGE) {
                 ToneDocument.Snapshot page;
-                byte[] guides;
                 try {
-                    List<ToneDocument> layers = layers(all, stacks, i, tracing, templates[i]);
+                    List<ToneDocument> layers = layers(all, stacks, i, tracing, null);
                     sheet = said(crcs[i], named[i], layers);
                     page = flatten(layers, hidden(stacks, i, tracing));
-                    guides = templates[i].shared(page.width, page.height);
                 }
                 catch (IOException | RuntimeException e) { target.delete(); continue; }
-                byte[] bytes = png(page, crcs[i], tiles, guides != null);
+                byte[] bytes = png(page, crcs[i], tiles, false);
                 write(target, bytes); made++;
-                vectors = twin(page, crcs[i], tiles, guides != null, twin);
+                vectors = twin(page, crcs[i], tiles, twin);
             }
             said.add(sheet.days(days[0], days[1]));
             lines.append(key).append('\t').append(vectors).append('\n');
@@ -480,8 +478,8 @@ final class NotebookExport {
     static final String LINES_STATE = ".lines.txt", LINES_MARK = "pictures 2\n";
     static String vectorName(long key) { return String.format(Locale.ROOT, ".%08x", key) + VECTOR_PNG; }
     /** {@code page}'s {@link #vectorPng} written to {@code twin}: 1 when it has one, else 0 (none written). */
-    private static int twin(ToneDocument.Snapshot page, long key, Magnets.Tiles tiles, boolean guides, File twin) throws IOException {
-        byte[] bytes = vectorPng(page, key, tiles, guides);
+    private static int twin(ToneDocument.Snapshot page, long key, Magnets.Tiles tiles, File twin) throws IOException {
+        byte[] bytes = vectorPng(page, key, tiles, false);
         if (bytes == null) return 0;
         write(twin, bytes);
         return 1;
@@ -504,6 +502,8 @@ final class NotebookExport {
                 templates[s] = options.pageTemplate(pageTemplates != null && b < pageTemplates.size() ? pageTemplates.get(b) : null);
                 named[s] = templates[s].equals(NotebookTemplate.BLANK) ? "" : templates[s].label;
                 crcs[s] = pageKey(stackKey(pages, stacks, s, tracing), templates[s]);
+                // The copies leave the guides out (the owner, 2026-11-08): a templated page's copy from before, with them, is drawn again.
+                if (!templates[s].equals(NotebookTemplate.BLANK)) crcs[s] ^= LEFT_OUT;
             }
             pictured = covers != null && covers.picture >= 0 && covers.picture < pages.size() ? pages.get(covers.picture) : null;
             if (covers != null) for (int c = 0; c < 2; c++) {
@@ -535,15 +535,13 @@ final class NotebookExport {
         for (int i = 0; i < plan.sheets; i++) synchronized (DocumentCodec.ONE_PAGE) {
             NotebookPdf.Sheet sheet;
             ToneDocument.Snapshot page;
-            byte[] guides;
             try {
-                List<ToneDocument> layers = layers(pages, plan.stacks, i, tracing, plan.templates[i]);
+                List<ToneDocument> layers = layers(pages, plan.stacks, i, tracing, null);
                 sheet = said(plan.crcs[i], plan.named[i], layers);
                 page = flatten(layers, hidden(plan.stacks, i, tracing));
-                guides = plan.templates[i].shared(page.width, page.height);
             } catch (IOException | RuntimeException e) { continue; }
-            byte[] picture = vectorPng(page, plan.crcs[i], tiles, guides != null);
-            pngs.add(picture != null ? picture : png(page, plan.crcs[i], tiles, guides != null));
+            byte[] picture = vectorPng(page, plan.crcs[i], tiles, false);
+            pngs.add(picture != null ? picture : png(page, plan.crcs[i], tiles, false));
             said.add(sheet.days(today, today));
         }
         NotebookPdf.write(out, name, title, options.template.equals(NotebookTemplate.BLANK) ? "" : options.template.label, said, k -> read(pngs.get(k)));
@@ -600,6 +598,8 @@ final class NotebookExport {
         }
         return c.getValue();
     }
+    /** Mixed into a templated page's copy key since the copies left its guides out ({@link Plan}). */
+    static final long LEFT_OUT = 0x5a17e0b1L;
     /** The CRC a page's PNG carries: its page's, mixed with the template's when guides are printed (Blank: the page's own, as before guides). */
     static long pageKey(long crc, NotebookTemplate template) {
         if (template.equals(NotebookTemplate.BLANK)) return crc;

@@ -392,21 +392,15 @@ public final class NotebookOptionsChecks {
             check(Arrays.equals(Files.readAllBytes(new File(printed, "nb/001.png").toPath()), plainPng) && b.drawn == 2
                     && Arrays.equals(Files.readAllBytes(NotebookExport.pdf(printed, "nb").toPath()), Files.readAllBytes(NotebookExport.pdf(plain, "nb").toPath())),
                     "Default options: the PNG and the PDF byte for byte as without");
-            // A template, printed.
+            // A template: the copies leave its guides out (the owner, 2026-11-08).
             NotebookOptions diary = NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.DIARY);
             NotebookExport.Done c = NotebookExport.update(printed, "nb", pages, null, null, diary);
             byte[] guidePng = Files.readAllBytes(new File(printed, "nb/001.png").toPath());
-            check(c.drawn == 2 && c.kept == 0, "A template added draws every page again");
-            check(NotebookExport.read(guidePng).crc == NotebookExport.pageKey(pages.get(0).crc, NotebookTemplate.DIARY) && NotebookExport.read(guidePng).crc != pages.get(0).crc, "and its PNG carries the page's CRC with the template's");
-            int[] shown = tones(guidePng), without = tones(plainPng);
-            check(shown[guide] == expectGuide && without[guide] == expectPaper, "The PNG has the guides under the marks (" + shown[guide] + " against " + without[guide] + ")");
-            int differ = 0;
-            for (int i = 0; i < shown.length; i++) if (shown[i] != without[i]) differ++;
-            check(differ > 100, "and only them differ");
-            check(Files.size(NotebookExport.pdf(printed, "nb").toPath()) != Files.size(NotebookExport.pdf(plain, "nb").toPath()), "so does the PDF");
+            check(c.drawn == 2 && c.kept == 0, "A template added writes every page again");
+            check(NotebookExport.read(guidePng).crc == (NotebookExport.pageKey(pages.get(0).crc, NotebookTemplate.DIARY) ^ NotebookExport.LEFT_OUT) && NotebookExport.read(guidePng).crc != pages.get(0).crc, "and its PNG carries the page's CRC with the template's");
+            check(Arrays.equals(tones(guidePng), tones(plainPng)), "The PNG has no guides: as without the template");
             NotebookExport.Done d = NotebookExport.update(printed, "nb", pages, null, null, diary);
             check(d.drawn == 0 && d.kept == 2, "Nothing changed: nothing drawn again");
-            // Guides in PDF (Leave Out) is cut (2026-10-24): the guides always print, as on paper (NotebookRulesChecks.lockCut).
             // Covers have none.
             NotebookExport.Covers covers = new NotebookExport.Covers("nb", CoverDesign.DEFAULT, W, H, null, null, -1);
             File one = new File(dir, "one"), two = new File(dir, "two"); one.mkdirs(); two.mkdirs();

@@ -1,29 +1,44 @@
 package io.github.mpdairy.monopaint;
 
 /**
- * What the eraser takes (the owner, 2026-10-20: "an eraser that targets a kind of mark"): a long press on its tile offers
- * these four, Everything first: every mark, whole, permanent ink too (the owner, 2026-10-22). A kind is a {@link ToneDocument#KIND_PEN} bit and the like; each
- * Medium lays one ({@link ResolvedBrush#kind}). Pure Java; docs/archive/superpowers/specs/2026-10-20-erase-kind-design.md.
+ * What the eraser takes: a long press on its tile offers Everything (every mark, whole, permanent ink too: the owner,
+ * 2026-10-22) or one of the three layers, every mark on it and none on the others (the owner, 2026-11-08: "rename them
+ * just layers 1 etc instead of pen paint etc"; Pen, Paint and Dry Media from 2026-10-20 until then). What it takes is
+ * one int, its target ({@link #TARGETS}): {@link ToneDocument#KIND_PEN} bits, which Show Kinds limits ({@link #takes}),
+ * and above them the layer, 1 to 3 ({@link #layerOf}; 0: every layer). The kinds, each Medium laying one
+ * ({@link ResolvedBrush#kind}), stay Show Kinds' ({@link #LABELS}). Pure Java; docs/archive/superpowers/specs/2026-10-20-erase-kind-design.md.
  */
 final class EraseKind {
-    /** The buttons' words (docs/TEXT-STYLE.md: Title Case, two words at most), and what each takes. */
+    /** Show Kinds' columns, a kind each after Everything (docs/TEXT-STYLE.md: Title Case, two words at most), and what each is. */
     static final String[] LABELS = {"Everything", "Pen", "Paint", "Dry Media"};
     static final int[] KINDS = {0, ToneDocument.KIND_PEN, ToneDocument.KIND_PAINT, ToneDocument.KIND_PENCIL};
+    /** The eraser's choices' words, and the target each sets. */
+    static final String[] CHOICES = {"Everything", "Layer 1", "Layer 2", "Layer 3"};
+    private static final int LAYER = 8;
+    static final int[] TARGETS = {0, 1 << LAYER, 2 << LAYER, 3 << LAYER};
     /** The result in two words, said when a choice is made. */
-    private static final String[] NOTES = {"Erasing everything", "Erasing pen", "Erasing paint", "Erasing dry media"};
+    private static final String[] NOTES = {"Erasing everything", "Erasing layer 1", "Erasing layer 2", "Erasing layer 3"};
 
     /** The Eraser tile's mark for each choice (none for Everything). */
-    static final String[] MARKS = {"", "Pe", "Pa", "Dr"};
+    static final String[] MARKS = {"", "1", "2", "3"};
     static String note(int choice) { return NOTES[choice]; }
-    /** The choice that takes {@code kinds}, 0 (Everything) for any other. */
+    /** The choice that sets {@code target}, 0 (Everything) for any other. */
+    static int choice(int target) { for (int i = 1; i < TARGETS.length; i++) if (TARGETS[i] == target) return i; return 0; }
+    /** Kind {@code kinds}' column ({@link #LABELS}), 0 (Everything) for any other. */
     static int choiceOf(int kinds) { for (int i = 1; i < KINDS.length; i++) if (KINDS[i] == kinds) return i; return 0; }
+    /** The layer {@code target} erases, 1 to 3 ({@link InkWashLayers#layer}); 0: every one. */
+    static int layerOf(int target) { return target >>> LAYER; }
 
     /**
-     * What an eraser set to {@code kinds} (0: Everything) takes while Show Kinds hides {@code hidden}
-     * ({@link NotebookOptions#hiddenKinds}): never a hidden kind, which can't be seen. With none hidden, {@code kinds} as
-     * set; else 0 means nothing is left to take, and the stroke is refused.
+     * What an eraser set to {@code target} (0: Everything) takes while Show Kinds hides {@code hidden}
+     * ({@link NotebookOptions#hiddenKinds}): never a hidden kind, which can't be seen, its layer kept. With none hidden,
+     * {@code target} as set; else 0 means nothing is left to take, and the stroke is refused.
      */
-    static int takes(int kinds, int hidden) { return hidden == 0 ? kinds : (kinds == 0 ? ToneDocument.KIND_ALL : kinds) & ~hidden; }
+    static int takes(int target, int hidden) {
+        if (hidden == 0) return target;
+        int kinds = target & ToneDocument.KIND_ALL, left = (kinds == 0 ? ToneDocument.KIND_ALL : kinds) & ~hidden;
+        return left == 0 ? 0 : left | target & ~ToneDocument.KIND_ALL;
+    }
 
     /**
      * Show Kinds (the owner, 2026-10-28): each kind's step on a page's screen ({@link NotebookOptions#GUIDE_STEPS}, Full to

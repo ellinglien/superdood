@@ -223,7 +223,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   the browser's foot only since 2026-11-06, the owner: "it shouldn't be a browser, it should be the local app version": the app's Edit Brush is it, and Brush Lab shares to it); over those **Stamp ▾** for a Stamp; at the top, for a Basic tool changed in Brush Lab only, **Reset to Default** (the owner's words, 2026-10-27; at the top since 2026-10-28; the Tools page's too, plain words before Edit in Brush Lab, 2026-11-03).
 
 - **Light popouts beside the column, 2026-10-22** (the owner: "long press eraser menu, make it smaller and lighter so
-  it doesn't leave ghosts on the screen after"): the eraser's kinds (**Everything**, **Pen**, **Paint**, **Dry Media**)
+  it doesn't leave ghosts on the screen after"): the eraser's choices (**Everything**, **Layer 1**, **Layer 2**, **Layer 3**)
   and **Clear page**, an offer, a short label: words in captions on white, a fine grey outline, no boxes; the one in use
   a small dot before it and bold (said ", in use"), never ink-filled.
 - **Notes on the drawing screen, 2026-10-22** (the owner: "the system update alerts... got cut off by the canvas. maybe
@@ -393,8 +393,8 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   of working needs, from `assets/brushes/kits.txt`. The library's tab **Kits** (a card a kit: its name, "3 brushes");
   This Brush's button **Load Kit** (said "Load the Marbling kit"); the kit's sheet: its title "Marbling Kit", its intro
   (one whole sentence, the brush words' rules: no semicolons), its steps "1 Drop ink" (a bar's words: a number, then
-  three words at most, sentence case) with the Basic tool's name beside them ("Sumi"; the eraser's step "Eraser, Dry
-  Media"), where it goes ("Fills the first 3 slots", "Fills and shows the first 3 slots" when Brushes on Bar rises),
+  three words at most, sentence case) with the Basic tool's name beside them ("Sumi"; the eraser's step "Eraser,
+  Layer 1"), where it goes ("Fills the first 3 slots", "Fills and shows the first 3 slots" when Brushes on Bar rises),
   **Cancel** and **Load Kit**; refused, the Tools page's fixed note. A kit's slot picked says
   its step ("3 Comb rings") in the name's place. Marbling's notes: "No ink floating" (Clear water or Comb with nothing
   afloat), "Rings printed" (another brush printed the bath).
@@ -504,8 +504,10 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   (Gouache, "ages, cracks"; **Cracking paint** since 2026-11-06, the owner: "maybe rename it cracking paint", key `cracks` kept), with Risograph's **Riso** (Print, "grainy print"), the Medium card's word for it.
   "This brush" says the drying, then After: "Dries at once. Fades away in
   20 s."
-- **The eraser's choices** (long press on the Eraser, the owner, 2026-10-20): **Everything**, **Pen**, **Paint**, **Dry Media** (pencil, charcoal and
-  crayon; the owner's name, replacing "Pencil, Charcoal"), the Eraser tile's mark while one is chosen (**Pe**, **Pa**, **Dr**), and the note "Erasing pen" / "Erasing paint" / "Erasing dry media" / "Erasing everything".
+- **The eraser's choices** (long press on the Eraser, the owner, 2026-10-20; layers since 2026-11-08, "rename them just
+  layers 1 etc instead of pen paint etc"): **Everything**, **Layer 1**, **Layer 2**, **Layer 3** (Pen, Paint and Dry Media
+  until then; those stay Show Kinds' columns), the Eraser tile's mark while a layer is chosen (**1**, **2**, **3**), and
+  the note "Erasing layer 1" / "Erasing everything".
 - **Control:** Steady, Press Wide, Press Dark, Press Both, Springy, Tilt Shade, Tilt Turn, Flick, Custom.
 
 **Dials** (Title Case, rule 8):

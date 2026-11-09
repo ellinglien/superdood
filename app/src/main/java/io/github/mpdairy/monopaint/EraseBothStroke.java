@@ -15,6 +15,8 @@ package io.github.mpdairy.monopaint;
  * mischief-lab.html's scrape): each pass takes some, more on some streaks than others. On a notebook cover, erasing
  * everything also rubs the cover's design off where it went, down to white paper; its tape, label and picture stay
  * ({@link ToneDocument#rubDesign}, {@link CoverWear}). An eraser limited to kinds leaves the design: it is no kind of mark.
+ * An eraser set to a layer ({@link EraseKind#layerOf}) takes every mark on that layer's pair and none elsewhere; the
+ * masking fluid and a cover's design, which are no layer's, stay.
  */
 final class EraseBothStroke implements DrawingStroke {
     private final ToneDocument document;
@@ -24,8 +26,12 @@ final class EraseBothStroke implements DrawingStroke {
     private final WashCoverage coverage;
     /** The pixels it went over where masking fluid could lift, lifted at lift instead of erased; null on a page without any. */
     private final WashCoverage lifts;
-    /** The kinds of mark it takes ({@link ToneDocument#eraseKinds}); 0: Everything. */
+    /** The kinds of mark it takes ({@link ToneDocument#eraseKinds}); 0: every kind. */
     private final int kinds;
+    /** Everything: every kind on every layer, the fluid and a cover's design too. */
+    private final boolean everything;
+    /** The engine layers it erases, inclusive: every one, or a layer's pair ({@link EraseKind#layerOf}); none (from > to) where the page has no such layer. */
+    private final int from, to;
     /**
      * What it takes of the paint, whole ({@link ToneDocument#eraseKinds}): {@link #kinds}, and every kind for Everything, so
      * permanent ink goes too (the owner, 2026-10-22). Masking fluid's wax is no kind: lifting fluid takes with 0, the Erasable rule.
@@ -62,24 +68,29 @@ final class EraseBothStroke implements DrawingStroke {
 
     /** The Eraser tool or the pen's eraser end, sized by {@code preset} and pressure. */
     EraseBothStroke(ToneDocument document, InkWashSizes.Preset preset) { this(document, InkWashSizes.maxSize(preset), 0, 0); }
-    /** As above, taking only marks of {@code kinds} ({@link ToneDocument#eraseKinds}; 0: everything), whole, permanent paint too. */
+    /** As above, taking only marks of {@code kinds} (an {@link EraseKind} target: kinds and a layer; 0: everything), whole, permanent paint too. */
     EraseBothStroke(ToneDocument document, InkWashSizes.Preset preset, int kinds) { this(document, InkWashSizes.maxSize(preset), 0, kinds); }
     /** The Eraser tool or the pen's eraser end at the current size ({@link ToolSwatches#useSize}): {@code most} px at its broadest. */
     static EraseBothStroke pen(ToneDocument document, float most, int kinds) { return new EraseBothStroke(document, most, 0, kinds); }
     /** A finger: {@code diameter} page pixels when fast, narrowing when slow (see {@link PenSpeed#fingerDiameter}), whatever its pressure. */
     EraseBothStroke(ToneDocument document, float diameter) { this(document, Float.NaN, diameter, 0); }
     EraseBothStroke(ToneDocument document, float diameter, int kinds) { this(document, Float.NaN, diameter, kinds); }
-    private EraseBothStroke(ToneDocument document, float most, float diameter, int kinds) {
-        this.document = document; this.most = most; this.diameter = diameter; this.kinds = kinds; pass = document.erasePasses++;
+    private EraseBothStroke(ToneDocument document, float most, float diameter, int target) {
+        this.document = document; this.most = most; this.diameter = diameter; pass = document.erasePasses++;
+        kinds = target & ToneDocument.KIND_ALL; everything = target == 0;
         takes = kinds == 0 ? ToneDocument.KIND_ALL : kinds;
         restore = document.activeLayer();
         coverage = new WashCoverage(document.width, document.height);
         boolean masked = document.hasMask();
-        // Masking fluid is no kind of mark: an eraser limited to one leaves it (it still shields what is under it).
-        lifts = masked && kinds == 0 ? new WashCoverage(document.width, document.height) : null;
+        // Masking fluid is no kind of mark, nor a layer's: an eraser limited to either leaves it (it still shields what is under it).
+        lifts = masked && everything ? new WashCoverage(document.width, document.height) : null;
         ones = new int[document.width]; java.util.Arrays.fill(ones, 1); fresh = new byte[document.width];
-        inkLayer = InkWashLayers.inkOf(document, InkWashLayers.current(document));
-        cut = VectorInk.Cut.of(document, kinds);
+        int layer = EraseKind.layerOf(target), pair = layer == 0 ? -1 : InkWashLayers.pairOfLayer(document, layer);
+        boolean made = pair >= 0 && pair < InkWashLayers.pairs(document);
+        from = layer == 0 ? 0 : made ? InkWashLayers.washOf(document, pair) : 1;
+        to = layer == 0 ? document.layerCount() - 1 : made ? InkWashLayers.inkOf(document, pair) : 0;
+        inkLayer = InkWashLayers.inkOf(document, made ? pair : InkWashLayers.current(document));
+        cut = VectorInk.Cut.of(document, kinds, from, to);
         // Unless masking fluid shields paint (a page whose fluid has all been lifted previews again).
         previews = !masked;
         document.selectLayer(inkLayer);
@@ -107,7 +118,8 @@ final class EraseBothStroke implements DrawingStroke {
     float[] at() { return Float.isNaN(lastX) ? null : new float[]{lastX, lastY, lastSize}; }
     /** Erases the ink on the pixels {@code x0} to {@code x1} (exclusive) of row {@code y} the stroke has not been over yet. */
     private void erase(int y, int x0, int x1) {
-        if (coverage.cover(y, x0, x1, ones, fresh) == 0) return;
+        // A layer the page has yet to make: nothing to take.
+        if (inkLayer < from || inkLayer > to || coverage.cover(y, x0, x1, ones, fresh) == 0) return;
         // Fluid it can lift: this pass takes the fluid (at lift) and leaves what is under it.
         boolean any = lifts == null;
         if (lifts != null) for (int i = 0; i < x1 - x0; i++) {
@@ -153,12 +165,11 @@ final class EraseBothStroke implements DrawingStroke {
      */
     void erasedTones(int left, int top, int w, int h, int[] out) {
         if (fresh.length < w) throw new IllegalArgumentException("Wider than the page");
-        int to = document.layerCount() - 1;
         for (int y = 0; y < h; y++) {
             coverage.levels(left, top + y, w, 1, fresh);
             // A Tone dot the scrape left shows as it is.
             for (int x = 0; x < w; x++) if (fresh[x] == 0 || kinds == 0 && dot(left + x, top + y)) { fresh[x] = 0; out[y * w + x] = -1; }
-            document.compositeTonesKept(left, top + y, w, 0, to, takes, fresh, out, y * w);
+            document.compositeTonesKept(left, top + y, w, from, to, takes, fresh, out, y * w);
         }
     }
     /** {left, top, right, bottom} of the pixels erased since the last call, right and bottom exclusive; null for none. */
@@ -199,7 +210,7 @@ final class EraseBothStroke implements DrawingStroke {
             // plane), one Undo step with the rest. A plane of another kind is left whole, a hidden layer too (the screen
             // doesn't show it). Vector Ink's plane goes as the pen's, the cut drawing what is left of its lines again.
             // The cost: a pass over the pixels it went over per plane, at lift only; a blank pixel is passed by at once.
-            for (int layer = 0; layer < document.layerCount(); layer++) {
+            for (int layer = from; layer <= to; layer++) {
                 if (!document.layerVisible(layer)) continue;
                 document.selectLayer(layer);
                 for (int p = -1; p < ToneDocument.PLANES; p++) {
@@ -222,7 +233,7 @@ final class EraseBothStroke implements DrawingStroke {
         } finally { document.selectLayer(restore); }
         if (cut != null) cut.done(changed, coverage);
         // After the layer is restored: Undo puts back the layer selected with the design.
-        if (kinds == 0 && document.rubs())
+        if (everything && document.rubs())
             changed |= document.rubDesign(CoverWear.with(document.wear(), document.width, document.height, coverage.bounds(), this::erased), coverage.bounds(), changed);
         return changed;
     }

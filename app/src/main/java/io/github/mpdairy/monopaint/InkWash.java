@@ -22,12 +22,14 @@ final class InkWash {
     final ToolSlots slots;
     /** The selected tool: a slot, {@link #ERASER}, {@link #SMUDGE} or {@link #STAMP}. */
     int selected;
-    /** The kinds of mark the eraser takes ({@link EraseKind}); 0: everything. Not kept between launches. */
+    /** What the eraser takes ({@link EraseKind}: a layer, or 0, everything). Not kept between launches. */
     int eraseKinds;
     /** The kinds Show Kinds hides on the page drawn on ({@link EraseKind#hidden}), read at each eraser stroke; the drawing screen sets it. */
     java.util.function.IntSupplier hiddenKinds = () -> 0;
     /** The kinds the eraser takes now ({@link EraseKind#takes}): never a hidden one. */
     int erasing() { return EraseKind.takes(eraseKinds, hiddenKinds.getAsInt()); }
+    /** What the log keeps of an eraser's target: its kinds. shortcut: a layer's eraser replays as every layer's (Replay doesn't follow layers either); log the layer when it does. */
+    private static int logged(int target) { return target & ToneDocument.KIND_ALL; }
     /** The open drawing's strokes by brush, for its name ({@link DrawingNames#described}); the drawing screen clears it. */
     final DrawingNames.Tally drawn = new DrawingNames.Tally();
 
@@ -126,7 +128,7 @@ final class InkWash {
         ToolSwatches.Look look = shifted(chosen, brush, holder(chosen, finger));
         // Record and Replay: the brush (none: the eraser, and the kinds it takes), size and grey this stroke was made with.
         int eraseKinds = erasing();
-        recorder = StrokeLog.Recorder.of(brush, look, eraseKinds, holder(chosen, finger), chosen == SMUDGE, finger);
+        recorder = StrokeLog.Recorder.of(brush, look, logged(eraseKinds), holder(chosen, finger), chosen == SMUDGE, finger);
         // Sharp dry brushes: the pen's stroke of a brush kept sharp is fed as the log keeps it (DrawingPad.feed).
         if (brush != null && chosen != SMUDGE && !finger && SharpStrokes.takes(brush.parts, look.px, look.darkness)) SharpStrokes.keep(recorder, brush.parts, look.px, look.darkness, session);
         // Mirrors and Filled Shape as the browser's too (StrokeStart).
@@ -221,7 +223,7 @@ final class InkWash {
         slots.pageChanged();
         InkWashLayers.showSelected(document);
         int eraseKinds = erasing();
-        recorder = StrokeLog.Recorder.fingerEraser(diameter, eraseKinds);
+        recorder = StrokeLog.Recorder.fingerEraser(diameter, logged(eraseKinds));
         return StrokeStart.mirrored(document, new EraseBothStroke(document, diameter, eraseKinds), () -> { session.settleNow(document); return new EraseBothStroke(document, diameter, eraseKinds); }, () -> 2 * diameter, false);
     }
 }

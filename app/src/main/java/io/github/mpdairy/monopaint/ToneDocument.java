@@ -1428,8 +1428,8 @@ final class ToneDocument {
      * pixels go as the pen's (their plane is Pen), the cut drawing what is left of them again at the lift ({@link VectorInk.Cut}).
      */
     void compositeTonesKept(int x,int y,int w,int from,int to,int kinds,byte[] at,int[] out,int offset) {
-        // Inkwash: the Everything eraser rubs a cover's design off too (rubDesign).
-        byte[] bare=kinds==0||kinds==KIND_ALL?bare():null;
+        // Inkwash: the Everything eraser rubs a cover's design off too (rubDesign); one set to a layer doesn't.
+        byte[] bare=(kinds==0||kinds==KIND_ALL)&&from<=0&&to>=layers.size()-1?bare():null;
         int end=stackSize(layers.size()), m=0;
         Layer[] shown=new Layer[end]; int[] owner=new int[end], opacity=new int[end];
         for(int k=0;k<end;k++) {
@@ -2439,7 +2439,11 @@ final class ToneDocument {
     private void liveBlocks(int l,int t,int r,int b) {
         if(live==null) return;
         l=Math.max(0,l); t=Math.max(0,t); r=Math.min(width,r); b=Math.min(height,b);
-        if(r>l&&b>t) { int across=(width+LIVE_BLOCK-1)/LIVE_BLOCK; for(int y=t/LIVE_BLOCK;y<=(b-1)/LIVE_BLOCK;y++) live.set(y*across+l/LIVE_BLOCK,y*across+(r-1)/LIVE_BLOCK+1); }
+        if(r<=l||b<=t) return;
+        int across=(width+LIVE_BLOCK-1)/LIVE_BLOCK;
+        // A pixel's write (Vector Ink lays a large line pixel by pixel): its one block's bit.
+        if(r-l==1&&b-t==1) { live.set(t/LIVE_BLOCK*across+l/LIVE_BLOCK); return; }
+        for(int y=t/LIVE_BLOCK;y<=(b-1)/LIVE_BLOCK;y++) live.set(y*across+l/LIVE_BLOCK,y*across+(r-1)/LIVE_BLOCK+1);
     }
     /** Live pages' probe ({@link LiveProbe}): the side of the blocks {@link #takeLive} gives, page px. */
     static final int LIVE_BLOCK=16;

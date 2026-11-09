@@ -1004,19 +1004,19 @@ public final class DrawLayoutChecks {
             // Every write of the page's pixels to the panel goes through wrote(), which puts Zen's button back, no flash (2026-11-05: "disappears a bit").
             String pad = source("DrawingPad");
             check(pad.contains("if (target == previewDirect) previewArea.union(presenting);\n                    wrote(presenting);")
-                            && pad.contains("if (result < 0) queueView(endingArea); else wrote(endingArea);")
+                            && pad.contains("if (result < 0) queueView(endingArea); else { wrote(endingArea); zenFanRim(new Rect(endingArea)); }")
                             && pad.contains("if (direct.refresh(source, new Rect(part[0], part[1], part[2], part[3])) < 0) { postDelayed(this::refreshFastInk, 8); return; }\n        wrote(area);")
-                            && pad.contains("            }\n        wrote(area);\n        Log.i(ProbeActivity.TAG, \"Area refresh (\"")
-                            && pad.contains("app.pagePanel, zenFanKept()); }") && pad.contains("if (presented = turn.present(presented())) { wrote(") && pad.contains("if (rim.present(shown, area) >= 0) wrote(area);")
+                            && pad.contains("            }\n        wrote(area);\n        zenFanRim(area);\n        Log.i(ProbeActivity.TAG, \"Area refresh (\"")
+                            && pad.contains("app.pagePanel, zenFanKept()); }") && pad.contains("if (presented = turn.present(presented())) { wrote(") && pad.contains("for (Rect area : parts) if (rim.refresh(shown, area) >= 0) wrote(area);")
                             && pad.contains("if (zenWritten.isEmpty()) postDelayed(zenBack, CLOSED_MS);")
                             && pad.contains("app.redrawZen(zenWritten); zenWritten.setEmpty();")
                             && pad.split("app\\.redrawZen\\(").length == 3 && pad.split("direct\\.refresh\\(").length == 4
                             && pad.split("\\.present\\(presented\\(\\)").length == 3 && pad.split("\\.endFast\\(").length == 2,
                     "Zen Mode: strokes, the eraser's ring, wet paint, sharp tiles, a stroke's end, cleaned popups, area refreshes and page turns all put the button back after writing over it (wrote), no extra flash; no other panel write left out");
             check(pad.contains("java.util.List<RectF> fan = app.zenFanMask();\n        if (fan != null) panel.addAll(fan);") && !pad.contains("app.zenFanPanel()")
-                            && source("PaintActivity").contains("java.util.List<RectF> mask = zenFan.mask();") && pad.split("MagnetDrag\\.minus\\(").length == 7 && pad.split(", covered\\(\\)\\)").length == 4
+                            && source("PaintActivity").contains("java.util.List<RectF> mask = zenFan.mask();") && pad.split("MagnetDrag\\.minus\\(").length == 8 && pad.split(", covered\\(\\)\\)").length == 5
                             && source("PaintActivity").contains("RectF area = zenFanPanel();\n        if (area == null) return;\n        zenFan.setVisibility(View.GONE);"),
-                    "Zen Mode's open fan: the fast display keeps off its shape, in steps (drying paint took bits of it, the owner 2026-11-06), every write through the mask; closing it shows what it covered");
+                    "Zen Mode's open fan: the fast display keeps off its shape, in steps (drying paint took bits of it, the owner 2026-11-06; a Lasso loop's end its arc, 2026-11-09), every write through the mask; closing it shows what it covered");
             // Every open popup too (2026-11-06: wet paint drew over the menu, Play, the tray...): one path, Popups'.
             String popups = source("Popups");
             check(pad.contains("java.util.List<RectF> panel = Popups.covering();\n        java.util.List<RectF> fan = app.zenFanMask();")
@@ -1260,8 +1260,8 @@ public final class DrawLayoutChecks {
                             && bar.contains("step -> app.layerStep(layer, step), () -> { hideLabel(); app.pickLayer(layer); })") && bar.contains("showLabel(list, true, 0, layers);")
                             && bar.contains("ACTION_LONG_CLICK, DrawLayout.LAYER_VISIBILITY)") && bar.split("private LinearLayout eyeCell\\(", -1).length == 2
                             && app.contains("layerChange(() -> InkWashLayers.setStep(page, layer, step));")
-                            && app.contains("hidden = DrawLayout.layerHiddenNote(Math.max(1, InkWashLayers.layer(pad.document)));"),
-                    "The layer button's hold: each layer's eye and name beside it, Show Kinds' steps on its pair, an Undo step each; a hidden layer refuses strokes");
+                            && app.contains("int layer = erased > 0 ? erased : Math.max(1, InkWashLayers.layer(pad.document))") && app.contains("hidden = DrawLayout.layerHiddenNote(layer);"),
+                    "The layer button's hold: each layer's eye and name beside it, Show Kinds' steps on its pair, an Undo step each; a hidden layer refuses strokes (the eraser's own layer when set to one)");
         } catch (java.io.IOException e) { throw new AssertionError(e); }
         book();
     }

@@ -372,7 +372,7 @@ final class DrawingPad extends View {
             fadeToNow(); viewport.reset(); ensureDisplay(); updateViewport(); renderAll(); lassoBar();
             rendered = SystemClock.uptimeMillis();
             if (turn != null) {
-                try { if (presented = turn.present(presented())) { wrote(new Rect(0, 0, presented().getWidth(), presented().getHeight())); zenFanRim(); } }
+                try { if (presented = turn.present(presented())) { wrote(new Rect(0, 0, presented().getWidth(), presented().getHeight())); zenFanRim(null); } }
                 catch (RuntimeException error) { Log.w(ProbeActivity.TAG, "Page update uses Android display", error); }
             }
         } finally { if (turn != null) turn.close(); }
@@ -515,7 +515,9 @@ final class DrawingPad extends View {
         // Inkwash: Vector Ink's lines turned sharp or back (the zoomed view, a first stroke, Undo): the whole page, without
         // their layer or with it.
         int sharp = sharp();
-        if (sharp != composedSharp) { composedSharp = sharp; bounds = new int[]{0, 0, document.width, document.height}; }
+        // A layer with no lines yet (a first stroke's, an Undo of it) has an empty lines plane: the page is the same with or
+        // without it, only the stroke's area renders (the whole page took ~520 ms on the Manta and the stroke lagged after).
+        if (sharp != composedSharp) { if (((sharp ^ composedSharp) & VectorInk.linedMask(document)) != 0) bounds = new int[]{0, 0, document.width, document.height}; composedSharp = sharp; }
         if (also != null) bounds = bounds == null ? also : new int[]{Math.min(bounds[0], also[0]), Math.min(bounds[1], also[1]),
                 Math.max(bounds[2], also[2]), Math.max(bounds[3], also[3])};
         // Inkwash: where the magnets changed (an Undo, a magnet laid), apart from the paint's area.
@@ -1092,6 +1094,7 @@ final class DrawingPad extends View {
         for (int[] part : MagnetDrag.minus(new int[]{area.left, area.top, area.right, area.bottom}, covered()))
             if (direct.refresh(source, new Rect(part[0], part[1], part[2], part[3])) < 0) { postDelayed(this::refreshFastInk, 8); return; }
         wrote(area);
+        zenFanRim(area);
         fastInk.setEmpty(); fastInkRefreshes++;
     }
     /**
@@ -1139,7 +1142,12 @@ final class DrawingPad extends View {
     private void endFast() {
         for (int[] p : pending.drain()) endingArea.union(p[0], p[1], p[2], p[3]);
         int result = 0;
-        try { if (!endingArea.isEmpty()) result = direct.endFast(endingFast, presented(), endingArea); }
+        // Not under an open popup or Zen's fan: the area is one box round all the stroke showed, so a Lasso loop beside the
+        // fan took its arc and ring with it (the owner, 2026-11-09: "missing chunk from the fan after a two finger delete lasso").
+        try {
+            if (!endingArea.isEmpty()) for (int[] part : MagnetDrag.minus(new int[]{endingArea.left, endingArea.top, endingArea.right, endingArea.bottom}, covered()))
+                if ((result = direct.endFast(endingFast, presented(), new Rect(part[0], part[1], part[2], part[3]))) < 0) break;
+        }
         catch (RuntimeException error) {
             Log.w(ProbeActivity.TAG, "Stroke preview's end shown unforced", error);
             queueView(endingArea);
@@ -1147,7 +1155,7 @@ final class DrawingPad extends View {
         pace.last = SystemClock.uptimeMillis();
         if (result < 0 && ++retries < 120) { postDelayed(retry, 8); return; }
         // Still busy: shown as any change, the rest left to the next refresh.
-        if (result < 0) queueView(endingArea); else wrote(endingArea);
+        if (result < 0) queueView(endingArea); else { wrote(endingArea); zenFanRim(new Rect(endingArea)); }
         retries = 0;
         endingFast.close(); endingFast = null; endingArea.setEmpty();
         if (!pending.isEmpty()) flush(true);
@@ -1237,8 +1245,11 @@ final class DrawingPad extends View {
                     if (target == previewDirect) previewArea.union(presenting);
                     wrote(presenting);
                 }
-                pending.removeFirst(); recovery.shown();
+                int[] done = pending.first(); pending.removeFirst(); recovery.shown();
+                if (covered != null) for (int[] c : covered) if (done[0] < c[2] && c[0] < done[2] && done[1] < c[3] && c[1] < done[3]) { rimDue.union(done[0], done[1], done[2], done[3]); break; }
             }
+            // The patches that met the fan's box (or a popup's), their parts past Zen's fan's round paper skipped with it: put on the panel soon, at most every RIM_MS (the owner, 2026-11-07: "happens with any paint laid around the fan edge"; drying paint writes every frame, so waiting for a pause never came).
+            if (!rimDue.isEmpty() && !rimPosted) { rimPosted = true; postDelayed(rimLater, RIM_MS); }
         } catch (RuntimeException error) {
             if (target == previewDirect) {
                 // Keep the canvas on the gray session; only the preview loses its speed.
@@ -1278,6 +1289,7 @@ final class DrawingPad extends View {
                 return;
             }
         wrote(area);
+        zenFanRim(area);
         Log.i(ProbeActivity.TAG, "Area refresh (" + reason + "): " + area);
     }
     /**
@@ -1300,9 +1312,16 @@ final class DrawingPad extends View {
      * Inkwash: after a page turn that kept off Zen's open fan ({@link #zenFanKept}), the page put on the panel where the
      * mask's steps reach past the fan's round paper (the owner, 2026-11-07: the old page's corners stayed there in steps
      * round the arc): each step's parts beyond the paper's disc, from the page with the fan and what lies over it drawn
-     * in, so the fan's own pixels there go out unchanged.
+     * in, so the fan's own pixels there go out unchanged. Always refreshed, every pixel driven: a session opened on {@code shown} takes it as already on the panel, so a plain present sent nothing (the owner, 2026-11-08: the steps after painting went only when the fan reopened); ghosts there go too. Only
+     * within {@code within} (raster; null: anywhere).
      */
-    private void zenFanRim() {
+    private final Rect rimDue = new Rect();
+    private static final long RIM_MS = 300;
+    private boolean rimPosted;
+    private final Runnable rimLater = () -> { rimPosted = false; Rect due = new Rect(rimDue); rimDue.setEmpty(); zenFanRim(due); };
+    /** As {@link #zenFanRim(Rect)}, everywhere: after the fan opens, Android's update of its box puts its own stale page past the paper (the owner, 2026-11-07: "a blocky area around the fan edge"). */
+    void zenFanRim() { zenFanRim(null); }
+    private void zenFanRim(Rect within) {
         java.util.List<RectF> mask = app.zenFanMask();
         float[] paper = app.zenPaper();
         ZenFanView fan = app.zenFanView();
@@ -1318,7 +1337,7 @@ final class DrawingPad extends View {
                 if (side.width() <= 0 || side.height() <= 0) continue;
                 fromPanel.mapRect(side);
                 Rect area = new Rect(); side.roundOut(area);
-                if (area.intersect(0, 0, presented().getWidth(), presented().getHeight())) parts.add(area);
+                if (area.intersect(0, 0, presented().getWidth(), presented().getHeight()) && (within == null || area.intersect(within))) parts.add(area);
             }
         }
         if (parts.isEmpty()) return;
@@ -1332,7 +1351,7 @@ final class DrawingPad extends View {
         DirectEink rim = null;
         try {
             rim = DirectEink.forView(this, shown, viewportBitmap == null ? pageToView : new Matrix(), 0, 7);
-            for (Rect area : parts) if (rim.present(shown, area) >= 0) wrote(area);
+            for (Rect area : parts) if (rim.refresh(shown, area) >= 0) wrote(area);
         } catch (RuntimeException | LinkageError error) { Log.w(ProbeActivity.TAG, "The fan's rim stays as it was", error); }
         finally { if (rim != null) rim.close(); shown.recycle(); }
     }
@@ -1541,7 +1560,7 @@ final class DrawingPad extends View {
             // The page drawn again in the firmware's default update, every pixel driven (not the forced grey pass, which
             // drives nothing here and held the main thread and the panel about 0.6 s); partial grey back after it.
             // With the firmware's full refresh too: the clean update alone left the big ghosts (the owner, 2026-10-25).
-            Ui.flashWindow(this, reason, () -> { if (direct != null) input.partialGrey(); });
+            Ui.flashWindow(this, reason, () -> { if (direct != null) input.partialGrey(); zenFanRim(null); });
             fastInk.setEmpty();
         } else if (direct != null) {
             Bitmap source = presented();
@@ -1554,6 +1573,7 @@ final class DrawingPad extends View {
                 if (++refreshRetries < 120) postDelayed(() -> autoRefresh(reason), 8); else refreshRetries = 0;
                 return;
             }
+            zenFanRim(null);
             // The whole page is current on the panel, closed popups' areas too.
             fastInk.setEmpty();
         } else invalidate();

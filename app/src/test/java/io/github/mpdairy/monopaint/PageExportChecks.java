@@ -37,14 +37,19 @@ public final class PageExportChecks {
             pages.add(PackedPage.of(DrawingBook.encode(first)));
             pages.add(PackedPage.of(DrawingBook.encode(old(240, 320))));
             NotebookOptions lined = NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.LINED);
-            // The PNG: the notebook's copy of that page, byte for byte.
-            File png = PageExport.write(folder, "Harbour", 0, PageExport.PNG, pages, lined, null, null, tiles());
+            // The PNG: with no template, the notebook's copy of that page, byte for byte.
             File notebook = new File(folder, "notebook");
-            NotebookExport.update(notebook, "Harbour", pages, tiles(), null, lined);
-            byte[] pngBytes = Files.readAllBytes(png.toPath());
-            check(png.getName().equals("Harbour p1.png") && Arrays.equals(pngBytes, Files.readAllBytes(new File(notebook, "Harbour/001.png").toPath())), "The page's PNG is the notebook's copy of it");
-            check(Arrays.equals(Files.readAllBytes(PageExport.write(folder, "Harbour", 1, PageExport.PNG, pages, lined, null, null, tiles()).toPath()),
+            NotebookExport.update(notebook, "Harbour", pages, tiles(), null, NotebookOptions.DEFAULT);
+            File plain = PageExport.write(folder, "Harbour", 0, PageExport.PNG, pages, NotebookOptions.DEFAULT, null, null, tiles());
+            check(plain.getName().equals("Harbour p1.png") && Arrays.equals(Files.readAllBytes(plain.toPath()), Files.readAllBytes(new File(notebook, "Harbour/001.png").toPath())), "The page's PNG is the notebook's copy of it");
+            check(Arrays.equals(Files.readAllBytes(PageExport.write(folder, "Harbour", 1, PageExport.PNG, pages, NotebookOptions.DEFAULT, null, null, tiles()).toPath()),
                     Files.readAllBytes(new File(notebook, "Harbour/002.png").toPath())), "Page 2's too");
+            // Lined: Export Page keeps the guides the notebook's copies leave out (the owner, 2026-11-08).
+            byte[] plainBytes = Files.readAllBytes(plain.toPath());
+            File png = PageExport.write(folder, "Harbour", 0, PageExport.PNG, pages, lined, null, null, tiles());
+            byte[] pngBytes = Files.readAllBytes(png.toPath());
+            check(!Arrays.equals(greys(pngBytes), greys(plainBytes)), "Lined, the page's PNG has its guides");
+            byte[] page2 = Files.readAllBytes(PageExport.write(folder, "Harbour", 1, PageExport.PNG, pages, lined, null, null, tiles()).toPath());
             // The PDF: one page, numbered as the page, its image the PNG's data.
             File pdf = PageExport.write(folder, "Harbour", 1, PageExport.PDF, pages, lined, null, null, tiles());
             String text = new String(Files.readAllBytes(pdf.toPath()), StandardCharsets.ISO_8859_1);
@@ -60,7 +65,7 @@ public final class PageExportChecks {
             compare(read, greys, "page 1");
             Psd two = read(Files.readAllBytes(PageExport.write(folder, "Harbour", 1, PageExport.LAYERS, pages, lined, null, null, tiles()).toPath()));
             check(two.names.equals(Arrays.asList("Paper", "Template", "Layer 1 Old Paint", "Layer 2 Pen")), "An old page's layers named by number, its paint of no kind Old Paint: " + two.names);
-            compare(two, greys(Files.readAllBytes(new File(notebook, "Harbour/002.png").toPath())), "page 2");
+            compare(two, greys(page2), "page 2");
             check(PageExport.name("Harbour", 4, PageExport.LAYERS).equals("Harbour p5.psd") && PageExport.page(4, PageExport.PDF).equals("p5.pdf"), "Its names");
             byte[] row = new byte[300];
             for (int i = 0; i < row.length; i++) row[i] = (byte) (i < 140 ? 7 : i % 3 == 0 ? i : 200);
@@ -69,7 +74,7 @@ public final class PageExportChecks {
             byte[] unpacked = new byte[row.length];
             check(unpack(ByteBuffer.wrap(packed.toByteArray()), unpacked) == packed.size() && Arrays.equals(row, unpacked), "PackBits round trip");
         } finally { NotebookMigrationChecks.delete(folder); }
-        System.out.println("PASS: Export Page (" + checks + " checks): a page's PNG is the notebook's copy byte for byte, its PDF that page numbered as it is; its Layers copy reads back as Grayscale PSD layers, Paper, Template, then each kind in the page's order, Magnets on top, its merged image the PNG's greys and its layers laid Normal within " + worst + " greys of them (" + String.format("%.3f", meanDiff) + " on average)");
+        System.out.println("PASS: Export Page (" + checks + " checks): a page's PNG is the notebook's copy byte for byte (no template; lined, it keeps the guides the copies leave out), its PDF that page numbered as it is; its Layers copy reads back as Grayscale PSD layers, Paper, Template, then each kind in the page's order, Magnets on top, its merged image the PNG's greys and its layers laid Normal within " + worst + " greys of them (" + String.format("%.3f", meanDiff) + " on average)");
     }
 
     /** A page drawn with the app's brushes: washes and a fineliner (NotebookFixture), a pencil, a block of opaque paint, lined, a magnet. */

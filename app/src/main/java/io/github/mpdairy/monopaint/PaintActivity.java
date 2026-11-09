@@ -595,10 +595,14 @@ public final class PaintActivity extends Activity implements ControlHost {
         // Vector Ink: on the layer in use; refused only when that layer's lines are full.
         String vector = pad.document == null ? null : VectorInk.refusal(pad.document, inkWash.brush(tool));
         if (vector != null) { sayVector(vector); return false; }
-        // Show Kinds: nothing is drawn, or erased, unseen; nor on a hidden layer (the layer button's hold, 2026-11-06).
+        // Show Kinds: nothing is drawn, or erased, unseen; nor on a hidden layer (the layer button's hold, 2026-11-06), the
+        // eraser's own layer when it is set to one.
         String hidden = hiddenNote(tool);
-        if (hidden == null && pad.document != null && !InkWashLayers.visible(pad.document, InkWashLayers.current(pad.document)))
-            hidden = DrawLayout.layerHiddenNote(Math.max(1, InkWashLayers.layer(pad.document)));
+        int erased = tool == InkWash.ERASER ? EraseKind.layerOf(inkWash.eraseKinds) : 0;
+        if (hidden == null && pad.document != null) {
+            int layer = erased > 0 ? erased : Math.max(1, InkWashLayers.layer(pad.document)), pair = erased > 0 ? InkWashLayers.pairOfLayer(pad.document, erased) : InkWashLayers.current(pad.document);
+            if (pair >= 0 && pair < InkWashLayers.pairs(pad.document) && !InkWashLayers.visible(pad.document, pair)) hidden = DrawLayout.layerHiddenNote(layer);
+        }
         if (hidden != null) { note(hidden); return false; }
         // Marbling's order (ToolKits): clear water or a comb with nothing floating moves nothing; another brush prints the rings.
         Brush drawn = inkWash.brush(tool);
@@ -1111,6 +1115,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         zenDot.setLayoutParams(square);
         inkWashBar.zenAnchor = zenFan;
         showZen();
+        // shortcut: a fixed wait for Android's panel update of the fan's box to land first; tie it to that update if the band still shows.
+        zenFan.postDelayed(() -> { if (zenFanOpen()) pad.zenFanRim(); }, 400);
     }
     /** Zen Mode's fan closed, if open, its menus with it, its line's buttons home; what it covered cleaned on the panel as a popup's is, no flash. Zen Mode stays. */
     void closeZenFan() {
@@ -1430,9 +1436,11 @@ public final class PaintActivity extends Activity implements ControlHost {
      */
     private void pickBrush(int slot, Brush brush) {
         if (toolbarFixed()) return;
-        boolean used = inkWash.slots.pick(slot, brush);
-        inkWashBar.selectTool(slot);
-        if (!used) return;
+        boolean[] used = {false};
+        // With Zen Mode's fan open, its mark moves with the pick (the column is hidden).
+        Runnable pick = () -> { used[0] = inkWash.slots.pick(slot, brush); inkWashBar.selectTool(slot); };
+        if (zenFanOpen()) zenFan.toolsChanged(pick); else pick.run();
+        if (!used[0]) return;
         recovery();
         inkWashBar.brushChanged(slot, brush.shownName());
     }
@@ -2090,7 +2098,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         // A tool kit (ToolKits): the bar shows all its slots (Brushes on Bar raised), and its eraser step sets the eraser's kind.
         int bar = data.getIntExtra(ToolsActivity.BAR, -1), eraser = data.getIntExtra(ToolsActivity.ERASER, -1);
         if (bar > 0 && book != null && rules().brushes > 0 && bar > rules().brushes) setNotebookOptions(book.options().withBrushes(bar));
-        if (eraser >= 0 && eraser < EraseKind.KINDS.length) { inkWash.eraseKinds = EraseKind.KINDS[eraser]; inkWashBar.eraserChanged(); }
+        if (eraser >= 0 && eraser < EraseKind.TARGETS.length) { inkWash.eraseKinds = EraseKind.TARGETS[eraser]; inkWashBar.eraserChanged(); }
         boolean changed = slotsReturned(written, slot, data.getBooleanExtra(ToolsActivity.TOGETHER, false));
         if (lab) { openBrushLab(slot, data.getStringArrayExtra(ToolsActivity.START)); return; }
         if (!changed) return;

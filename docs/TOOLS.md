@@ -38,5 +38,5 @@ codes on a computer, and exports brush sets for Procreate.
 ## Wet media
 
 Washes and watercolour stay wet for a few seconds, then set. With gravity on, wet paint runs toward whichever edge
-of the tablet is tipped down. Hold the eraser to choose what it takes: Everything, or only Pen, Paint or Dry
-Media.
+of the tablet is tipped down. Hold the eraser to choose what it takes: Everything, or only Layer 1, 2
+or 3.

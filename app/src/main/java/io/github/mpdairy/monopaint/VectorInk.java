@@ -167,7 +167,7 @@ final class VectorInk {
             if (scratch[0].length < k || scratch[0][0].length < n) { scratch[0] = new int[k][n]; scratch[1] = new int[k][n]; }
             this.greys = scratch[0]; covers = scratch[1];
             // Each layer's lines alone: premultiplied grey and coverage (over 0), so over v they show v × (255 − c) / 255 + g.
-            for (int j = 0; j < k; j++) { java.util.Arrays.fill(this.greys[j], 0, n, 0); java.util.Arrays.fill(covers[j], 0, n, 0); lines[j].over(scale, ox, oy, left, top, w, h, this.greys[j], covers[j], coverage); }
+            for (int j = 0; j < k; j++) { java.util.Arrays.fill(this.greys[j], 0, n, 0); java.util.Arrays.fill(covers[j], 0, n, 0); lines[j].alone(scale, ox, oy, left, top, w, h, this.greys[j], covers[j]); }
             int last = -1, m = 0;
             for (int y = 0; y < h; y++) {
                 int py = (int) Math.floor((top + y + .5 - oy) / scale);
@@ -244,6 +244,8 @@ final class VectorInk {
             document.selectLayer(layer);
             since = document.top();
             document.beginPlane(ToneDocument.PLANE_LINES, true);
+            // A stroke that never finished leaves nothing behind for this one.
+            forget();
         }
         @Override public void sample(float x, float y, float pressure, float tiltX, float tiltY) {
             if (!Float.isFinite(x) || !Float.isFinite(y)) return;
@@ -252,20 +254,63 @@ final class VectorInk {
             if (n >= VectorLines.MOST_POINTS) return;
             if (n == xs.length) { xs = java.util.Arrays.copyOf(xs, 2 * n); ys = java.util.Arrays.copyOf(ys, 2 * n); ps = java.util.Arrays.copyOf(ps, 2 * n); }
             xs[n] = x; ys[n] = y; ps[n] = (float) (nib.width(inkSize, Float.isFinite(pressure) ? StrokeMath.clamp(pressure) : 0, NEUTRAL) / size); n++;
-            // The newest piece of the rough line (where the last sample's round end overlaps it, its edge a shade darker until the lift).
-            int from = Math.max(0, n - 2);
-            lay(document, VectorLines.rough(shade, size, java.util.Arrays.copyOfRange(xs, from, n), java.util.Arrays.copyOfRange(ys, from, n), java.util.Arrays.copyOfRange(ps, from, n), n - from), 0, n - from - 1);
+        }
+        /** The rough line's pieces since the last call, one piece (the pad calls it once an input batch, before it shows the page; a large line's piece was laid at every sample, 480 a second). */
+        @Override public void present() {
+            if (n == 0 || n - 1 <= shownTo) return;
+            int from = Math.max(0, shownTo);
+            layMore(VectorLines.rough(shade, size, java.util.Arrays.copyOfRange(xs, from, n), java.util.Arrays.copyOfRange(ys, from, n), java.util.Arrays.copyOfRange(ps, from, n), n - from));
+            shownTo = n - 1;
+        }
+        /** The last sample {@link #present} laid, −1 before the first. */
+        private int shownTo = -1;
+        /**
+         * {@code piece} laid where it covers more than this stroke's pieces so far ({@link #laid}): each sample's piece is
+         * mostly the last one's round end again, and a large line laid it all, pixel by pixel, at every sample (the owner,
+         * 2026-11-07: "vector ink is unusable past a certain size"). Each pixel takes the share that brings the stroke's
+         * cover there to the piece's, so it ends as the most of any piece's (no darker edge where they overlap).
+         */
+        private void layMore(VectorLines.Stroke piece) {
+            int[] b = VectorLines.bounds(piece, 0, piece.points() - 1, 1, 0, 0);
+            int l = Math.max(0, b[0]), t = Math.max(0, b[1]), r = Math.min(document.width, b[2]), d = Math.min(document.height, b[3]);
+            if (l >= r || t >= d) return;
+            int w = r - l, h = d - t;
+            if (laid == null || laid.length != document.width * document.height) { laid = new byte[document.width * document.height]; touched[2] = touched[3] = -1; }
+            if (cover.length < w * h) cover = new byte[w * h];
+            java.util.Arrays.fill(cover, 0, w * h, (byte) 0);
+            VectorLines.cover(piece, 1, 0, 0, l, t, w, h, cover);
+            for (int y = 0; y < h; y++) for (int x = 0, i = (t + y) * document.width + l; x < w; x++, i++) {
+                int c = cover[y * w + x] & 255, had = laid[i] & 255;
+                if (c <= had) continue;
+                laid[i] = (byte) c;
+                // Over what it laid (had), the share a that makes it c: 1 − (1 − c)(1 − a)... a = 1 − (1 − c) / (1 − had).
+                int a = had == 0 ? c : 255 - ((255 - c) * 255 + (255 - had) / 2) / (255 - had);
+                if (a > 0) document.overTone(l + x, t + y, shade, a);
+            }
+            if (touched[2] < 0) { touched[0] = l; touched[1] = t; touched[2] = r; touched[3] = d; }
+            else { touched[0] = Math.min(touched[0], l); touched[1] = Math.min(touched[1], t); touched[2] = Math.max(touched[2], r); touched[3] = Math.max(touched[3], d); }
+        }
+        /** This stroke's cover so far at each page pixel, while the pen is down; the area it touched, cleared at the lift. Shared: one pen stroke at a time. */
+        private static byte[] laid, cover = new byte[0];
+        private static final int[] touched = {0, 0, -1, -1};
+        /** {@link #laid} cleared where this stroke touched it. */
+        private void forget() {
+            if (laid == null || touched[2] < 0) return;
+            int pw = document.width;
+            for (int y = Math.max(0, touched[1]); y < Math.min(document.height, touched[3]); y++) java.util.Arrays.fill(laid, y * pw + Math.max(0, touched[0]), y * pw + Math.min(pw, touched[2]), (byte) 0);
+            touched[2] = touched[3] = -1;
         }
         /** The layer's lines with this one so far, unsmoothed. */
-        VectorLines shown() { return n == 0 ? before : before.with(VectorLines.rough(shade, size, xs, ys, ps, n)); }
+        VectorLines shown() { return n == 0 ? before : before.withLive(VectorLines.rough(shade, size, xs, ys, ps, n)); }
         @Override public boolean finish() {
+            forget();
             document.cancel();
             VectorLines.Stroke line = VectorLines.smoothed(shade, size, xs, ys, ps, n);
             if (line == null) return false;
             document.beginPlane(ToneDocument.PLANE_LINES, true);
             lay(document, line, 0, line.points() - 1);
             document.finish();
-            document.changeLines(layer, before.with(line), since);
+            document.changeLines(layer, before.withKept(line), since);
             return true;
         }
     }
@@ -296,9 +341,12 @@ final class VectorInk {
             from = new VectorLines[layers.length]; cut = new VectorLines[layers.length]; applied = new int[layers.length];
             for (int k = 0; k < layers.length; k++) from[k] = cut[k] = document.lines(layers[k]);
         }
-        /** The cut for an eraser of {@code kinds} ({@link ToneDocument#eraseKinds}, 0: everything), before it begins; null where no shown layer holds lines or it doesn't take Pen. */
-        static Cut of(ToneDocument document, int kinds) {
-            int[] lined = shownLined(document);
+        /** The cut for an eraser of {@code kinds} ({@link ToneDocument#eraseKinds}, 0: everything) on layers {@code from} to {@code to}, before it begins; null where no shown layer of them holds lines or it doesn't take Pen. */
+        static Cut of(ToneDocument document, int kinds, int from, int to) {
+            int[] shown = shownLined(document), lined = new int[shown.length];
+            int n = 0;
+            for (int layer : shown) if (layer >= from && layer <= to) lined[n++] = layer;
+            lined = java.util.Arrays.copyOf(lined, n);
             return lined.length == 0 || kinds != 0 && (kinds & ToneDocument.KIND_PEN) == 0 ? null : new Cut(document, lined);
         }
         /** Its layers as bits. */

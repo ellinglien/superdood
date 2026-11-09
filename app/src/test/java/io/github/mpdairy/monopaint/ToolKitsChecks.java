@@ -23,7 +23,7 @@ public final class ToolKitsChecks {
             "Kit: Marbling", "Intro: Drop ink and clear water in turn to grow rings, then comb them before they print.",
             "Sumi: Drop ink", "Clear water: Drop water", "Comb: Comb rings",
             "Kit: Sketch and Ink", "Intro: Sketch in pencil, ink over it, then erase the pencil and the ink stays.",
-            "Sketch pencil: Sketch", "Steady line: Ink over", "Eraser Dry Media: Erase pencil",
+            "Sketch pencil: Sketch", "Steady line: Ink over", "Eraser Layer 3: Erase pencil",
             "Kit: Watercolour with Masking", "Intro: Mask the whites, wash over them, blot to lift paint, then rub the mask off.",
             "Masking fluid: Mask whites", "Soft wash: Wash over", "Water: Press to lift", "Eraser Everything: Rub off mask"));
 
@@ -79,11 +79,11 @@ public final class ToolKitsChecks {
     }
 
     static void parsing() {
-        List<ToolKits.Kit> some = ToolKits.parse(Arrays.asList("# Kit: Notes", "stray", "Kit: A", "Intro: One.", "Sumi: Drop ink", "Eraser Pen: Erase pen",
+        List<ToolKits.Kit> some = ToolKits.parse(Arrays.asList("# Kit: Notes", "stray", "Kit: A", "Intro: One.", "Sumi: Drop ink", "Eraser Layer 1: Erase pen",
                 "Kit: Empty", "Intro: Nothing in it.", "Kit: B", "Comb: Comb rings", "Kit: C", "Intro: Two.", "Eraser Nonsense: x", "Comb: Comb"));
         check(some.size() == 2 && some.get(0).name.equals("A") && some.get(1).name.equals("C"), "Kits with an intro and a brush, notes and strays left out: " + some.size());
         check(some.get(0).eraser != null && some.get(0).eraser.eraser == 1 && some.get(0).steps() == 2 && some.get(0).said(1).equals("2 Erase pen")
-                && some.get(0).tool(1).equals("Eraser, Pen"), "An eraser step: its kind, last");
+                && some.get(0).tool(1).equals("Eraser, Layer 1"), "An eraser step: its layer, last");
         check(some.get(1).eraser == null, "An eraser kind not known is left out");
     }
 
@@ -119,7 +119,7 @@ public final class ToolKitsChecks {
         ToolKits.Kit sketch = kit("Sketch and Ink");
         page = ToolsPageChecks.open(ToolsPageChecks.fresh(), 5);
         page.loadKit(sketch);
-        check(page.eraser() == 3, "A kit's eraser step sets the eraser to its kind");
+        check(page.eraser() == 3, "A kit's eraser step sets the eraser to its layer");
         Brush[] results = page.results();
         check(results[0] != null && results[1] != null && results[2] == null, "Back takes the kit's slots their brushes, the rest unchanged");
     }

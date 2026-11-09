@@ -173,7 +173,7 @@ public final class TemplateChecks {
             NotebookExport.update(out, "nb", snap.filed(), null, null, snap.options, snap.pageTemplates);
             for (int i = 0; i < book.count(); i++) {
                 NotebookExport.Png png = NotebookExport.read(Files.readAllBytes(new File(new File(out, "nb"), NotebookExport.pageName(i)).toPath()));
-                check(png.crc == NotebookExport.pageKey(snap.filed().get(i).crc, NotebookTemplate.of(after.get(i))), "page " + i + "'s PNG keyed by its own template");
+                check(png.crc == (NotebookExport.pageKey(snap.filed().get(i).crc, NotebookTemplate.of(after.get(i))) ^ (NotebookTemplate.of(after.get(i)).equals(NotebookTemplate.BLANK) ? 0 : NotebookExport.LEFT_OUT)), "page " + i + "'s PNG keyed by its own template");
             }
         } finally { delete(out); }
     }

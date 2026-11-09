@@ -79,13 +79,20 @@ final class ZenFanView extends View {
         ink.setColor(Theme.INK); ink.setStyle(Paint.Style.STROKE); ink.setStrokeWidth(ZenFan.STROKE);
         // The wedges, from the point (0, 0), out along +x (the foot) and up along -y (the side edge): the size up the side
         // edge to the gap, the grey from the gap to its lower edge, each closed along the gap's side back to its corner.
-        float c = ZenFan.wedgeStart(), g = ZenFan.greyStart(), w = ZenFan.WEDGE;
-        double low = Math.toRadians(ZenFan.LOW);
-        RectF circle = new RectF(-w, -w, w, w);
-        float meet = angle(ZenFan.wedgeEnd()), greyMeet = angle(ZenFan.greyEnd()), lowAt = (float) ZenFan.LOW - 90;
-        sizeWedge.moveTo(0, -c); sizeWedge.lineTo(0, -w); sizeWedge.arcTo(circle, -90, meet + 90); sizeWedge.close();
-        greyWedge.moveTo((float) (g * Math.sin(low)), (float) (-g * Math.cos(low))); greyWedge.lineTo((float) (w * Math.sin(low)), (float) (-w * Math.cos(low)));
-        greyWedge.arcTo(circle, lowAt, greyMeet - lowAt); greyWedge.close();
+        // Their outer edge an arc round the X, as the fan's arc (the X is down and back from the point by ZenFan.TUCKED).
+        float c = ZenFan.wedgeStart(), w = ZenFan.WEDGE, t = ZenFan.TUCKED, r = ZenFan.INNER;
+        RectF circle = new RectF(-t - r, t - r, -t + r, t + r);
+        float top = round(new float[]{0, w}), meet = round(ZenFan.wedgeEnd());
+        sizeWedge.moveTo(0, -c); sizeWedge.lineTo(0, -w); sizeWedge.arcTo(circle, top, meet - top); sizeWedge.close();
+        // The grey the size's mirror image across the gap's middle (the owner, 2026-11-07: "they should be identical shapes").
+        sizeWedge.transform(MIRROR, greyWedge);
+    }
+    /** {@link ZenFan#mirror} in the wedges' frame (from the point, +x along the foot, -y up the side edge). */
+    private static final android.graphics.Matrix MIRROR = new android.graphics.Matrix();
+    static {
+        float[] from = {0, 0, 100, 0, 0, -100}, to = new float[6];
+        for (int i = 0; i < 6; i += 2) { float[] m = ZenFan.mirror(from[i], -from[i + 1]); to[i] = m[0]; to[i + 1] = -m[1]; }
+        MIRROR.setPolyToPoly(from, 0, to, 0, 3);
     }
 
     /**
@@ -108,19 +115,23 @@ final class ZenFanView extends View {
             canvas.restoreToCount(saved);
         }
     }
-    /** The tool in use's typical drawn width over its size ({@link SwatchReadout#drawnWidth}): kept until the tool, its brush or its look changes. */
-    private double drawn() {
+    /** The tool in use's typical drawn width at size {@code px} ({@link SwatchReadout#drawnWidth}), page px: each size's kept until the tool, its brush or its grey changes. */
+    private java.util.function.DoubleUnaryOperator drawn() {
         int tool = selected();
-        ToolSwatches.Look look = app.inkWash.look(tool);
         Brush brush = app.inkWash.brush(tool);
-        java.util.List<Object> key = java.util.Arrays.asList(tool, brush, look.px, look.darkness);
-        if (!key.equals(drawnKey)) { drawnKey = key; drawnPer = look.px > 0 ? SwatchReadout.drawnWidth(look, brush) / look.px : 1; }
-        return drawnPer;
+        double darkness = app.inkWash.look(tool).darkness;
+        // The brush by its settings: the slots read it afresh each call (a parse), so the object itself never matches, and it is read once a draw or a touch.
+        java.util.List<Object> key = java.util.Arrays.asList(tool, brush == null ? null : brush.identity(), darkness);
+        if (!key.equals(drawnKey)) { drawnKey = key; drawnAt.clear(); }
+        return px -> drawnAt.computeIfAbsent(px, p -> SwatchReadout.drawnWidth(p, darkness, brush));
     }
+    /** {@link #drawn()} as the pen landed, and whether the tool takes greys: neither changes while the pen is down (the pen reports every 2 ms). */
+    private java.util.function.DoubleUnaryOperator widths = px -> px;
+    private boolean greysHeld;
     private java.util.List<Object> drawnKey;
-    private double drawnPer = 1;
-    /** A point {out, up} from the fan's point, as a canvas angle, degrees (0 along the foot, -90 up the side edge). */
-    private static float angle(float[] p) { return (float) Math.toDegrees(Math.atan2(-p[1], p[0])); }
+    private final java.util.Map<Double, Double> drawnAt = new java.util.HashMap<>();
+    /** A point {out, up} from the wedges' point, as a canvas angle round the X, degrees (0 along the foot, -90 up the side edge). */
+    private static float round(float[] p) { return (float) Math.toDegrees(Math.atan2(-(p[1] + ZenFan.TUCKED), p[0] + ZenFan.TUCKED)); }
 
     /** Laid over the stage, {@code width × height} px, for Zen's icon's middle at ({@code x}, {@code y}) px, {@code slots} slots shown. */
     void place(float x, float y, int slots, boolean right, int width, int height) {
@@ -183,7 +194,7 @@ final class ZenFanView extends View {
         if (hasGreys) {
             if (greys == null) greys = greys(d);
             canvas.save(); canvas.clipPath(greyWedge);
-            canvas.translate(0, -ZenFan.WEDGE); canvas.scale(1 / d, 1 / d);
+            canvas.translate(0, -ZenFan.INNER); canvas.scale(1 / d, 1 / d);
             canvas.drawBitmap(greys, 0, 0, null);
             canvas.restore();
         }
@@ -220,13 +231,13 @@ final class ZenFanView extends View {
         // The markers beside the wedges' edges, the column's tabs, clear of the outlines: the size up the side edge, the grey along the foot.
         ToolSwatches.Look look = app.inkWash.look(tool);
         // The marker where the wedge is as wide as the line the brush typically draws (SwatchReadout.drawnWidth).
-        float s = Double.isNaN(dragSize) ? ZenFan.sizeUp(look.px * drawn()) : (float) dragSize, gap = ZenFan.STROKE, mark = ZenFan.TAB, half = ZenFan.TAB_LONG / 2;
+        float s = Double.isNaN(dragSize) ? ZenFan.sizeUp(drawn().applyAsDouble(look.px)) : (float) dragSize, gap = ZenFan.STROKE, mark = ZenFan.TAB, half = ZenFan.TAB_LONG / 2;
         canvas.drawRect(-gap - mark, -s - half, -gap, -s + half, marks);
         if (hasGreys) {
             float g = Double.isNaN(dragGrey) ? fan.shadeRadius(look.darkness) : (float) dragGrey;
-            // Turned to the grey wedge's lower edge: beside it, toward the foot.
-            canvas.save(); canvas.rotate((float) ZenFan.LOW);
-            canvas.drawRect(gap, -g - half, gap + mark, -g + half, marks);
+            // The size's marker's place, mirrored to the grey wedge's lower edge.
+            canvas.save(); canvas.concat(MIRROR);
+            canvas.drawRect(-gap - mark, -g - half, -gap, -g + half, marks);
             canvas.restore();
         }
         tool(canvas, tool, d, true);
@@ -368,19 +379,28 @@ final class ZenFanView extends View {
         whole.setPixels(px, 0, w, 0, 0, w, h);
         return Bitmap.createBitmap(whole, left, top, right - left + 1, bottom - top + 1);
     }
-    /** The grey wedge's square, {@link ZenFan#WEDGE} dp a side above the foot from the point: each pixel its grey in the panel's dots. */
+    /** The grey wedge's square, {@link ZenFan#INNER} dp a side above the foot from the point: each pixel its grey (by its distance from the X) in the panel's dots. */
     private Bitmap greys(float d) {
-        int side = Math.round(ZenFan.WEDGE * d);
+        int side = Math.round(ZenFan.INNER * d);
         int[] pixels = new int[side * side];
         for (int y = 0; y < side; y++)
             for (int x = 0; x < side; x++)
-                pixels[y * side + x] = DotPattern.pixel(ToolSwatches.tone(fan.darknessAt(Math.hypot(x / d, ZenFan.WEDGE - y / d))), x, y);
+                pixels[y * side + x] = DotPattern.pixel(ToolSwatches.tone(fan.darknessAt(ZenFan.fromX(x / d, ZenFan.INNER - y / d))), x, y);
         return Bitmap.createBitmap(pixels, side, side, Bitmap.Config.ARGB_8888);
     }
 
+    /** dp the pen moves from its landing before the fan follows it: past the nib's skid. */
+    private static final float SLIP = 12;
+    private float landX, landY;
+    private boolean slid;
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (fan == null) return false;
         float d = density(), sx = bounds[0] + event.getX() / d, sy = bounds[1] + event.getY() / d;
+        // The pen's landing kept until it has clearly moved: the nib skids up to 9 dp as it lands (logged 2026-11-07), and a tap's marker crept after it.
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) { landX = sx; landY = sy; slid = false; widths = drawn(); greysHeld = DrawLayout.greys(selected());
+}
+        else if (!slid && Math.hypot(sx - landX, sy - landY) < SLIP) { sx = landX; sy = landY; }
+        else slid = true;
         int at = fan.hit(sx, sy);
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
@@ -400,7 +420,7 @@ final class ZenFanView extends View {
                 removeCallbacks(hold);
                 int was = item;
                 item = ZenFan.NONE;
-                if (was == ZenFan.SIZE) { double t = ToolSwatches.position(fan.size(sx, sy, drawn())); release(() -> app.inkWashBar.swatches.setSize(t)); }
+                if (was == ZenFan.SIZE) { double t = ToolSwatches.position(fan.size(sx, sy, widths)); release(() -> app.inkWashBar.swatches.setSize(t)); }
                 else if (was == ZenFan.SHADE && DrawLayout.greys(selected())) { double g = fan.darkness(sx, sy); release(() -> app.inkWashBar.swatches.setGrey(g)); }
                 // Round Zen's circle, past its button's cell: as a tap on the circle, the fan closed.
                 else if (was == ZenFan.LEAVE && at == ZenFan.LEAVE && !held) app.zenTapped();
@@ -422,10 +442,24 @@ final class ZenFanView extends View {
     }
     /** While a wedge is held, its marker follows the pen (its edge's strip alone put on the panel); the value is set on the lift. */
     private void follow(float sx, float sy) {
-        double size = item == ZenFan.SIZE ? ZenFan.sizeUp(fan.size(sx, sy, drawn()) * drawn()) : Double.NaN;
-        double grey = item == ZenFan.SHADE && DrawLayout.greys(selected()) ? fan.shadeRadius(fan.darkness(sx, sy)) : Double.NaN;
-        if (Double.compare(size, dragSize) == 0 && Double.compare(grey, dragGrey) == 0) return;
-        // Only the dragged wedge's marker strip, ink and paper: the panel's binary update, as the column's slider tab (StripMarker).
+        wantSize = item == ZenFan.SIZE ? ZenFan.sizeUp(widths.applyAsDouble(fan.size(sx, sy, widths))) : Double.NaN;
+        wantGrey = item == ZenFan.SHADE && greysHeld ? fan.shadeRadius(fan.darkness(sx, sy)) : Double.NaN;
+        removeCallbacks(showMarker);
+        if (Double.compare(wantSize, dragSize) == 0 && Double.compare(wantGrey, dragGrey) == 0) return;
+        // At most one marker update a panel update's time (the pen reports every 2 ms; queued, the marker trailed the pen), the last always.
+        long wait = shownAt + MARKER_GAP - android.os.SystemClock.uptimeMillis();
+        if (wait > 0) postDelayed(showMarker, wait); else showMarker.run();
+    }
+    /** ms between the marker's panel updates: the Manta's binary update's 8 frames. */
+    private static final long MARKER_GAP = 100;
+    private long shownAt;
+    private double wantSize = Double.NaN, wantGrey = Double.NaN;
+    /** Only the dragged wedge's marker strip, ink and paper: the panel's binary update, as the column's slider tab (StripMarker). */
+    private final Runnable showMarker = this::showMarker;
+    private void showMarker() {
+        if (item != ZenFan.SIZE && item != ZenFan.SHADE) return;
+        double size = wantSize, grey = wantGrey;
+        shownAt = android.os.SystemClock.uptimeMillis();
         app.selectionFeedback.updateBinary(this, strip(item == ZenFan.SIZE), () -> { dragSize = size; dragGrey = grey; });
     }
     /**
@@ -433,6 +467,8 @@ final class ZenFanView extends View {
      * the boxes that changed (the old and new bar, the markers), ink and paper ones through the binary update, as a pick
      * on the column ({@link SelectionFeedback#updateParts}); the grey wedge, coming or going with the eraser, one grey pass.
      */
+    /** A tool's picture or the one in use changed elsewhere (a slot given another tool, its picture made later): the fan put on the panel again, as after a pick on it (the owner, 2026-11-09: "the image doesn't seem to update right away"). */
+    void toolsChanged(Runnable change) { release(change); }
     private void release(Runnable change) {
         long started = android.os.SystemClock.uptimeMillis();
         app.selectionFeedback.updateParts(this, () -> { dragSize = dragGrey = Double.NaN; change.run(); });
@@ -443,10 +479,10 @@ final class ZenFanView extends View {
         float d = density(), room = ZenFan.MARK_ROOM, gap = ZenFan.STROKE;
         // As far out as a marker goes, short of the ring of previews (greys a binary update would harden).
         float top = -ZenFan.WEDGE - ZenFan.TAB_LONG / 2;
-        RectF strip = size ? new RectF(-room, top, -gap, 0) : new RectF(gap, top, room, 0);
-        // The fan's frame, dp, as onDraw's: its point, mirrored with the column on the right, the grey's turned to its edge.
+        RectF strip = new RectF(-room, top, -gap, 0);
+        // The fan's frame, dp, as onDraw's: its point, mirrored with the column on the right, the grey's the size's mirrored to its edge.
         android.graphics.Matrix frame = new android.graphics.Matrix();
-        if (!size) frame.postRotate((float) ZenFan.LOW);
+        if (!size) frame.set(MIRROR);
         if (fan.right) frame.postScale(-1, 1);
         frame.postTranslate(fan.px - bounds[0], fan.py - bounds[1]);
         frame.mapRect(strip);
@@ -454,5 +490,5 @@ final class ZenFanView extends View {
         px.intersect(0, 0, getWidth(), getHeight());
         return px;
     }
-    @Override protected void onDetachedFromWindow() { removeCallbacks(hold); super.onDetachedFromWindow(); }
+    @Override protected void onDetachedFromWindow() { removeCallbacks(hold); removeCallbacks(showMarker); super.onDetachedFromWindow(); }
 }

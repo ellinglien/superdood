@@ -28,21 +28,30 @@ Whatever is new will be in [CHANGELOG.md](CHANGELOG.md); a tour of the screens i
 
 ## Install
 
-### From a release
+### From a release (about 5 minutes, no coding)
 
-1. Download the `.apk` from the [latest release](https://github.com/ellinglien/superdood/releases/latest).
-2. On the tablet, turn on Sideloading in its settings, and connect it by USB to a computer with Google's
-   [platform tools](https://developer.android.com/tools/releases/platform-tools) (`adb devices` should list it).
-3. Install it and compile it ahead of time, which keeps drawing smooth on the tablet:
+1. **Download** `superdood-1.2.apk` from the [latest release](https://github.com/ellinglien/superdood/releases/latest).
+2. **On the Supernote:** Settings → Security & Privacy → turn on **Sideloading**.
+3. **On your computer** (Mac, Windows or Linux): install
+   [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases). Plug the Supernote in with its USB
+   cable, open Android Sideloader, click **Choose APK file**, pick the `.apk`, then **Install APK**.
+4. **On the Supernote:** open **Superdood** and allow file access when it asks: notebooks live in
+   `Document/Superdood`, where they survive updates and reinstalls (and Supernote Cloud syncs them).
 
-   ```sh
-   adb install -r Superdood.apk     # the .apk you downloaded
-   adb shell cmd package compile -m speed -f ing.ell.mybaddrawings
-   ```
-4. Open Superdood and allow file access when it asks: notebooks live in `Document/Superdood`, where
-   they survive updates and reinstalls.
+Drawing is smoothest once Android has compiled the app ahead of time. It does that by itself while the tablet sits idle
+and charging; to do it straight away, use the commands below once.
 
-Later releases install over it with the same commands.
+### With adb (smoothest from the start)
+
+With Google's [platform tools](https://developer.android.com/tools/releases/platform-tools) on your computer and the
+Supernote connected by USB (`adb devices` should list it):
+
+```sh
+adb install -r superdood-1.2.apk     # the .apk you downloaded
+adb shell cmd package compile -m speed -f ing.ell.mybaddrawings
+```
+
+Later releases install over it either way; your notebooks are kept.
 
 ### From source
 

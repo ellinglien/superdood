@@ -56,16 +56,18 @@ public final class PngRenderChecks {
         List<PackedPage> pages = new ArrayList<>(Arrays.asList(PackedPage.of(DrawingBook.encode(d))));
         java.io.ByteArrayOutputStream now = new java.io.ByteArrayOutputStream();
         NotebookExport.pdf(now, "Harbour", "Harbour", pages, PageExportChecks.tiles(), null, NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.LINED), null, null, TODAY);
-        int[] highRes = high(d, NotebookTemplate.LINED);
-        for (byte[] bytes : new byte[][]{copy(d, PageExport.PDF, ExportSize.PAGE, NotebookTemplate.LINED), now.toByteArray()}) {
-            NotebookPdfChecks.Pdf pdf = new NotebookPdfChecks.Pdf(bytes);
+        // Export Now's PDF is the notebook's copies: the guides left out (the owner, 2026-11-08); Export Page keeps them.
+        int[][] highRes = {high(d, NotebookTemplate.LINED), high(d, NotebookTemplate.BLANK)};
+        byte[][] made = {copy(d, PageExport.PDF, ExportSize.PAGE, NotebookTemplate.LINED), now.toByteArray()};
+        for (int c = 0; c < made.length; c++) {
+            NotebookPdfChecks.Pdf pdf = new NotebookPdfChecks.Pdf(made[c]);
             int page = pdf.pages().get(0), was = before.pages().get(0);
             int[] size = imageSize(pdf, page), old = imageSize(before, was);
             check(size[0] == 2 * d.width && size[1] == 2 * d.height && old[0] == d.width, "the PDF's picture is twice the page: " + size[0] + " × " + size[1]);
             check(pdf.dict(page).contains("/MediaBox [0 0 72.00 48.00]") && before.dict(was).contains("/MediaBox [0 0 72.00 48.00]"), "the page's size as before: " + pdf.dict(page));
             check(pdf.content(page).equals(before.content(was)), "placed and worded as before");
             int[] shown = pdf.image(page);
-            check(Arrays.equals(shown, highRes), "the PDF's picture is High Res's PNG, its sharp edges too");
+            check(Arrays.equals(shown, highRes[c]), "the PDF's picture is High Res's PNG, its sharp edges too (" + c + ")");
             check(finer(shown, d) > 1000, "its pencil edges finer than the page's pixels");
         }
         // Washes alone: nothing to draw sharp, the PDF as before, byte for byte.

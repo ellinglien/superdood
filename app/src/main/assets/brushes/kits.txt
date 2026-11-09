@@ -5,7 +5,7 @@
 # Then one line a brush (a kit loads in the tray's order, kind by kind, A to Z, whatever order the lines are in; only Default Tools keeps its own): the Basic tool's name exactly as on the Tools page, More Brushes too (or one of the
 # bar's first-launch brushes, ToolSlots.FIRST, by its name), a colon,
 # and its job in two or three words ("Sumi: Drop ink"). The bar's slot says "1 Drop ink" when it is picked.
-# A last line "Eraser Dry Media: Erase pencil" also sets the eraser to that kind as the kit loads
+# A last line "Eraser Layer 1: Erase layer 1" also sets the eraser to that layer as the kit loads
 # (Everything, Pen, Paint or Dry Media). At most nine brushes a kit (the bar's slots; Fill in has its own place beside the eraser). Lines starting with # are notes.
 # Plain, warm words, no semicolons (docs/TEXT-STYLE.md).
 

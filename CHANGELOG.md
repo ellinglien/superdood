@@ -5,6 +5,22 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.2 (2026-11-09)
+
+- **The fan's wedges round the X** (2026-11-07): the size and grey wedges' outer edge follows the arc, the gap between
+  them runs straight out from the nib preview, and the grey wedge mirrors the size wedge, the same length.
+- **A steadier tap in the fan** (2026-11-08): the pen's landing holds until it moves, so a tap's marker no longer creeps
+  as the nib skids.
+- **The fan stays whole** (2026-11-08, 2026-11-09, the owner: "missing chunk from the fan after a two finger delete
+  lasso"): paint, page turns and a Lasso loop beside the fan no longer wipe parts of it or leave the old page round its
+  edge.
+- **A slot's new tool shows at once in the fan** (2026-11-09, the owner: "the image doesn't seem to update right
+  away"): its picture and the mark of the tool in use.
+- **Vector Ink faster** (2026-11-08): large sizes and a layer's first stroke no longer lag on the Manta.
+- **The eraser's layers** (2026-11-08, the owner: "rename them just layers 1 etc"): the eraser's hold offers
+  Everything, Layer 1, Layer 2 and Layer 3.
+- **PDF and PNG copies without the template's guides** (2026-11-08, the owner: "for pdf saves, let's make templates not
+  visible by default"): pages exported on plain paper.
 - **The fan round the nib preview** (2026-11-07, the owner: "make the circle midpoint to be the center of the nib
   preview"): the arc, the ring of 13 previews, the tools and the white behind them now centre on the nib preview in the
   corner, a little larger; the tools and previews run from clear of the page strip to above the brush line.

@@ -44,14 +44,33 @@ final class ZenFan {
      * point, tucked in from the X ({@link #TUCK}), so the farthest of them reaches that.
      */
     static final float RING = LINE - CLEAR - PREVIEW_H / 2, INNER = RING - PREVIEW_H / 2 - PREVIEW_TAB - CLEAR;
-    /** The wedges' radius round their point, dp: {@link #INNER} less the point's tuck, so they lie inside it however they turn. */
-    static final float WEDGE = INNER - ZenFan.TUCK;
+    /** The X from the wedges' point, dp each way (down and back): the wedges' outer edge is round the X, as the arc is. */
+    static final float TUCKED = ZenFan.TUCK / (float) Math.sqrt(2);
+    /**
+     * The size wedge's side edge's top, dp up from the wedges' point: where it meets their outer edge, {@link #INNER} round
+     * the X (the owner, 2026-11-07: "the arc of the picker wedges needs to be adjusted to reflect the new larger circle
+     * arc.. to match it should be from the same midpoint").
+     */
+    static final float WEDGE = (float) (Math.sqrt(INNER * INNER - TUCKED * TUCKED) - TUCKED);
+    /** How far out from the wedges' point along the unit direction ({@code ux}, {@code uy}), starting {@code ox}, {@code oy} off it, a line meets the outer edge round the X, dp. */
+    private static double toEdge(double ox, double oy, double ux, double uy) {
+        double a = ox + TUCKED, b = oy + TUCKED, k = a * ux + b * uy;
+        return -k + Math.sqrt(k * k - (a * a + b * b - INNER * INNER));
+    }
+    /** A point {out, up} from the wedges' point, its distance from the X. */
+    static double fromX(double out, double up) { return Math.hypot(out + TUCKED, up + TUCKED); }
     /** Degrees round the X's middle the arc, the ring and the tools sweep to from the side edge: short of the foot, so the brush line beside the X stays clear (the owner chose this, 2026-11-07). */
     static final double SWEEP = 80;
     /** Degrees round the X they start from: where the arc is {@link #CLEAR} past the page strip over the X, so its first previews and tools clear the strip. */
     static final double START = Math.toDegrees(Math.asin((14 + CLEAR) / LINE));
-    /** Degrees from the side edge: the gap's middle between the wedges, and the grey wedge's lower edge, the row and Zoom under it (the owner's sketch). */
-    static final double SPLIT = 26, LOW = 52;
+    /**
+     * Degrees from the side edge: the gap's middle between the wedges, a line straight out from the X as the arc's (the
+     * owner, 2026-11-07: "should be a direct line to the middle of the circles midpoint"; from the wedges' point at 26
+     * until then, meeting their outer edge where it does now), and the grey wedge's lower edge's direction: the side
+     * edge's mirror across the gap's middle, the grey wedge the size wedge's mirror image (the owner, 2026-11-07: "they
+     * should be identical shapes").
+     */
+    static final double SPLIT = 29, LOW = 2 * SPLIT;
     /**
      * dp: a tool's picture's length out from the arc, its butt on the arc (the owner, 2026-11-04: no gap), the Eraser's
      * {@link #ERASER_GAP} out; the selected one's bar {@link #MARK_GAP} past its tip, as the column's side bar, {@link
@@ -118,18 +137,19 @@ final class ZenFan {
     /** The gap's half width, dp, and its middle's direction's sine and cosine. */
     private static final double HALF = CLEAR / 2, SIN = Math.sin(Math.toRadians(SPLIT)), COS = Math.cos(Math.toRadians(SPLIT));
     /** The size wedge's corner, dp up the side edge from the point: where the gap's side meets it. */
-    static float wedgeStart() { return (float) (HALF / SIN); }
-    /** The grey wedge's corner, dp out along its lower edge from the point. */
-    static float greyStart() { return (float) (HALF / Math.sin(Math.toRadians(LOW - SPLIT))); }
+    static float wedgeStart() { return (float) ((TUCKED * COS + HALF) / SIN - TUCKED); }
+    /** The grey wedge's corner's distance from the X, dp: the size wedge's, mirrored. */
+    static final float GREY_FROM = (float) Math.hypot(TUCKED, wedgeStart() + TUCKED);
+    /** ({@code out}, {@code up}) dp from the point mirrored across the gap's middle, the line out from the X: the size wedge's parts to the grey's. */
+    static float[] mirror(double out, double up) {
+        double u = out + TUCKED, v = up + TUCKED, k = 2 * (u * SIN + v * COS);
+        return new float[]{(float) (k * SIN - u - TUCKED), (float) (k * COS - v - TUCKED)};
+    }
     /** Where the size wedge's arc meets the gap, dp from the point: {out, up}. */
     static float[] wedgeEnd() {
-        double t = Math.sqrt(WEDGE * WEDGE - HALF * HALF);
-        return new float[]{(float) (t * SIN - HALF * COS), (float) (t * COS + HALF * SIN)};
-    }
-    /** Where the grey wedge's arc meets the gap, dp from the point: {out, up}. */
-    static float[] greyEnd() {
-        double t = Math.sqrt(WEDGE * WEDGE - HALF * HALF);
-        return new float[]{(float) (t * SIN + HALF * COS), (float) (t * COS - HALF * SIN)};
+        // The gap's side toward the side edge: the line out from the X, half the gap over.
+        double ox = -TUCKED - HALF * COS, oy = -TUCKED + HALF * SIN, t = toEdge(ox, oy, SIN, COS);
+        return new float[]{(float) (ox + t * SIN), (float) (oy + t * COS)};
     }
     /** How far ({@code out}, {@code up}) is from the ray {@code degrees} from the side edge, dp, toward the foot. */
     private static double below(double out, double up, double degrees) {
@@ -160,15 +180,17 @@ final class ZenFan {
         if (dx < -MARK_ROOM || dy < -MARK_ROOM) return OUTSIDE;
         // Beside the wedges' edges, only their marker rooms; past their radius, white up to the ring.
         boolean behind = dx < 0 || dy < 0;
-        if (r > WEDGE) return behind ? OUTSIDE : NONE;
+        // Past the outer edge round the X (white up to the ring, which is caught above), nothing.
+        if (fromX(dx, dy) > INNER) return behind ? OUTSIDE : NONE;
         // Across the gap's middle, dp: its half each side hits nothing.
-        double off = below(dx, dy, SPLIT);
+        double off = below(dx + TUCKED, dy + TUCKED, SPLIT);
         if (Math.abs(off) < HALF) return NONE;
         // Short of each wedge's corner, nothing (the X's target is there).
         if (off < 0) return dy < 0 ? OUTSIDE : dy < wedgeStart() ? NONE : SIZE;
         if (dy < 0) return OUTSIDE;
-        // Under the grey wedge: its marker's room beside its lower edge, then the row's (its buttons take their own touches).
-        return r >= greyStart() && below(dx, dy, LOW) < MARK_ROOM ? SHADE : NONE;
+        // The grey wedge and its marker's room, as the size's mirrored; past that room, the row's (its buttons take their own touches).
+        float[] m = mirror(dx, dy);
+        return m[1] < wedgeStart() || m[0] < -MARK_ROOM ? NONE : SHADE;
     }
     /** How many previews the ring holds: as many as the page bar's spacing fits round it. */
     static int previews() { return (int) ((Math.toRadians(SWEEP - START) * RING + PREVIEW_GAP) / (PREVIEW_W + PREVIEW_GAP)); }
@@ -186,7 +208,7 @@ final class ZenFan {
      * arc past its widest ({@link #wedgeEnd}). Its marker reads as the line's width there (the owner, 2026-11-04: "it
      * indicates the size of the tool... so it should be closer to the size actually shown").
      */
-    static double width(double up) { return up <= wedgeStart() || up >= WEDGE ? 0 : Math.min((up - wedgeStart()) * SIN / COS, Math.sqrt(WEDGE * WEDGE - up * up)); }
+    static double width(double up) { return up <= wedgeStart() || up >= WEDGE ? 0 : Math.min((up - wedgeStart()) * SIN / COS, Math.sqrt(INNER * INNER - (up + TUCKED) * (up + TUCKED)) - TUCKED); }
     /** The broadest line the wedge shows true, page px: its width where widest. */
     static double truest() { return wedgeEnd()[0] * PAGE_PX; }
     /**
@@ -200,31 +222,49 @@ final class ZenFan {
         return (float) (top + (WEDGE - top) * Math.min(1, Math.log(px / most) / Math.log(ModularSizes.MAX / most)));
     }
     /** The size at ({@code sx}, {@code sy}), page px: {@link #sizeUp}'s inverse at its height, to the toolbar slider's nearest step ({@link ToolSwatches#sizeAt}). */
-    double size(float sx, float sy) { return size(sx, sy, 1); }
+    double size(float sx, float sy) { return size(sx, sy, px -> px); }
     /**
-     * As {@link #size(float, float)} for a brush that draws {@code drawn} page px wide per px of its size (its typical
-     * drawn width over its size, {@link FootprintSweep#typicalWidth}): the slider's size whose line is as wide as the
-     * wedge there (the owner, 2026-11-07: the marker "doesn't always take into account the control stuff").
+     * As {@link #size(float, float)} for a brush that draws {@code drawn}(px) page px wide at size px (its typical drawn
+     * width, {@link FootprintSweep#typicalWidth}): the slider's step whose line is nearest the wedge's width there (the
+     * owner, 2026-11-07: the marker "doesn't always take into account the control stuff"), so its marker stays put on the
+     * lift (a ratio taken at the old size made it jump, then drift).
      */
-    double size(float sx, float sy, double drawn) {
+    double size(float sx, float sy, java.util.function.DoubleUnaryOperator drawn) {
         double up = Math.min(WEDGE, local(sx, sy)[1]), most = truest(), top = wedgeEnd()[1];
         double px = up <= top ? (up - wedgeStart()) * SIN / COS * PAGE_PX : most * Math.pow(ModularSizes.MAX / most, (up - top) / (WEDGE - top));
         // At the wedge's corner and below it, the finest: a floor, so the finest sizes stay a tap away.
-        return ToolSwatches.sizeAt(ToolSwatches.position(Math.max(ModularSizes.MIN, px / (drawn > 0 ? drawn : 1))));
+        double want = Math.max(ModularSizes.MIN, px);
+        // shortcut: a binary search, so a brush whose line narrows as its size grows may land on a near step, not the nearest; search all steps if one does.
+        int lo = 0, hi = SIZE_STEPS.length - 1;
+        while (lo < hi) { int mid = (lo + hi) / 2; if (drawn.applyAsDouble(SIZE_STEPS[mid]) < want) lo = mid + 1; else hi = mid; }
+        if (lo > 0 && want - drawn.applyAsDouble(SIZE_STEPS[lo - 1]) <= drawn.applyAsDouble(SIZE_STEPS[lo]) - want) lo--;
+        return SIZE_STEPS[lo];
     }
+    /** The slider's sizes ({@link ToolSwatches#sizeAt}), page px: half px under 10, whole ones up to the broadest. */
+    static final double[] SIZE_STEPS = java.util.stream.DoubleStream.concat(
+            java.util.stream.DoubleStream.iterate(ModularSizes.MIN, v -> v + .5).limit((long) ((10 - ModularSizes.MIN) * 2)),
+            java.util.stream.DoubleStream.iterate(10, v -> v + 1).limit((long) (ModularSizes.MAX - 10) + 1)).toArray();
 
-    /** The grey wedge's length, dp, and its solid ends' ({@link ShadeStrip#endpoint}). */
-    private int length() { return Math.round(WEDGE - greyStart()); }
+    /**
+     * The grey wedge's greys run with the distance from the X, white at its corner's to black at its outer edge, so the
+     * edge, an arc round the X, is black all along: the corner's distance from the X, dp, the run's length, and its solid
+     * ends' ({@link ShadeStrip#endpoint}).
+     */
+    private static double greyFrom() { return GREY_FROM; }
+    private int length() { return (int) Math.round(INNER - greyFrom()); }
     private int endpoint() { return ShadeStrip.endpoint(length(), ShadeStrip.END); }
     /** The grey at ({@code sx}, {@code sy}), darkness 0–1: the toolbar strip's {@link ShadeStrip#LEVELS} steps, white at the wedge's corner to black at its arc. */
     double darkness(float sx, float sy) {
         float[] p = local(sx, sy);
-        return darknessAt(Math.hypot(p[0], p[1]));
+        return darknessAt(fromX(p[0], p[1]));
     }
-    /** The grey {@code r} dp from the point, darkness 0–1 (the grey wedge's fill). */
-    double darknessAt(double r) { return DrawLayout.shadeAt((float) r, greyStart(), length(), endpoint()); }
-    /** Where grey {@code darkness}'s marker sits, dp from the point along the wedge's lower edge. */
-    float shadeRadius(double darkness) { return greyStart() + length() - ShadeStrip.markerAt(ToolSwatches.tone(darkness), length(), endpoint()); }
+    /** The grey {@code r} dp from the X, darkness 0–1 (the grey wedge's fill). */
+    double darknessAt(double r) { return DrawLayout.shadeAt((float) r, (float) greyFrom(), length(), endpoint()); }
+    /** Where grey {@code darkness}'s marker sits along the grey wedge's lower edge, dp: as far as up the side edge ({@link #mirror}) where that is its grey's distance from the X. */
+    float shadeRadius(double darkness) {
+        double d = greyFrom() + length() - ShadeStrip.markerAt(ToolSwatches.tone(darkness), length(), endpoint());
+        return (float) (Math.sqrt(d * d - TUCKED * TUCKED) - TUCKED);
+    }
 
     /** The screen point {@code r} dp from the X's middle at {@code degrees} from the side edge toward the foot: {x, y}. */
     float[] point(float r, double degrees) {
@@ -252,8 +292,8 @@ final class ZenFan {
      * foot, just over the row.
      */
     static final float CELL = 26, PICKER = 28, LAYERS_SIDE = 38, LAYERS_FOOT = PICKER + 2;
-    /** Menu's middle out along the foot, dp: its top inner corner on the grey wedge's lower edge, the row as far in as it goes (the ring round the X leaves it less room). */
-    static final float FIRST = (float) Math.ceil(PICKER * Math.tan(Math.toRadians(LOW)) + PICKER / 2);
+    /** Menu's middle out along the foot, dp: where the row sat before the grey wedge became the size's mirror (its lower edge since above Menu's corner). */
+    static final float FIRST = 50;
     /** Cell {@code cell}'s size, dp: {wide, high}. */
     static float[] side(int cell) {
         float side = cell == LAYERS ? LAYERS_SIDE : cell == WET ? CELL : PICKER;

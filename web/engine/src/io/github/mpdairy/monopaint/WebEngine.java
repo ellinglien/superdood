@@ -622,14 +622,14 @@ public final class WebEngine {
     @JSExport public static boolean screensFit(int w, int h) { return LabLayout.fits(w, h); }
 
     /**
-     * The long presses' timing and words, as JSON: {@link DrawLayout#LONG_PRESS_MS} and its slop; the eraser's kinds
-     * ({@link EraseKind}), the one in use marked by the page; the grey strip's Opacity ({@link DrawLayout#OPACITY}).
+     * The long presses' timing and words, as JSON: {@link DrawLayout#LONG_PRESS_MS} and its slop; the eraser's choices
+     * ({@link EraseKind#TARGETS} as "kinds", what the eraser takes), the one in use marked by the page; the grey strip's Opacity ({@link DrawLayout#OPACITY}).
      */
     @JSExport public static String holds() {
         J j = new J().o().k("ms").v(DrawLayout.LONG_PRESS_MS).k("slop").v(DrawLayout.LONG_PRESS_SLOP).k("row").v(DrawLayout.MENU_ROW).k("kinds").a();
-        for (int k : EraseKind.KINDS) j.v(k);
-        j.e().k("labels").a(); for (String l : EraseKind.LABELS) j.v(l);
-        j.e().k("notes").a(); for (int i = 0; i < EraseKind.LABELS.length; i++) j.v(EraseKind.note(i));
+        for (int k : EraseKind.TARGETS) j.v(k);
+        j.e().k("labels").a(); for (String l : EraseKind.CHOICES) j.v(l);
+        j.e().k("notes").a(); for (int i = 0; i < EraseKind.CHOICES.length; i++) j.v(EraseKind.note(i));
         j.e().k("type").o(); for (TypeStyle t : TypeStyle.values()) j.k(t.name()).a().v(t.sp).v(t.weight).v(t.tracking).e();
         j.e().k("opacity").v(DrawLayout.OPACITY).k("opacityOnly").v(DrawLayout.OPACITY_ONLY).k("noteMs").v(DrawLayout.NOTE_MS).k("offerMs").v(PageClear.OFFER_MS);
         return j.e().toString();
@@ -762,7 +762,7 @@ public final class WebEngine {
     @JSExport public static String toolsLeave(boolean lab) {
         own(slots().take(page.results(), page.together()));
         if (lab) start = page.start.write();
-        String said = new J().o().k("slot").v(page.slot()).k("eraser").v(page.eraser() < 0 ? -1 : EraseKind.KINDS[page.eraser()]).e().toString();
+        String said = new J().o().k("slot").v(page.slot()).k("eraser").v(page.eraser() < 0 ? -1 : EraseKind.TARGETS[page.eraser()]).e().toString();
         page = null;
         return said;
     }

@@ -102,6 +102,22 @@ final class VectorLines {
         next[strokes.length] = stroke;
         return new VectorLines(next);
     }
+    /** As {@link #with(Stroke)} for a stroke still being drawn (a new one each frame): {@link #alone} draws it over this one's kept tiles, nothing of its own kept. */
+    VectorLines withLive(Stroke stroke) { VectorLines out = with(stroke); out.base = this; return out; }
+    /** What {@link #withLive} built this on, or null. */
+    private VectorLines base;
+    /**
+     * As {@link #with(Stroke)} for a finished stroke: its tiles begin as this one's kept tiles with the stroke drawn over,
+     * so a lift draws the one stroke, not every line under it again (a size 250 lift took ~600 ms on the Manta, 1.4 s zoomed).
+     */
+    VectorLines withKept(Stroke stroke) {
+        VectorLines out = with(stroke);
+        synchronized (tiles) { out.seed = new java.util.HashMap<>(tiles); out.seedFrom = strokes.length; out.tileScale = tileScale; out.tileOx = tileOx; out.tileOy = tileOy; }
+        return out;
+    }
+    /** Tiles of the lines this was made from by {@link #withKept}, strokes {@code seedFrom} on not yet in them; null once the zoom changes. */
+    private java.util.Map<Long, byte[][]> seed;
+    private int seedFrom;
     /** Half the width of a line of {@code size} at {@code share} of it (0 to 1), page px; a hairline at least. */
     static double radius(double size, double share) { return Math.max(THINNEST, size / 2 * Math.max(0, Math.min(1, share))); }
 
@@ -254,16 +270,19 @@ final class VectorLines {
         if (n == 0 || from > to) return;
         if (from == to) { disc(stroke.x(from) * scale + ox, stroke.y(from) * scale + oy, stroke.radius(from) * scale, left, top, w, h, out); }
         // A run of points at a time, passed by when its box misses the area (a long line through a small tile).
-        double[] runs = stroke.runs();
+        double[] runs = stroke.runs(), span = new double[2], whole = new double[2];
         double l = (left - ox) / scale, t = (top - oy) / scale, r0 = (left + w - ox) / scale, b0 = (top + h - oy) / scale, pad = 2 / scale;
-        for (int i = from; i < to; i++) {
+        for (int i = from, checked = -1; i < to; ) {
             int run = i / RUN;
-            if (i % RUN == 0 || i == from) {
+            if (run != checked) {
+                checked = run;
                 double[] box = {runs[4 * run], runs[4 * run + 1], runs[4 * run + 2], runs[4 * run + 3]};
-                if (box[0] > r0 + pad || box[2] < l - pad || box[1] > b0 + pad || box[3] < t - pad) { i = Math.min(to, (run + 1) * RUN) - 1; continue; }
+                if (box[0] > r0 + pad || box[2] < l - pad || box[1] > b0 + pad || box[3] < t - pad) { i = Math.min(to, (run + 1) * RUN); continue; }
             }
-            double ax = stroke.x(i) * scale + ox, ay = stroke.y(i) * scale + oy, bx = stroke.x(i + 1) * scale + ox, by = stroke.y(i + 1) * scale + oy;
-            double ra = stroke.radius(i) * scale, rb = stroke.radius(i + 1) * scale, r = Math.max(ra, rb);
+            int j = reach(stroke, i, to, scale);
+            double ax = stroke.x(i) * scale + ox, ay = stroke.y(i) * scale + oy, bx = stroke.x(j) * scale + ox, by = stroke.y(j) * scale + oy;
+            double ra = stroke.radius(i) * scale, rb = stroke.radius(j) * scale, r = Math.max(ra, rb);
+            i = j;
             int x0 = Math.max(left, (int) Math.floor(Math.min(ax, bx) - r - 1)), x1 = Math.min(left + w, (int) Math.ceil(Math.max(ax, bx) + r + 1));
             int y0 = Math.max(top, (int) Math.floor(Math.min(ay, by) - r - 1)), y1 = Math.min(top + h, (int) Math.ceil(Math.max(ay, by) + r + 1));
             double dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
@@ -271,12 +290,24 @@ final class VectorLines {
             double ux = dx / len, uy = dy / len;
             for (int y = y0; y < y1; y++) {
                 double py = y + .5 - ay;
-                for (int x = x0; x < x1; x++) {
+                // The row's reach: its x span of the two end discs and the band between, past which nothing covers (a large line's box is mostly corners).
+                if (!span(y + .5, ax, ay, bx, by, r + 1, ux, uy, len, span)) continue;
+                int sx0 = Math.max(x0, (int) Math.floor(span[0]) - 1), sx1 = Math.min(x1, (int) Math.ceil(span[1]) + 1), row = (y - top) * w - left;
+                // Its inside, a pixel or more within the thinner end's edge, whole: filled at once, the edge's pixels alone worked out.
+                int fx0 = sx1, fx1 = sx1;
+                if (Math.min(ra, rb) > 2 && span(y + .5, ax, ay, bx, by, Math.min(ra, rb) - 1, ux, uy, len, whole)) {
+                    fx0 = Math.max(sx0, (int) Math.ceil(whole[0] - .5)); fx1 = Math.min(sx1, (int) Math.floor(whole[1] - .5) + 1);
+                    if (fx0 < fx1) java.util.Arrays.fill(out, row + fx0, row + fx1, (byte) 255); else fx0 = fx1 = sx1;
+                }
+                for (int x = sx0, o = row + sx0; x < sx1; x++, o++) {
+                    if (x == fx0) { x = fx1 - 1; o = row + x; continue; }
+                    // Already whole (laid by the piece before): nothing to add.
+                    if (out[o] == (byte) 255) continue;
                     double px = x + .5 - ax, along = px * ux + py * uy, across = Math.abs(px * uy - py * ux), d, rad;
                     if (along < 0) { d = Math.sqrt(px * px + py * py); rad = ra; }
                     else if (along > len) { double qx = x + .5 - bx, qy = y + .5 - by; d = Math.sqrt(qx * qx + qy * qy); rad = rb; }
                     else { d = across; rad = ra + (rb - ra) * along / len; }
-                    keep(out, (y - top) * w + x - left, rad - d + .5);
+                    keep(out, o, rad - d + .5);
                 }
             }
         }
@@ -284,6 +315,50 @@ final class VectorLines {
         if (from == 0 && (stroke.caps & START_CUT) != 0 && n > 1) flat(stroke, 0, 1, scale, ox, oy, left, top, w, h, out);
         if (to == n - 1 && (stroke.caps & END_CUT) != 0 && n > 1) flat(stroke, n - 1, n - 2, scale, ox, oy, left, top, w, h, out);
     }
+    /** Row {@code cy}'s x span ({from, to}, target px; null: none) of the capsule from (ax, ay) to (bx, by) of radius {@code r}: the end discs' spans and the band's between. */
+    private static boolean span(double cy, double ax, double ay, double bx, double by, double r, double ux, double uy, double len, double[] into) {
+        // Nothing allocated: it runs for every row of every piece (a lift's arrays here were most of its time on the Manta).
+        double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE, da = cy - ay, db = cy - by;
+        if (Math.abs(da) < r) { double h = Math.sqrt(r * r - da * da); lo = ax - h; hi = ax + h; }
+        if (Math.abs(db) < r) { double h = Math.sqrt(r * r - db * db); lo = Math.min(lo, bx - h); hi = Math.max(hi, bx + h); }
+        // The band: points whose distance across is under r and along is within the piece; on this row, x where |across| < r.
+        if (Math.abs(uy) > 1e-9) {
+            // across = (x - ax) * uy - (cy - ay) * ux, so |across| < r is an x interval; along within [0, len] another.
+            double k = (cy - ay) * ux, a1 = (k - r) / uy + ax, a2 = (k + r) / uy + ax;
+            double p = (cy - ay) * uy, b1 = (0 - p) / ux, b2 = (len - p) / ux;
+            double xlo = Math.min(a1, a2), xhi = Math.max(a1, a2);
+            if (Math.abs(ux) > 1e-9) { double blo = Math.min(b1, b2) + ax, bhi = Math.max(b1, b2) + ax; xlo = Math.max(xlo, blo); xhi = Math.min(xhi, bhi); }
+            else if (p < 0 || p > len) xhi = xlo - 1;
+            if (xlo < xhi) { lo = Math.min(lo, xlo); hi = Math.max(hi, xhi); }
+        } else if (Math.abs(cy - ay) < r) { lo = Math.min(lo, Math.min(ax, bx)); hi = Math.max(hi, Math.max(ax, bx)); }
+        if (lo > hi) return false;
+        into[0] = lo; into[1] = hi;
+        return true;
+    }
+    /**
+     * The farthest point past {@code i} (up to {@code to}, within its run, so every tile merges alike) that {@link #cover} draws {@code i}
+     * to as one piece: each point between within {@link #TOL} target px of the straight piece, its width within TOL of the
+     * blend. A piece fills its whole box, so a large line's close points drew each pixel hundreds of times (the owner,
+     * 2026-11-07: "vector ink is unusable past a certain size").
+     */
+    private static int reach(Stroke s, int i, int to, double scale) {
+        int best = i + 1;
+        // At 100% (the page's own pixels) every point its own piece: an eraser's cut renumbers a line's pieces, and its tiles laid again must match the rest exactly.
+        if (scale == 1) return best;
+        double ax = s.x(i), ay = s.y(i), ar = s.radius(i), tol = TOL / scale;
+        for (int b = i + 2; b <= Math.min(to, (i / RUN + 1) * RUN); b++) {
+            double dx = s.x(b) - ax, dy = s.y(b) - ay, len = Math.hypot(dx, dy), br = s.radius(b);
+            if (len < 1e-9) return best;
+            for (int m = i + 1; m < b; m++) {
+                double px = s.x(m) - ax, py = s.y(m) - ay, along = (px * dx + py * dy) / len;
+                if (along < 0 || along > len || Math.abs(px * dy - py * dx) / len > tol || Math.abs(s.radius(m) - (ar + (br - ar) * along / len)) > tol) return best;
+            }
+            best = b;
+        }
+        return best;
+    }
+    /** Target px a merged piece may stray from the points it stands for. */
+    private static final double TOL = .25;
     /** The whole of {@code stroke}, as {@link #cover(Stroke, int, int, double, double, double, int, int, int, int, byte[])}. */
     static void cover(Stroke stroke, double scale, double ox, double oy, int left, int top, int w, int h, byte[] out) {
         cover(stroke, 0, stroke.points() - 1, scale, ox, oy, left, top, w, h, out);
@@ -413,8 +488,11 @@ final class VectorLines {
      */
     void over(double scale, double ox, double oy, int left, int top, int w, int h, int[] greys, byte[] coverage) { over(scale, ox, oy, left, top, w, h, greys, null, coverage); }
     /** As above, each pixel's coverage laid over {@code covered} too (null: not kept): over {@code greys} of 0, the lines' marks alone (High Res's Layers copy). */
-    void over(double scale, double ox, double oy, int left, int top, int w, int h, int[] greys, int[] covered, byte[] coverage) {
-        for (Stroke s : strokes) {
+    void over(double scale, double ox, double oy, int left, int top, int w, int h, int[] greys, int[] covered, byte[] coverage) { over(0, scale, ox, oy, left, top, w, h, greys, covered, coverage); }
+    /** As above, strokes {@code first} on alone. */
+    private void over(int first, double scale, double ox, double oy, int left, int top, int w, int h, int[] greys, int[] covered, byte[] coverage) {
+        for (int k = first; k < strokes.length; k++) {
+            Stroke s = strokes[k];
             int[] b = bounds(s, scale, ox, oy);
             int x0 = Math.max(left, b[0]), y0 = Math.max(top, b[1]), x1 = Math.min(left + w, b[2]), y1 = Math.min(top + h, b[3]);
             if (x0 >= x1 || y0 >= y1) continue;
@@ -429,6 +507,49 @@ final class VectorLines {
             }
         }
     }
+    /**
+     * As {@link #over(double, double, double, int, int, int, int, int[], int[], byte[])} over {@code greys} and {@code
+     * covered} of 0 (the lines alone: premultiplied grey and coverage), from tiles kept for this zoom and offset: drying
+     * paint redraws the zoomed view every frame, and each redraw drew every line again (the owner, 2026-11-07: "everything's
+     * deathly slow", large Vector Ink lines on the page). These lines never change (a change is a new VectorLines).
+     */
+    void alone(double scale, double ox, double oy, int left, int top, int w, int h, int[] greys, int[] covered) {
+        if (base != null) { base.alone(scale, ox, oy, left, top, w, h, greys, covered); over(base.strokes.length, scale, ox, oy, left, top, w, h, greys, covered, new byte[w * h]); return; }
+        synchronized (tiles) {
+            if (scale != tileScale || ox != tileOx || oy != tileOy) { tiles.clear(); seed = null; tileScale = scale; tileOx = ox; tileOy = oy; }
+            for (int ty = Math.floorDiv(top, TILE); ty * TILE < top + h; ty++) for (int tx = Math.floorDiv(left, TILE); tx * TILE < left + w; tx++) {
+                byte[][] tile = tile(tx, ty, scale, ox, oy);
+                if (tile == null) continue;
+                int x0 = Math.max(left, tx * TILE), x1 = Math.min(left + w, (tx + 1) * TILE), y0 = Math.max(top, ty * TILE), y1 = Math.min(top + h, (ty + 1) * TILE);
+                for (int y = y0; y < y1; y++) for (int x = x0, i = (y - top) * w + x0 - left, j = (y - ty * TILE) * TILE + x0 - tx * TILE; x < x1; x++, i++, j++) {
+                    greys[i] = tile[0][j] & 255; covered[i] = tile[1][j] & 255;
+                }
+            }
+        }
+    }
+    /** Tile ({@code tx}, {@code ty})'s lines alone, {grey, coverage} a byte a pixel, or null where no line meets it. */
+    private byte[][] tile(int tx, int ty, double scale, double ox, double oy) {
+        long key = (long) tx << 32 | (ty & 0xffffffffL);
+        if (tiles.containsKey(key)) return tiles.get(key);
+        int n = TILE * TILE;
+        int[] g = new int[n], c = new int[n];
+        if (seed != null && seed.containsKey(key)) {
+            byte[][] was = seed.remove(key);
+            if (was != null) for (int i = 0; i < n; i++) { g[i] = was[0][i] & 255; c[i] = was[1][i] & 255; }
+            over(seedFrom, scale, ox, oy, tx * TILE, ty * TILE, TILE, TILE, g, c, new byte[n]);
+        } else over(scale, ox, oy, tx * TILE, ty * TILE, TILE, TILE, g, c, new byte[n]);
+        byte[][] tile = null;
+        for (int i = 0; i < n; i++) if (c[i] != 0) { tile = new byte[2][n]; break; }
+        if (tile != null) for (int i = 0; i < n; i++) { tile[0][i] = (byte) g[i]; tile[1][i] = (byte) c[i]; }
+        tiles.put(key, tile);
+        return tile;
+    }
+    /** Target px a tile's side; the most tiles kept (a Manta screen's 300 and more), least recently used let go. */
+    private static final int TILE = 128, TILES = 400;
+    private double tileScale = Double.NaN, tileOx, tileOy;
+    private final java.util.LinkedHashMap<Long, byte[][]> tiles = new java.util.LinkedHashMap<Long, byte[][]>(64, .75f, true) {
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<Long, byte[][]> eldest) { return size() > TILES; }
+    };
     /** Whether some stroke's bounds meet page area {@code l, t, r, b}. */
     boolean meets(double l, double t, double r, double b) {
         for (Stroke s : strokes) { double[] x = s.bounds(); if (x[0] < r && x[2] > l && x[1] < b && x[3] > t) return true; }

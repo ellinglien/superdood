@@ -5850,3 +5850,22 @@ lined layer without it reads its Pen plane as Vector Ink's alone: old pages open
 
 Generic: none. Engine boundary unchanged (pure Java, the browser's the same code). Check against the version before
 (`1f0d16e8`, `OlderLayersCheck`): both read the other's pages as drawn.
+
+## The eraser by layer (2026-11-08)
+
+The owner: "rename them just layers 1 etc instead of pen paint etc". The eraser's hold offers Everything, Layer 1, Layer 2,
+Layer 3 (`EraseKind.CHOICES`, `TARGETS`); Pen, Paint and Dry Media stay Show Kinds' columns (`EraseKind.LABELS`). A target
+is the old kinds int with the layer above its bits (`EraseKind.layerOf`), so every path that carried `eraseKinds` (the
+pen, a finger, mirrors, the browser's `pen`) carries it unchanged; Show Kinds still limits its kinds (`EraseKind.takes`
+keeps the layer). `EraseBothStroke` erases engine layers `from` to `to`, the layer's pair (none where the page hasn't made
+it), every kind there; the fluid and a cover's design are Everything's alone. The stroke log keeps the kinds only (a
+layer's eraser replays as every layer's, as Replay doesn't follow layers), so an older reader reads every log.
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` | +1 −1 | `compositeTonesKept` previews a cover's rub only when every layer is erased. |
+| `EraseBothStroke` | +14 −7 | `from`/`to`, `everything`; the live layer the target's pair's ink. |
+| `VectorInk` | +4 −2 | `Cut.of` cuts the lines of the layers erased. |
+| `EraseKind`, `InkWash`, `InkWashBar`, `PaintActivity`, `ToolKits`, `WebEngine` | small | The choices, the log's kinds, the menu and mark, a hidden target layer refused, kits' "Eraser Layer 1", the browser's menu. |
+
+Generic: none. Engine boundary unchanged.

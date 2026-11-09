@@ -50,7 +50,7 @@ final class ToolKits {
         int steps() { return brushes.size() + (eraser == null ? 0 : 1); }
         /** What step {@code i} uses: a Basic tool's name as shown ("Clear water effect", {@link Brush#shownName}), or "Eraser, Dry Media". */
         String tool(int i) {
-            if (i >= brushes.size()) return ERASER + ", " + EraseKind.LABELS[eraser.eraser];
+            if (i >= brushes.size()) return ERASER + ", " + EraseKind.CHOICES[eraser.eraser];
             Brush b = brush(brushes.get(i).preset);
             return b == null ? brushes.get(i).preset : b.shownName();
         }
@@ -107,7 +107,7 @@ final class ToolKits {
                 intro = value;
             } else if (key.startsWith(ERASER + " ")) {
                 String kind = key.substring(ERASER.length()).trim();
-                for (int k = 0; k < EraseKind.LABELS.length; k++) if (EraseKind.LABELS[k].equalsIgnoreCase(kind)) eraser = new Role(null, value, k);
+                for (int k = 0; k < EraseKind.CHOICES.length; k++) if (EraseKind.CHOICES[k].equalsIgnoreCase(kind)) eraser = new Role(null, value, k);
             } else {
                 brushes.add(new Role(key, value, -1));
             }

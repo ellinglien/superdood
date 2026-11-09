@@ -29,15 +29,19 @@ public final class ZenFanChecks {
         check(Math.abs(ZenFan.STROKE - 1.5 * DrawLayout.ZEN_ICON / 24) < 1e-6, "one stroke width, the X's");
         // At most 3 cm from its point, tools and their bars included (the owner, 2026-11-04); the X a 48 dp target at least.
         // The drawn wedges' arc ends where the gap's side meets it (ZenFanView's outlines).
-        float[] end = ZenFan.wedgeEnd(), greyEnd = ZenFan.greyEnd();
-        check(Math.abs(Math.hypot(end[0], end[1]) - ZenFan.WEDGE) < .01 && Math.abs(below(end, ZenFan.SPLIT) + ZenFan.CLEAR / 2) < .01
-                && Math.abs(Math.hypot(greyEnd[0], greyEnd[1]) - ZenFan.WEDGE) < .01 && Math.abs(below(greyEnd, ZenFan.SPLIT) - ZenFan.CLEAR / 2) < .01, "the wedges' arcs end on the gap's sides");
+        float[] end = ZenFan.wedgeEnd(), greyEnd = ZenFan.mirror(end[0], end[1]), back = ZenFan.mirror(greyEnd[0], greyEnd[1]), low0 = ZenFan.mirror(0, 0), low1 = ZenFan.mirror(0, 100);
+        // The grey wedge the size's mirror image (the owner, 2026-11-07: "identical shapes"): mirrored twice, back; its lower edge at LOW.
+        check(Math.abs(back[0] - end[0]) < .01 && Math.abs(back[1] - end[1]) < .01 && Math.abs(Math.toDegrees(Math.atan2(low1[0] - low0[0], low1[1] - low0[1])) - ZenFan.LOW) < .01, "the grey wedge the size's mirror image");
+        // Their outer edge round the X, as the arc (2026-11-07), {@link ZenFan#INNER} from it; the side edge's top on it too.
+        check(Math.abs(ZenFan.fromX(end[0], end[1]) - ZenFan.INNER) < .01 && Math.abs(below(fromX(end), ZenFan.SPLIT) + ZenFan.CLEAR / 2) < .01
+                && Math.abs(ZenFan.fromX(greyEnd[0], greyEnd[1]) - ZenFan.INNER) < .01 && Math.abs(below(fromX(greyEnd), ZenFan.SPLIT) - ZenFan.CLEAR / 2) < .01
+                && Math.abs(ZenFan.fromX(0, ZenFan.WEDGE) - ZenFan.INNER) < .01, "the wedges' arcs round the X, ending on the gap's sides");
         ZenFan manta = ZenFan.at(1024, 1365, ToolSlots.COUNT, false);
         // The arc's top end as far from the Manta's edge as it was (the owner, 2026-11-06), the tools where they were.
         // Round the nib preview's middle, the X's (the owner, 2026-11-07): the arc's top end over it, the sweep short of the foot.
         check(Math.abs(manta.point(ZenFan.LINE, ZenFan.START)[0] - manta.x - ZenFan.STRIP / 2 - ZenFan.CLEAR) < .01 && ZenFan.SWEEP < 90, "the arc round the X from " + ZenFan.CLEAR + " dp past the strip to " + ZenFan.SWEEP + " degrees");
         // Equidistant (the owner, 2026-11-07): the gap between the wedges, the white between them and the previews' tabs, and between the previews and the arc.
-        check(ZenFan.RING + ZenFan.PREVIEW_H / 2 + ZenFan.CLEAR == ZenFan.LINE && ZenFan.INNER + ZenFan.CLEAR + ZenFan.PREVIEW_TAB + ZenFan.PREVIEW_H / 2 == ZenFan.RING && ZenFan.WEDGE + ZenFan.TUCK == ZenFan.INNER, "one white space between the wedges, the ring and the arc");
+        check(ZenFan.RING + ZenFan.PREVIEW_H / 2 + ZenFan.CLEAR == ZenFan.LINE && ZenFan.INNER + ZenFan.CLEAR + ZenFan.PREVIEW_TAB + ZenFan.PREVIEW_H / 2 == ZenFan.RING, "one white space between the wedges, the ring and the arc");
         check(ZenFan.PREVIEW_W == new DrawLayout(1024, 1365).previewWidth() && ZenFan.PREVIEW_H == new DrawLayout(1024, 1365).previewHeight(), "the ring's previews the Manta's page bar's");
         // All 13 previews round the X (the owner, 2026-11-07), the circle as large as that takes; the X a 48 dp target at least.
         check(ZenFan.previews() == 13 && 2 * ZenFan.LEAVE_R >= 48, "13 previews in the ring (" + ZenFan.previews() + ")");
@@ -51,22 +55,25 @@ public final class ZenFanChecks {
     static void parts(ZenFan fan, String at) {
         check(fan.hit(fan.x, fan.y) == ZenFan.LEAVE && fan.hit(fan.px, fan.py) == ZenFan.NONE, at + ": the X at Zen's icon, outside the fan's point");
         float mid = (ZenFan.wedgeStart() + ZenFan.WEDGE) / 2;
-        float[] size = fan.apex(mid, ZenFan.SPLIT / 3), shade = fan.apex(mid, (ZenFan.SPLIT + 2 * ZenFan.LOW) / 3), gap = fan.apex(mid, ZenFan.SPLIT),
+        double third = Math.toRadians(ZenFan.SPLIT / 3);
+        float[] mirrored = ZenFan.mirror(mid * Math.sin(third), mid * Math.cos(third));
+        float[] size = fan.apex(mid, ZenFan.SPLIT / 3), shade = local(fan, mirrored[0], mirrored[1]), gap = fan.point(150, ZenFan.SPLIT),
                 band = fan.point(ZenFan.INNER + ZenFan.CLEAR / 4, 30), ring = fan.point(ZenFan.RING, 30), row = fan.apex(100, 75);
         check(fan.hit(size[0], size[1]) == ZenFan.SIZE, at + ": the side edge's wedge is the size");
         check(fan.hit(shade[0], shade[1]) == ZenFan.SHADE, at + ": the next wedge is the grey");
         check(fan.hit(gap[0], gap[1]) == ZenFan.NONE && fan.hit(band[0], band[1]) == ZenFan.NONE && fan.hit(row[0], row[1]) == ZenFan.NONE, at + ": the gap, the white past the wedges and under them hit nothing");
         check(fan.hit(ring[0], ring[1]) == ZenFan.PAGES, at + ": the ring is the previews");
         // The gap's width: just past each of its sides, each wedge.
-        float half = ZenFan.CLEAR / 2, r = 100;
+        // The gap's middle a line out from the X (2026-11-07): across it, 140 dp out from the X.
+        float half = ZenFan.CLEAR / 2, r = 140, t = ZenFan.TUCKED;
         double s = Math.toRadians(ZenFan.SPLIT);
-        float[] up = local(fan, (float) (r * Math.sin(s) - (half + 1) * Math.cos(s)), (float) (r * Math.cos(s) + (half + 1) * Math.sin(s)));
-        float[] in = local(fan, (float) (r * Math.sin(s) - (half - 1) * Math.cos(s)), (float) (r * Math.cos(s) + (half - 1) * Math.sin(s)));
-        float[] down = local(fan, (float) (r * Math.sin(s) + (half + 1) * Math.cos(s)), (float) (r * Math.cos(s) - (half + 1) * Math.sin(s)));
+        float[] up = local(fan, (float) (r * Math.sin(s) - (half + 1) * Math.cos(s)) - t, (float) (r * Math.cos(s) + (half + 1) * Math.sin(s)) - t);
+        float[] in = local(fan, (float) (r * Math.sin(s) - (half - 1) * Math.cos(s)) - t, (float) (r * Math.cos(s) + (half - 1) * Math.sin(s)) - t);
+        float[] down = local(fan, (float) (r * Math.sin(s) + (half + 1) * Math.cos(s)) - t, (float) (r * Math.cos(s) - (half + 1) * Math.sin(s)) - t);
         check(fan.hit(up[0], up[1]) == ZenFan.SIZE && fan.hit(in[0], in[1]) == ZenFan.NONE && fan.hit(down[0], down[1]) == ZenFan.SHADE, at + ": the gap " + ZenFan.CLEAR + " dp wide");
         // The markers' rooms beside the edges take the pen: the size's beside the side edge, the grey's beside its lower edge.
-        double low = Math.toRadians(ZenFan.LOW);
-        float[] sizeMark = local(fan, -ZenFan.MARK_ROOM / 2, 100), shadeMark = local(fan, (float) (r * Math.sin(low) + ZenFan.MARK_ROOM / 2 * Math.cos(low)), (float) (r * Math.cos(low) - ZenFan.MARK_ROOM / 2 * Math.sin(low)));
+        float[] beside = ZenFan.mirror(-ZenFan.MARK_ROOM / 2, 100);
+        float[] sizeMark = local(fan, -ZenFan.MARK_ROOM / 2, 100), shadeMark = local(fan, beside[0], beside[1]);
         check(fan.hit(sizeMark[0], sizeMark[1]) == ZenFan.SIZE && fan.hit(shadeMark[0], shadeMark[1]) == ZenFan.SHADE, at + ": each marker's room beside its edge");
         double last = 0;
         check(fan.items() == fan.slots + 3 && fan.tool(fan.slots) == ToolSlots.FILL && fan.tool(fan.slots + 1) == ToolSlots.SMUDGE && fan.tool(fan.slots + 2) == ToolSlots.ERASER, at + ": Fill in, Smudge and Eraser last");
@@ -132,7 +139,7 @@ public final class ZenFanChecks {
             for (float x = c[0] + .25f; x < c[2]; x += .5f) for (float y = c[1] + .25f; y < c[3]; y += .5f) {
                 int hit = fan.hit(x, y);
                 float[] p = {Math.abs(x - fan.px), fan.py - y};
-                check((hit == ZenFan.NONE || hit == ZenFan.SHADE) && below(p, ZenFan.LOW) >= -.01, at + ": cell " + i + " clear of the wedges and the ring at " + x + "," + y + " (" + hit + ")");
+                check((hit == ZenFan.NONE || hit == ZenFan.SHADE) && ZenFan.mirror(p[0], p[1])[0] <= .01, at + ": cell " + i + " clear of the wedges and the ring at " + x + "," + y + " (" + hit + ")");
             }
         }
         float[] wet = cells[ZenFan.WET], lasso = cells[ZenFan.LASSO], layers = cells[ZenFan.LAYERS];
@@ -186,6 +193,10 @@ public final class ZenFanChecks {
         check(outer < ZenFan.LINE - ZenFan.CLEAR / 2 && inner >= ZenFan.INNER + ZenFan.CLEAR - .01, at + ": the ring between the white round the wedges and the arc");
     }
     /** How far {out, up} is from the ray {@code degrees} from the side edge, dp, toward the foot. */
+    /** A point {out, up} from the wedges' point, as {out, up} from the X. */
+    /** The screen point {@code t} dp along the grey wedge's lower edge: the side edge's, mirrored. */
+    static float[] lower(ZenFan fan, float t) { float[] m = ZenFan.mirror(0, t); return local(fan, m[0], m[1]); }
+    static float[] fromX(float[] p) { return new float[]{p[0] + ZenFan.TUCKED, p[1] + ZenFan.TUCKED}; }
     static double below(float[] p, double degrees) {
         double a = Math.toRadians(degrees);
         return p[0] * Math.cos(a) - p[1] * Math.sin(a);
@@ -268,7 +279,7 @@ public final class ZenFanChecks {
             wasUp = up;
             if (px <= ZenFan.truest()) {
                 honest++;
-                check(Math.abs(ZenFan.width(up) - px / ZenFan.PAGE_PX) < .01 && (px == 0 || Math.abs(below(new float[]{(float) ZenFan.width(up), up}, ZenFan.SPLIT) + ZenFan.CLEAR / 2) < .01),
+                check(Math.abs(ZenFan.width(up) - px / ZenFan.PAGE_PX) < .01 && (px == 0 || Math.abs(below(fromX(new float[]{(float) ZenFan.width(up), up}), ZenFan.SPLIT) + ZenFan.CLEAR / 2) < .01),
                         "size " + px + " px: the wedge " + ZenFan.width(up) + " dp wide at its marker, the line's width");
             }
             float[] at = local(fan, 0, up);
@@ -282,12 +293,12 @@ public final class ZenFanChecks {
             check(px >= was, "size grows up the side edge");
             was = px;
         }
-        float[] white = fan.apex(ZenFan.greyStart(), ZenFan.LOW), black = fan.apex(ZenFan.WEDGE, ZenFan.LOW);
+        float[] white = lower(fan, ZenFan.wedgeStart()), black = lower(fan, ZenFan.WEDGE);
         check(fan.darkness(white[0], white[1]) == 0 && fan.darkness(black[0], black[1]) == 1, "grey: white at the wedge's corner, black at its arc");
         java.util.Set<Double> greys = new java.util.TreeSet<>();
         was = -1;
-        for (float r = ZenFan.greyStart(); r <= ZenFan.WEDGE; r += .25f) {
-            float[] p = fan.apex(r, ZenFan.LOW);
+        for (float r = ZenFan.wedgeStart(); r <= ZenFan.WEDGE; r += .25f) {
+            float[] p = lower(fan, r);
             double d = fan.darkness(p[0], p[1]);
             check(d >= was, "grey darkens outward");
             was = d;
@@ -295,7 +306,7 @@ public final class ZenFanChecks {
         }
         check(greys.size() >= ShadeStrip.LEVELS - 1, "grey: the strip's steps (" + greys.size() + " of " + ShadeStrip.LEVELS + ")");
         for (double d : greys) {
-            float[] p = fan.apex(fan.shadeRadius(d), ZenFan.LOW);
+            float[] p = lower(fan, fan.shadeRadius(d));
             check(fan.darkness(p[0], p[1]) == d, "grey " + d + " through its marker and back");
         }
     }

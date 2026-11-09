@@ -857,8 +857,8 @@ final class InkWashBar {
         });
         updateLine(() -> {
             showBrushLine();
-            // An eraser that takes one kind says so, so it is never a surprise.
-            if (tool == InkWash.ERASER && app.inkWash.eraseKinds != 0) app.message(EraseKind.note(EraseKind.choiceOf(app.inkWash.eraseKinds)));
+            // An eraser that takes one layer says so, so it is never a surprise.
+            if (tool == InkWash.ERASER && app.inkWash.eraseKinds != 0) app.message(EraseKind.note(EraseKind.choice(app.inkWash.eraseKinds)));
             // Show Kinds: a brush whose kind isn't Full says so, so nothing is drawn unseen by surprise.
             app.sayKind(tool);
         });
@@ -871,6 +871,11 @@ final class InkWashBar {
      * button keeping what it showed until it arrives; only a button's first, when the bar is built, is drawn at once, so
      * a slot never shows another icon. The selected slot's sizes and greys follow (Brush Lab may have set them).
      */
+    /** {@code change} gives {@code button} its new face: on the panel over the row; with Zen Mode's fan open, the fan's copy of it too (the column is hidden). */
+    private void faceChanged(View button, Runnable change) {
+        ZenFanView fan = app.zenFanView();
+        if (fan != null) fan.toolsChanged(change); else app.selectionFeedback.update(button, change);
+    }
     void showBrush(int slot) {
         showBrush(slot, false);
         if (slot == app.inkWash.selected) { swatches.show(slot); showBrushLine(); }
@@ -996,13 +1001,13 @@ final class InkWashBar {
         if (art != 0) {
             Bitmap face = drawing(art, width, height, DrawLayout.TIP_TRIM);
             if (first || now) { show.accept(face); button.invalidate(); }
-            else app.selectionFeedback.update(button, () -> show.accept(face));
+            else faceChanged(button, () -> show.accept(face));
             samples.request(button, stroke, tray -> { trays[slot] = Bitmap.createBitmap(tray, width, height, Bitmap.Config.ARGB_8888); });
             return;
         }
         Consumer<int[]> shown = tray -> { trays[slot] = Bitmap.createBitmap(tray, width, height, Bitmap.Config.ARGB_8888); show.accept(trays[slot]); };
         // A new size or grey: the row's stroke put on the panel over the row alone, with no Android frame (2026-10-24).
-        if (!first && !now) samples.request(button, stroke, tray -> app.selectionFeedback.update(button, () -> shown.accept(tray)));
+        if (!first && !now) samples.request(button, stroke, tray -> faceChanged(button, () -> shown.accept(tray)));
         else { shown.accept(stroke.get()); button.invalidate(); }
     }
     /**
@@ -1120,15 +1125,15 @@ final class InkWashBar {
         if (app.busy() || app.erasingOff()) return;
         app.pad.finishStroke();
         boolean clears = PageClear.offered(app.pad.document);
-        String[] texts = java.util.Arrays.copyOf(EraseKind.LABELS, EraseKind.LABELS.length + (clears ? 1 : 0));
+        String[] texts = java.util.Arrays.copyOf(EraseKind.CHOICES, EraseKind.CHOICES.length + (clears ? 1 : 0));
         if (clears) texts[texts.length - 1] = PageClear.CLEAR;
-        View row = lightRow(texts, EraseKind.choiceOf(app.inkWash.eraseKinds), EraseKind.LABELS.length, true, choice -> {
+        View row = lightRow(texts, EraseKind.choice(app.inkWash.eraseKinds), EraseKind.CHOICES.length, true, choice -> {
             hideLabel();
-            if (choice == EraseKind.LABELS.length) {
+            if (choice == EraseKind.CHOICES.length) {
                 if (app.layerEdit(() -> app.pad.document.clearPage())) app.message(PageClear.CLEARED);
                 return;
             }
-            app.inkWash.eraseKinds = EraseKind.KINDS[choice]; app.message(EraseKind.note(choice));
+            app.inkWash.eraseKinds = EraseKind.TARGETS[choice]; app.message(EraseKind.note(choice));
             eraserMarked();
             // A kind picked takes the eraser up too (the owner, 2026-10-29: "I'd like the eraser to be selected after a
             // menu selection other than clear page").
@@ -1162,13 +1167,13 @@ final class InkWashBar {
     /** A touch going down in the window, the pen's or a finger's: the time-up popup closes (the pen closes every label, {@link #penDown}). */
     void touchDown() { if (label != null && labelContent == timeUpRow) hideLabel(); }
 
-    /** The eraser's kind set elsewhere (a tool kit's eraser step, {@link ToolKits}): its note, and its tile's mark. */
+    /** The eraser's layer set elsewhere (a tool kit's eraser step, {@link ToolKits}): its note, and its tile's mark. */
     void eraserChanged() {
-        int choice = EraseKind.choiceOf(app.inkWash.eraseKinds);
+        int choice = EraseKind.choice(app.inkWash.eraseKinds);
         app.message(EraseKind.note(choice));
         eraserMarked();
     }
-    /** The Eraser tile drawn again, its mark ({@link EraseKind#MARKS}) following its kind. */
+    /** The Eraser tile drawn again, its mark ({@link EraseKind#MARKS}) following its layer. */
     private void eraserMarked() { app.selectionFeedback.update(tools[InkWash.ERASER], () -> tools[InkWash.ERASER].invalidate()); }
 
     // Finger
@@ -1179,11 +1184,11 @@ final class InkWashBar {
     static final String PAN = "Pan";
     private boolean pans(FingerTool.Choice choice) { return choice == FingerTool.Choice.ERASER && NotebookRules.keeps(app.rules(), true); }
     /**
-     * The Eraser tile's mark while it takes one kind ({@link EraseKind#MARKS}: two letters, ink on a paper patch at the
+     * The Eraser tile's mark while it takes one layer ({@link EraseKind#MARKS}: its number, ink on a paper patch at the
      * row's lower corner on the page side, clear of its side bar); nothing for Everything.
      */
     private void drawEraserMark(Canvas canvas, ToolButton button) {
-        String mark = EraseKind.MARKS[EraseKind.choiceOf(app.inkWash.eraseKinds)];
+        String mark = EraseKind.MARKS[EraseKind.choice(app.inkWash.eraseKinds)];
         if (mark.isEmpty()) return;
         float line = app.dp(Theme.FINE), w = app.dp(15), h = app.dp(11), bottom = button.getHeight() - app.dp(1);
         float right = this.right ? app.dp(DrawLayout.barRoom()) + w : button.getWidth() - app.dp(DrawLayout.barRoom());
