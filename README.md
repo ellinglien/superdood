@@ -36,19 +36,16 @@ Whatever is new will be in [CHANGELOG.md](CHANGELOG.md); a tour of the screens i
    [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases). Plug the Supernote in with its USB
    cable, open Android Sideloader, click **Choose APK file**, pick the `.apk`, then **Install APK**.
 4. **On the Supernote:** open **Superdood** and allow file access when it asks: notebooks live in
-   `Document/Superdood`, where they survive updates and reinstalls (and Supernote Cloud syncs them).
+   `Document/Superdood`, where they survive updates and reinstalls (and can sync).
 
-Drawing is smoothest once Android has compiled the app ahead of time. It does that by itself while the tablet sits idle
-and charging; to do it straight away, use the commands below once.
-
-### With adb (smoothest from the start)
+### Or with adb
 
 With Google's [platform tools](https://developer.android.com/tools/releases/platform-tools) on your computer and the
 Supernote connected by USB (`adb devices` should list it):
 
 ```sh
 adb install -r superdood-1.2.apk     # the .apk you downloaded
-adb shell cmd package compile -m speed -f ing.ell.mybaddrawings
+adb shell cmd package compile -m speed -f ing.ell.mybaddrawings     # optional: compiles it ahead of time
 ```
 
 Later releases install over it either way; your notebooks are kept.
