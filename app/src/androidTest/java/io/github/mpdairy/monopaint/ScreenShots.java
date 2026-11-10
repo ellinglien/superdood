@@ -449,7 +449,6 @@ final class ScreenShots {
                 // Page Settings: a hold on a page's preview (the screen-reader action's path), a screen over the drawing screen.
                 step(app, nomad, "page-" + s + "-settings", () -> call(get(bar.turner, "strip"), "options", new Class<?>[]{int.class}, app.book.stacks().of(Math.max(0, app.book.index()))), app.notebooks::hide);
                 step(app, nomad, "draw-" + s + "-words-bin", () -> app.pad.words.toggle(), () -> app.pad.words.close());
-                step(app, nomad, "draw-" + s + "-rotate-prompt", () -> call(app.rotationPrompt, "suggest", new Class<?>[]{int.class}, 90), () -> app.rotationPrompt.hide());
                 step(app, nomad, "draw-" + s + "-time-up", () -> bar.timeUp(() -> { }), bar::hideLabel);
                 step(app, nomad, "dialog-" + s + "-delete-page", () -> app.notebooks.confirmDelete(0, () -> { }), null);
                 step(app, nomad, "dialog-" + s + "-new-notebook", app::newNotebook, null);

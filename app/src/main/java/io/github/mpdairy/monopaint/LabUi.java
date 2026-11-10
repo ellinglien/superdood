@@ -201,4 +201,47 @@ final class LabUi {
             }
         }
     }
+
+    /**
+     * A search's field (the Tools page library's, 2026-10-28; the shelf's, Read Handwriting 2026-11-09): one line in a
+     * chip's rounded edge, then × Close search. The finds come {@code ms} after typing stops, or at once on the
+     * keyboard's Search key (the keyboard put down to see them).
+     */
+    static final class SearchField {
+        final LinearLayout row;
+        final android.widget.EditText field;
+        private final Runnable now;
+        /** {@code initial} is shown without a search of its own (a new layout keeps the text while open). */
+        SearchField(Context context, int chip, int pad, int ms, String initial, java.util.function.Consumer<String> search, Runnable close) {
+            row = row(context);
+            field = Theme.style(new android.widget.EditText(context), TypeStyle.CAPTION);
+            field.setSingleLine(true);
+            field.setHint(ToolsLayout.SEARCH);
+            field.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+            // A search still due when the screen is laid out again is dropped with its field, never run on the old one.
+            now = () -> { if (field.isAttachedToWindow()) search.accept(field.getText().toString()); };
+            field.setOnEditorActionListener((v, action, event) -> { field.removeCallbacks(now); now.run(); keyboard(false); return true; });
+            field.setPadding(dp(context, pad), 0, dp(context, pad), 0);
+            field.setBackground(Theme.rounded(context, Theme.PAPER, Theme.FINE, Theme.INK, chip / 2f));
+            field.setText(initial);
+            field.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+                @Override public void afterTextChanged(android.text.Editable s) { field.removeCallbacks(now); field.postDelayed(now, ms); }
+            });
+            row.addView(field, new LinearLayout.LayoutParams(0, dp(context, chip), 1));
+            LabButton x = LabButton.icon(context, R.drawable.ic_ph_x, "Close search");
+            x.setOnClickListener(v -> close.run());
+            row.addView(x, after(context, chip, chip, 6));
+        }
+        void open() { field.requestFocus(); keyboard(true); }
+        /** Emptied, the keyboard down, no search pending (the text is cleared first: it queues one). */
+        void clear() { keyboard(false); field.setText(""); field.removeCallbacks(now); }
+        void keyboard(boolean up) {
+            android.view.inputmethod.InputMethodManager k = (android.view.inputmethod.InputMethodManager) field.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (k == null) return;
+            if (up) k.showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            else k.hideSoftInputFromWindow(field.getWindowToken(), 0);
+        }
+    }
 }

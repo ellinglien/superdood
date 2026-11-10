@@ -343,7 +343,10 @@ final class NotebookExport {
     /** Where a notebook's PDF goes ({@link NotebookPdf}): a folder (the Supernote's Documents), its title, and the day it is. */
     static final class Documents {
         final File folder; final String title; final LocalDate today;
-        Documents(File folder, String title, LocalDate today) { this.folder = folder; this.title = title; this.today = today; }
+        /** The notebook's read handwriting (null: none, or Read Handwriting is off): its best guesses go in the PDF's text. */
+        final Transcript transcript;
+        Documents(File folder, String title, LocalDate today) { this(folder, title, today, null); }
+        Documents(File folder, String title, LocalDate today, Transcript transcript) { this.folder = folder; this.title = title; this.today = today; this.transcript = transcript; }
     }
     /**
      * As above, the PDF in {@code documents} ({@link NotebookPdf#update}: its words, outline and days, the back cover left
@@ -451,7 +454,7 @@ final class NotebookExport {
                 write(target, bytes); made++;
                 vectors = twin(page, crcs[i], tiles, twin);
             }
-            said.add(sheet.days(days[0], days[1]));
+            said.add(sheet.days(days[0], days[1]).hand(handwriting(documents.transcript, all, stacks, i, hidden(stacks, i, tracing))));
             lines.append(key).append('\t').append(vectors).append('\n');
             if (vectors == 1) twins.add(twin.getName());
             pdf.add(vectors == 1 ? twin : target);
@@ -493,7 +496,7 @@ final class NotebookExport {
         final PageStacks stacks; final int sheets; final NotebookTemplate[] templates; final String[] named; final long[] crcs, coverKeys = new long[2];
         final PackedPage pictured;
         Plan(List<PackedPage> pages, Covers covers, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing) {
-            stacks = tracing != null && tracing.count() == pages.size() ? tracing.stacks() : new PageStacks(new boolean[pages.size()]);
+            stacks = TracingPaper.stacks(tracing, pages.size());
             int drawn = BlankPages.drawn(pages, options.paper).size();
             sheets = stacks.of(drawn - 1) + 1;
             templates = new NotebookTemplate[sheets]; named = new String[sheets]; crcs = new long[sheets];
@@ -588,6 +591,13 @@ final class NotebookExport {
         return new long[]{replaced ? old.sheets.get(at).made : today, today};
     }
     private static long day(long millis) { return java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay(); }
+    /** Stack {@code s}'s shown layers' read lines in {@code t} (by each page's CRC; null: none). */
+    static List<Transcript.Line> handwriting(Transcript t, List<PackedPage> pages, PageStacks stacks, int s, boolean[] hidden) {
+        if (t == null) return java.util.Collections.emptyList();
+        List<Transcript.Line> lines = new ArrayList<>();
+        for (int p = stacks.first(s), k = 0; p <= stacks.last(s); p++, k++) if (!hidden[k]) lines.addAll(t.lines(pages.get(p).crc));
+        return lines;
+    }
     /** What stack {@code s}'s PNG is of: a page alone, its CRC; a stack, its layers' CRCs and their Hidden steps mixed. */
     static long stackKey(List<PackedPage> pages, PageStacks stacks, int s, TracingPaper tracing) {
         if (stacks.size(s) == 1) return pages.get(stacks.first(s)).crc;

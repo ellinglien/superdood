@@ -18,18 +18,6 @@ final class PanelPreviewLayout extends ViewGroup {
     private View panel;
     private final Rect panelBounds = new Rect();
     Runnable afterLayout;
-    private View rotationHint;
-    private int hintTurn, hintSize;
-
-    void setRotationHint(View hint,int size) {rotationHint=hint;hintSize=size;addView(hint);}
-    void turnRotationHint(int turn) {hintTurn=turn;layoutRotationHint();}
-    /** The prompt's button in the middle of the screen (the owner, 2026-10-27), whichever way it is turned; only its glyph follows the suggested turn. */
-    private void layoutRotationHint() {
-        if(rotationHint==null || getChildCount()==0)return;
-        View child=getChildAt(0);
-        int hx=(child.getLeft()+child.getRight()-hintSize)/2, hy=(child.getTop()+child.getBottom()-hintSize)/2;
-        rotationHint.layout(hx,hy,hx+hintSize,hy+hintSize);rotationHint.setRotation(hintTurn);
-    }
 
     void showPanel(View view, Rect bounds) {
         panel=view;panelBounds.set(bounds);addView(view);
@@ -66,15 +54,12 @@ final class PanelPreviewLayout extends ViewGroup {
         getChildAt(0).measure(MeasureSpec.makeMeasureSpec(enabled ? Math.min(simulated.panelWidth,width) : width, MeasureSpec.EXACTLY),
                 MeasureSpec.makeMeasureSpec(enabled ? Math.min(simulated.panelHeight,height) : height, MeasureSpec.EXACTLY));
         measurePanel();
-        if(rotationHint!=null)rotationHint.measure(MeasureSpec.makeMeasureSpec(hintSize,MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(hintSize,MeasureSpec.EXACTLY));
     }
 
     @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
         View child = getChildAt(0);
         int x = (getWidth()-child.getMeasuredWidth())/2, y = (getHeight()-child.getMeasuredHeight())/2;
         child.layout(x,y,x+child.getMeasuredWidth(),y+child.getMeasuredHeight());
-        layoutRotationHint();
         if(panel!=null)panel.layout(panelBounds.left,panelBounds.top,panelBounds.right,panelBounds.bottom);
         if(afterLayout!=null)afterLayout.run();
     }

@@ -14,8 +14,9 @@ import java.util.List;
  * here: a brush let go is kept in Recent, a Basic tool is always under its kind, a saved one in Saved, and the drawing
  * screen's Undo takes back each slot's change once the page is left. The chip is kept between visits (the first time,
  * the kind of the selected slot's tool); the grid opens on the page holding the selected slot's tool. A search ({@link
- * #search}) looks through the Basic tools, Recent and Saved at once. What the drawing screen gets on Back is {@link
- * #results}. Pure, checked on the desktop.
+ * #search}) looks through the Basic tools, Recent and Saved at once. The selected slot tapped again is picked up, and
+ * a tap on another swaps the two ({@link #tap}). What the drawing screen gets on Back is {@link #results} and {@link
+ * #moved}. Pure, checked on the desktop.
  */
 final class ToolsPage {
     /**
@@ -128,6 +129,12 @@ final class ToolsPage {
     private List<Card> cached;
     /** What the search looks for, trimmed; empty for none (the chip's cards). Not kept. */
     private String search = "";
+    /** The slot picked up to move ({@link #tap}), or -1. */
+    private int lifted = -1;
+    /** Each slot's size and grey a swap brought into it; null: the slot's own ({@link #look(int)}). */
+    private final ToolSwatches.Look[] moved = new ToolSwatches.Look[ToolSlots.COUNT];
+    /** Whether the notebook's toolbar can't change ({@link ToolsActivity#FIXED}): no slot is picked up. */
+    boolean fixed;
 
     /**
      * Opens on slot {@code slot}, and on the chip last chosen ({@code store}); the first time, on the kind of that slot's
@@ -161,6 +168,29 @@ final class ToolsPage {
         slot = i;
         show(current[i]);
     }
+    /**
+     * A tap on slot {@code i} (the owner, 2026-11-09: "can we add a way to reorder the toolbars?"): another slot is
+     * selected; the selected one again is picked up ({@link #lifted}), unless the toolbar is fixed. With one picked up, a
+     * tap on another swaps the two, their brushes, sizes and greys, the moved one selected where it lands; on itself, it
+     * is put back.
+     */
+    void tap(int i) {
+        if (i < 0 || i >= ToolSlots.COUNT) return;
+        if (lifted >= 0) { if (i != lifted) swap(lifted, i); lifted = -1; }
+        else if (i != slot) select(i);
+        else if (!fixed) lifted = i;
+    }
+    /** The slot picked up, or -1. */
+    int lifted() { return lifted; }
+    /** Slot {@code from}'s brush, size and grey go to slot {@code to}, and {@code to}'s to {@code from}; {@code to} is selected. */
+    private void swap(int from, int to) {
+        Brush brush = current[from];
+        ToolSwatches.Look look = look(from);
+        moved[from] = look(to); current[from] = current[to];
+        moved[to] = look; current[to] = brush;
+        slot = to;
+        show(brush);
+    }
     /** The selected slot's tool as it stands on the page. */
     Brush current() { return current[slot]; }
     /** Slot {@code i}'s tool as it stands on the page. */
@@ -177,7 +207,26 @@ final class ToolsPage {
     /** What the try strip draws the selected slot's tool at: the slot's own size and grey, as Brush Lab's does. */
     ToolSwatches.Look look() { return look(slot); }
     /** As {@link #look()}, for slot {@code i} (its tile among the nine). */
-    ToolSwatches.Look look(int i) { return slots.swatches.look(ToolSlots.key(i), current[i]); }
+    ToolSwatches.Look look(int i) { return moved[i] != null ? moved[i] : own(i); }
+    /** Slot {@code i}'s size and grey as Back leaves it with no swap: a pick's own where it brings them ({@link ToolSwatches#brought}), else the slot's. */
+    private ToolSwatches.Look own(int i) {
+        String key = ToolSlots.key(i);
+        return result(i) != null ? slots.swatches.brought(key, current[i]) : slots.swatches.look(key, current[i]);
+    }
+    /**
+     * What the drawing screen sets each slot's size and grey to once its brush is in ({@link ToolSlots#take}): px, then
+     * darkness, for each slot; NaN where no swap brought one, or brought back its own (swapped there and back).
+     */
+    double[] moved() {
+        double[] looks = new double[2 * ToolSlots.COUNT];
+        for (int i = 0; i < ToolSlots.COUNT; i++) {
+            ToolSwatches.Look own = moved[i] == null ? null : own(i);
+            boolean none = own == null || own.px == moved[i].px && own.darkness == moved[i].darkness;
+            looks[2 * i] = none ? Double.NaN : moved[i].px;
+            looks[2 * i + 1] = none ? Double.NaN : moved[i].darkness;
+        }
+        return looks;
+    }
 
     /** Lays the grid out: {@code perPage} cards a page, descriptions up to {@code lineRoom} dp wide; opens on the page holding the slot's tool. */
     void layout(int perPage, float lineRoom) {
@@ -311,12 +360,14 @@ final class ToolsPage {
 
     /**
      * A card's brush is the selected slot's tool now (the page stays, to try it); the unsaved brush it replaces is kept in
-     * Recent. The tool already: nothing.
+     * Recent; the slot takes its own size and grey again. The tool already: nothing. A slot picked up is put back first.
      */
     void put(Brush brush) {
+        lifted = -1;
         if (brush.sameAs(current[slot])) return;
         replace(slot, brush);
         current[slot] = brush;
+        moved[slot] = null;
     }
     /**
      * The Basic tool the selected slot's tool was before Brush Lab changed it, or null: what Reset to Default puts back,
@@ -361,6 +412,7 @@ final class ToolsPage {
      */
     boolean loadKit(ToolKits.Kit kit) {
         if (kit == null || kit.size() > ToolSlots.COUNT) return false;
+        lifted = -1;
         Brush[] tools = kit.tools();
         int newBar = Math.max(bar, kit.size()), newEraser = kit.eraser != null ? kit.eraser.eraser : eraser;
         boolean changes = newBar != bar || newEraser != eraser;
@@ -374,6 +426,7 @@ final class ToolsPage {
         for (int i = 0; i < tools.length; i++) {
             if (replace(i, tools[i]) && ++kept > 1) note = "Kept " + kept + " brushes in Recent";
             current[i] = tools[i];
+            moved[i] = null;
         }
         bar = newBar; eraser = newEraser;
         slot = 0;

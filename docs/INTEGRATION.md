@@ -56,11 +56,11 @@ Categories: **(a)** upstream, untouched; **(b)** upstream, modified by Scribulor
 **(c)** Scribulor engine, pure Java (no `android.*`), candidate shared module;
 **(d)** Scribulor UI/product layer, Scribulor-only; **(e)** tooling.
 
-### (a) Upstream, untouched (19)
+### (a) Upstream, untouched (18)
 
 Display and e-ink: `DirtyRegions DotGray DotPattern QuarterTurnLayout CanvasGuide ProbeActivity` (the device checks'
-probe). Input: `MultiFingerTap`. Controls: `ControlHost PageActionButton RotationPrompt RotationSuggestion` (the rotate
-prompt over the page). MonoPaint's tools, kept as the checks' references or for what they still hold: `ToneDabs`
+probe). Input: `MultiFingerTap`. Controls: `ControlHost PageActionButton RotationSuggestion` (the turn's
+hold; `PageActionButton` unused since the Rotate button went, 2026-11-10, "The app turns by itself" below). MonoPaint's tools, kept as the checks' references or for what they still hold: `ToneDabs`
 (`ToolStroke`'s dabs; `StumpChecks` compares Soften with MonoPaint's stump), `PressureStroke` (`stump_pictures.sh`, the
 device benches), `FloodFill`, `WatercolorWash` (only `test_document.sh`'s checks, whose source list no longer compiles),
 `WetWorkBudget` (Wet paint's), `PaintState`, `ToolLibrary` (the colour, modes and presets still loaded and saved with
@@ -718,7 +718,7 @@ structural step and the stroke's step is linked to it (`linkSince`), one Undo.
 | `PaintActivity` | +14 −7 | `TextBoxes.type` set at start; Play's Text row; `menuAt` (a menu beside a page rectangle); Text closed where Words is. |
 | `InkWash`, `InkWashBar`, `DrawLayout`, `Theme`, `PicturePlacer` | small | `InkWash.ink`; Play marked while Text is on; `Theme.textFace`; `PicturePlacer.ring` shared. |
 
-Not done: searchable words in the notebook PDF (the magnets' are), a Text layer in the PSD copy, the dot-size PNG copy,
+Not done: a Text layer in the PSD copy, the dot-size PNG copy,
 live (shared) pages (not on this branch: a box travels only in the page file), more fonts, italics, rotation.
 
 #### Palm taps (2026-11-03, branch `palm-taps`): upstream files touched
@@ -5869,3 +5869,83 @@ layer's eraser replays as every layer's, as Replay doesn't follow layers), so an
 | `EraseKind`, `InkWash`, `InkWashBar`, `PaintActivity`, `ToolKits`, `WebEngine` | small | The choices, the log's kinds, the menu and mark, a hidden target layer refused, kits' "Eraser Layer 1", the browser's menu. |
 
 Generic: none. Engine boundary unchanged.
+
+## Lasso to Superdood, the Supernote plugin (2026-11-08)
+
+A Supernote NOTE plugin (`supernote-plugin/`, React Native 0.79.2 from Ratta's template, `sn-plugin-lib` 0.2.3) puts a
+**Superdood** entry in the lasso toolbar's More menu. It reads the lassoed pen strokes (points in page px, pressures
+0 to 4096; no times, no tilt), and its native module (`SuperdoodModule`, run by PluginHost as the system) calls the
+app's `LassoProvider` (`content://ing.ell.mybaddrawings.lasso`, method `draw`; system, shell and the app only). The app
+draws the strokes with the toolbar's selected brush at its size and grey on a blank page (`LassoRender`: the web
+engine's stroke path, samples untimed), crops the marks and returns a PNG, paper clear. The plugin inserts it
+(`insertImage` puts it at the page's middle) and sets its lasso box onto the strokes. The strokes stay.
+
+Measured on the Manta: 3 strokes with Slow bloom drawn in about 2.3 s, 2.9 s from tap to picture. Building the plugin:
+`cd supernote-plugin && npm install && JAVA_HOME=… ANDROID_HOME=~/Library/Android/sdk bash buildPlugin.sh`, then put
+`build/outputs/LassoSuperdood.snplg` in MyStyle and Settings → Apps → Plugins → Select Plugin Package.
+
+| File | Change | Why |
+|---|---|---|
+| `WatercolorSession` | +9 | `dryAll`: settle and run fading ink out, the web engine's Dry, shared by `LassoRender` and `WebParity`. |
+| `InkWash` | +0 −0 | `parse` package-private: the provider reads the selected tool. |
+| `WebEngine` | −3 | Dry calls `dryAll`. |
+| `LassoRender`, `LassoProvider`, manifest | new | The drawing and the app's entry for the plugin. |
+
+Generic: `dryAll`. Engine boundary unchanged (the provider is Android, `LassoRender` pure).
+
+**Superdood fill (2026-11-09, the owner: "like a 'highlighter fill'").** A second More entry, method `fill`: the
+lasso's inside (the lasso's own path, pen type 4; a plugin-made lasso has none, so the strokes' box, 30 px round)
+scrubbed with the brush in rows, back and forth, clipped to the lasso, and the lassoed strokes left clear (half their
+width, thickness/100 px, and 2 more) so the note's writing shows through. A lasso over 100,000 px is painted smaller
+and enlarged (`LassoRender.WORK`): a Slow wash's drying is the cost and can't be cut short (its blooms form in the last
+ticks). Measured on the Manta, Slow bloom at 6 px, a 960 × 820 px lasso: 36 s at full size, 10.4 s painted a third the
+size. The picture now goes over as a file (`LassoProvider.openFile`), not in the call's Bundle (its 1 MB). A permission
+dialog doesn't show over a lasso, so a refused insert says to allow it in Settings.
+
+## Read Handwriting (2026-11-09)
+
+An opt-in System Settings row that reads the pen writing on every notebook page on the tablet (Google's ML Kit Digital
+Ink) so the shelf's Search can find it. Spec: `docs/superpowers/specs/2026-11-09-read-handwriting-design.md`. Reading is
+app code; **the engine is untouched** and the boundary unchanged.
+
+**Dependency:** `com.google.mlkit:digital-ink-recognition:18.1.0`, the app's first Maven dependency (so
+`android.useAndroidX=true`). The release APK grew from about 12.5 to 19.4 MB. ML Kit pulls in WorkManager, so the
+manifest gains ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED and FOREGROUND_SERVICE. Its auto-start provider is removed
+from the manifest: nothing of ML Kit starts, and nothing downloads, until Read Handwriting is switched on.
+
+| File | Change | Why |
+|---|---|---|
+| `DocumentCodec` | +`log`, `PageLog` | A page's stroke log, its pixels skipped. The generic change. |
+| `PageWriting`, `WritingLines`, `Transcript` | new, pure | The strokes still on a page (Lasso moves applied, erased and wide strokes left out); strokes to lines; a notebook's lines by page CRC, the file, search matching. Desktop-checked (`PageWritingChecks`, `WritingLinesChecks`, `TranscriptChecks`). |
+| `HandwritingReader` | new | The only class that knows ML Kit. Never downloads on its own; switching off cancels a stored download job and deletes the model. |
+| `HandwritingQueue` | new | One lowest-priority thread per activity. Reads changed pages (by CRC); urgent work (search, renames, deletes) goes first and reading gives way between pages; a cut-short download resumes at the next start. |
+| `DocumentStore.notebookFile` | new | Read-only file access, safe off the save thread. |
+| `PaintActivity`, `PaintPreferences` | hooks | The queue made, fed from `saved`, delete and rename; `readHandwriting`. |
+| `SystemSettings`, `SystemSettingsPanel` | row | "Read Handwriting", Off by default; first-time words, Turn On / Not Now, not cancelable; "Download failed". |
+| `ShelfSearch`, `NotebookScreens` | new, changed | Search on the shelf: results paged, "Nothing found", "<n> pages unread"; a find opens by its page's CRC with its stack's matching lines boxed until the next touch. `pageButtons` made static and shared. |
+| `LabUi.SearchField` | moved | The Tools page library's search field (from `ToolsActivity`), shared with the shelf. |
+| `TracingPaper.stacks` | extracted | A file's stacks in one place; Search needs it too. |
+| `NotebookPdf`, `NotebookExport`, `AutoExport` | changed | The notebook PDF's invisible text gains each read line's best guess on its box (`Sheet.hand`, `Documents.transcript`, read by `AutoExport` only while the pref is on): Auto Export and Export Now. Not in Live sends (`LiveBooks`, `LiveSend`) or Export Page's single-page PDF, which don't reach the transcript. |
+
+An older build reading a PDF state record with the new ninth field takes it as unreadable (a fresh PDF, or "Name 2.pdf"; nothing is lost).
+
+Generic: `DocumentCodec.log`.
+
+## The app turns by itself (2026-11-10)
+
+The owner: "strange hangover from the rotate button: it's lingering on the screen and affecting pen marks .. can we
+make rotation happen without the button?", then "we can make the zoom lock a dual use lock? since it's already on the
+screen". MonoPaint's Rotate button over the page (and the shake that recalled it) is gone; the app turns once the
+tablet is held a new way. **The engine is untouched.**
+
+| File | Change | Why |
+|---|---|---|
+| `RotationPrompt` (upstream, now modified) | rewritten | No button: the sensor's held angle (`RotationSuggestion`, untouched) turns the app (`PaintActivity.requestQuarter`). The turn waits while a menu or panel is open, a page loads, fingers pinch, or the pen was at the screen within 1.5 s (`DrawingPad.penWithin`). Never while the padlock is closed (`navigationLocked`); opening it looks again. |
+| `PaintActivity` | hooks removed | `rotateButton`, its builder, `pageAction`, the tap-outside dismiss; `toggleNavigationLock` asks for another look when unlocking. |
+| `PanelPreviewLayout` | −rotation hint | The button's place in the simulated panel. |
+| `DrawingPad` | `penWithin` | One reader of `penSeen` for the turn's wait; the page-turn snapshot no longer asks about the button. |
+| `PinchPan.describe` | words | The padlock said: "Zoom 200%, zoom and rotation locked". |
+| `NotebookScreens.shelf` | gear | System Settings from the shelf's bar (`PaintActivity.systemSettings`, the menu's row's own popup). |
+
+**Checks:** `RotationSuggestionChecks`, `PinchPanChecks` (desktop). `OrientationChecks` rewritten for the turn by itself
+and the lock (device; compiled, not run here); `RotationPromptChecks` deleted with the prompt. Generic: none.

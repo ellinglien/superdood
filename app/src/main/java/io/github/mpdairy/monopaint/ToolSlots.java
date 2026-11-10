@@ -48,7 +48,7 @@ final class ToolSlots {
             {"BENDAY", "Ben-Day brush", "ben-day-brush.Me1zzeezz00000000ll_0i0000000000000000zz065ji000at_0_000_0_25ess00000000000000nz0.2ef", "17", "1.0"},
             {"HIGHLIGHTER", "High lighter", "high-lighter.M31e1zzp60000000000_1007700000000zz2_0_000_0_0000000000000000000nz0.2f2", "34", "0.102"}};
     /** The stamp tool's size at first, px, and its grey, darkness 0 white to 1 black; the eraser's size, px; Fill in's size and grey (its slot's in FIRST until 2026-11-06). */
-    static final double FIRST_STAMP_PX = 44, FIRST_STAMP_GREY = .216, FIRST_ERASER_PX = 31, FIRST_FILL_PX = 2.5, FIRST_FILL_GREY = 1;
+    static final double FIRST_STAMP_PX = 44, FIRST_STAMP_GREY = .216, FIRST_ERASER_PX = 360 /* the owner's on the Manta (2026-11-09: "initial eraser size needs to be as big as it is on the manta") */, FIRST_FILL_PX = 2.5, FIRST_FILL_GREY = 1;
     /** Slot {@code slot}'s size on a first launch, px ({@link #FIRST}). */
     static double firstPx(int slot) { return Double.parseDouble(FIRST[slot][3]); }
     /** Slot {@code slot}'s grey on a first launch, darkness ({@link #FIRST}). */
@@ -102,6 +102,9 @@ final class ToolSlots {
         /** Changes made with it, taken back with it ({@link #useAll}: a tool kit's slots), first slot first; empty for one. */
         final List<Change> with = new ArrayList<>();
         Change(int slot, String before) { this.slot = slot; this.before = before; }
+        /** Whether a Tools page swap set the slot's size and grey ({@link #take}); then those before, as kept (null: none). */
+        boolean look;
+        String px, dark;
     }
 
     ToolSlots(BrushLibrary.Store store, Random dice) {
@@ -190,8 +193,17 @@ final class ToolSlots {
      * The Tools page's or Brush Lab's slots coming back ({@code brushes}, null: unchanged): each put in its slot, an Undo
      * step each ({@link #use}), or every change one step, {@code together} (a kit's, {@link #useAll}). Whether each changed.
      */
-    boolean[] take(Brush[] brushes, boolean together) {
-        if (together) return useAll(brushes);
+    boolean[] take(Brush[] brushes, boolean together) { return take(brushes, together, null); }
+    /**
+     * As {@link #take(Brush[], boolean)}, then the Tools page's swaps ({@code looks}, {@link ToolsPage#moved}: each slot's
+     * px, then darkness; NaN unchanged; null none): each slot draws at the size and grey its brush brought from the slot
+     * it left, never a brush's own ({@link ToolSwatches#bring}); with any, every change one Undo step, which puts those
+     * sizes and greys back too. A fixed toolbar takes none.
+     */
+    boolean[] take(Brush[] brushes, boolean together, double[] looks) {
+        boolean moves = false;
+        for (int i = 0; looks != null && !frozen && i < COUNT && 2 * i < looks.length; i++) moves |= !Double.isNaN(looks[2 * i]);
+        if (together || moves) return useAll(brushes, moves ? looks : null);
         boolean[] used = new boolean[COUNT];
         for (int i = 0; i < COUNT && i < brushes.length; i++) used[i] = brushes[i] != null && use(i, brushes[i]);
         return used;
@@ -200,10 +212,23 @@ final class ToolSlots {
      * Puts each of {@code brushes} (null: unchanged) in its slot, as {@link #use} does, but as one Undo step (a tool kit's
      * slots, {@link ToolKits}). Whether each slot changed.
      */
-    boolean[] useAll(Brush[] brushes) {
+    boolean[] useAll(Brush[] brushes) { return useAll(brushes, null); }
+    /** As {@link #useAll(Brush[])}, then {@code looks} set as {@link #take(Brush[], boolean, double[])} says, in the same step. */
+    private boolean[] useAll(Brush[] brushes, double[] looks) {
         boolean[] used = new boolean[COUNT];
         int made = 0;
-        for (int i = 0; i < COUNT && i < brushes.length; i++) if (used[i] = brushes[i] != null && use(i, brushes[i])) made++;
+        for (int i = 0; i < COUNT && i < brushes.length; i++) {
+            boolean look = looks != null && 2 * i + 1 < looks.length && !Double.isNaN(looks[2 * i]);
+            String key = key(i), px = store.get(ToolSwatches.PX + key), dark = store.get(ToolSwatches.DARK + key);
+            if (used[i] = brushes[i] != null && use(i, brushes[i])) made++;
+            if (!look) continue;
+            // Only the size and grey moved (two slots holding the same brush): a step of its own, its brush as it is.
+            if (!used[i]) { record(new Change(i, brush(i).write())); made++; }
+            Change c = changes.peekLast();
+            c.look = true; c.px = px; c.dark = dark;
+            swatches.useSize(key, looks[2 * i]);
+            swatches.useGrey(key, looks[2 * i + 1]);
+        }
         // The changes just made (the latest; the oldest steps give way past UNDOS) fold into the first of them.
         if (made > 1) {
             List<Change> mine = new ArrayList<>();
@@ -567,6 +592,7 @@ final class ToolSlots {
         for (int i = last.with.size() - 1; i >= -1; i--) {
             Change c = i < 0 ? last : last.with.get(i);
             set(c.slot, c.before);
+            if (c.look) { store.put(ToolSwatches.PX + key(c.slot), c.px); store.put(ToolSwatches.DARK + key(c.slot), c.dark); }
             undone.add(0, c.slot);
         }
         return last.slot;
@@ -582,10 +608,14 @@ final class ToolSlots {
         if (frozen && slot != STAMP) return false;
         Brush before = brush(slot);
         if (before.sameAs(brush)) return false;
-        changes.addLast(new Change(slot, before.write()));
-        if (changes.size() > UNDOS) changes.removeFirst();
+        record(new Change(slot, before.write()));
         set(slot, brush.write());
         return true;
+    }
+    /** {@code c} is the latest Undo step; the oldest gives way past {@link #UNDOS}. */
+    private void record(Change c) {
+        changes.addLast(c);
+        if (changes.size() > UNDOS) changes.removeFirst();
     }
     private String[] stored() {
         String[] lines = new String[COUNT];

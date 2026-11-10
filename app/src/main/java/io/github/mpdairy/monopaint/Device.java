@@ -67,7 +67,6 @@ final class Device {
     /** The installed firmware build, e.g. "Chauvet.E103.2606141001.2389_release". */
     static String firmware() { return Build.DISPLAY; }
     /** Fast e-ink is normally used on any firmware; untested means it is a guess the user can override. */
-    boolean firmwareTested() { return java.util.Arrays.asList(testedFirmware).contains(firmware()); }
 
     /**
      * The driver mode for a pen stroke's exact black/white pixels on the main plane, faster than the gray mode 7, on the

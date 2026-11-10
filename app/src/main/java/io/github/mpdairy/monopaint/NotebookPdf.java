@@ -19,7 +19,8 @@ import java.util.regex.Pattern;
  * in Documents and syncs, made from its PNG copies ({@link NotebookExport}): each page the size it is on the tablet (300
  * ppi, so it opens one to one), its picture as the PNG holds it, under an invisible text layer (render mode 3, Courier,
  * not embedded) of what the app knows: the title, the page's number, its days (made, changed), its template and its
- * fridge magnets' words where they sit, so a search lands on the word. No handwriting is read. An
+ * fridge magnets' words where they sit, so a search lands on the word, and, with Read Handwriting on, the best guess
+ * of each line of handwriting where it sits ({@link Sheet#hand}). An
  * outline (the cover, then a day at a time, its pages under it), page labels (Cover, 1, 2, …) and the document's info.
  *
  * <p>Handwriting: the Supernote keeps a PDF's handwriting beside it ("<name>.pdf.mark", by file name and page number)
@@ -48,31 +49,53 @@ final class NotebookPdf {
         /** The page's template's name ("" for none), its magnets. */
         final String template;
         final List<Magnets.Magnet> magnets;
-        Sheet(long key, long made, long changed, boolean cover, String template, List<Magnets.Magnet> magnets) {
+        /** The read handwriting's lines (page px; only the best guess kept, as the state records it), none by default. */
+        final List<Transcript.Line> hand;
+        Sheet(long key, long made, long changed, boolean cover, String template, List<Magnets.Magnet> magnets) { this(key, made, changed, cover, template, magnets, Collections.emptyList()); }
+        Sheet(long key, long made, long changed, boolean cover, String template, List<Magnets.Magnet> magnets, List<Transcript.Line> hand) {
             this.key = key; this.made = made; this.changed = changed; this.cover = cover;
-            this.template = clean(template); this.magnets = magnets;
+            this.template = clean(template); this.magnets = magnets; this.hand = hand;
         }
-        Sheet days(long made, long changed) { return new Sheet(key, made, changed, cover, template, magnets); }
+        Sheet days(long made, long changed) { return new Sheet(key, made, changed, cover, template, magnets, hand); }
+        Sheet hand(List<Transcript.Line> hand) { return new Sheet(key, made, changed, cover, template, magnets, hand); }
         String line() {
             StringBuilder words = new StringBuilder();
             for (Magnets.Magnet m : magnets) {
                 if (words.length() > 0) words.append('\u001e');
                 words.append(m.x).append('\u001f').append(m.y).append('\u001f').append(m.tilt).append('\u001f').append(m.turn).append('\u001f').append(clean(m.word));
             }
-            return "sheet\t" + Long.toHexString(key) + "\t" + made + "\t" + changed + "\t" + (cover ? 1 : 0) + "\t" + template + "\t\t" + words;  // the empty field: a Self-Portrait Prompt card's, until 2026-11-05
+            // The empty field: a Self-Portrait Prompt card's, until 2026-11-05. A ninth, only with handwriting: so a transcript made later writes the PDF again.
+            StringBuilder said = new StringBuilder();
+            for (Transcript.Line l : hand) {
+                if (guess(l) == null) continue;
+                if (said.length() > 0) said.append('\u001e');
+                said.append(l.box[0]).append('\u001f').append(l.box[1]).append('\u001f').append(l.box[2]).append('\u001f').append(l.box[3]).append('\u001f').append(clean(guess(l)));
+            }
+            return "sheet\t" + Long.toHexString(key) + "\t" + made + "\t" + changed + "\t" + (cover ? 1 : 0) + "\t" + template + "\t\t" + words + (said.length() == 0 ? "" : "\t" + said);
         }
         static Sheet parse(String line) {
             String[] f = line.split("\t", -1);
-            if (f.length != 8 || !f[0].equals("sheet")) return null;
+            if (f.length != 8 && f.length != 9 || !f[0].equals("sheet")) return null;
             try {
                 List<Magnets.Magnet> magnets = new ArrayList<>();
                 if (!f[7].isEmpty()) for (String m : f[7].split("\u001e")) {
                     String[] p = m.split("\u001f", 5);
                     magnets.add(new Magnets.Magnet(p[4], Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
                 }
-                return new Sheet(Long.parseLong(f[1], 16), Long.parseLong(f[2]), Long.parseLong(f[3]), f[4].equals("1"), f[5], magnets);
+                List<Transcript.Line> hand = new ArrayList<>();
+                if (f.length == 9) for (String l : f[8].split("\u001e")) {
+                    String[] p = l.split("\u001f", 5);
+                    hand.add(new Transcript.Line(new float[]{Float.parseFloat(p[0]), Float.parseFloat(p[1]), Float.parseFloat(p[2]), Float.parseFloat(p[3])}, new String[]{p[4]}));
+                }
+                return new Sheet(Long.parseLong(f[1], 16), Long.parseLong(f[2]), Long.parseLong(f[3]), f[4].equals("1"), f[5], magnets, hand);
             } catch (RuntimeException bad) { return null; }
         }
+    }
+    /** {@code l}'s best guess when it is worth writing: not blank, in a box with a height and a width (NaN, infinite, flat or turned over: none). */
+    private static String guess(Transcript.Line l) {
+        if (l.guesses.length == 0 || l.guesses[0] == null || l.guesses[0].trim().isEmpty()) return null;
+        float w = l.box[2] - l.box[0], h = l.box[3] - l.box[1];
+        return w > 0 && h > 0 && !Float.isInfinite(w) && !Float.isInfinite(h) ? l.guesses[0] : null;
     }
     private static String clean(String s) { return s == null ? "" : s.replaceAll("[\\t\\r\\n\\u001e\\u001f]", " "); }
 
@@ -336,6 +359,14 @@ final class NotebookPdf {
             double px = m.x + lx * cos - ly * sin, py = m.y + lx * sin + ly * cos;
             c.append(String.format(Locale.ROOT, "/F %.2f Tf %.2f Tz %.4f %.4f %.4f %.4f %.2f %.2f Tm ", Magnets.EM * POINTS, 100 * ems / (.6 * m.word.length()),
                     cos, -sin, sin, cos, px * POINTS, h - py * POINTS)).append(literal(m.word)).append(" Tj\n");
+        }
+        // A search lands on the handwriting and copying a line gives its best reading; the page looks the same.
+        for (Transcript.Line l : s.hand) {
+            String guess = guess(l);
+            double size = Math.max(1, (l.box[3] - l.box[1]) * POINTS * .8), across = (l.box[2] - l.box[0]) * POINTS;
+            if (guess == null) continue;
+            c.append(String.format(Locale.ROOT, "/F %.2f Tf %.2f Tz 1 0 0 1 %.2f %.2f Tm ", size, 100 * across / (.6 * size * guess.length()), l.box[0] * POINTS, h - l.box[3] * POINTS))
+                    .append(literal(guess)).append(" Tj\n");
         }
         return c.append("ET\n").toString();
     }

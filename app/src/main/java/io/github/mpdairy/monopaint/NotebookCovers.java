@@ -126,13 +126,28 @@ final class NotebookCovers {
         for (int i = 0; i < text.length(); i++) w += LabText.advance(text.charAt(i)) * size + spacing;
         return text.isEmpty() ? 0 : w - spacing;
     }
+    /**
+     * The printed words' letters ({@link #TITLE_WORDS}, {@link #LINE_WORDS}) as Ukulele Bold sets them, em, measured from
+     * res/font/ukulele_bold.ttf (the owner, 2026-11-10: at the app's .6 em each an I left a gap, "COM POSI TI ON").
+     */
+    private static final String PRINTED = "ABCDEIJKMNOPSTU ";
+    private static final float[] PRINTED_EM = {.575f, .674f, .631f, .691f, .7f, .198f, .664f, .727f, .742f, .723f, .649f, .666f, .649f, .613f, .693f, .487f};
+    /** {@code text} letter-spaced by {@code spacing} px at {@code size} px, as {@link #spaced} sets it. */
+    static float spacedWidth(String text, float size, float spacing) {
+        float w = 0;
+        for (int i = 0; i < text.length(); i++) {
+            int at = PRINTED.indexOf(text.charAt(i));
+            w += (at >= 0 ? PRINTED_EM[at] : LabText.advance(text.charAt(i))) * size + spacing;
+        }
+        return text.isEmpty() ? 0 : w - spacing;
+    }
     private static int px(int width, double share) { return Math.max(1, (int) Math.round(width * share)); }
     /** {@code text}'s letters one by one from {@code x}, {@code spacing} px apart, so every device spaces them the same. */
     private static void spaced(List<Words> words, String text, float x, float baseline, float size, float spacing) {
         for (int i = 0; i < text.length(); i++) {
             String letter = text.substring(i, i + 1);
             words.add(new Words(letter, x, baseline, size, 700));
-            x += width(letter, size, 0) + spacing;
+            x += spacedWidth(letter, size, 0) + spacing;
         }
     }
 
@@ -146,10 +161,10 @@ final class NotebookCovers {
         List<Words> words = new ArrayList<>();
         float pad = (float) (width * PAD), left = x + pad, right = x + lw - pad;
         float title = (float) (width * TITLE);
-        spaced(words, TITLE_WORDS, (float) (cx - width(TITLE_WORDS, title, title * (float) TITLE_SPACING) / 2), y + pad + title * .82f, title, title * (float) TITLE_SPACING);
+        spaced(words, TITLE_WORDS, (float) (cx - spacedWidth(TITLE_WORDS, title, title * (float) TITLE_SPACING) / 2), y + pad + title * .82f, title, title * (float) TITLE_SPACING);
         float small = (float) (width * SMALL), smallSpacing = small * (float) SMALL_SPACING;
         float widest = 0;
-        for (String word : LINE_WORDS) widest = Math.max(widest, width(word, small, smallSpacing));
+        for (String word : LINE_WORDS) widest = Math.max(widest, spacedWidth(word, small, smallSpacing));
         float lineStart = left + widest + (float) (width * AFTER_WORDS);
         boolean tiny = width < TINY;
         int[] lines = new int[ROWS.length];

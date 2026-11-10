@@ -294,9 +294,10 @@ final class LiveShare implements Application.ActivityLifecycleCallbacks {
      * Send's files). Its window shows the link as a QR code and superdood.org's code for it; closing it, or its ten
      * minutes, ends the link and stops that host.
      */
-    void send(DrawingBook.Snapshot book, String name, int place) {
+    void send(DrawingBook.Snapshot book, String name, int place, Runnable[] end) {
         String address = LiveHost.lanAddress();
-        if (address == null) { book.release(); app.message(WIFI_OFF); return; }
+        // end {failed, ready}: the export's sign taken down (PaintActivity#exporting); Wi-Fi off says so itself.
+        if (address == null) { book.release(); end[1].run(); app.message(WIFI_OFF); return; }
         LiveHost shared = host;
         serial.execute(() -> {
             LiveSend files; LiveHost own = null;
@@ -305,12 +306,12 @@ final class LiveShare implements Application.ActivityLifecycleCallbacks {
                 if (shared == null) own = new LiveHost(LiveHost.PORT, LiveHost.newKey(), java.util.Collections.emptySet(), n -> null);
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
                 Log.w(TAG, "send: " + e);
-                app.runOnUiThread(() -> app.message(FAILED));
+                app.runOnUiThread(() -> { end[1].run(); app.message(FAILED); });
                 return;
             }
             LiveHost h = shared != null ? shared : own, stop = own;
             h.send = files;
-            app.runOnUiThread(() -> sendWindow(files, h, stop, address));
+            app.runOnUiThread(() -> { end[1].run(); sendWindow(files, h, stop, address); });
         });
     }
     private void sendWindow(LiveSend files, LiveHost h, LiveHost own, String address) {

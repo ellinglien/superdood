@@ -5,6 +5,63 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.2.1 (2026-11-10)
+
+- **Read Handwriting, for Search on the shelf** (2026-11-09, opt-in): System Settings' Read Handwriting reads the
+  notebooks' pen writing on the tablet with Google's ML Kit (downloaded once, about 20 MB, only when switched on), so
+  the shelf's new Search finds words in it; a find opens its page with the line boxed. The writing stays on the tablet;
+  Google gets usage stats (device and app details, timings and errors), never the writing. Off by default.
+- **Searchable PDFs** (2026-11-09, with Read Handwriting on): each line's best reading goes into the notebook's PDF as
+  hidden text where the line sits, so a PDF reader can find it.
+- **COMPOSITION BOOK spaced evenly on the covers** (2026-11-10, the owner: "the spacing of the word composition is off"):
+  the label's printed words take each letter's own width, so an I no longer leaves a gap.
+- **A new notebook's pages are full size again** (2026-11-10, the owner: "just created a notebook and the page is a
+  square?"): the name prompt's keyboard had squeezed the page it was made from.
+- **A new Start Here guide** (2026-11-10, the owner's finished "Guide draft"): eight drawn pages, from "Hello There!" to
+  "Now Go!", given on a fresh install and opened on page 1.
+- **First and last page inside a notebook** (2026-11-10, the owner: "add buttons beside the next and prev page for
+  going to beginning or ending"): the bar under a notebook's pages has |‹ and ›| beside ‹ and ›, to page 1 and the
+  last page.
+- **Exports say they're working** (2026-11-10, the owner: "export now ... doesnt seem to give any indication if it
+  succeeded or did anything or not"): Export Now, Export Page and Send read "Exporting" on their button at once (a
+  notebook's PDF can take a minute), then "Exported" or "Export Failed", with the note saying where. From the drawing
+  screen's Menu, a note says "Exporting".
+- **A closed menu no longer cuts away the side bar** with Automatic Refresh off (2026-11-10).
+- **The page turns with the tablet** (2026-11-10, the owner: "strange hangover from the rotate button: it's lingering
+  on the screen and affecting pen marks .. can we make rotation happen without the button?"): no more Rotate button
+  over the page. Hold the tablet a new way and, after a moment with the pen away, the app turns. The Zoom button's
+  padlock holds the turn as it holds the zoom ("we can make the zoom lock a dual use lock? since it's already on the
+  screen"): closed, the app stays as it is turned.
+- **System Settings from the shelf** (2026-11-10, the owner: "a way to get to app settings from the notebook explorer
+  view"): a gear at the right of the Notebooks bar opens it.
+- **Sideways, pinch out to the whole page** (2026-11-10, the owner: "one exception to the no zoom lower than 100
+  rule.. when it's horizontal, we should allow the user to zoom down to fit the full page on the screen"): turned
+  sideways the page still opens filling the width; a pinch out now goes on down to the whole page, centred. Upright,
+  and in Zen Mode, a pinch stops where it did.
+- **The loading screen stays a second** (2026-11-10, the owner: "show for at least a second before it opens? just to
+  welcome people into the experience each time"): the welcome drawing shows for at least a second on every launch,
+  then the notebook opens as before. The second counts from the drawing's first frame, with about 1.3 s allowed for
+  the panel to draw it, not from when the screen was built: that way it was "only up for a fraction of a second".
+- **Reorder the toolbar** (2026-11-09, the owner: "can we add a way to reorder the toolbars? a simple intuitive way
+  ideally"): on the Toolbar page, tap the selected slot again to pick it up ("Tap where it goes."), then tap another
+  slot: the two swap places, with their sizes and greys. Tap it again to put it back. One Undo takes a swap back.
+- **Locked Zoom still scrolls** (2026-11-09, the owner: "when lock is enabled it doesnt scroll.. allowing scroll when it's on
+  would solve the problem"): with the padlock on, two fingers move the page but never zoom it.
+- **Export asks for file access** (2026-11-09, the owner): exporting without it asks then ("Export Needs File Access"),
+  and the export is made once allowed, instead of "Export failed".
+- **Opens as it was left** (2026-11-09, the owner: "maybe it's better to switch back to the other toolbar view instead
+  of the fan for the default"): a new install starts in the side bar, as Start Here shows it; once Zen Mode is on (hold
+  the circle), the app opens in it with the fan, as before.
+- **A big eraser from the start** (2026-11-09, the owner): a new install's eraser starts at 360 px, as the owner's.
+- **No ghost of the splash** (2026-11-09, the owner: "a very strong ghost of the title screen on load"): the first
+  screen, the shelf or the page, gets one full refresh.
+- **A quieter first launch** (2026-11-09, the owner's first-run audit): no firmware toast; the fast display's own
+  notes are gone, and a stuck screen says "Screen stuck: open a menu"; a failed brushes, notebook move or recovery says
+  so in a few plain words, no raw error; a fresh install's Start Here is no longer rewritten at first launch.
+- **A plainer file-access question** (2026-11-09, the owner: "explain why it's being done and what the alternative is
+  if you don't allow", then "too long"): "Keep Notebooks in Document/Superdood? There they can sync, and they're safe if
+  the app is removed. Choosing Not Now keeps them inside the app."
+
 ## 1.2 (2026-11-09)
 
 - **The fan's wedges round the X** (2026-11-07): the size and grey wedges' outer edge follows the arc, the gap between

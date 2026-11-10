@@ -9,7 +9,7 @@ package io.github.mpdairy.monopaint;
 public final class PinchPanChecks {
     public static void main(String[] args) {
         mapping(); rotateTurnsThePage(); pinchKeepsThePage(); slops(); taps(); pinches(); threeFingers(); lock(); fingerTool(); words();
-        System.out.println("PASS: the page maps to the canvas and back at 100%, 200% and 800%, panned off-centre, in all four turns, as MonoPaint's rotate, scale and move did, a changed area to the canvas pixels it covers; Rotate turns the page with the app, upright, whole and as large as fits, and back from the canvas to the page, the pen's tilt turned as gravity is; a pinch keeps the page under the fingers; two fingers stay a tap (Undo, three Redo) until one moves past the tap's own slop, then pinch and pan from where they landed and no tap fires; a third finger before they move is a three-finger tap; fingers landing close together never navigate; locked (the default), nothing moves and taps still undo; a finger's stroke is taken back when the second lands, which may then pinch; the Zoom button's words");
+        System.out.println("PASS: the page maps to the canvas and back at 100%, 200% and 800%, panned off-centre, in all four turns, as MonoPaint's rotate, scale and move did, a changed area to the canvas pixels it covers; Rotate turns the page with the app, upright, whole and as large as fits, and back from the canvas to the page, the pen's tilt turned as gravity is; a pinch keeps the page under the fingers; two fingers stay a tap (Undo, three Redo) until one moves past the tap's own slop, then pinch and pan from where they landed and no tap fires; a third finger before they move is a three-finger tap; fingers landing close together never navigate; locked, two fingers pan but never zoom and taps still undo; a finger's stroke is taken back when the second lands, which may then pinch; the Zoom button's words");
     }
 
     // ---- where the page lies ----
@@ -265,8 +265,10 @@ public final class PinchPanChecks {
         float scale = view.viewport.scale(), x = view.viewport.x, y = view.viewport.y;
         view.locked = true;
         view.run(two(-120, -200, 200, 300));
-        check(view.viewport.scale() == scale && view.viewport.x == x && view.viewport.y == y, "Locking keeps the view as it is, zoomed and panned");
-        check(!new PinchPan().land(true, 0, 0, 0, 1, 400, 0, PinchPan.LEAST_SPAN_DP), "Locked, two fingers never land as a pinch");
+        check(view.viewport.scale() == scale && (view.viewport.x != x || view.viewport.y != y), "Locked, two fingers pan the zoomed page but never zoom it");
+        PinchPan locked = new PinchPan();
+        check(locked.land(true, 0, 0, 0, 1, 400, 0, PinchPan.LEAST_SPAN_DP) && locked.starts(0, 100, 600, 100, PinchPan.SLOP_DP)
+                && locked.step(-100, 150, 700, 150, PinchPan.LEAST_SPAN_DP)[0] == 1, "Locked, a spreading pinch moves the page at its scale");
     }
     static void fingerTool() {
         // The first finger drifts far enough to draw before the second lands: its stroke is taken back, and the two pinch.
@@ -286,7 +288,7 @@ public final class PinchPanChecks {
     }
     static void words() {
         check(PinchPan.caption(100).equals("100%") && PinchPan.caption(800).equals("800%"), "The button's percentage");
-        check(PinchPan.describe(200, true).equals("Zoom 200%, locked") && PinchPan.describe(200, false).equals("Zoom 200%, unlocked"), "Its screen-reader words");
+        check(PinchPan.describe(200, true).equals("Zoom 200%, zoom and rotation locked") && PinchPan.describe(200, false).equals("Zoom 200%, unlocked"), "Its screen-reader words");
         String s = PinchPan.describe(800, false);
         check(!s.matches(".*(you|→|=|;).*"), s + ": no \"you\", no symbols as grammar");
     }

@@ -71,7 +71,7 @@ public final class ToolSlotsChecks {
             check(ToolSlots.firstPx(i) == PX[i] && ToolSlots.firstGrey(i) == GREYS[i], "FIRST's slot " + i + " at " + PX[i] + " px and grey " + GREYS[i]);
             check(s.look(ToolSlots.key(i), slots.brush(i)).px == PX[i] && s.look(ToolSlots.key(i), slots.brush(i)).darkness == GREYS[i], "Slot " + i + " at its own " + PX[i] + " px and grey " + GREYS[i]);
         }
-        check(s.look(ToolSwatches.ERASER_KEY, null).px == 31 && s.sizeInUse(ToolSlots.key(7)) == -1 && s.sizeInUse(ToolSlots.key(0)) == -1, "The eraser at its own 31 px; the slots' sizes their own");
+        check(s.look(ToolSwatches.ERASER_KEY, null).px == 360 && s.sizeInUse(ToolSlots.key(7)) == -1 && s.sizeInUse(ToolSlots.key(0)) == -1, "The eraser at its own 360 px; the slots' sizes their own");
         check("44".equals(prefs.get(ToolSwatches.PX + ToolSlots.STAMP_KEY)) && "0.216".equals(prefs.get(ToolSwatches.DARK + ToolSlots.STAMP_KEY))
                 && slots.stamp().parts.choice(BrushPart.TIP) == PartChoice.STAMP && slots.stamp().parts.choice(BrushPart.MEDIUM) == LegacyBrushes.builtin("INK").choice(BrushPart.MEDIUM),
                 "The stamp tool as before: a Fineliner stamp at 44 px and grey .216");

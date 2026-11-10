@@ -44,7 +44,7 @@ public final class DrawLayoutChecks {
     static void leaveClean() throws java.io.IOException {
         String screens = source("NotebookScreens");
         int cover = screens.indexOf("private void cover(Mode next)"), suspend = screens.indexOf("app.pad.suspend();", cover),
-                shown = screens.indexOf("view.setVisibility(View.VISIBLE);", cover), clean = screens.indexOf("if (leaving) view.postDelayed(() -> Ui.flashWindow(", cover);
+                shown = screens.indexOf("view.setVisibility(View.VISIBLE);", cover), clean = screens.indexOf("if (leaving || afterSplash) view.postDelayed(() -> Ui.flashWindow(", cover);
         check(cover > 0 && suspend > cover && shown > suspend && clean > shown && clean < screens.indexOf("void hide()"),
                 "Every way from the drawing screen to the notebook screens cleans the window once they show and a menu that opened them is gone");
     }
@@ -146,7 +146,7 @@ public final class DrawLayoutChecks {
                     "Play the menu's row, its menu beside Menu, marked while a toy is on; no Play or Shapes button in the column");
             // Notebook Settings' foot (2026-10-28): Export Now, then Delete Notebook last, the same actions and confirmation.
             String screens = source("NotebookScreens");
-            int exportAt = screens.indexOf("app.exportNow();"), deleteAt = screens.indexOf("app.deleteNotebook(app.drawingName);"), footAt = screens.indexOf("TextView foot = text(LibraryCard.foot(");
+            int exportAt = screens.indexOf("app.exportNow(export);"), deleteAt = screens.indexOf("app.deleteNotebook(app.drawingName);"), footAt = screens.indexOf("TextView foot = text(LibraryCard.foot(");
             check(exportAt > 0 && exportAt < deleteAt && deleteAt < footAt && screens.contains("new LabButton[]{export, delete}") && LibraryCard.DELETE_NOTEBOOK.equals("Delete Notebook")
                             && app.contains(".setTitle(\"Delete this notebook?\")") && screens.contains("LibraryCard.settingsLayout("),
                     "Notebook Settings' foot: Export Now, then Delete Notebook, its confirmation as before; Rename the name's button");

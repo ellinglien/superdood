@@ -25,14 +25,14 @@ public final class NotebookFileChecks {
         lazy();
         recovery();
         startHere();
-        System.out.println("PASS: notebooks in files: page pictures average their page at 16 greys, never the masking fluid, encode small and refuse garbage; the notebook block (cover and pictures) is written after the last page and read back, ZIP readers see only the manifest and pages, a picture whose CRC doesn't match its page is ignored, pictures move with their pages and go once a page changes, the cover follows its page; a moved page takes its bytes, picture, canvas choice and the cover with it through save, recovery and reopening, its PNG kept; pictures that don't fit the block's room are left out, the cover's kept first; the shelf reads a cover from the file's end; opening checks every page's bytes and header but decodes only the shown page, a page that can't decode fails alone and is kept; a damaged byte is still refused; the recovery file keeps them; the bundled Start Here notebook opens, nine drawn pages of one layer, its cover plain, open on page 1");
+        System.out.println("PASS: notebooks in files: page pictures average their page at 16 greys, never the masking fluid, encode small and refuse garbage; the notebook block (cover and pictures) is written after the last page and read back, ZIP readers see only the manifest and pages, a picture whose CRC doesn't match its page is ignored, pictures move with their pages and go once a page changes, the cover follows its page; a moved page takes its bytes, picture, canvas choice and the cover with it through save, recovery and reopening, its PNG kept; pictures that don't fit the block's room are left out, the cover's kept first; the shelf reads a cover from the file's end; opening checks every page's bytes and header but decodes only the shown page, a page that can't decode fails alone and is kept; a damaged byte is still refused; the recovery file keeps them; the bundled Start Here notebook opens, eight drawn pages of one layer, its cover plain (DocumentStore.recover opens it on page 1)");
     }
 
-    /** The bundled Start Here notebook (DocumentStore.START_HERE): the owner's nine drawn pages, one layer each, the cover plain. */
+    /** The bundled Start Here notebook (DocumentStore.START_HERE): the owner's eight drawn pages (2026-11-10), one layer each, the cover plain; saved on its last page, opened on page 1 by DocumentStore.recover. */
     static void startHere() throws IOException {
         DrawingBook book = BookCodec.open(new File(Assets.FOLDER, "start-here.mpaint"));
-        check(book.count() == 9 && book.stacks().count() == 9 && !book.coverDrawn(DrawingBook.FRONT) && book.index() == 0, "Start Here: nine pages of one layer, the cover plain, open on page 1");
-        for (int i = 0; i < 9; i++) { book.select(i); check(!book.current().unmarked(), "Start Here page " + (i + 1) + " drawn"); }
+        check(book.count() == 8 && book.stacks().count() == 8 && !book.coverDrawn(DrawingBook.FRONT), "Start Here: eight pages of one layer, the cover plain");
+        for (int i = 0; i < 8; i++) { book.select(i); check(!book.current().unmarked(), "Start Here page " + (i + 1) + " drawn"); }
     }
     /** A 3-page notebook, pictures on pages 1 and 3, the cover page 3. */
     static byte[] sample() throws IOException {

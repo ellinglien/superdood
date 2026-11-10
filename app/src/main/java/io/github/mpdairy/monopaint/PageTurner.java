@@ -45,12 +45,17 @@ final class PageTurner {
         void previous();
         /** The next page; past the last, the back cover. */
         void next();
+        /** Page 1 and the last page (inside a notebook, the owner, 2026-11-10: "buttons beside the next and prev page for going to beginning or ending"). */
+        default void first() { }
+        default void last() { }
     }
 
     final LinearLayout view;
     private final PaintActivity app;
     /** ‹ and › (by the number, on both bars); (the Notebook button left the drawing screen's bar, 2026-10-27). */
     private final ToolButton previous, next;
+    /** |‹ and ›|, inside a notebook (else null). */
+    private final ToolButton first, last;
     /** Zoom and its lock on the drawing screen (else null). */
     final ZoomButton zoom;
     private final Host host;
@@ -75,21 +80,24 @@ final class PageTurner {
         view.setPadding(0, notebook ? 0 : gap, 0, notebook ? gap : 0);
         previous = app.iconButton("Previous page", R.drawable.ic_ph_caret_left, host::previous).slow();
         next = app.iconButton("Next page", R.drawable.ic_ph_caret_right, host::next).slow();
+        first = notebook ? null : app.iconButton(FIRST, R.drawable.ic_caret_first, host::first).slow();
+        last = notebook ? null : app.iconButton(LAST, R.drawable.ic_caret_last, host::last).slow();
         strip = notebook ? new Strip() : null;
         zoom = notebook ? new ZoomButton(app) : null;
         number = new Number();
         show(0, 1);
     }
 
-    /** Lays the bar inside a notebook out: ‹, the page and its count, ›, in the middle, its buttons {@code button} dp wide. */
+    static final String FIRST = "First page", LAST = "Last page";
+    /** Lays the bar inside a notebook out: |‹, ‹, the page and its count, ›, ›|, in the middle, its buttons {@code button} dp wide. */
     void place(int button, boolean columnRight) {
         view.removeAllViews();
         int wide = app.dp(button);
-        previous.setBackground(null); next.setBackground(null);  // plain, as on the drawing screen's bar
         LabUi.spring(view);
-        view.addView(previous, new LinearLayout.LayoutParams(wide, -1));
-        view.addView(number, new LinearLayout.LayoutParams(app.dp(DrawLayout.pageNumber()), -1));
-        view.addView(next, new LinearLayout.LayoutParams(wide, -1));
+        for (View part : new View[]{first, previous, number, next, last}) {
+            if (part != number) part.setBackground(null);  // plain, as on the drawing screen's bar
+            view.addView(part, new LinearLayout.LayoutParams(part == number ? app.dp(DrawLayout.pageNumber()) : wide, -1));
+        }
         LabUi.spring(view);
     }
     /**
@@ -197,6 +205,8 @@ final class PageTurner {
             previous.setContentDescription(index == 0 ? "Front cover" : "Previous page");
             next.setContentDescription(index == this.count - 1 ? "Back cover" : "Next page");
             dim(next, R.drawable.ic_ph_caret_right, index != DrawingBook.BACK);
+            dim(first, R.drawable.ic_caret_first, index != 0);
+            dim(last, R.drawable.ic_caret_last, index != this.count - 1);
         }
         number.setContentDescription(DrawLayout.pageSaid(index, this.count));
         number.invalidate();

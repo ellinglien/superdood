@@ -1,0 +1,4 @@
+<!-- Iconoir "nav-arrow-right" (iconoir.com, MIT, v7.10.1) with a bar after it: to the last page. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M7 6L13 12L7 18M17 6L17 18" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

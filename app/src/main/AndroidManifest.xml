@@ -12,6 +12,8 @@
     <application android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true" android:largeHeap="true"
         android:label="@string/app_name" android:icon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true">
+        <!-- ML Kit starts only once Read Handwriting is switched on (HandwritingReader), never at app start. -->
+        <provider android:name="com.google.mlkit.common.internal.MlKitInitProvider" android:authorities="${applicationId}.mlkitinitprovider" tools:node="remove" />
         <!-- Lets adb take heap dumps and profiles of the release build (owner's request, 2026-10-25). -->
         <profileable android:shell="true" tools:targetApi="29" />
         <activity android:name=".ProbeActivity" android:exported="false" android:screenOrientation="portrait" />
@@ -30,5 +32,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Lasso to Superdood: the Supernote plugin's strokes drawn with the selected brush (LassoProvider). -->
+        <provider android:name=".LassoProvider" android:authorities="${applicationId}.lasso" android:exported="true" />
     </application>
 </manifest>

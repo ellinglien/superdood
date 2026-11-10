@@ -17,6 +17,12 @@ final class SystemSettings {
     static final String EDGE_HOLD_NOTE = "Manta only";
     /** The Fridge ({@link Fridge}, 2026-11-06): On once its first time's words are agreed to; Off, they show again before the next send. */
     static final String FRIDGE = Fridge.SHARED, FRIDGE_NOTE = "Off asks before sending";
+    /** Read Handwriting (docs/superpowers/specs/2026-11-09-read-handwriting-design.md): its row, note and first-time words. */
+    static final String READ_HANDWRITING = "Read Handwriting", READ_HANDWRITING_NOTE = "For Search on the shelf";
+    static final String READ_HANDWRITING_ABOUT = "Handwriting is read on this tablet so the shelf can search it. "
+        + "Google's reader is downloaded once, about 20 MB. The writing stays on the tablet. "
+        + "Google gets usage stats: device and app details, timings and errors.";
+    static final String TURN_ON = "Turn On";
     /**
      * The one gate for a flash (the firmware's full refresh, {@link Ui#flashWindow}), and for every clean redraw and forced grey pass
      * the app makes on its own: one {@code asked} for (Refresh, or a tap set to it) always flashes; one the app would make

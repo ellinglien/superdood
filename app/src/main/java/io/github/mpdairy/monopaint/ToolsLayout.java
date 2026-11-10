@@ -57,9 +57,10 @@ final class ToolsLayout {
     /**
      * The words: the bar's title (the page's job, "Tools" until 2026-11-03; Brush Lab's Back from here says it too) and
      * its line; the button opening Brush Lab on the selected slot (Brush Lab in the bar's corner until 2026-11-03); the
-     * try strip's head ("Draw here to try Fill in", Brush Lab's too); the search's button.
+     * try strip's head ("Draw here to try Fill in", Brush Lab's too); the search's button; the bar's line while a slot is
+     * picked up to move ({@link ToolsPage#tap}).
      */
-    static final String TITLE = "Toolbar", JOB = "",LAB = "Edit in Brush Lab", TRY = "Draw here to try ",
+    static final String TITLE = "Toolbar", JOB = "", MOVE = "Tap where it goes.", LAB = "Edit in Brush Lab", TRY = "Draw here to try ",
             SEARCH = "Search";
 
     final int width, height;

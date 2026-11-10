@@ -6,8 +6,8 @@ import android.graphics.drawable.Drawable;
 
 /**
  * The page bar's Zoom button ({@link PageTurner}, the owner, 2026-10-21: out of the side bar), MonoPaint's ({@code Toolbar}'s zoom button, {@link ZoomButtonTouch}) in Inkwash's look:
- * Phosphor's padlock, closed while zoom and pan are locked (the default) and open while two fingers may pinch and pan
- * ({@link PinchPan}), beside the zoom's percentage. A tap locks or unlocks, and the choice is kept ({@code
+ * Phosphor's padlock, closed while zoom and pan are locked and open while two fingers may pinch and pan
+ * ({@link PinchPan}), beside the zoom's percentage. Closed, it holds the app's turn too ({@link RotationPrompt}, the owner, 2026-11-10). A tap locks or unlocks, and the choice is kept ({@code
  * PaintActivity.toggleNavigationLock}); locking or unlocking keeps the view as it is; a second quick tap fits the whole
  * page, keeping the lock as it was ({@link ZoomButtonTouch}). Both reach the panel through the fast feedback path ({@link SelectionFeedback}), the
  * percentage too while fingers pinch. {@link DrawLayout#zoomButton} wide. Its own class, so the bar's other changes stay apart from it.

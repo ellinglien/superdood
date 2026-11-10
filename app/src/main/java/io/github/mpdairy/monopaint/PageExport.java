@@ -103,7 +103,7 @@ final class PageExport {
 
     /** {@link #bytes}'s copy written into {@code out}: a PNG or PDF made whole, Layers streamed as it is drawn. */
     static void write(OutputStream out, String title, int place, String choice, ExportSize size, List<PackedPage> pages, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing, Magnets.Tiles tiles, long today) throws IOException {
-        PageStacks stacks = tracing != null && tracing.count() == pages.size() ? tracing.stacks() : new PageStacks(new boolean[pages.size()]);
+        PageStacks stacks = TracingPaper.stacks(tracing, pages.size());
         int bottom = stacks.first(place);
         NotebookTemplate template = options.pageTemplate(pageTemplates != null && bottom < pageTemplates.size() ? pageTemplates.get(bottom) : null);
         synchronized (DocumentCodec.ONE_PAGE) {

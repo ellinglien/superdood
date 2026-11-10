@@ -19,8 +19,8 @@ public final class ToolsPageChecks {
 
     public static void main(String[] args) {
         Assets.install(Assets.folder(Assets.FOLDER));
-        chips(); refocus(); opens(); remembers(); sources(); recent(); paging(); changes(); six(); tries(); start(); keeps(); resets(); deletes(); lines(); layout(); table(); search();
-        System.out.println("PASS: the Tools page (the redesign, 2026-11-03): its bar says its job (Toolbar, \"" + ToolsLayout.JOB + "\"), the ten slots first, a tap choosing the one a card goes to, the selected slot's tool named beside Edit in Brush Lab, the try strip under it (Brush Lab's too); no Undo, Load Kit or Cut Stamp on the page, Tools First only while on; Back taking each slot its pick (the drawing screen's Undo takes each back); one filter row: Recent (put in a slot lately, latest first, each once), Saved (the library but the Basic tools), the kinds (Pens, Markers, Brushes, Washes, Paint, Dry Media, Print, Odd Ones, Effects: every style in one, a Basic tool under what it does as the tool picker groups; a kept style's name opens on its kind) and Kits, paged; opening on the chip last chosen (the first time the slot's tool's kind) and the page holding the slot's tool; a slot changed on this visit marked, the start carried through Brush Lab; an unsaved brush a pick or a kit lets go is kept in Recent, said once; Reset to Default beside Edit in Brush Lab for an edited Basic tool alone, as the tool picker's; a saved card deleted by a long press; a card changes the tool on the page, not the slot, the page staying to try it at the one size and grey; every drawing cut at its handle and one width; every budget fitting both tablets in either turn");
+        chips(); refocus(); opens(); remembers(); sources(); recent(); paging(); changes(); six(); tries(); start(); keeps(); resets(); deletes(); lines(); layout(); table(); search(); swaps();
+        System.out.println("PASS: the Tools page (the redesign, 2026-11-03): its bar says its job (Toolbar, \"" + ToolsLayout.JOB + "\"), the ten slots first, a tap choosing the one a card goes to, the selected slot's tool named beside Edit in Brush Lab, the try strip under it (Brush Lab's too); no Undo, Load Kit or Cut Stamp on the page, Tools First only while on; Back taking each slot its pick (the drawing screen's Undo takes each back); one filter row: Recent (put in a slot lately, latest first, each once), Saved (the library but the Basic tools), the kinds (Pens, Markers, Brushes, Washes, Paint, Dry Media, Print, Odd Ones, Effects: every style in one, a Basic tool under what it does as the tool picker groups; a kept style's name opens on its kind) and Kits, paged; opening on the chip last chosen (the first time the slot's tool's kind) and the page holding the slot's tool; a slot changed on this visit marked, the start carried through Brush Lab; an unsaved brush a pick or a kit lets go is kept in Recent, said once; Reset to Default beside Edit in Brush Lab for an edited Basic tool alone, as the tool picker's; a saved card deleted by a long press; the selected slot tapped again picked up, a tap on another swapping the two with their sizes and greys (not in a fixed toolbar); a card changes the tool on the page, not the slot, the page staying to try it at the one size and grey; every drawing cut at its handle and one width; every budget fitting both tablets in either turn");
     }
 
     /** Whether {@code b} is one of the shown tools (ToolPresets.shown). */
@@ -68,7 +68,7 @@ public final class ToolsPageChecks {
                     "The page laid out before its first frame, its time logged");
             // The owner, 2026-10-28: "make the non-selected tools a little grey": a solid grey; 2026-11-03, "maybe invert it so
             // it's dark? to make it obvious it's selected": the selected slot an ink tile, its drawing in paper, no underline.
-            check(card.contains("static final int GREY = Theme.GREY_600;") && card.contains("fill.setColor(bold ? Theme.ON_INK : grey ? GREY : Theme.INK);")
+            check(card.contains("static final int GREY = Theme.GREY_600;") && card.contains("fill.setColor(inverted ? Theme.ON_INK : grey ? GREY : Theme.INK);")
                     && card.contains("canvas.drawRoundRect(0, 0, getWidth(), tall, r, r, fill);") && tools.contains("card.setChosen(i == selected);")
                     && tools.contains("new ToolCard(this, samples).tile()") && !tools.contains("card.setNow(i == selected)") && !card.contains("setAlpha("),
                     "The slots not selected drawn in solid grey-600, the selected one inverted, not underlined");
@@ -246,6 +246,86 @@ public final class ToolsPageChecks {
         check(page.result().sameAs(card.brush) && page.now(card), "A card's brush is the tool now");
         page.put(slots.brush(4));
         check(page.result() == null, "The slot's own brush again: nothing goes back");
+    }
+    /** Reordering the bar (the owner, 2026-11-09: "can we add a way to reorder the toolbars? a simple intuitive way ideally"). */
+    static void swaps() {
+        ToolSlots slots = fresh();
+        slots.swatches.useSize(ToolSlots.key(1), 8); slots.swatches.useGrey(ToolSlots.key(1), .3);
+        slots.swatches.useSize(ToolSlots.key(5), 120); slots.swatches.useGrey(ToolSlots.key(5), .9);
+        Brush one = slots.brush(1), five = slots.brush(5);
+        check(!one.sameAs(five), "Two slots with different brushes");
+        String stored = prefs.get("tool_slots");
+        ToolsPage page = open(slots, 3);
+        page.layout(30, 16);
+        page.tap(1);
+        check(page.slot() == 1 && page.lifted() == -1, "A tap selects a slot");
+        page.tap(1);
+        check(page.slot() == 1 && page.lifted() == 1, "The selected slot tapped again is picked up");
+        page.tap(1);
+        check(page.lifted() == -1 && page.slot() == 1 && java.util.Arrays.stream(page.results()).allMatch(b -> b == null), "Tapped once more: put back, nothing changed");
+        page.tap(1);
+        page.tap(5);
+        check(page.lifted() == -1 && page.slot() == 5 && page.current(5).sameAs(one) && page.current(1).sameAs(five), "A tap on another slot swaps the two, the moved one selected where it landed");
+        check(page.look(5).px == 8 && page.look(5).darkness == .3 && page.look(1).px == 120 && page.look(1).darkness == .9, "Their sizes and greys go with them");
+        check(page.changed(1) && page.changed(5) && !page.changed(3) && prefs.get("tool_slots").equals(stored), "Both marked changed; the page never writes the slots");
+        // Back: the drawing screen takes the brushes (a Basic tool would bring its own look), then the moved sizes and greys.
+        check(!slots.canUndo(), "No Undo step before Back");
+        slots.take(page.results(), page.together(), page.moved());
+        check(slots.brush(5).sameAs(one) && slots.brush(1).sameAs(five), "Back: the bar in its new order");
+        check(slots.swatches.look(ToolSlots.key(5), one).px == 8 && slots.swatches.look(ToolSlots.key(5), one).darkness == .3
+                && slots.swatches.look(ToolSlots.key(1), five).px == 120 && slots.swatches.look(ToolSlots.key(1), five).darkness == .9, "Back: each at the size and grey it had");
+        // One Undo takes the swap back whole: the brushes and their sizes and greys.
+        slots.undo();
+        check(!slots.canUndo() && slots.undone().contains(1) && slots.undone().contains(5), "A swap is one Undo step");
+        check(slots.brush(1).sameAs(one) && slots.brush(5).sameAs(five) && slots.swatches.look(ToolSlots.key(1), one).px == 8 && slots.swatches.look(ToolSlots.key(1), one).darkness == .3
+                && slots.swatches.look(ToolSlots.key(5), five).px == 120 && slots.swatches.look(ToolSlots.key(5), five).darkness == .9, "Undo puts the brushes back, each at its own size and grey");
+        slots.take(page.results(), page.together(), page.moved());
+        // A card while one is picked up: put back, and the card goes in the selected slot as ever.
+        ToolsPage again = open(slots, 5);
+        again.layout(30, 16);
+        again.tap(5);
+        Brush pencil = rolled(PENCIL, 31);
+        again.put(pencil);
+        check(again.lifted() == -1 && again.slot() == 5 && again.current(5).sameAs(pencil) && Double.isNaN(again.moved()[10]), "A card while picked up: put back, the card in the slot");
+        // A fixed toolbar takes no pick: no slot is picked up, and the drawing screen moves no size.
+        ToolsPage fixed = open(slots, 2);
+        fixed.fixed = true;
+        fixed.tap(2);
+        fixed.tap(4);
+        check(fixed.lifted() == -1 && fixed.slot() == 4 && fixed.current(2).sameAs(slots.brush(2)), "A fixed toolbar: a tap selects, never picks up");
+        slots.frozen = true;
+        double[] back = page.moved();
+        back[2] = 44;
+        slots.take(new Brush[ToolSlots.COUNT], false, back);
+        check(slots.swatches.look(ToolSlots.key(1), five).px == 120, "A fixed toolbar takes no moved size");
+        slots.frozen = false;
+        // (fresh() starts another store: last.)
+        // Swapped there and back: nothing goes back, no size written, no Undo step.
+        ToolSlots round = fresh();
+        round.swatches.useSize(ToolSlots.key(1), 8); round.swatches.useSize(ToolSlots.key(5), 120);
+        ToolsPage there = open(round, 1);
+        there.layout(30, 16);
+        there.tap(1); there.tap(5); there.tap(5); there.tap(1);
+        check(there.slot() == 1 && java.util.Arrays.stream(there.results()).allMatch(b -> b == null) && java.util.Arrays.stream(there.moved()).allMatch(Double::isNaN), "Swapped there and back: nothing goes back");
+        round.take(there.results(), there.together(), there.moved());
+        check(!round.canUndo() && round.swatches.look(ToolSlots.key(1), round.brush(1)).px == 8, "Swapped there and back: no Undo step, the sizes as they were");
+        // A card picked this visit, then swapped: it lands at the size and grey it brings, as a pick does.
+        ToolSlots picked = fresh();
+        picked.swatches.useSize(ToolSlots.key(2), 3);
+        Brush basic = null;
+        for (ToolPresets.Preset p : ToolPresets.shown()) {
+            Brush b = p.brush();
+            if (basic == null && ToolPresets.look(b) != null && !b.sameAs(picked.brush(2)) && !b.sameAs(picked.brush(5)) && picked.swatches.brought(ToolSlots.key(2), b).px != 3) basic = b;
+        }
+        check(basic != null, "A Basic tool with a starting size of its own");
+        double own = picked.swatches.brought(ToolSlots.key(2), basic).px;
+        ToolsPage card = open(picked, 2);
+        card.layout(30, 16);
+        card.put(basic);
+        check(card.look(2).px == own, "A pick shows at the size it brings");
+        card.tap(2); card.tap(5);
+        picked.take(card.results(), card.together(), card.moved());
+        check(picked.brush(5).sameAs(basic) && picked.swatches.look(ToolSlots.key(5), basic).px == own, "Picked then swapped: Back puts it at its own starting size (" + own + "), not the slot's old 3");
     }
     /** The slots on the page (the owner, 2026-10-19): "click a slot and then click an option from library". */
     static void six() {

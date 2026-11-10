@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
@@ -102,12 +101,19 @@ final class NotebookScreens {
     private int pagePlace = DrawingBook.NONE;
     private boolean pageFromDrawing;
     private Object pageShown;
+    /** The shelf's Search (Read Handwriting). */
+    private final ShelfSearch search;
+    /** A find's boxes over page {@code markPage} (a layer: shown over its stack), until the next tap on the page. */
+    private int markPage = DrawingBook.NONE;
+    private final List<float[]> marks = new ArrayList<>();
+    private final Paint markInk = new Paint(Paint.ANTI_ALIAS_FLAG);
     /** The last page whose paper tone was read from its bytes, and the tone (a page not decoded is read once). */
     private PackedPage tonePacked;
     private int toneRead;
 
     NotebookScreens(PaintActivity app) {
         this.app = app;
+        search = new ShelfSearch(app, () -> shelf, this::build);
         view = new FrameLayout(app);
         view.setBackgroundColor(Theme.PAPER);
         view.setVisibility(View.GONE);
@@ -123,9 +129,11 @@ final class NotebookScreens {
     /** Shows the shelf, and reads it again from the library. */
     void showShelf() {
         pagePlace = DrawingBook.NONE;
+        unmark();
         cover(Mode.SHELF);
         build();
         load();
+        search.again();
     }
     /** Shows the open notebook at page {@code at} (a layer: its stack). */
     void showPages(int at) {
@@ -158,22 +166,26 @@ final class NotebookScreens {
         if (leaving) { app.dismissPanels(); if (app.pad != null) app.pad.suspend(); }
         if (next != Mode.PAGES) crisps.evictAll();
         mode = next;
+        search.shelfShown(next == Mode.SHELF);
         view.setVisibility(View.VISIBLE);
         // The page and the column are under partial grey: ink sent straight to the panel stayed over paper here (the owner, 2026-10-30). Their partial grey comes back on return (DrawingPad.returned).
         // Once a menu that opened it has left the panel too (the firmware shows a window's change about 350 ms late): cleaned
         // at once, its patch ghosted on, the menu in the top corner (the owner, 2026-10-30). With the firmware's flash: the
         // clean update alone still left it (the owner, 2026-10-31), as it left big ghosts on the page (DrawingPad.autoRefresh).
         // Automatic Refresh off (System Settings): no redraw at all.
-        if (leaving) view.postDelayed(() -> Ui.flashWindow(app.previewFrame.getRootView(), "notebook screen opened", () -> { }, SystemSettings.flashes(false, app.prefs.autoRefresh()), true), MENU_GONE_MS);
+        boolean afterSplash = app.takeSplashGhost();
+        if (leaving || afterSplash) view.postDelayed(() -> Ui.flashWindow(app.previewFrame.getRootView(), afterSplash ? "after the splash" : "notebook screen opened", () -> { }, afterSplash || SystemSettings.flashes(false, app.prefs.autoRefresh()), true), MENU_GONE_MS);
         app.syncToolbar();
     }
     /** Back to drawing. */
     void hide() {
         if (mode == Mode.HIDDEN) return;
         mode = Mode.HIDDEN;
+        search.shelfShown(false);
         view.setVisibility(View.GONE);
         view.removeAllViews(); builtWidth = 0; selector = null;
         pageList = null; pagePlace = DrawingBook.NONE; pageShown = null;
+        unmark();
         crisps.evictAll();
         // The shelf's cover sheets (up to 40 MB) go: drawing wants the room. A cover's are made again ahead when near one.
         CoverPattern.forget(); CoverTexture.forget();
@@ -291,12 +303,27 @@ final class NotebookScreens {
         // No job line under Notebooks since 2026-11-06 (the owner: "it's not necessary").
         LabUi.PageBar shelfBar = new LabUi.PageBar(app, 0, null, NotebookLayout.BACK, "");
         shelfBar.line.setVisibility(View.GONE);
-        column.addView(shelfBar.view, sized(-1, NotebookLayout.BAR));
+        // Search at the bar's right, only while Read Handwriting is On; while open, its field in the bar's place.
+        View bar = search.bar(shelfBar, l);
+        // System Settings from the shelf too (the owner, 2026-11-10: "a way to get to app settings from the notebook explorer view").
+        if (!search.open()) {
+            LabButton gear = new LabButton(app, R.drawable.ic_ph_gear, null, false);
+            gear.setContentDescription(SystemSettings.TITLE);
+            gear.setOnClickListener(v -> { if (!app.shelfBusy()) app.systemSettings(gear); });
+            shelfBar.view.addView(gear, LabUi.after(app, -2, NotebookLayout.BUTTON, NotebookLayout.BAR_GAP));
+        }
+        column.addView(bar, sized(-1, NotebookLayout.BAR));
         LinearLayout.LayoutParams gridPlace = sized(-1, 0); gridPlace.weight = 1; gridPlace.topMargin = dp(l.gap);
+        LinearLayout.LayoutParams buttonsPlace = sized(-1, NotebookLayout.BAR); buttonsPlace.topMargin = dp(l.gap);
         if (status != null) {
             TextView words = text(status, TypeStyle.BODY);
             words.setGravity(Gravity.CENTER);
             column.addView(words, gridPlace);
+            return column;
+        }
+        // The finds in the grid's place, a page at a time with the shelf's page buttons.
+        if (search.open()) {
+            search.results(column, gridPlace, buttonsPlace);
             return column;
         }
         int pages = l.shelfPages(shelf.size());
@@ -319,22 +346,39 @@ final class NotebookScreens {
         }
         column.addView(grid, gridPlace);
         LinearLayout buttons = LabUi.row(app);
-        buttons.setGravity(Gravity.CENTER);
-        LabButton back = new LabButton(app, R.drawable.ic_ph_caret_left, null, false), on = new LabButton(app, R.drawable.ic_ph_caret_right, null, false);
-        back.setContentDescription("Newer notebooks"); on.setContentDescription("Older notebooks");
-        back.setEnabled(shelfPage > 0); on.setEnabled(shelfPage < pages - 1);
-        back.setOnClickListener(v -> { shelfPage--; build(); });
-        on.setOnClickListener(v -> { shelfPage++; build(); });
-        TextView at = text((shelfPage + 1) + " / " + pages, TypeStyle.LABEL);
-        at.setGravity(Gravity.CENTER);
-        buttons.addView(back, sized(NotebookLayout.BUTTON, NotebookLayout.BUTTON));
-        buttons.addView(at, sized(96, NotebookLayout.BUTTON));
-        buttons.addView(on, sized(NotebookLayout.BUTTON, NotebookLayout.BUTTON));
-        buttons.setVisibility(pages > 1 ? View.VISIBLE : View.INVISIBLE);
-        LinearLayout.LayoutParams buttonsPlace = sized(-1, NotebookLayout.BAR); buttonsPlace.topMargin = dp(l.gap);
+        pageButtons(app, buttons, shelfPage, pages, "Newer notebooks", "Older notebooks", by -> { shelfPage += by; build(); });
         column.addView(buttons, buttonsPlace);
         return column;
     }
+    /** {@code buttons} as the shelf's page buttons: ‹, "2 / 5" and › (said {@code newer} and {@code older}), a tap {@code turn}ing −1 or 1; hidden for one page. */
+    static void pageButtons(PaintActivity app, LinearLayout buttons, int at, int pages, String newer, String older, java.util.function.IntConsumer turn) {
+        buttons.removeAllViews();
+        buttons.setGravity(Gravity.CENTER);
+        LabButton back = new LabButton(app, R.drawable.ic_ph_caret_left, null, false), on = new LabButton(app, R.drawable.ic_ph_caret_right, null, false);
+        back.setContentDescription(newer); on.setContentDescription(older);
+        back.setEnabled(at > 0); on.setEnabled(at < pages - 1);
+        back.setOnClickListener(v -> turn.accept(-1));
+        on.setOnClickListener(v -> turn.accept(1));
+        TextView number = LabUi.text(app, (at + 1) + " / " + pages, TypeStyle.LABEL);
+        number.setGravity(Gravity.CENTER);
+        int button = app.dp(NotebookLayout.BUTTON);
+        buttons.addView(back, new LinearLayout.LayoutParams(button, button));
+        buttons.addView(number, new LinearLayout.LayoutParams(app.dp(96), button));
+        buttons.addView(on, new LinearLayout.LayoutParams(button, button));
+        buttons.setVisibility(pages > 1 ? View.VISIBLE : View.INVISIBLE);
+    }
+
+    /** Find {@code f}'s page shown inside its notebook (the open one), its lines boxed: the page with the find's CRC (pages may have moved since the search), else its place unboxed. */
+    void showFound(ShelfSearch.Found f) {
+        if (app.book == null) return;
+        // Its own place first: a duplicated page shares its CRC with the one it was copied from.
+        PackedPage there = f.page >= 0 && f.page < app.book.count() ? app.book.packed(f.page) : null;
+        int at = there != null && there.crc == f.crc ? f.page : DrawingBook.NONE;
+        for (int i = 0; i < app.book.count() && at == DrawingBook.NONE; i++) { PackedPage p = app.book.packed(i); if (p != null && p.crc == f.crc) at = i; }
+        if (at != DrawingBook.NONE) { markPage = at; marks.clear(); marks.addAll(search.boxes(f)); }
+        showPages(at != DrawingBook.NONE ? at : f.page);
+    }
+    private void unmark() { marks.clear(); markPage = DrawingBook.NONE; }
 
     /** A tile: a notebook's cover, name and count; null: New notebook. */
     private View tile(DocumentStore.Notebook notebook) {
@@ -443,6 +487,8 @@ final class NotebookScreens {
         turner = new PageTurner(app, new PageTurner.Host() {
             @Override public void previous() { turn(-1); }
             @Override public void next() { turn(1); }
+            @Override public void first() { go(0); }
+            @Override public void last() { if (app.book != null) go(app.book.stacks().count() - 1); }
         }, false);
         turner.place(l.pageButton, false);
         LinearLayout.LayoutParams barPlace = sized(-1, l.pageBar); barPlace.topMargin = dp(l.gap);
@@ -495,6 +541,11 @@ final class NotebookScreens {
         if (pageList != null) fillPageSettings();
         // The neighbours' pictures ready for the next turn.
         for (int i = Math.max(0, viewing - 2); i <= Math.min(n - 1, viewing + 2); i++) for (int p = stacks.first(i); p <= stacks.last(i); p++) pagePicture(book, p);
+    }
+    /** To page {@code place} (|‹ and ›|). */
+    private void go(int place) {
+        if (app.book == null || place < 0 || viewing == place) return;
+        viewing = place; updatePages();
     }
     private void turn(int by) {
         if (app.book == null) return;
@@ -790,7 +841,7 @@ final class NotebookScreens {
     }
     private void outline(Canvas canvas, RectF box, float stroke, int color, boolean dashed) {
         line.setStrokeWidth(stroke); line.setColor(color);
-        line.setPathEffect(dashed ? new DashPathEffect(new float[]{dp(6), dp(4)}, 0) : null);
+        line.setPathEffect(dashed ? Theme.dashes(app) : null);
         canvas.drawRect(box.left + stroke / 2, box.top + stroke / 2, box.right - stroke / 2, box.bottom - stroke / 2, line);
     }
     private void plus(Canvas canvas, RectF box) {
@@ -939,8 +990,19 @@ final class NotebookScreens {
             }
         });
         PageView() { super(app); setContentDescription("The page. Tap to open it"); }
+        /** A find's boxes went at this touch's start; the page drawn again at its end if still shown (a tap leaves the screen: no update for nothing). */
+        private boolean unmarked;
         @SuppressLint("ClickableViewAccessibility")
-        @Override public boolean onTouchEvent(MotionEvent event) { return gestures.onTouchEvent(event) || super.onTouchEvent(event); }
+        @Override public boolean onTouchEvent(MotionEvent event) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN && !marks.isEmpty()) { unmark(); unmarked = true; }
+            boolean used = gestures.onTouchEvent(event) || super.onTouchEvent(event);
+            if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) && unmarked) {
+                unmarked = false;
+                if (mode == Mode.PAGES && page == this) invalidate();
+            }
+            return used;
+        }
         @Override protected void onDraw(Canvas canvas) {
             canvas.drawColor(Theme.PAPER);
             DrawingBook book = app.book;
@@ -960,6 +1022,12 @@ final class NotebookScreens {
         if (crisp != null) canvas.drawBitmap(crisp, Math.round(to.left), Math.round(to.top), ink);
         else drawPlace(canvas, book, viewing, inside);
         if (crisp != null && !DrawingBook.isCover(viewing)) for (int near : new int[]{NotebookStrip.before(book, viewing), NotebookStrip.after(book, viewing)}) if (near != DrawingBook.NONE) crisp(book, near, w, h);
+        // A find's lines boxed in ink, a little outside the writing (Read Handwriting).
+        if (!marks.isEmpty() && book.valid(markPage) && book.stacks().of(markPage) == viewing) {
+            float sx = to.width() / book.width, sy = to.height() / book.height, pad = dp(4);
+            markInk.setStyle(Paint.Style.STROKE); markInk.setStrokeWidth(dp(Theme.BASE)); markInk.setColor(Theme.INK);
+            for (float[] m : marks) canvas.drawRect(to.left + m[0] * sx - pad, to.top + m[1] * sy - pad, to.left + m[2] * sx + pad, to.top + m[3] * sy + pad, markInk);
+        }
     }
 
     // The settings list (LibraryCard)
@@ -1067,7 +1135,7 @@ final class NotebookScreens {
         LinearLayout actions = LabUi.row(app);
         actions.setGravity(Gravity.CENTER_VERTICAL);
         LabButton export = new LabButton(app, 0, PictureImport.EXPORT_NOW, false), delete = new LabButton(app, 0, LibraryCard.DELETE_NOTEBOOK, false);
-        export.setOnClickListener(v -> { if (app.book == book && selector == null) app.exportNow(); });
+        export.setOnClickListener(v -> { if (app.book == book && selector == null) app.exportNow(export); });
         delete.setOnClickListener(v -> { if (app.book == book && !app.busy() && selector == null) app.deleteNotebook(app.drawingName); });
         delete.setVisibility(kept ? View.GONE : View.VISIBLE);
         for (LabButton b : new LabButton[]{export, delete}) {
@@ -1629,5 +1697,10 @@ final class NotebookScreens {
                 .setNegativeButton("Cancel", null));
     }
 
+    /** Read Handwriting went on or off (or its download failed): the shelf's Search shown or not, an open search closed. */
+    void searchChanged() {
+        search.changed();
+        if (mode == Mode.SHELF) build();
+    }
     void close() { worker.shutdownNow(); bitmaps.evictAll(); crisps.evictAll(); covers.evictAll(); previews.evictAll(); }
 }

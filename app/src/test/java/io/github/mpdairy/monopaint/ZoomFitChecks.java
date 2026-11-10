@@ -12,6 +12,10 @@ final class ZoomFitChecks {
     static final float DENSITY = 1.875f;  // the Manta's and the Nomad's 300 dpi
     static int px(int dp) { return Math.round(dp * DENSITY); }
 
+    private static void whole(CanvasViewport v, int[] pad, int[] page, float whole) {
+        check(whole < pad[0] / (float) page[0] && Math.abs(v.scale() - whole) < 1e-4 && Math.abs(2 * v.x + page[0] * v.scale() - pad[0]) <= 1 && Math.abs(2 * v.y + page[1] * v.scale() - pad[1]) <= 1,
+                "sideways, a pinch out stops at the whole page, centred: " + v.scale() + " at " + v.x + ", " + v.y);
+    }
     public static void main(String[] args) {
         for (int[] s : DrawLayoutChecks.SCREENS) {
             int[] zen = panel(s), pad = pad(s), turned = pad(new int[]{s[1], s[0]});
@@ -21,13 +25,15 @@ final class ZoomFitChecks {
                 v.reset(); v.configure(pad[0], pad[1], page[0], page[1]);
                 fitted(v, pad, page, s);
                 float x = v.x, y = v.y, scale = v.scale();
-                v.gesture(.01f, 0, 0, 0, 0);
-                check(v.scale() == scale, "a pinch out of the fit stays at the fit");
-                v.gesture(3, pad[0] / 2f, pad[1] / 2f, pad[0] / 3f, pad[1] / 3f);
-                check(v.scale() > scale && !v.untouched(), "a pinch zooms in");
-                v.gesture(.01f, 0, 0, 0, 0);
+                // Sideways (the owner, 2026-11-10): a pinch out goes past the width filled, down to the whole page, centred.
                 boolean sideways = pad[0] > pad[1] && page[1] > page[0];
-                check(Math.abs(v.scale() - (sideways ? scale : 1)) < 1e-4, sideways ? "sideways, a pinch out stops at the width filled" : "a pinch out still stops at 100%");
+                float whole = Math.min(pad[0] / (float) page[0], pad[1] / (float) page[1]);
+                v.gesture(.01f, 0, 0, 0, 0);
+                if (sideways) whole(v, pad, page, whole); else check(v.scale() == scale, "a pinch out of the fit stays at the fit");
+                v.gesture(3, pad[0] / 2f, pad[1] / 2f, pad[0] / 3f, pad[1] / 3f);
+                check(v.scale() > (sideways ? whole : scale) && !v.untouched(), "a pinch zooms in");
+                v.gesture(30, pad[0] / 2f, pad[1] / 2f, pad[0] / 3f, pad[1] / 3f); v.gesture(.01f, 0, 0, 0, 0);
+                if (sideways) whole(v, pad, page, whole); else check(Math.abs(v.scale() - 1) < 1e-4, "a pinch out still stops at 100%");
                 v.reset(); v.configure(pad[0], pad[1], page[0], page[1]);
                 check(v.x == x && v.y == y && v.scale() == scale, "the double tap comes back to exactly the fit");
                 // Zen Mode while fitted: the page fitted again in the whole screen; and back out.
@@ -42,7 +48,7 @@ final class ZoomFitChecks {
         check(manta[0] == 1785 && manta[1] == 2387, "the Manta's pad: " + manta[0] + " x " + manta[1]);
         backdrop(manta);
         pageBarHidden(manta);
-        System.out.println("PASS: the page whole and centred in the room the bars leave (the Manta's 1785 x 2387 px), Manta and Nomad either way up, pages from either turn and from Zen Mode; the double tap and leaving Zen Mode come back to exactly that fit; a pinch still never below 100%; the lines beyond the page at every zoom, never in a copy; in the browser the whole page any way up, 2.5 times about the fingers, a pinch out back to the whole page; a desktop's wide window the width filled, a pinch out to the whole page");
+        System.out.println("PASS: the page whole and centred in the room the bars leave (the Manta's 1785 x 2387 px), Manta and Nomad either way up, pages from either turn and from Zen Mode; the double tap and leaving Zen Mode come back to exactly that fit; a pinch still never below 100%, but sideways, down to the whole page; the lines beyond the page at every zoom, never in a copy; in the browser the whole page any way up, 2.5 times about the fingers, a pinch out back to the whole page; a desktop's wide window the width filled, a pinch out to the whole page");
     }
     /**
      * The page bar hidden (the menu's Page Bar; the owner, 2026-11-06: fill the room's height): upright, the Manta's page

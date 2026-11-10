@@ -338,6 +338,15 @@ final class WatercolorSession {
     /** Whether a tap's run is going ({@link #hurry}): the blow dryer blows on. */
     boolean hurrying() { return hurrying; }
     /**
+     * A picture's last step (the web engine's Dry, Lasso to Superdood's picture, the parity checks): what still settles
+     * laid where it is ({@link #settleNow}), and fading ink (Fading, Lemon Juice) run to its end by the page's clock.
+     */
+    void dryAll(ToneDocument document) {
+        settleNow(document);
+        long far = FadingInk.now() + 24L * 3600 * 1000;
+        for (int k = 0; k < 1000 && document.fading(); k++) document.fade(far, null);
+    }
+    /**
      * Before any stroke, and before the page is put away or changed: what is still settling is laid where it is, and
      * what floats prints.
      */

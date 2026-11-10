@@ -83,7 +83,6 @@ final class DrawingPad extends View {
     private final StrokeTiming timing = new StrokeTiming();
     /** Page pixels the last {@link #renderDirty()} rendered. */
     private long renderedArea;
-    private boolean fallbackNotice;
     /** Fast display failed, connecting or while presenting: the page shows through Android drawing until it reconnects. */
     private boolean fellBack;
     private int drawCount;
@@ -191,6 +190,8 @@ final class DrawingPad extends View {
     private final Runnable navigationFrame = this::drawNavigationFrame;
     /** When the pen was last near the screen or on it (uptime ms): fingers are ignored 250 ms after, a two- or three-finger tap {@link FingerTool#PEN_PALM_MS}. */
     private long penSeen;
+    /** The pen down, or at the screen within the last {@code ms} (the automatic turn waits on it, {@link RotationPrompt}). */
+    boolean penWithin(long ms) { return pointer != -1 || SystemClock.uptimeMillis() < penSeen + ms; }
 
     /** Inkwash: the fridge magnets over the page, and the Words bin's pen ({@link WordsMode}). */
     final WordsMode words;
@@ -225,9 +226,17 @@ final class DrawingPad extends View {
         return (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP)
                 && event.getPointerId(event.getActionIndex()) == pointer;
     }
-    /** Page size for a new blank page that fills this view in the current orientation. */
+    /** The size a new blank page takes to fill this view in the current orientation, {width, height}. */
+    int[] blankSize() { return new int[]{app.landscape ? getHeight() : getWidth(), app.landscape ? getWidth() : getHeight()}; }
+    /**
+     * A {@link #blankSize} taken earlier, for the next blank page alone (null: the view's now): New Notebook's name
+     * prompt's keyboard squeezes the view until it goes (the owner, 2026-11-10: a new notebook's page 1785 × 1572).
+     */
+    int[] nextBlank;
     private ToneDocument blankPage() {
-        return InkWashLayers.blank(app.landscape ? getHeight() : getWidth(), app.landscape ? getWidth() : getHeight());
+        int[] size = nextBlank != null && nextBlank[0] > 0 && nextBlank[1] > 0 ? nextBlank : blankSize();
+        nextBlank = null;
+        return InkWashLayers.blank(size[0], size[1]);
     }
 
     // Pages and rasters
@@ -360,8 +369,7 @@ final class DrawingPad extends View {
         // background before rendering the next page, even with Pages open.
         if (document != null && display != null && page.width == document.width && page.height == document.height
                 && viewport.untouched() && app.resumed && hasWindowFocus() && !isLayoutRequested() && !app.notebookShown()
-                && !app.root.isLayoutRequested() && !app.previewFrame.isLayoutRequested()
-                && app.rotateButton.getVisibility() != View.VISIBLE) {
+                && !app.root.isLayoutRequested() && !app.previewFrame.isLayoutRequested()) {
             try { turn = new PageTurnDisplay(this, presented(), viewportBitmap == null ? pageToView : new Matrix(), app.pagePanel, zenFanKept()); }
             catch (RuntimeException | LinkageError error) { Log.w(ProbeActivity.TAG, "Page update uses Android display", error); }
         }
@@ -1002,7 +1010,8 @@ final class DrawingPad extends View {
             direct = viewportBitmap == null ? DirectEink.forView(this, display, pageToView, 0, 7)
                     : DirectEink.forView(this, viewportBitmap.bitmap, new Matrix(), 0, 7);
             fellBack = false; recovery.restart();
-            if (cleanWindow) {
+            boolean afterSplash = app.takeSplashGhost();
+            if (cleanWindow || afterSplash) {
                 cleanWindow = false;
                 eraseFastInk(windowArea());
                 // The clean redraws the whole page too: no forced refresh after it (its Android redraw of the bar would blink again).
@@ -1013,7 +1022,7 @@ final class DrawingPad extends View {
                 };
                 // Always the clean redraw, its blink and no flash, even with Automatic Refresh off: a screen over this one (Page
                 // Settings) otherwise leaves the column and the top bar ghosted (the owner, 2026-11-05: "a spot for an auto refresh").
-                Ui.flashWindow(app.previewFrame.getRootView(), "back on the drawing screen", restore, true, ghosted && flashes());
+                Ui.flashWindow(app.previewFrame.getRootView(), afterSplash ? "after the splash" : "back on the drawing screen", restore, true, afterSplash || ghosted && flashes());
                 unrefreshed = ghosted = asked = false;
             }
             refreshFastInk();
@@ -1022,7 +1031,6 @@ final class DrawingPad extends View {
         } catch (RuntimeException | LinkageError error) {
             Log.w(ProbeActivity.TAG, "Using Android drawing presentation", error);
             fellBack = true;
-            if (!fallbackNotice) { app.message("Fast display unavailable; using standard drawing"); fallbackNotice = true; }
             // Connecting again after a failure (reconnectLater): another try, while tries are left.
             if (recovery.failures() > 0) reconnectLater();
         }
@@ -1402,8 +1410,8 @@ final class DrawingPad extends View {
     }
     private void reconnectLater() {
         long delay = recovery.failed();
-        if (delay < 0) { app.message("Fast display stopped; painting is kept. Open and close a menu to retry."); return; }
-        if (recovery.failures() == 1) app.message("Fast display paused; reconnecting");
+        if (delay < 0) { app.message("Screen stuck: open a menu"); return; }
+        if (recovery.failures() == 1) Log.w(ProbeActivity.TAG, "Fast display paused; reconnecting");
         removeCallbacks(reconnect); postDelayed(reconnect, delay);
     }
     private void reconnect() {
@@ -1505,9 +1513,13 @@ final class DrawingPad extends View {
         postDelayed(() -> {
             if (app.popupOpen()) return;
             // The page's pixels go over Zen's button there too: wrote() puts it back, whatever Automatic Refresh is.
-            if (direct != null) eraseFastInk(area); else refreshFastInk();
+            boolean cleans = SystemSettings.flashes(false, app.prefs.autoRefresh());
+            // Automatic Refresh off: only the page's part is blanked, as no clean follows to draw the bars back (the owner,
+            // 2026-11-10: the menu "cut away where it overlapped the toolbar").
+            RectF blank = new RectF(area);
+            if (direct != null && (cleans || blank.intersect(pageArea()))) eraseFastInk(blank); else refreshFastInk();
             // Automatic Refresh off (System Settings): the closed popup's patches are not cleaned either.
-            if (!SystemSettings.flashes(false, app.prefs.autoRefresh())) return;
+            if (!cleans) return;
             cleanOffPage(area);
         }, CLOSED_MS);
     }

@@ -149,8 +149,8 @@ public final class NotebookExportChecks {
         String app = DrawLayoutChecks.source("PaintActivity"), copies = DrawLayoutChecks.source("AutoExport");
         int at = app.indexOf("AutoExport.notebook(");
         check(at >= 0 && at == app.lastIndexOf("AutoExport.notebook(") && !app.contains("AutoExport.notebooks("), "One place queues a notebook's copies, none queues the migrated ones");
-        check(app.lastIndexOf("    void exportNow()", at) > app.lastIndexOf("\n    }\n", at), "That place is Export Now");
-        check(!copies.contains("static void notebooks(") && copies.contains("NotebookExport.update(folder(), DrawingFiles.name(path), pages") && copies.contains("documents(path)));"),
+        check(app.lastIndexOf("    void exportNow(View anchor)", at) > app.lastIndexOf("\n    }\n", at), "That place is Export Now");
+        check(!copies.contains("static void notebooks(") && copies.contains("NotebookExport.update(folder(), DrawingFiles.name(path), pages") && copies.contains("documents(app, path)));"),
                 "Export Now writes the PNGs to EXPORT and the PDF to Documents, as the automatic copies did");
     }
 

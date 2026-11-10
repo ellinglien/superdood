@@ -7,14 +7,9 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
-import android.text.Editable;
 import android.text.TextUtils;
-import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -43,9 +38,13 @@ import java.util.Random;
  * <p>
  * Tap a slot, then a card (the owner: "click a slot and then click an option from library"): the card's brush is the
  * slot's here (its card underlined, its slot showing it, the page staying to try it), its size following it; an unsaved
- * brush it replaces is kept in Recent, said in the bar ({@link ToolsPage#note}). Back takes each slot its tool. A long
+ * brush it replaces is kept in Recent, said in the bar ({@link ToolsPage#note}). The selected slot tapped again is
+ * picked up (the owner, 2026-11-09: "can we add a way to reorder the toolbars?"): its tile paper with its drawing in ink
+ * and a dashed ink edge, the bar's line "Tap where it goes."; a tap on another slot swaps the two, their brushes, sizes
+ * and greys, the moved one selected; on itself, or a card (which then goes in it as ever), puts it back. A fixed toolbar
+ * picks none up ({@link ToolsPage#tap}). Back takes each slot its tool. A long
  * press on a saved card deletes it, asked in the search's place. The drawing screen makes the changes ({@link #BRUSHES}:
- * an Undo step each there), selects the slot selected here, and opens Brush Lab after when asked ({@link #LAB}); Brush
+ * an Undo step each there; with a swap, its sizes and greys too, {@link #MOVED}, and the visit one Undo step), selects the slot selected here, and opens Brush Lab after when asked ({@link #LAB}); Brush
  * Lab's Back comes here again, the slots' start carried through ({@link #START}). Turned as the drawing is ({@link
  * #TURN}). Everything it does is {@link ToolsPage}'s; nothing scrolls, and only what changed is drawn again (e-ink).
  */
@@ -56,6 +55,8 @@ public final class ToolsActivity extends Activity {
      * ways, the slots' start ({@link ToolSlots.Start#write}; in: null when opened from the drawing screen).
      */
     static final String SLOT = "slot", TURN = "turn", BRUSHES = "brushes", LAB = "lab", START = "start";
+    /** Back: each slot's size and grey a swap moved into it ({@link ToolsPage#moved}), set after its brush. */
+    static final String MOVED = "moved";
     /** In: when the drawing screen opened it ({@link SystemClock#uptimeMillis}), for the log's "Tools page shown in N ms". */
     static final String OPENED = "opened";
     /**
@@ -107,11 +108,10 @@ public final class ToolsActivity extends Activity {
     private ToolsPage.Card confirming;
     /** The search's field and ×, in Search's place, and whether it is open. */
     private LinearLayout searchRow;
-    private EditText searchField;
+    private LabUi.SearchField searchBox;
     private boolean searchOpen;
     /** The grid follows the typing once per pause, not each letter (e-ink). */
     static final int SEARCH_MS = 250;
-    private final Runnable searchNow = () -> { page.search(searchField.getText().toString()); render(); };
 
     @Override protected void attachBaseContext(Context base) { super.attachBaseContext(Ui.largerText(base)); }
 
@@ -126,6 +126,7 @@ public final class ToolsActivity extends Activity {
         BrushLibrary.Store store = InkWash.store(stored);
         page = new ToolsPage(new ToolSlots(store, new Random()), store, slot, getIntent().getStringArrayExtra(START));
         page.bar(getIntent().getIntExtra(BAR, ToolSlots.COUNT));
+        page.fixed = fixed != null;
         samples = new SampleQueue();
         test = new TestArea(this, samples, new TestArea.Host() {
             @Override public Brush brush() { return page.current(); }
@@ -204,7 +205,7 @@ public final class ToolsActivity extends Activity {
         for (int slot = 0; slot < layout.slotCount; slot++) {
             int i = slot;
             ToolCard card = new ToolCard(this, samples).tile();
-            card.setOnClickListener(v -> { test.pad.finishStroke(); page.select(i); render(); });
+            card.setOnClickListener(v -> { test.pad.finishStroke(); boolean was = page.lifted() >= 0; page.tap(i); jobFollows(was); render(); });
             slotCards[slot] = card;
             LinearLayout.LayoutParams cell = new LinearLayout.LayoutParams(0, -1, 1);
             if (slot > 0) cell.leftMargin = dp(layout.slotGap);
@@ -279,8 +280,9 @@ public final class ToolsActivity extends Activity {
             ToolCard card = slotCards[i];
             showSlot(card, layout, page, i);
             card.setChosen(i == selected);
+            card.setLifted(i == page.lifted());
             card.setChanged(page.changed(i));
-            card.setContentDescription(brush.shownName() + (i == selected ? ", selected" : "") + (page.changed(i) ? ", changed" : ""));
+            card.setContentDescription(brush.shownName() + (i == page.lifted() ? ", picked up" : i == selected ? ", selected" : "") + (page.changed(i) ? ", changed" : ""));
         }
         renderTool();
         renderFind();
@@ -317,7 +319,13 @@ public final class ToolsActivity extends Activity {
         }
         return bar.view;
     }
-    private final Runnable noteGone = () -> job.setText(fixed != null ? "" : ToolsLayout.JOB);
+    private final Runnable noteGone = () -> job.setText(fixed != null ? "" : page.lifted() >= 0 ? ToolsLayout.MOVE : ToolsLayout.JOB);
+    /** A slot picked up or put back ({@code was}: one was up before): the bar's line follows at once, any note gone. */
+    private void jobFollows(boolean was) {
+        if (was == page.lifted() >= 0) return;
+        root.removeCallbacks(noteGone);
+        noteGone.run();
+    }
     /** The note the page's last change left, if any, in the job's line for {@link DrawLayout#NOTE_MS}; no animation. */
     private void sayNote() {
         String said = page.note();
@@ -360,27 +368,9 @@ public final class ToolsActivity extends Activity {
         swap.addView(find, new FrameLayout.LayoutParams(-2, -1, Gravity.START | Gravity.CENTER_VERTICAL));
         question = LabUi.row(this);
         swap.addView(question, new FrameLayout.LayoutParams(-1, -1));
-        // The search: one line in a chip's rounded edge, then × to close it.
-        searchRow = LabUi.row(this);
-        searchField = Theme.style(new EditText(this), TypeStyle.CAPTION);
-        searchField.setSingleLine(true);
-        searchField.setHint(ToolsLayout.SEARCH);
-        searchField.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        // The keyboard's Search key: the finds now, the keyboard down to see the grid.
-        searchField.setOnEditorActionListener((v, action, event) -> { root.removeCallbacks(searchNow); searchNow.run(); keyboard(false); return true; });
-        searchField.setPadding(dp(layout.chipPad()), 0, dp(layout.chipPad()), 0);
-        searchField.setBackground(Theme.rounded(this, Theme.PAPER, Theme.FINE, Theme.INK, ToolsLayout.CHIP / 2f));
         // Kept through a new layout (the screen turned) while open; cleared on closing.
-        searchField.setText(page.search());
-        searchField.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-            @Override public void afterTextChanged(Editable s) { root.removeCallbacks(searchNow); root.postDelayed(searchNow, SEARCH_MS); }
-        });
-        searchRow.addView(searchField, new LinearLayout.LayoutParams(0, dp(ToolsLayout.CHIP), 1));
-        LabButton close = LabButton.icon(this, R.drawable.ic_ph_x, "Close search");
-        close.setOnClickListener(v -> { closeSearch(); render(); });
-        searchRow.addView(close, LabUi.after(this, ToolsLayout.CHIP, ToolsLayout.CHIP, 6));
+        searchBox = new LabUi.SearchField(this, ToolsLayout.CHIP, layout.chipPad(), SEARCH_MS, page.search(), query -> { page.search(query); render(); }, () -> { closeSearch(); render(); });
+        searchRow = searchBox.row;
         swap.addView(searchRow, new FrameLayout.LayoutParams(-1, -1));
         head.addView(swap, new LinearLayout.LayoutParams(0, -1, 1));
         more = chip(ToolsPage.Chip.MORE.label, false);
@@ -588,7 +578,7 @@ public final class ToolsActivity extends Activity {
         if (refused == null) {
             LabButton load = new LabButton(this, 0, ToolKits.LOAD, true);
             load.setContentDescription("Load the " + kit.name + " kit");
-            load.setOnClickListener(v -> { closeKit(); page.loadKit(kit); sayNote(); render(); });
+            load.setOnClickListener(v -> { closeKit(); boolean was = page.lifted() >= 0; page.loadKit(kit); jobFollows(was); sayNote(); render(); });
             buttons.addView(load, LabUi.after(this, -2, 40, 10));
         }
         LinearLayout.LayoutParams buttonsPlace = new LinearLayout.LayoutParams(-1, -2);
@@ -614,23 +604,14 @@ public final class ToolsActivity extends Activity {
         confirming = null;
         searchOpen = true;
         render();
-        searchField.requestFocus();
-        keyboard(true);
+        searchBox.open();
     }
     /** The search closed and cleared, the keyboard down: the chip's cards again. */
     private void closeSearch() {
         if (!searchOpen) return;
         searchOpen = false;
-        keyboard(false);
-        searchField.setText("");
-        root.removeCallbacks(searchNow);
+        searchBox.clear();
         page.search("");
-    }
-    private void keyboard(boolean up) {
-        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-        if (keyboard == null) return;
-        if (up) keyboard.showSoftInput(searchField, InputMethodManager.SHOW_IMPLICIT);
-        else keyboard.hideSoftInputFromWindow(searchField.getWindowToken(), 0);
     }
 
     // Leaving
@@ -639,7 +620,9 @@ public final class ToolsActivity extends Activity {
     private void pick(Brush brush) {
         test.pad.finishStroke();
         confirming = null;
+        boolean was = page.lifted() >= 0;
         page.put(brush);
+        jobFollows(was);
         sayNote();
         render();
     }
@@ -652,7 +635,7 @@ public final class ToolsActivity extends Activity {
         String[] written = new String[results.length];
         for (int i = 0; i < results.length; i++) written[i] = results[i] == null ? null : results[i].write();
         setResult(RESULT_OK, new Intent().putExtra(SLOT, page.slot()).putExtra(BRUSHES, written).putExtra(LAB, lab).putExtra(START, page.start.write())
-                .putExtra(SETTINGS, open ? settings : null).putExtra(BAR, page.barResult()).putExtra(ERASER, page.eraser()).putExtra(TOGETHER, page.together()));
+                .putExtra(SETTINGS, open ? settings : null).putExtra(BAR, page.barResult()).putExtra(ERASER, page.eraser()).putExtra(TOGETHER, page.together()).putExtra(MOVED, page.moved()));
         finish();
         overridePendingTransition(0, 0);
     }

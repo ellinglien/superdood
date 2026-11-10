@@ -17,6 +17,7 @@ public final class NotebookLayoutChecks {
                 NotebookLayout l = new NotebookLayout(s[0], s[1], aspect);
                 String at = s[0] + "x" + s[1] + " at " + aspect;
                 // The shelf.
+                check(l.foundPerPage() >= 4 && l.foundPerPage() * l.foundRow() + LabText.line(TypeStyle.CAPTION.sp) <= l.gridHeight, "a page of search finds and the unread note fit the grid's place at " + at + " (" + l.foundPerPage() + ")");
                 check(l.shelfUsed() <= s[1] && l.rows >= 1 && l.columns >= 2 && l.perPage() >= 4, "The shelf fits without scrolling, at least four tiles a page at " + at + " (" + l.columns + " × " + l.rows + ")");
                 check(l.columns * l.tileWidth + (l.columns - 1) * l.columnGap <= s[0] - 2 * l.margin, "Its tiles fit across at " + at);
                 check(l.tileWidth >= (l.compact ? 150 : 180) && l.coverHeight >= 150, "Covers big enough to know at " + at + " (" + l.tileWidth + " × " + l.coverHeight + ")");

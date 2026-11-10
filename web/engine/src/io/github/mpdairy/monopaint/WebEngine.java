@@ -266,9 +266,7 @@ public final class WebEngine {
     /** Everything still settling laid where it is, and fading ink run to its end: a picture's last step. */
     @JSExport public static void dry(int p) {
         Page g = at(p);
-        g.session.settleNow(g.d);
-        long far = FadingInk.now() + 24L * 3600 * 1000;
-        for (int k = 0; k < 1000 && g.d.fading(); k++) g.d.fade(far, null);
+        g.session.dryAll(g.d);
     }
     /** What changed since the last call, {x0, y0, x1, y1} (exclusive), or four zeros. */
     @JSExport @JSByRef public static int[] dirty(int p) {

@@ -326,7 +326,7 @@ final class DocumentCodec {
     }
     /** {@code n} zero bytes to {@code out}, a block at a time (not a page-sized array for nothing). */
     private static void zeros(OutputStream out,int n) throws IOException { byte[] zero=new byte[Math.min(n,1<<16)]; for(int left=n;left>0;left-=zero.length) out.write(zero,0,Math.min(left,zero.length)); }
-    private static ToneDocument readLayers(InputStream stream,int width,int height,boolean retain,boolean hasOpacity,boolean hasMask,boolean sections) throws IOException {
+    private static ToneDocument readLayers(InputStream stream,int width,int height,boolean retain,boolean hasOpacity,boolean hasMask,boolean sections,StrokeLog[] logOut) throws IOException {
         java.util.zip.Inflater inflater=new java.util.zip.Inflater();
         try {
             InflaterInputStream compressed=new InflaterInputStream(stream,inflater);
@@ -368,6 +368,7 @@ final class DocumentCodec {
             long checksum=crc.getValue();
             if(new DataInputStream(compressed).readLong()!=checksum) throw new IOException("Painting checksum mismatch");
             if(compressed.read()!=-1) throw new IOException("Extra painting data");
+            if(logOut!=null) logOut[0]=log[0];
             if(!retain) return null;
             ToneDocument document=new ToneDocument(width,height,layers,active,mask);
             document.placeMagnets(magnets[0]); document.placeTexts(texts[0]); document.placeMirrors(mirrors[0]); document.placePaper(paper[0]); document.placeClock(clock[0]); document.placeLog(log[0]); document.placeWear(wear[0]); document.placeSections(pace[0]); document.placeKindsShown(kindsShown[0]);
@@ -667,8 +668,23 @@ final class DocumentCodec {
             compressed.write(tones); compressed.finish(); compressed.flush();
         } finally {deflater.end();}
     }
-    static ToneDocument read(InputStream stream) throws IOException { return read(stream,true,0,0); }
-    static void validate(InputStream stream,int width,int height) throws IOException { read(stream,false,width,height); }
+    static ToneDocument read(InputStream stream) throws IOException { return read(stream,true,0,0,null); }
+    static void validate(InputStream stream,int width,int height) throws IOException { read(stream,false,width,height,null); }
+    /** A page's size and stroke log (Read Handwriting), its pixels inflated past but never kept. */
+    static final class PageLog {
+        final int width, height;
+        final StrokeLog log;
+        PageLog(int width, int height, StrokeLog log) { this.width = width; this.height = height; this.log = log; }
+    }
+    static PageLog log(byte[] page) throws IOException {
+        checkHeader(page, 0, 0);
+        java.nio.ByteBuffer header = java.nio.ByteBuffer.wrap(page);
+        header.getInt();
+        int width = header.getInt(), height = header.getInt();
+        StrokeLog[] log = {StrokeLog.NONE};
+        read(new java.io.ByteArrayInputStream(page), false, 0, 0, log);
+        return new PageLog(width, height, log[0]);
+    }
     /**
      * Checks a page's header without inflating it: a format this reader knows and a valid size ({@code width} ×
      * {@code height} unless 0), as {@link #read} would refuse them. Opening a book checks its other pages this way.
@@ -685,7 +701,7 @@ final class DocumentCodec {
         byte[] buffer=new byte[Math.min(count,8192)];
         while(count>0) { int chunk=Math.min(count,buffer.length); input.readFully(buffer,0,chunk); count-=chunk; }
     }
-    private static ToneDocument read(InputStream stream,boolean retain,int expectedWidth,int expectedHeight) throws IOException {
+    private static ToneDocument read(InputStream stream,boolean retain,int expectedWidth,int expectedHeight,StrokeLog[] logOut) throws IOException {
         DataInputStream header = new DataInputStream(stream);
         int magic=header.readInt();
         if (magic != MAGIC && magic != LAYER_MAGIC && magic != OPACITY_MAGIC && magic != MASK_MAGIC && magic != SECTIONS_MAGIC) throw new IOException("Unknown painting format");
@@ -694,7 +710,7 @@ final class DocumentCodec {
         catch (IllegalArgumentException invalid) { throw new IOException("Invalid painting dimensions", invalid); }
         if(expectedWidth!=0&&(width!=expectedWidth||height!=expectedHeight)) throw new IOException("Page size mismatch");
         if(magic==LAYER_MAGIC || magic==OPACITY_MAGIC || magic==MASK_MAGIC || magic==SECTIONS_MAGIC)
-            return readLayers(stream,width,height,retain,magic!=LAYER_MAGIC,magic==MASK_MAGIC,magic==SECTIONS_MAGIC);
+            return readLayers(stream,width,height,retain,magic!=LAYER_MAGIC,magic==MASK_MAGIC,magic==SECTIONS_MAGIC,logOut);
         long checksum=header.readLong();
         byte[] tones = retain?new byte[width * height]:null;
         CRC32 crc = new CRC32();

@@ -93,7 +93,7 @@ final class InkWash {
     }
     /** What a tool's size, shade and selection are kept under; the eraser's are as they were before slots. */
     static String key(int tool) { return ToolSlots.toolKey(tool); }
-    private static int parse(String saved) {
+    static int parse(String saved) {
         for (int tool = 0; tool < ToolSlots.TOOLS; tool++) if (key(tool).equals(saved)) return tool;
         return 0;
     }

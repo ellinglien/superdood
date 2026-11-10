@@ -26,7 +26,6 @@ public final class WidthInstrumentation extends Instrumentation {
     private boolean pageFeedbackOnly;
     private boolean paintOnly, shapesOnly, shapesPerfOnly;
     private boolean settingsOnly, brushOnly, pickerOnly, nomadOnly, pagesOnly;
-    boolean rotationPromptOnly;
     private boolean brushPerfOnly;
     private boolean storageOnly, liveStrokes, pickerBench, refreshProbe;
     /** {@link PickerBench}'s mode: "true" (all), "press", "slots" or "pages". */
@@ -66,8 +65,6 @@ public final class WidthInstrumentation extends Instrumentation {
         settingsOnly = args != null && "true".equals(args.getString("settingsOnly"));
         pickerOnly = args != null && "true".equals(args.getString("pickerOnly"));
         nomadOnly = args != null && "true".equals(args.getString("nomadOnly"));
-        rotationPromptOnly = args != null && "true".equals(args.getString("rotationPromptOnly"));
-        nomadOnly |= rotationPromptOnly;
         pagesOnly = args != null && "true".equals(args.getString("pagesOnly"));
         shapesPerfOnly = args != null && "true".equals(args.getString("shapesPerfOnly"));
         shapesOnly = args != null && "true".equals(args.getString("shapesOnly"));

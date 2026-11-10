@@ -18,9 +18,6 @@ import java.util.Arrays;
 /** Runs on ShapeUiChecks' disposable book and shares its verified restoration. */
 final class NomadUiChecks {
     static void run(Instrumentation test,PaintActivity app,StringBuilder report)throws Exception {
-        if(test instanceof WidthInstrumentation && ((WidthInstrumentation)test).rotationPromptOnly) {
-            RotationPromptChecks.run(test,app,report);return;
-        }
         if(!(Boolean)call(app,"canSimulate")) {report.append("SKIPPED Nomad simulation: this tablet cannot simulate a smaller one.\n");return;}
         SharedPreferences prefs=(SharedPreferences)get(app,"preferences");
         boolean original=prefs.getBoolean("nomad_mode",false);
@@ -70,7 +67,6 @@ final class NomadUiChecks {
             check(!prefs.getBoolean("nomad_mode",true)&&frame.getWidth()==1920&&frame.getHeight()==2560,"Off restores full screen");
             report.append("PASS: Nomad simulation can be turned off.\n");
             PageNavigationChecks.run(test,app,report);
-            RotationPromptChecks.run(test,app,report);
         } finally {
             main(test,() -> {
                 call(app,"closePagePanel");

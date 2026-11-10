@@ -17,7 +17,7 @@ final class CanvasViewport {
     /**
      * The browser on a desktop (the owner, 2026-11-05: "having the browser be zoomed to full width (for desktop), with
      * maybe a way to scroll down"): with {@link #whole}, a window wider than tall fills its width, its top showing, as
-     * sideways on the Manta; a pinch out still reaches the whole page.
+     * sideways on the Manta; a pinch out reaches the whole page ({@link #minZoom}).
      */
     boolean wide;
     /**
@@ -49,11 +49,14 @@ final class CanvasViewport {
     /** A view wider than tall showing an upright page: fitted to the width, not whole. */
     static boolean fillsWidth(float width, float height, float pageWidth, float pageHeight) { return width>height && pageHeight>pageWidth; }
     /**
-     * A pinch never goes below 100% (the fitted view of a page bigger than the screen may: it shows the whole page), nor
-     * below the width filled sideways (the owner, 2026-10-29: "you cant go LOWER % zoom than 136 on horizontal"); in
-     * the browser ({@link #whole}), not below the whole page (filling the width there too, {@link #wide}).
+     * A pinch never goes below 100% (the fitted view of a page bigger than the screen may: it shows the whole page).
+     * Sideways, the width filled, it goes on down to the whole page (the owner, 2026-11-10: "one exception to the no zoom
+     * lower than 100 rule.. when it's horizontal, we should allow the user to zoom down to fit the full page"; till then
+     * it stopped at the width), as a desktop's browser ({@link #wide}); Zen Mode never shows room ({@link #cover}).
      */
-    float minZoom() { return whole && filled ? Math.min(1,height*pageWidth/(width*pageHeight)) : filled || whole || tall ? 1 : 1/fitScale; }
+    float minZoom() { return across() ? Math.min(1,height*pageWidth/(width*pageHeight)) : filled || whole || tall ? 1 : 1/fitScale; }
+    /** The width filled, the whole page a pinch out away: sideways on the tablet, a desktop's browser. */
+    private boolean across() { return filled && !cover; }
     int percent() { return Math.round(scale()*100); }
     /** Back to the fitted view ({@link #configure}). */
     void reset() { heldLayout=false; zoom=1; x=y=0; untouched=true; }
@@ -79,8 +82,8 @@ final class CanvasViewport {
         float ratio=next/zoom;
         x=newX-(oldX-x)*ratio; y=newY-(oldY-y)*ratio; zoom=next;
         clamp();
-        // A desktop zoomed out past its width: the page centred whichever way it is smaller than the window.
-        if(whole && filled) {
+        // Zoomed out past the width filled: the page centred whichever way it is smaller than the view.
+        if(across()) {
             float w=pageWidth*scale(), h=pageHeight*scale();
             if(w<width)x=Math.round((width-w)/2);
             if(h<height)y=Math.round((height-h)/2);

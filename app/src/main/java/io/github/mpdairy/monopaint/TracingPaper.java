@@ -47,6 +47,8 @@ final class TracingPaper {
     /** The stacks the links make. */
     private final PageStacks stacks;
     PageStacks stacks() { return stacks; }
+    /** The stacks of a file's {@code pages} pages: {@code tracing}'s, or each page its own without tracing paper for that count. */
+    static PageStacks stacks(TracingPaper tracing, int pages) { return tracing != null && tracing.count() == pages ? tracing.stacks() : new PageStacks(new boolean[pages]); }
     /** Whether page {@code i} is stacked on the page below. */
     boolean linked(int i) { return (steps[i] & LINKED) != 0; }
     /** Page {@code i}'s step as a layer of its stack: its own, Solid when never set. */

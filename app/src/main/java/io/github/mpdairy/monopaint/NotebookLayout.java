@@ -58,6 +58,8 @@ final class NotebookLayout {
 
     // The shelf
     final int columns, rows, tileWidth, coverHeight, tileHeight, columnGap, rowGap;
+    /** The grid's room between the bar and the page buttons. */
+    final int gridHeight;
     // Inside a notebook
     final int pageWidth, pageHeight, spreadHeight, thumbWidth, thumbHeight, stripGap, visible;
     /** The margin over the bar inside a notebook: the bar's height past {@link #BAR} taken from it, so the page and the settings keep their room. */
@@ -73,7 +75,8 @@ final class NotebookLayout {
         compact = Math.min(width, height) < DrawLayout.WIDE;
         margin = compact ? 24 : 40; gap = compact ? 12 : 16; nameLines = compact ? COMPACT_NAME_LINES : NAME_LINES;
         columnGap = compact ? 16 : 32; rowGap = compact ? 16 : 24;
-        int gridWidth = width - 2 * margin, gridHeight = height - 2 * margin - 2 * BAR - 2 * gap;
+        int gridWidth = width - 2 * margin;
+        gridHeight = height - 2 * margin - 2 * BAR - 2 * gap;
         int least = compact ? 150 : 180, bestColumns = 2, bestRows = 0;
         for (int c = 2; c <= 6; c++) {
             int w = (gridWidth - (c - 1) * columnGap) / c;
@@ -127,6 +130,10 @@ final class NotebookLayout {
 
     /** Tiles on a shelf page; the first page's first is New notebook. */
     int perPage() { return columns * rows; }
+    /** A search find's row in the grid's place (Read Handwriting): the name and page a line, the guess a caption's line, a gap under. */
+    int foundRow() { return (int) Math.ceil(LabText.line(TypeStyle.BODY.sp) + LabText.line(TypeStyle.CAPTION.sp)) + gap; }
+    /** The finds a shelf page holds: the grid's room less a caption's line for "3 pages unread". */
+    int foundPerPage() { return Math.max(1, (gridHeight - (int) Math.ceil(LabText.line(TypeStyle.CAPTION.sp))) / foundRow()); }
     /** The shelf's pages for {@code notebooks} notebooks, with New notebook. */
     int shelfPages(int notebooks) { return Math.max(1, (notebooks + 1 + perPage() - 1) / perPage()); }
     /** The notebooks on shelf page {@code page}: the first's index and how many (page 0 starts after New notebook). */

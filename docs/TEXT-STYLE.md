@@ -71,7 +71,8 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   grey, 2026-10-24; Brush Lab's too until its picker box, 2026-10-29). The drawing screen's column has none since 2026-10-24. No **New Brush** since the refocus (2026-10-24):
   Brush Lab's **Randomize** makes one, and its **New** (2026-10-29). The Tools page (the redesign, 2026-11-03, the
   owner: "it's not clear what to do once you're there"): its bar **‹ Back**, the title **Toolbar** ("Tools" until then)
-  (no job line since 2026-11-06, "Tap a slot, then a brush for it." gone; a change's note in its place for a moment); the selected slot's tool named ("Fill in · fills shapes") beside **Edit in Brush Lab** (a place's
+  (no job line since 2026-11-06, "Tap a slot, then a brush for it." gone; a change's note in its place for a moment;
+  "Tap where it goes." there while a slot is picked up to swap, 2026-11-09, its screen-reader text "picked up"); the selected slot's tool named ("Fill in · fills shapes") beside **Edit in Brush Lab** (a place's
   name after a verb, three words but one place; **Brush Lab** in the bar's corner until then, Tweak in Brush Lab before);
   the try strip's head "Draw here to try Fill in" and **Clear** (Brush Lab's too, its Scratch Pad until then). Its
   library: **Search** (the field's hint too), its × **Close search**, no finds "Nothing found" (2026-10-28), then one
@@ -107,7 +108,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   "Harbour, page 5, Nov 6, 2026" over its links, **Take Down** (asked "Take Down?", "This can't be undone."). Notes "Send
   failed", "Too large", "Taken down", "Take down failed", or the server's own short words ("Try again later", "Name taken").
 - **The page bar**: the page and its count as "3 / 24", a cover as **Cover** or **Back**; screen-reader text "Page 3 of
-  24", "Front cover", "Back cover". Its buttons **Previous page**, **Next page**, **Notebook** and **New page** (the + tile after the last page,
+  24", "Front cover", "Back cover". Its buttons **Previous page**, **Next page** (inside a notebook also **First page** and **Last page**, 2026-11-10), **Notebook** and **New page** (the + tile after the last page,
   2026-10-24, its note in a full notebook "Notebook full, 250 pages"). On the
   drawing screen its previews say "Page 3 of 24" (the page drawn on "Page 3 of 24, drawing"), "Front cover", "Back
   cover"; a page's screen-reader actions **Move Page Up** (toward the last page, the top of the stack), **Move Page Down**
@@ -126,7 +127,9 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   **High Res, 3570 × 4774, sharp, large file**, the owner: "just warn the user that the file will be large"; the browser's and a guest's too; a Photoshop file, its layers **Paper**,
   **Template**, **Old Paint**, **Dry Media**, **Washes**, **Pen**, **Paint**, **Magnets**, "Layer 2 Pen" on a page of
   several layers); done, the note says the file and where, as Export Now's: "p5.psd in EXPORT/Superdood" (the file
-  "Harbour p5.psd"); else "Export failed". Its last row **Send** (2026-11-05, the owner: "a lightweight
+  "Harbour p5.psd"); else "Export failed". While a copy is made (2026-11-10, Export Now's and Send's too) the
+  button reads **Exporting**, then **Exported** or **Export Failed** for a note's time; from the drawing screen's Menu a note
+  "Exporting". Its last row **Send** (2026-11-05, the owner: "a lightweight
   quick share option"; `LiveSend`): a window headed **Send**, "superdood.org" over its four letters (as Draw Together's),
   the QR code, the caption "On this Wi-Fi, for ten minutes." and **Close**; notes "Wi-Fi off", "Sharing failed". The
   browser's page: the notebook's title, then **Page 5** and **Notebook** over their files, **PDF**, **PNG** with its
@@ -200,6 +203,8 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   Host gone and Connection lost cover the page, the status as its title over a note: "Drawing waits here until the
   host is back." and, lost, "Waiting for the Manta, maybe asleep. Back within a minute or two of waking." (2026-11-02, the owner: it "says it will be able to
   reconnect but it doesn't"; the page keeps trying on its own while open, so no **Reconnect** button).
+- **Zoom's padlock** (2026-11-10): it holds the app's turn too, so it is said "Zoom 200%, zoom and rotation locked" or
+  "Zoom 200%, unlocked". The shelf's gear is said "System Settings".
 - **Zoom in the browser** (2026-11-01): the percentage alone, said "Zoom 79%" (no padlock: two fingers always pinch and
   pan there); a tap shows the whole page.
 - **Undo and Redo in the browser** (2026-11-03): icons alone on the page bar at the column's end, said and shown on
@@ -250,7 +255,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   while on: the column on the right), **System Settings** (2026-11-04, the owner's name for it; Iconoir settings) last: a popup where the menu was
   (2026-11-06; its own page with a bar ‹ **Back** until then), the title **System Settings** (no job line, "For every notebook." gone, 2026-11-06); its rows **Automatic Refresh** (**On**, **Off**; under it "After
   page turns, zoom and erasing"), **Finger Action** (above, 2026-11-06), **Two-Finger Tap** and **Three-Finger Tap** (**Undo**, **Redo**, **Refresh**,
-  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**). Refresh is the column's word for a flash; the
+  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**), **Read Handwriting** (2026-11-09; **On**, **Off**; under it "For Search on the shelf"; asks first, in sentences, with **Turn On** and **Not Now**; a failed download says "Download failed" and shows Off). The shelf's Search (2026-11-09, beside the Tools page library's, the same words and the same field): **Search**, × **Close search**, no finds "Nothing found", "3 pages unread" (or "1 page unread") under the finds while some are still to read, results paged with the screen-reader words **Newer results** and **Older results**. Refresh is the column's word for a flash; the
   owner's "flashes" stays out of the app's words. **Export Now** (the one way the PDF and PNGs are made) and **Delete Notebook**
   are Notebook Settings' foot, Rename its name's button. **Show Kinds** (2026-10-28, the column's eye until 2026-11-06,
   the menu's row since, its popup beside the column; the page drawn on's: **Pen**, **Paint**, **Dry Media** side by side, each eye

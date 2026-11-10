@@ -127,7 +127,11 @@ final class DocumentStore {
                 if (!exists(atomic.getBaseFile())) {
                     String given = startHere; startHere = null;
                     File file = given == null ? null : drawingFile(given);
-                    result.complete(file == null || !file.isFile() ? null : new RecoveryCodec.Recovered(BookCodec.open(readable(file)), given, false), null);
+                    if (file == null || !file.isFile()) { result.complete(null, null); return; }
+                    DrawingBook guide = BookCodec.open(readable(file));
+                    // On page 1, whatever page the guide was saved on (the owner's 2026-11-10 guide was saved on its last).
+                    guide.select(0);
+                    result.complete(new RecoveryCodec.Recovered(guide, given, false), null);
                     return;
                 }
                 RecoveryCodec.Recovered read;
@@ -173,13 +177,6 @@ final class DocumentStore {
     void list(String folder, Result<DrawingFiles.Entry[]> result) {
         IO.execute(() -> {
             try { result.complete(files.list(folder), null); }
-            catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
-        });
-    }
-    /** Named drawings in the library, not counting the working drawing's recovery file. */
-    void drawingCount(Result<Integer> result) {
-        IO.execute(() -> {
-            try { result.complete(files.drawingCount(), null); }
             catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
         });
     }
@@ -265,6 +262,11 @@ final class DocumentStore {
                 result.complete(all, null);
             } catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
         });
+    }
+    /** Notebook {@code path}'s file to read, as {@link #notebooks} picks it (its .bak when there is one); moves and deletes nothing, so it is safe off {@link #IO} (Read Handwriting's queue reads on its own thread; {@code readable} could lose a save). */
+    File notebookFile(String path) throws IOException {
+        File file = files.drawing(path), backup = new File(file.getPath() + ".bak");
+        return backup.isFile() ? backup : file;
     }
     /** Page {@code page} of a saved notebook decoded, for its picture when its file has none; {@link DrawingBook#FRONT}: its front cover (without its paper; null if nothing is drawn on it). */
     void page(String path, int page, Result<ToneDocument> result) {

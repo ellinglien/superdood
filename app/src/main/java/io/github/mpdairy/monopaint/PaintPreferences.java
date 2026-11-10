@@ -53,8 +53,14 @@ final class PaintPreferences {
     boolean autoRefresh() { return flag("auto_refresh", false); } // off at first (the owner, 2026-11-05: "it's seeming ok")
     void setAutoRefresh(boolean value) { setFlag("auto_refresh", value); }
     /** The Fridge ({@link Fridge}): its first time's words agreed to (System Settings' The Fridge, On); Off asks again. */
+    /** Zen Mode as last left: a new install starts without it, in the side bar the Start Here guide shows (the owner, 2026-11-09). */
+    boolean zen() { return flag("zen_on", false); }
+    void setZen(boolean value) { setFlag("zen_on", value); }
     boolean fridgeAgreed() { return flag("fridge_agreed", false); }
     void setFridgeAgreed(boolean value) { setFlag("fridge_agreed", value); }
+    /** Read Handwriting (System Settings): On only once its first-time words are agreed to. */
+    boolean readHandwriting() { return flag("read_handwriting", false); }
+    void setReadHandwriting(boolean value) { setFlag("read_handwriting", value); }
     /** The cards sent from this tablet ({@link Fridge#encode}), so each can be taken down. */
     String fridgeCards() { return store.getString("fridge_cards", ""); }
     void setFridgeCards(String value) { store.edit().putString("fridge_cards", value).apply(); }
@@ -75,8 +81,6 @@ final class PaintPreferences {
     boolean androidDrawing() { return flag("android_drawing", false); }
     void setAndroidDrawing(boolean value) { setFlag("android_drawing", value); }
     /** The untested firmware build the user was last told about; empty before any. */
-    String untestedFirmwareNoticed() { return store.getString("untested_firmware_noticed", ""); }
-    void setUntestedFirmwareNoticed(String build) { store.edit().putString("untested_firmware_noticed", build).apply(); }
     /** Whether a stamp has ever been printed: until then a Stamp in use shows its hint (2026-11-02, {@link DrawLayout#stampHint}). */
     boolean stampPlaced() { return flag("stamp_placed", false); }
     void setStampPlaced(boolean value) { setFlag("stamp_placed", value); }
@@ -86,7 +90,7 @@ final class PaintPreferences {
     /** Whether the last imported picture went on a new layer; the current layer at first. */
     boolean importNewLayer() { return flag("import_new_layer", false); }
     void setImportNewLayer(boolean value) { setFlag("import_new_layer", value); }
-    /** Zoom and pan locked: unlocked at first (the owner, 2026-11-07: "have zoom unlocked by default"; a new key, so a lock kept from before goes). */
+    /** Zoom and pan locked, and the app's turn with them (2026-11-10, {@link RotationPrompt}): unlocked at first (the owner, 2026-11-07: "have zoom unlocked by default"; a new key, so a lock kept from before goes). */
     boolean navigationLocked() { return flag("zoom_locked", false); }
     void setNavigationLocked(boolean value) { setFlag("zoom_locked", value); }
     /** Whether the user has picked a shape, so Shapes shows that shape's icon. */

@@ -36,6 +36,7 @@ final class SystemSettingsPanel {
         for (int i = 0; i < holds.length; i++) holdLabels[i] = holds[i].label;
         row(app, list, SystemSettings.EDGE_HOLD, SystemSettings.EDGE_HOLD_NOTE, holdLabels, prefs.edgeHold().ordinal(), holds.length, i -> prefs.setEdgeHold(holds[i]));
         row(app, list, SystemSettings.FRIDGE, SystemSettings.FRIDGE_NOTE, onOff, prefs.fridgeAgreed() ? 0 : 1, 2, i -> prefs.setFridgeAgreed(i == 0));
+        row(app, list, SystemSettings.READ_HANDWRITING, SystemSettings.READ_HANDWRITING_NOTE, onOff, prefs.readHandwriting() ? 0 : 1, 2, i -> app.readHandwriting(i == 0));
         return list;
     }
     private static String[] labels(FingerTool.Tap[] taps) {

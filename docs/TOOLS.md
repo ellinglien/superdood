@@ -13,12 +13,19 @@ you ask (Export).
 
 ## The drawing screen
 
-- **The side bar**: Menu at the top, then ten brush slots, the smudge tool and the eraser, a box for the size and
-  grey of the tool in hand, and a few small buttons (Play, the timer, show or hide each kind of mark).
-  Tap a slot to draw with it; hold it to pick another brush for it, or **Edit Brush** to open Brush Lab on it.
-- **The page bar**, along the top: the notebook, Zoom and the page count, which opens the page previews.
+- **Zen Mode and the fan**: the app opens in Zen Mode with the fan open, a quarter circle from the corner. Along its side
+  edge two wedges set the size and the grey. Past them a ring of page previews (the page drawn on has a tab; + adds a
+  page). On the arc stand the tools: nine brush slots, Fill in, the smudge tool and the eraser. Along the foot are Menu,
+  the Dropper, Lasso, the droplet and the layer button; up its left edge are ‹, the page and its count, › and Zoom.
+  Tap picks (a tool, a page, a size or grey); hold opens its menus: a slot's brushes (or **Edit Brush**, which opens
+  Brush Lab on it), a page's settings. Picking keeps the fan open. The circle in the corner closes the fan; hold it
+  to leave Zen Mode.
+- **The side bar and page bar**: out of Zen Mode, the side bar holds Menu, the nine slots, the smudge tool and the eraser, a
+  box for the size and grey of the tool in hand, and a few small buttons (Play, the timer, show or hide each kind of
+  mark), used the same way. The page bar, along the top, has the notebook, Zoom and the page count, which opens the
+  page previews.
 - **Fingers**: one finger does what the menu's Finger Action row says (Eraser, Smudge, a brush, or Nothing); two fingers tap to undo,
-  three to redo; with Zoom unlocked, two fingers pinch and pan.
+  three to redo; with Zoom unlocked, two fingers pinch and pan; locked, they still pan (sideways a page is taller than the screen), never zoom.
 - **Play** opens the mischief: Text, Magnetic Poetry (fridge-poetry words), Shapes, Spirograph, Mirrors that copy
   each stroke, and **Replay Page**, which draws a page again, stroke by stroke.
 - **Lasso** picks up part of a page to move, size or turn; **Import** places a picture or a PDF page.
@@ -27,7 +34,8 @@ you ask (Export).
 
 Every brush is built from its parts (Control, Tip, Medium, Rework, Drying and After; the paper is the notebook's Surface), each with a few dials, and saved as
 a short share code. The **Tools page** is the library: ready brushes grouped by what they do (Pens, Markers, Brushes,
-Washes, Paint, Dry Media, Print, Odd Ones) and your own. **Brush Lab** (a slot's long press, Edit Brush) makes
+Washes, Paint, Dry Media, Print, Odd Ones) and your own: tap a slot, then a brush for it. Tapping the selected slot
+again picks it up, and a tap on another slot swaps the two, with their sizes and greys (the toolbar's order). **Brush Lab** (a slot's long press, Edit Brush) makes
 and changes them, with a test page beside the dials. A few brushes are deliberately unpredictable: Vanishing ink and Lemon juice (ink that
 fades, or appears minutes later), Mold, Flick and Fling, Spirograph, Stamp and Crayon. They say what they do, and
 the plain pens never surprise you.

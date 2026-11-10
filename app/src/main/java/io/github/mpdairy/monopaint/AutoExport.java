@@ -34,7 +34,10 @@ final class AutoExport {
     static boolean hasCopies(String path) { return new File(new File(folder(), DrawingFiles.name(path)), NotebookPdf.STATE).isFile(); }
     /** The notebook's PDF's title: its name without a title's hidden date ({@link DrawingNames#titled}). */
     static String title(String path) { return NotebookPdf.title(DrawingFiles.name(path)); }
-    private static NotebookExport.Documents documents(String path) { return new NotebookExport.Documents(documents(), title(path), java.time.LocalDate.now()); }
+    private static NotebookExport.Documents documents(PaintActivity app, String path) {
+        Transcript t = app.prefs.readHandwriting() && app.handwriting != null ? Transcript.read(app.handwriting.transcriptFile(path)) : null;
+        return new NotebookExport.Documents(documents(), title(path), java.time.LocalDate.now(), t);
+    }
     /** Tells the media index the PDF is there (the Documents app may list from it). */
     private static void scan(PaintActivity app, NotebookExport.Done done) {
         android.media.MediaScannerConnection.scanFile(app.getApplicationContext(), new String[]{done.pdf.getPath()}, null, null);
@@ -63,7 +66,7 @@ final class AutoExport {
                 // Packed: the snapshot's page isn't read again, and the page drawn on needn't copy its layers at its next stroke.
                 latest.release();
                 // The pages' fridge magnets drawn over them, as the PNG copy always had them; the covers first and last.
-                scan(app, NotebookExport.update(folder(), DrawingFiles.name(path), pages, WordsMode.exportTiles(), covers(path, latest.width, latest.height, covers, latest.cover, latest.design), latest.options, latest.pageTemplates, latest.tracing, documents(path)));
+                scan(app, NotebookExport.update(folder(), DrawingFiles.name(path), pages, WordsMode.exportTiles(), covers(path, latest.width, latest.height, covers, latest.cover, latest.design), latest.options, latest.pageTemplates, latest.tracing, documents(app, path)));
                 if (then != null) app.runOnUiThread(then);
             } catch (Exception | OutOfMemoryError error) {
                 // Only the copies are lost (the notebook is saved on its own): the next time tries again.

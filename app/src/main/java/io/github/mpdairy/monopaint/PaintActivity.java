@@ -73,6 +73,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     final MirrorsMenu mirrors = new MirrorsMenu(this);
     /** The shelf of notebooks and the inside of one, over the drawing screen (Inkwash's notebooks). */
     NotebookScreens notebooks;
+    HandwritingQueue handwriting;
     boolean navigationLocked;
 
     // App-only rotation: Android and the e-ink driver always remain in portrait.
@@ -100,7 +101,6 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** Send to the Fridge's windows ({@link Fridge}). */
     final FridgeWindow fridge = new FridgeWindow(this);
     RotationPrompt rotationPrompt;
-    PageActionButton rotateButton;
 
     // Panels. At most one popup is open at a time.
     PopupWindow filePopup;
@@ -141,12 +141,11 @@ public final class PaintActivity extends Activity implements ControlHost {
         // Draw once (the wet paint spec's experiment): launched with --ez drawOnce true or false, kept until changed.
         if (getIntent() != null && getIntent().hasExtra(PaintPreferences.DRAW_ONCE)) prefs.setDrawOnce(getIntent().getBooleanExtra(PaintPreferences.DRAW_ONCE, false));
         QuickStroke.drawOnce = prefs.drawOnce();
-        noticeUntestedFirmware();
         // Inkwash: one finger draws with the finger tool (FingerTool), two or three tap to undo or redo; with Zoom unlocked
         // two also pinch and pan once they move (PinchPan). Locked at first, the choice kept.
         navigationLocked = prefs.navigationLocked();
         prefs.loadPaint(paint);
-        library = prefs.toolLibrary(() -> message("Could not load presets. A recovery copy has been kept."));
+        library = prefs.toolLibrary(() -> message("Brushes reset, copy kept"));
         if (library.activeId().isEmpty() && library.current().isBrush()) library.edit(library.current().asBrush());
         paint.eraseMode &= library.current().supportsEraseMode();
         // Start in private storage; loadDrawing() moves the library to shared storage when allowed.
@@ -163,11 +162,12 @@ public final class PaintActivity extends Activity implements ControlHost {
             return pixels;
         };
         store = new DocumentStore(DrawingStorage.appPrivate(this), DrawingStorage.recovery(this));
+        handwriting = new HandwritingQueue(this, store, prefs.readHandwriting());
+        if (prefs.readHandwriting()) handwriting.on(this::readerFailed); // finishes a download or first read the app was closed in the middle of
         share.restore();
 
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Theme.PAPER);
-        rotateButton = rotateButton();
         body = new LinearLayout(this);
         inkWashBar = new InkWashBar(this);
         pad = new DrawingPad(this);
@@ -199,7 +199,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         orientationFrame.afterLayout = () -> { pad.disconnectDisplay(); pad.updateViewport(); pad.post(pad::connectDisplay); };
         previewFrame = new PanelPreviewLayout(this);
         previewFrame.addView(orientationFrame);
-        previewFrame.setRotationHint(rotateButton, dp(72));
         previewFrame.afterLayout = () -> pad.post(pad::connectDisplay);
         previewFrame.setSimulated(simulating() ? device.simulates : null);
         setContentView(previewFrame);
@@ -207,12 +206,19 @@ public final class PaintActivity extends Activity implements ControlHost {
         // screen in between on the panel (reveal).
         previewFrame.setVisibility(View.INVISIBLE);
         applyToolboxSide(); updatePages();
-        rotationPrompt = new RotationPrompt(this, rotateButton);
+        rotationPrompt = new RotationPrompt(this);
         pad.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             if (l != ol || t != ot || r != or || b != ob) { pad.disconnectDisplay(); pad.post(pad::connectDisplay); }
         });
+        previewFrame.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                previewFrame.getViewTreeObserver().removeOnPreDrawListener(this);
+                welcomeFrom = android.os.SystemClock.uptimeMillis();
+                return true;
+            }
+        });
         if (DrawingStorage.sharedAllowed(this)) loadDrawing();
-        else root.post(this::askForSharedStorage);
+        else afterWelcome(this::askForSharedStorage);
     }
 
     private static final String START_HERE_GIVEN = "start_here_given";
@@ -223,23 +229,23 @@ public final class PaintActivity extends Activity implements ControlHost {
         // reads the preferences, and nothing this launch holds is saved over it.
         if (DrawingStorage.handOverWaiting(this, preferences)) { startAgain(); return; }
         if (DrawingStorage.sharedAllowed(this)) store.relocate(DrawingStorage.shared(), (unused, error) -> {
-            if (error != null) runOnUiThread(() -> message("Could not move drawings to "
-                    + DrawingStorage.SHARED_NAME + ": " + error.getMessage()));
+            if (error != null) { Log.w(ProbeActivity.TAG, "Could not move drawings to " + DrawingStorage.SHARED_NAME, error); runOnUiThread(() -> message("Notebooks couldn't move")); }
         });
         // A fresh install opens on the Start Here notebook, given once (deleted, it stays gone).
         if (!preferences.getBoolean(START_HERE_GIVEN, false))
             store.startHere((given, error) -> {
                 // Given, the library was empty: no old drawings to make into notebooks, so no migration (and its shelf).
-                if (error == null) preferences.edit().putBoolean(START_HERE_GIVEN, true).putBoolean(NotebookScreens.MIGRATED, preferences.getBoolean(NotebookScreens.MIGRATED, false) || given).apply();
+                if (error == null) preferences.edit().putBoolean(START_HERE_GIVEN, true).putBoolean("randomCovers", true).putBoolean("plainPages", true).putBoolean(NotebookScreens.MIGRATED, preferences.getBoolean(NotebookScreens.MIGRATED, false) || given).apply();
             });
-        store.recover((recovered, error) -> runOnUiThread(() -> {
+        store.recover((recovered, error) -> afterWelcome(() -> {
             if (destroyed) return;
             loading = false;
             if (error != null) migrateThen(null, () -> {
+                Log.w(ProbeActivity.TAG, "Recovery failed", error);
                 // Keep the failed recovery on disk until the user explicitly chooses a new notebook or opens one.
                 loading = true;
-                showDialog(new AlertDialog.Builder(this).setTitle("Couldn't recover the drawing")
-                        .setMessage(error.getMessage())
+                showDialog(new AlertDialog.Builder(this).setTitle("Recovery failed")
+                        .setMessage("The last notebook couldn't be read.")
                         .setPositiveButton("Open", (d, w) -> { loading = false; notebooks.showShelf(); })
                         .setNegativeButton("New", (d, w) -> { startNewDrawing(); notebooks.hide(); })
                         .setCancelable(false));
@@ -257,6 +263,28 @@ public final class PaintActivity extends Activity implements ControlHost {
             if (handedOver) { handedOver = false; message("Brushes and settings brought over"); }
         }));
     }
+    /**
+     * The loading screen stays on the panel at least this long, however quick the load (the owner, 2026-11-10: "show for
+     * at least a second before it opens? just to welcome people into the experience each time"), counted from its first
+     * frame: counted from when the screen was built, the panel had it "only up for a fraction of a second" (the owner).
+     */
+    private static final long WELCOME_MS = 1000;
+    /**
+     * Allowed for the panel to have a launch's first frame whole: the app switch, then the firmware's update.
+     * shortcut: a guess the log can't check (the panel's own timing isn't in it), tune it by eye on the Manta.
+     */
+    private static final long PANEL_MS = 1300;
+    /** When the loading screen's first frame was drawn; 0 before. */
+    private long welcomeFrom;
+    /** Runs {@code then} on the main thread once the loading screen has had its time; still loading till then, so nothing reaches the panel. */
+    private void afterWelcome(Runnable then) {
+        android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+        main.post(() -> {
+            long now = android.os.SystemClock.uptimeMillis();
+            // No frame yet (the load was quicker, or the screen is off): the whole time from now, never a wait for a frame.
+            main.postDelayed(then, Math.max(0, (welcomeFrom == 0 ? now : welcomeFrom) + PANEL_MS + WELCOME_MS - now));
+        });
+    }
     /** A new process for the drawing screen, this one gone without its pause: nothing it holds is saved. */
     private void startAgain() {
         startActivity(new Intent(this, PaintActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
@@ -268,6 +296,12 @@ public final class PaintActivity extends Activity implements ControlHost {
      * stands takes its place in one frame, so the panel changes once. Then the slots' brushes are resolved off the main
      * thread ({@link #warmSlots}).
      */
+    /**
+     * The splash's drawing still on the panel under the first screen (the owner, 2026-11-09: "a very strong ghost of the
+     * title screen on load"): that screen, the shelf or the page, takes one full refresh, whatever Automatic Refresh says.
+     */
+    private boolean splashGhost = true;
+    boolean takeSplashGhost() { boolean was = splashGhost; splashGhost = false; return was; }
     private void reveal() {
         if (previewFrame.getVisibility() == View.VISIBLE) return;
         getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Theme.PAPER));
@@ -335,17 +369,6 @@ public final class PaintActivity extends Activity implements ControlHost {
             preferences.edit().putBoolean("plainPages", true).apply();
         }));
     }
-    /** The rotation prompt's button ({@link RotationPrompt}), over the page. */
-    private PageActionButton rotateButton() {
-        PageActionButton rotateButton = pageAction("Rotate", R.drawable.ic_ph_arrow_clockwise, () -> rotationPrompt.accept());
-        // Over the page, so a menu's panel: paper, a fine ink edge, square.
-        rotateButton.setBackground(Theme.menu(this)); rotateButton.setStateListAnimator(null);
-        // 1.5 times a header button (the owner, 2026-10-27: "make it a bit bigger"): 72 dp, its icon 36 dp.
-        rotateButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER); rotateButton.setPadding(dp(18), dp(18), dp(18), dp(18));
-        rotateButton.setVisibility(View.INVISIBLE);
-        return rotateButton;
-    }
-
     int dp(float value) { return Ui.dp(this, value); }
     int appTurn() { return appRotation == Surface.ROTATION_270 ? -90 : appRotation*90; }
 
@@ -370,26 +393,6 @@ public final class PaintActivity extends Activity implements ControlHost {
             if (busy()) return;
             pad.finishStroke();
             action.run();
-        });
-        return button;
-    }
-    /** A button whose action runs after its pressed outline reaches the panel. */
-    private PageActionButton pageAction(String name, int icon, Runnable action) {
-        PageActionButton button = new PageActionButton(this, this, false);
-        button.setImageResource(icon); button.setContentDescription(name);
-        button.setOnClickListener(v -> {
-            if (busy() || pageActionPending) return;
-            button.press.set(true); pageActionPending = true;
-            // Submit the press before page work or the full orientation change.
-            button.post(() -> {
-                try {
-                    // End the press before page counters, disabled arrows or a
-                    // new panel request an Android frame. Retaining the box for
-                    // 200 ms lets those redraws replay (and dim) its fast pixels.
-                    button.press.set(false);
-                    if (resumed && !destroyed && button.isAttachedToWindow()) action.run();
-                } finally { pageActionPending = false; }
-            });
         });
         return button;
     }
@@ -1016,10 +1019,14 @@ public final class PaintActivity extends Activity implements ControlHost {
         zenDot.show(inkWash.look(tool), inkWash.brush(tool), DrawLayout.greys(tool));
         zenDot.invalidate();
     }
-    /** The app opens in Zen Mode, its fan open, once (the owner, 2026-11-07: "i'd like to have the fan menu be the default menu for the app... start with the zen mode with the fan open on load"). */
+    /**
+     * The app opens as it was left: in Zen Mode with its fan open if it was (the owner, 2026-11-07: "start with the zen
+     * mode with the fan open on load"), else in the side bar, where a new install starts (2026-11-09: "maybe it's better
+     * to switch back to the other toolbar view instead of the fan for the default").
+     */
     private boolean zenAtStart = true;
     private void startInZen() {
-        if (!zenAtStart || inkWashBar == null) return;
+        if (!zenAtStart || inkWashBar == null || !prefs.zen()) return;
         zenAtStart = false;
         setZen(true);
         zenButton.post(this::openZenFan);
@@ -1148,6 +1155,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (zen == on || inkWashBar == null) return;
         closeZenFan();
         zen = on;
+        prefs.setZen(on);
         inkWashBar.closePanel(); inkWashBar.hideLabel();
         applyToolboxSide();
         // The bars come or go: one flash clears what they leave (the owner, 2026-10-26).
@@ -1208,16 +1216,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         saveToolState(); recovery();
     }
 
-    /**
-     * Fast e-ink is a guess on firmware the device checks have not run on with this tablet.
-     * Say so once per build, so a misbehaving screen has an obvious way out.
-     */
-    private void noticeUntestedFirmware() {
-        if (!Device.supernote() || device.firmwareTested() || prefs.androidDrawing()
-                || Device.firmware().equals(prefs.untestedFirmwareNoticed())) return;
-        prefs.setUntestedFirmwareNoticed(Device.firmware());
-        message(AppName.NAME + " hasn't been tested on this firmware yet.");
-    }
     /** Switches between fast e-ink and Android drawing (Settings' Screen drawing). */
     void setAndroidDrawing(boolean enabled) {
         pad.suspend();
@@ -1250,8 +1248,6 @@ public final class PaintActivity extends Activity implements ControlHost {
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
         Ui.notePress(event);
         boolean down = event.getActionMasked() == MotionEvent.ACTION_DOWN;
-        if (down && rotateButton != null && rotateButton.getVisibility() == View.VISIBLE && Ui.outside(rotateButton, event))
-            rotationPrompt.dismiss();
         if (dismissingTouch) {
             if (event.getActionMasked() == MotionEvent.ACTION_UP || event.getActionMasked() == MotionEvent.ACTION_CANCEL)
                 dismissingTouch = false;
@@ -1306,9 +1302,9 @@ public final class PaintActivity extends Activity implements ControlHost {
         return filePopup != null
                 || (inkWashBar != null && (inkWashBar.panelOpen() || inkWashBar.labelShown()));
     }
-    /** Whether a panel or prompt covers the canvas, so direct presentation must pause. */
+    /** Whether a panel covers the canvas, so direct presentation must pause. */
     boolean canvasCovered() {
-        return rotateButton.getVisibility() == View.VISIBLE || pagePanel != null || notebookShown();
+        return pagePanel != null || notebookShown();
     }
 
     /**
@@ -1367,6 +1363,36 @@ public final class PaintActivity extends Activity implements ControlHost {
         }
         menu(anchor, "file menu", rows, actions, prefs.largeSettingsText() ? 256 : 240, null);
     }
+    private View systemAnchor;
+    private PopupWindow systemPopup;
+    /** System Settings closed and opened again, its rows drawn from the preferences (Read Handwriting's Not Now leaves its chip Off). */
+    private void systemSettingsAgain() { dismiss(systemPopup); systemSettings(systemAnchor); }
+    /**
+     * Read Handwriting switched on or off from System Settings. On asks first (its first-time words, as the Fridge's),
+     * then downloads the reader and reads every notebook; Off deletes every transcript and the reader. Not Now leaves it Off.
+     */
+    void readHandwriting(boolean on) {
+        // Off when already off does nothing: off() would start ML Kit to delete a reader never downloaded.
+        if (!on) { if (!prefs.readHandwriting()) return; prefs.setReadHandwriting(false); handwriting.off(); notebooks.searchChanged(); return; }
+        if (prefs.readHandwriting()) return;
+        showDialog(new AlertDialog.Builder(this).setTitle(SystemSettings.READ_HANDWRITING).setMessage(SystemSettings.READ_HANDWRITING_ABOUT).setCancelable(false)
+            .setPositiveButton(SystemSettings.TURN_ON, (d, w) -> {
+                prefs.setReadHandwriting(true);
+                notebooks.searchChanged();
+                handwriting.on(this::readerFailed);
+            })
+            .setNegativeButton(Fridge.NOT_NOW, (d, w) -> systemSettingsAgain()));
+    }
+    /** The reader's download failed: Read Handwriting Off, said, and System Settings (if open) showing it. */
+    private void readerFailed(Exception e) {
+        boolean was = prefs.readHandwriting(); // Off already (the owner switched it off meanwhile): nothing to say
+        prefs.setReadHandwriting(false);
+        if (destroyed) return;
+        notebooks.searchChanged();
+        if (!was) return;
+        message("Download failed");
+        if (systemPopup != null && systemPopup.isShowing()) systemSettingsAgain();
+    }
     /** System Settings' popup's width, dp: Finger Action's three chips a line. */
     private static final int SYSTEM_WIDTH = 440;
     /**
@@ -1374,7 +1400,8 @@ public final class PaintActivity extends Activity implements ControlHost {
      * should just pop up over instead of being its own page"; its own screen left the column ghosting): the menu's look and
      * place beside {@code anchor}, once the menu it came from has left and had its clean ({@link #show}), one grey pass as it opens.
      */
-    private void systemSettings(View anchor) {
+    void systemSettings(View anchor) {
+        systemAnchor = anchor;
         // Finger Action's chips name the slots' brushes as the drawing screen has them (Pan in a No Erasing notebook).
         String[] fingers = new String[FingerTool.Choice.values().length];
         for (FingerTool.Choice c : FingerTool.Choice.values()) fingers[c.ordinal()] = inkWashBar.fingerName(c);
@@ -1384,7 +1411,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         int edge = dp(Theme.FINE);
         scroll.setPadding(edge, edge, edge, edge);
         Menu shown = new Menu();
-        placed(shown, Popups.create(scroll, appTurn()), scroll, Popups.bounds(root, anchor), SYSTEM_WIDTH);
+        systemPopup = Popups.create(scroll, appTurn());
+        placed(shown, systemPopup, scroll, Popups.bounds(root, anchor), SYSTEM_WIDTH);
         show(shown);
     }
     /** {@link #menu} with {@code rows}' words, icons and marks ({@link DrawLayout.Row}), {@code actions} the rows' own. */
@@ -1809,6 +1837,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         // Inkwash: the page bar's Zoom button shows it (MonoPaint's toolbar is hidden); the view stays as it is.
         inkWashBar.zoom.lockChanged(() -> navigationLocked = !navigationLocked);
         prefs.setNavigationLocked(navigationLocked);
+        // The padlock holds the turn too (RotationPrompt): opened, the tablet's way is looked at again.
+        if (!navigationLocked) rotationPrompt.again();
     }
     /** Saves the current color, modes and tools. */
     void saveToolState() {
@@ -1955,26 +1985,53 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (saveError != null) { message("Autosave failed: " + saveError); saveError = null; }
     }
     private static final int SHARED_STORAGE = 2;
-    /** Asked on every launch until allowed, before the working drawing loads. */
+    /**
+     * Asked on every launch until allowed, before the working drawing loads (the owner, 2026-11-09: simpler, why it's
+     * asked and what Not Now means; "too long", so two sentences; "can" sync: sync may be off, or not Supernote Cloud).
+     */
     private void askForSharedStorage() {
-        store.drawingCount((count, error) -> runOnUiThread(() -> askForSharedStorage(count == null ? 0 : count)));
-    }
-    private void askForSharedStorage(int drawings) {
         if (destroyed) return;
         reveal();
-        String risk = drawings == 0 ? "Drawings inside the app are lost if it's uninstalled."
-                : (drawings == 1 ? "1 drawing is" : drawings + " drawings are") + " inside the app, lost if it's uninstalled.";
-        showDialog(new AlertDialog.Builder(this).setTitle("Keep drawings in Files?")
-                .setMessage(risk + " Allow file access to keep them in " + DrawingStorage.SHARED_NAME + ".")
+        showDialog(new AlertDialog.Builder(this).setTitle("Keep Notebooks in " + DrawingStorage.SHARED_NAME + "?")
+                .setMessage("There they can sync, and they're safe if the app is removed. Choosing Not Now keeps them inside the app.")
                 .setPositiveButton("Allow", (d, w) -> {
                     if (!DrawingStorage.request(this, SHARED_STORAGE)) { message("This tablet cannot grant file access"); loadDrawing(); }
                 })
-                .setNegativeButton("Not now", (d, w) -> loadDrawing())
+                .setNegativeButton("Not Now", (d, w) -> loadDrawing())
                 .setCancelable(false));
     }
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
         if (request == SHARED_STORAGE) loadDrawing();
+        if (request == EXPORT_ACCESS) accessReturned();
+    }
+    /** The export waiting on file access ({@link #needsAccess}), made once it is allowed. */
+    private Runnable afterAccess;
+    /**
+     * An export without file access (the owner, 2026-11-09: "yes ask for file access when someone tries" to export): copies
+     * go in the tablet's folders, so the question comes then, the export made once allowed; Not Now leaves it.
+     */
+    private boolean needsAccess(Runnable export) {
+        if (DrawingStorage.sharedAllowed(this)) return false;
+        showDialog(new AlertDialog.Builder(this).setTitle("Export Needs File Access")
+                .setMessage("Copies and notebooks then go in " + DrawingStorage.SHARED_NAME + ".")
+                .setPositiveButton("Allow", (d, w) -> {
+                    afterAccess = export;
+                    if (!DrawingStorage.request(this, EXPORT_ACCESS)) { afterAccess = null; message("This tablet cannot grant file access"); }
+                })
+                .setNegativeButton("Not Now", null));
+        return true;
+    }
+    /** Back from the access question: allowed, the library moved to the shared folder (the open notebook stays open), then the export. */
+    private void accessReturned() {
+        Runnable export = afterAccess;
+        afterAccess = null;
+        if (export == null || !DrawingStorage.sharedAllowed(this)) return;
+        store.relocate(DrawingStorage.shared(), (unused, error) -> runOnUiThread(() -> {
+            if (destroyed) return;
+            if (error != null) { Log.w(ProbeActivity.TAG, "Could not move drawings to " + DrawingStorage.SHARED_NAME, error); message("Notebooks couldn't move"); return; }
+            export.run();
+        }));
     }
     private void startNewDrawing() { String name = newName(); startNewDrawing(name); givenName = name; }
     /** The open notebook's name as the app gave it, before its first save says its options in it ({@link NotebookNames#named}); null when typed or picked. */
@@ -2063,8 +2120,10 @@ public final class PaintActivity extends Activity implements ControlHost {
         savedBook.savedPages(snapshot.book);
         // A failed save must never change the destination of subsequent saves.
         if (book == savedBook) { savedBook.markSaved(snapshot.book); named(path); recoveryNow(); }
+        // Read Handwriting: the notebook's changed pages read again, in the background (only while it's on).
+        if (handwriting != null) handwriting.saved(path);
     }
-    private static final int BRUSH_LAB = 3, TOOLS = 4, PICK_DOCUMENT = 5;
+    private static final int BRUSH_LAB = 3, TOOLS = 4, PICK_DOCUMENT = 5, EXPORT_ACCESS = 6;
     /**
      * Opens the Tools page on slot {@code slot} (the tool picker's Advanced, {@link #toolPicker}), turned as
      * the drawing is; it answers in {@link #toolsReturned}.
@@ -2084,7 +2143,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     }
     /**
      * Back from the Tools page: each slot it changed takes its brush (an Undo step each, its size set there already, as
-     * Brush Lab's), and the slot selected there is selected, named under the bar if its brush changed; then Brush Lab on
+     * Brush Lab's; a swapped one its size and grey from the slot it left, {@link ToolsActivity#MOVED}), and the slot selected there is selected, named under the bar if its brush changed; then Brush Lab on
      * it, if that is what was tapped, or on a new brush for it (New Brush), whose Back comes to the Tools page again
      * ({@link #brushLabReturned}), the slots' start carried through.
      */
@@ -2099,7 +2158,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         int bar = data.getIntExtra(ToolsActivity.BAR, -1), eraser = data.getIntExtra(ToolsActivity.ERASER, -1);
         if (bar > 0 && book != null && rules().brushes > 0 && bar > rules().brushes) setNotebookOptions(book.options().withBrushes(bar));
         if (eraser >= 0 && eraser < EraseKind.TARGETS.length) { inkWash.eraseKinds = EraseKind.TARGETS[eraser]; inkWashBar.eraserChanged(); }
-        boolean changed = slotsReturned(written, slot, data.getBooleanExtra(ToolsActivity.TOGETHER, false));
+        boolean changed = slotsReturned(written, slot, data.getBooleanExtra(ToolsActivity.TOGETHER, false), data.getDoubleArrayExtra(ToolsActivity.MOVED));
         if (lab) { openBrushLab(slot, data.getStringArrayExtra(ToolsActivity.START)); return; }
         if (!changed) return;
         // Its step in a kit ("1 Drop ink"), else its name.
@@ -2109,15 +2168,16 @@ public final class PaintActivity extends Activity implements ControlHost {
     }
     /**
      * Each of the nine slots whose brush came back ({@code written}, as {@link Brush#write}; null: unchanged) takes it,
-     * an Undo step each, or, {@code together}, every change one Undo step (a tool kit's, {@link ToolSlots#useAll}). Every
-     * button shows its slot as it is now, and slot {@code slot} is selected. Whether {@code slot}'s brush changed.
+     * an Undo step each, or, {@code together}, every change one Undo step (a tool kit's, {@link ToolSlots#useAll}); then
+     * the sizes and greys the Tools page's swaps moved ({@code moved}, {@link ToolSlots#take}; null: none), all one Undo step. Every button
+     * shows its slot as it is now, and slot {@code slot} is selected. Whether {@code slot}'s brush changed.
      */
-    private boolean slotsReturned(String[] written, int slot, boolean together) {
+    private boolean slotsReturned(String[] written, int slot, boolean together, double[] moved) {
         boolean changed = false;
         boolean refused = false;
         Brush[] brushes = new Brush[ToolSlots.COUNT];
         for (int i = 0; i < ToolSlots.COUNT; i++) brushes[i] = Brush.read(written[i]);
-        boolean[] usedAll = inkWash.slots.take(brushes, together);
+        boolean[] usedAll = inkWash.slots.take(brushes, together, moved);
         for (int i = 0; i < ToolSlots.COUNT; i++) {
             Brush brush = brushes[i];
             boolean used = usedAll[i];
@@ -2195,7 +2255,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         int slot = data.getIntExtra(BrushLabActivity.SLOT, -1);
         String[] written = data.getStringArrayExtra(BrushLabActivity.BRUSHES);
         if (slot < 0 || slot >= ToolSlots.COUNT || written == null || written.length != ToolSlots.COUNT) return;
-        boolean changed = slotsReturned(written, slot, false);
+        boolean changed = slotsReturned(written, slot, false, null);
         String[] start = data.getStringArrayExtra(BrushLabActivity.START);
         if (start != null) { openTools(slot, start); return; }
         if (!changed) return;
@@ -2206,6 +2266,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == SHARED_STORAGE) { loadDrawing(); return; }
+        if (request == EXPORT_ACCESS) { accessReturned(); return; }
         if (request == BRUSH_LAB) { if (result == RESULT_OK && data != null) brushLabReturned(data); return; }
         if (request == TOOLS) { if (result == RESULT_OK && data != null) toolsReturned(data); return; }
         if (request == PICK_DOCUMENT) {
@@ -2302,13 +2363,41 @@ public final class PaintActivity extends Activity implements ControlHost {
      * Export Now, the one way copies are made (the owner, 2026-10-24: "export only when you need it"): the notebook's PDF
      * in Documents/<app folder> and its PNGs in EXPORT/<app folder>, wet paint set first; done, a note says where the PDF is.
      */
-    void exportNow() {
+    void exportNow(View anchor) {
         if (book == null || busy() || loading || pad.document == null) return;
+        if (needsAccess(() -> exportNow(anchor))) return;
         leaving();
-        if (!AutoExport.notebook(this, drawingName, book.snapshot(), () -> message(EXPORT_FAILED), () -> message(EXPORTED))) message(EXPORT_FAILED);
+        Runnable[] end = exporting(anchor, EXPORTED);
+        if (!AutoExport.notebook(this, drawingName, book.snapshot(), end[0], end[1])) end[0].run();
     }
     /** Export Now's notes: where the copies are (docs/TEXT-STYLE.md: the result, in a few words). */
     static final String EXPORTED = "PDF in " + DrawingStorage.SHARED_NAME, EXPORT_FAILED = PageExport.FAILED;
+    /** An export's button while its copy is made (as the Fridge's Send reads "Sending"), then its result for a note's time. */
+    static final String EXPORTING = "Exporting", EXPORTED_BUTTON = "Exported", EXPORT_FAILED_BUTTON = "Export Failed";
+    /**
+     * An export started from {@code anchor} shows at once (the owner, 2026-11-10: Export Now's only sign was a toast at its
+     * end, 70 s on for ten pages): a notebook screen's button reads "Exporting" while it runs, elsewhere a note says so.
+     * Returns its ends, {failed, done}: the note {@code done} (null: none, Send's window shows) or the failure, and the
+     * button its result for a note's time, then its own name.
+     */
+    private Runnable[] exporting(View anchor, String done) {
+        LabButton button = anchor instanceof LabButton ? (LabButton) anchor : null;
+        CharSequence name = button == null ? null : button.getText();
+        if (button != null) { button.setText(EXPORTING); button.setEnabled(false); } else message(EXPORTING);
+        Runnable[] ends = new Runnable[2];
+        for (int i = 0; i < 2; i++) {
+            boolean ok = i == 1;
+            ends[i] = () -> {
+                if (!ok || done != null) message(ok ? done : EXPORT_FAILED);
+                if (button == null) return;
+                button.setEnabled(true);
+                if (ok && done == null) { button.setText(name); return; }
+                button.setText(ok ? EXPORTED_BUTTON : EXPORT_FAILED_BUTTON);
+                button.postDelayed(() -> button.setText(name), DrawLayout.NOTE_MS);
+            };
+        }
+        return ends;
+    }
     /**
      * Export Page's menu beside {@code anchor} (Page Settings' button, the menu's row): page {@code place}'s PDF, PNG or
      * Layers ({@link #exportPage}), and Send (2026-11-05: those and the notebook's PDF to a phone or computer on the Wi-Fi, {@link LiveShare#send}).
@@ -2319,16 +2408,16 @@ public final class PaintActivity extends Activity implements ControlHost {
         Runnable[] choices = new Runnable[names.length];
         for (int i = 0; i < PageExport.CHOICES.length; i++) {
             String choice = PageExport.CHOICES[i];
-            choices[i] = PageExport.sized(choice) ? () -> sizeMenu(anchor, place, choice) : () -> exportPage(place, choice, ExportSize.PAGE);
+            choices[i] = PageExport.sized(choice) ? () -> sizeMenu(anchor, place, choice) : () -> exportPage(anchor, place, choice, ExportSize.PAGE);
         }
-        choices[names.length - 1] = () -> sendPage(place);
+        choices[names.length - 1] = () -> sendPage(anchor, place);
         menu(anchor, "export menu", names, new int[]{R.drawable.ic_ph_file_pdf, R.drawable.ic_ph_image, R.drawable.ic_ph_stack, R.drawable.ic_ph_export}, choices, prefs.largeSettingsText() ? 176 : 160);
     }
     /** Send: page {@code place}'s copies as they are now, wet paint set first, as Export Page. */
-    private void sendPage(int place) {
+    private void sendPage(View anchor, int place) {
         if (book == null || drawingName.isEmpty() || busy() || loading || pad.document == null) return;
         leaving();
-        share.send(book.snapshot(), DrawingFiles.name(drawingName), place);
+        share.send(book.snapshot(), DrawingFiles.name(drawingName), place, exporting(anchor, null));
     }
     /** Send to the Fridge ({@link FridgeWindow}): the page shown as it is now, wet paint set first, as Export Page. */
     private void sendToFridge() {
@@ -2346,7 +2435,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         boolean png = choice.equals(PageExport.PNG);
         for (int i = 0; i < sizes.length; i++) {
             ExportSize size = sizes[i];
-            choices[i] = () -> exportPage(place, choice, size);
+            choices[i] = () -> exportPage(anchor, place, choice, size);
             icons[i] = png ? R.drawable.ic_ph_image : R.drawable.ic_ph_stack;
         }
         menu(anchor, png ? "png size menu" : "layers size menu", words, icons, choices, (png ? 240 : 336) + (prefs.largeSettingsText() ? 24 : 0));
@@ -2355,11 +2444,12 @@ public final class PaintActivity extends Activity implements ControlHost {
      * Export Page (Page Settings, the owner, 2026-10-28): page {@code place}'s (a stack's) {@code choice} copy, a PDF, PNG
      * or Layers (each at {@code size}; {@link PageExport}), wet paint set first, as Export Now; done, a note says where it is: "p5.psd in EXPORT/Scribulor".
      */
-    void exportPage(int place, String choice, ExportSize size) {
+    void exportPage(View anchor, int place, String choice, ExportSize size) {
         if (book == null || busy() || loading || pad.document == null) return;
+        if (needsAccess(() -> exportPage(anchor, place, choice, size))) return;
         leaving();
-        String done = PageExport.page(place, choice) + " in " + AutoExport.SUPERNOTE_FOLDER;
-        if (!AutoExport.page(this, drawingName, book.snapshot(), place, choice, size, () -> message(EXPORT_FAILED), () -> message(done))) message(EXPORT_FAILED);
+        Runnable[] end = exporting(anchor, PageExport.page(place, choice) + " in " + AutoExport.SUPERNOTE_FOLDER);
+        if (!AutoExport.page(this, drawingName, book.snapshot(), place, choice, size, end[0], end[1])) end[0].run();
     }
     private void openDrawing() {
         showSaveError();
@@ -2410,6 +2500,7 @@ public final class PaintActivity extends Activity implements ControlHost {
                     message("Rename failed: " + error.getMessage()); return;
                 }
                 AutoExport.rename(from, renamed);
+                handwriting.renamed(from, renamed);
                 notebooks.renamed();
             }));
             if (open) recoveryNow();
@@ -2433,6 +2524,7 @@ public final class PaintActivity extends Activity implements ControlHost {
                 if (destroyed) return;
                 if (error != null) { message("Delete failed: " + error.getMessage()); return; }
                 AutoExport.delete(path);
+                handwriting.deleted(path);
             }));
             // Read after the delete on the store's queue: the shelf no longer has it.
             notebooks.showShelf();
@@ -2589,6 +2681,10 @@ public final class PaintActivity extends Activity implements ControlHost {
     void openNotebook(String path, boolean card) {
         openNotebook(path, () -> { if (card) notebooks.showCard(); else notebooks.showPages(book.index()); });
     }
+    /** A search's find (Read Handwriting): its notebook open at its page in the notebook screen, the matching lines boxed until the next tap. */
+    void openFound(ShelfSearch.Found f) {
+        openNotebook(f.path, () -> notebooks.showFound(f));
+    }
     /** Notebook {@code path} opened (the open one saved first), then {@code then}. */
     private void openNotebook(String path, Runnable then) {
         if (path.equals(drawingName) && book != null) { then.run(); return; }
@@ -2622,10 +2718,12 @@ public final class PaintActivity extends Activity implements ControlHost {
     void newNotebook() {
         java.time.LocalDate today = java.time.LocalDate.now();
         NotebookNames names = NotebookNames.creating(today, new java.util.Random(), name -> drawingExists(name) || AutoExport.hasCopies(name));
+        // The page's size before the prompt's keyboard squeezes the page.
+        int[] size = pad.blankSize();
         NamePrompt.show(this, NotebookNames.NEW, names, this::drawingExists, name -> {
             if (shelfBusy()) return;
             settleChanges("starting a new notebook", () -> {
-                startNewDrawing(name); givenName = name.equals(names.base) ? name : null; notebooks.showCard();
+                pad.nextBlank = size; startNewDrawing(name); givenName = name.equals(names.base) ? name : null; notebooks.showCard();
                 // Each new notebook a design of its own, by chance (the owner liked them all); Cover Design changes it.
                 CoverDesign[] designs = CoverDesign.values(); setCoverDesign(designs[new java.util.Random().nextInt(designs.length)]);
             });
@@ -2687,7 +2785,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     @Override protected void onResume() {
         super.onResume(); resumed = true;
         DrawingStorage.leaveHandOver(this);
-        // The tilt watch for the Rotate prompt (dropped by mistake with MonoPaint's controls, 53b444a).
+        // The tilt watch that turns the app (RotationPrompt).
         rotationPrompt.enable();
         if (inkWash != null) {
             inkWash.importBrushes();
@@ -2704,7 +2802,6 @@ public final class PaintActivity extends Activity implements ControlHost {
         dismissPanels();
         resumed = false;
         rotationPrompt.disable();
-        rotationPrompt.hide();
         if (pad != null) { pad.suspend(); pad.pauseDrying(); pad.removeCallbacks(warmTools); }
         // The pictures not yet drawn ahead are let go: the Tools page, opening now, draws what it needs itself.
         if (toolPictures != null) { toolPictures.close(); toolPictures = null; }
@@ -2738,7 +2835,7 @@ public final class PaintActivity extends Activity implements ControlHost {
             android.os.Looper.myQueue().addIdleHandler(() -> { prepareFileMenu(); return false; });
             pad.removeCallbacks(warmTools); pad.postDelayed(warmTools, WARM_TOOLS_MS);
         }
-        else { rotationPrompt.dismiss(); pad.finishStroke(); pad.disconnectDisplay(); selectionFeedback.closeSession(); }
+        else { pad.finishStroke(); pad.disconnectDisplay(); selectionFeedback.closeSession(); }
     }
     @Override protected void onDestroy() {
         destroyed = true;
@@ -2748,6 +2845,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (pad != null) pad.close();
         if (inkWashBar != null) inkWashBar.close();
         if (notebooks != null) notebooks.close();
+        if (handwriting != null) handwriting.close();
         book = null;
         super.onDestroy();
     }

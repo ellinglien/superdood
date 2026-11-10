@@ -131,10 +131,8 @@ public final class WebParity {
             // Left to settle before the next, as a hand pauses between strokes (bounded: a bath floats its time out).
             for (int k = 0; k < 100_000 && session.tickDrying(d); k++) { }
         }
-        session.settleNow(d);
         // Fading and Lemon Juice run to their end by the page's clock (Lemon Juice as Quick lays it, Fading to nothing).
-        long far = FadingInk.now() + 24L * 3600 * 1000;
-        for (int k = 0; k < 1000 && d.fading(); k++) d.fade(far, null);
+        session.dryAll(d);
         return d;
     }
     /** A plane case: its ops in turn on a blank page, each left to settle as {@link #scene}'s strokes; an eraser untimed (its pressure's size). */
@@ -162,9 +160,7 @@ public final class WebParity {
             s.finish();
             for (int k = 0; k < 100_000 && session.tickDrying(d); k++) { }
         }
-        session.settleNow(d);
-        long far = FadingInk.now() + 24L * 3600 * 1000;
-        for (int k = 0; k < 1000 && d.fading(); k++) d.fade(far, null);
+        session.dryAll(d);
         return d;
     }
     /**

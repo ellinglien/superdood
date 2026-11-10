@@ -41,6 +41,7 @@ final class OrientationChecks {
         ToneDocument doc = new ToneDocument(metrics.widthPixels-Math.round(64*density),
                 metrics.heightPixels-Math.round(48*density));
         boolean originalErase=(Boolean)get(get(activity,"paint"),"eraseMode");
+        boolean originalLock=(Boolean)get(activity,"navigationLocked");
         try {
             main(test,() -> {
                 set(get(activity,"paint"),"eraseMode",false);
@@ -58,14 +59,22 @@ final class OrientationChecks {
             main(test,() -> {
                 stroke(activity,pad,140,180,280,180);
                 check(doc.tone(200,180)<255,"Portrait pen coordinates");
-                // Exercise the actual listener, including its delayed check with NO second sample.
-                sensor.onOrientationChanged(270);
-                check(((View)get(activity,"rotateButton")).getVisibility()==View.INVISIBLE,"Suggestion does not appear immediately");
             });
-            await(test,() -> ((View)get(activity,"rotateButton")).getVisibility()==View.VISIBLE,"Stable suggestion appears without a second event");
-            check(activity.getWindowManager().getDefaultDisplay().getRotation()==Surface.ROTATION_0,"Sensor alone never rotates");
             byte[] portrait = doc.snapshot();
-            main(test,() -> ((View)get(activity,"rotateButton")).performClick());
+            main(test,() -> {
+                // The padlock holds the turn as it holds the zoom.
+                set(activity,"navigationLocked",true);
+                sensor.onOrientationChanged(270);
+            });
+            SystemClock.sleep(RotationPrompt.PEN_AWAY_MS+3*RotationSuggestion.HOLD_MS);
+            main(test,() -> {
+                check((Integer)get(activity,"appRotation")==Surface.ROTATION_0,"Locked, the app never turns");
+                set(activity,"navigationLocked",false);
+                // Exercise the actual listener, including its delayed look with NO second sample.
+                sensor.onOrientationChanged(270);
+                check((Integer)get(activity,"appRotation")==Surface.ROTATION_0,"No turn before the hold");
+            });
+            // The pen was just at the page: the turn waits for it to be away, then for the hold.
             awaitRotation(test,activity,Surface.ROTATION_90,true);
             main(test,() -> {
                 check(get(activity,"pad")==pad && get(pad,"document")==doc,"Rotation preserves Activity, pad and document identity");
@@ -83,9 +92,8 @@ final class OrientationChecks {
                 check(doc.tone(400,340)<255,"Landscape pen coordinates match displayed page");
                 // Retired: landscape shade strip taps; Inkwash never shows MonoPaint's color bar.
                 set(get(activity,"paint"),"gray",0);
-                check(((View)get(activity,"rotateButton")).getVisibility()==View.INVISIBLE,"Accepted suggestion disappears");
             });
-            report.append("Landscape suggestion waits for a stable sensor angle and a tap; document, undo, pen and rotated palette hit testing pass.\n");
+            report.append("The app turns by itself after a stable sensor angle, never while the padlock is closed; document, undo, pen and rotated palette hit testing pass.\n");
             screenshot(test,activity,"orientation-right.png");
             fastStrokeAndRefresh(test,activity,doc,report);
             Matrix rightHandPage = new Matrix((Matrix)get(pad,"pageToView"));
@@ -122,23 +130,19 @@ final class OrientationChecks {
                 check(get(pad,"document")==doc,"Upside-down portrait retains the page");
                 sensor.onOrientationChanged(0);
             });
-            await(test,() -> ((View)get(activity,"rotateButton")).getVisibility()==View.VISIBLE,"Portrait return suggestion");
-            screenshot(test,activity,"orientation-suggestion.png");
-            main(test,() -> {
-                View rotate = (View)get(activity,"rotateButton");
-                tapLocal(activity,rotate,rotate.getWidth()/2f,rotate.getHeight()/2f);
-            });
             awaitRotation(test,activity,Surface.ROTATION_0,false);
             await(test,() -> get(pad,"direct") != null,"Portrait direct display reconnects");
             main(test,() -> {
                 check(get(pad,"document")==doc,"Same document after round trip");
                 check(doc.tone(200,180)<255 && doc.tone(400,340)<255 && doc.tone(620,540)<255,"All rotated strokes retained");
                 sensor.onOrientationChanged(-1);
-                check(((View)get(activity,"rotateButton")).getVisibility()==View.INVISIBLE,"Flat tablet has no suggestion");
             });
+            SystemClock.sleep(3*RotationSuggestion.HOLD_MS);
+            check((Integer)get(activity,"appRotation")==Surface.ROTATION_0,"A flat tablet never turns the app");
             report.append("All four app orientations keep Android in portrait and turn the page with the app, its tones unturned; direct e-ink, tool placement, both preset rails, black-bottom slider, portrait return and refresh pass.\n");
         } finally {
             main(test,() -> {
+                set(activity,"navigationLocked",originalLock);
                 call(activity,"requestQuarter",new Class<?>[]{int.class},0);
                 set(activity,"library",library);set(get(activity,"paint"),"eraseMode",originalErase); set(get(activity,"paint"),"gray",gray); TestAccess.setMaximum(activity,maximum);
                 set(get(activity,"paint"),"wetCanvas",wet); set(get(activity,"paint"),"transparentPaint",transparent);
@@ -265,7 +269,7 @@ final class OrientationChecks {
     private static void layout(PaintActivity activity,boolean right) throws Exception {
         // Retired: MonoPaint header, color bar, preset rail and hamburger placement; Inkwash shows only its side column.
         View pad=(View)get(activity,"pad");
-        // Retired: every page corner visible. Inkwash never shows a page below 100% (CanvasViewport.minZoom): one that
+        // Retired: every page corner visible. Inkwash never opens a page below 100% (CanvasViewport.minZoom; a pinch may, sideways): one that
         // doesn't fit is panned instead.
         check(((CanvasViewport)get(pad,"viewport")).percent()>=100,"Page shown at 100% or more");
     }

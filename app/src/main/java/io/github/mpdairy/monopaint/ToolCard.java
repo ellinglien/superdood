@@ -22,6 +22,7 @@ import java.util.function.Supplier;
  * left (13 sp), cut with … to fit. No frame, no grid lines. The card in use is underlined across the art's width
  * ({@link #setNow}). A toolbar slot is a tile ({@link #tile}, 2026-11-03): its art alone in {@link ToolsLayout#SLOT_PAD},
  * no name, the selected one inverted, an ink tile with its drawing in paper, the others grey ({@link #setChosen}); one
+ * picked up to move paper with its drawing in ink and a dashed ink edge ({@link #setLifted}); one
  * changed on this visit a small grey dot under it ({@link #setChanged}). Drawn again only when what it shows changes (e-ink).
  */
 @SuppressLint("ViewConstructor")
@@ -45,11 +46,14 @@ final class ToolCard extends View {
     private Bitmap picture;
     /** Its words for a screen reader, made when asked ({@link #describe}), else null. */
     private Supplier<String> described;
-    private boolean now, changed, bold, grey, tile;
+    private boolean now, changed, bold, grey, tile, lifted;
+    /** A picked-up slot's dashed edge ({@link Theme#DASH}). */
+    private final android.graphics.PathEffect dashes;
 
     ToolCard(Context context, SampleQueue samples) {
         super(context);
         this.samples = samples;
+        dashes = Theme.dashes(context);
         text.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, TypeStyle.CAPTION.sp, getResources().getDisplayMetrics()));
     }
 
@@ -76,6 +80,8 @@ final class ToolCard extends View {
     void setNow(boolean now) { if (now != this.now) { this.now = now; invalidate(); } }
     /** A slot: the selected one inverted; the others' picture grey (the owner, 2026-10-28: "make the non-selected tools a little grey so it's clear that they're not selected"). */
     void setChosen(boolean chosen) { if (chosen != bold || chosen == grey) { bold = chosen; grey = !chosen; invalidate(); } }
+    /** A slot picked up to move ({@link ToolsPage#tap}): paper, its drawing in ink, a dashed ink edge. */
+    void setLifted(boolean lifted) { if (lifted != this.lifted) { this.lifted = lifted; invalidate(); } }
     /** A slot whose brush changed on this visit: its dot. */
     void setChanged(boolean changed) { if (changed != this.changed) { this.changed = changed; invalidate(); } }
 
@@ -156,16 +162,28 @@ final class ToolCard extends View {
             canvas.drawRect(0, bottom - dp(DrawLayout.UNDERLINE), Math.min(w, aw), bottom, fill);
         }
     }
-    /** A slot's tile: the selected one an ink tile, its drawing in paper (as a chosen chip); a changed one's dot under it. */
+    /** A slot's tile: the selected one an ink tile, its drawing in paper (as a chosen chip), or picked up its dashed edge; a changed one's dot under it. */
     private void drawTile(Canvas canvas) {
         int pad = dp(ToolsLayout.SLOT_PAD), tall = dp(artHeight) + 2 * pad;
         fill.setAntiAlias(true);
-        if (bold) {
+        float r = dp(ToolsLayout.PAD_RADIUS);
+        boolean inverted = bold && !lifted;
+        if (inverted) {
             fill.setColor(Theme.INK);
-            float r = dp(ToolsLayout.PAD_RADIUS);
             canvas.drawRoundRect(0, 0, getWidth(), tall, r, r, fill);
         }
-        fill.setColor(bold ? Theme.ON_INK : grey ? GREY : Theme.INK);
+        if (lifted) {
+            // Picked up: the selected tile's ink lifts off, leaving a dashed edge (the lasso's ants' look).
+            float edge = dp(Theme.BASE);
+            fill.setStyle(Paint.Style.STROKE);
+            fill.setStrokeWidth(edge);
+            fill.setColor(Theme.INK);
+            fill.setPathEffect(dashes);
+            canvas.drawRoundRect(edge / 2, edge / 2, getWidth() - edge / 2, tall - edge / 2, r, r, fill);
+            fill.setPathEffect(null);
+            fill.setStyle(Paint.Style.FILL);
+        }
+        fill.setColor(inverted ? Theme.ON_INK : grey ? GREY : Theme.INK);
         if (picture != null) canvas.drawBitmap(picture, pad, pad, fill);
         if (changed) {
             fill.setColor(Theme.GREY_800);

@@ -5,8 +5,9 @@ package io.github.mpdairy.monopaint;
  * from a two- or three-finger tap (Undo, Redo: {@link MultiFingerTap}). The fingers landing are a tap until one of them
  * moves past a tap's slop from where it landed ({@link #SLOP_DP}, the slop the tap itself allows); from then on they
  * navigate and no tap fires: the page follows them from where they landed, a pinch zooming, a drag panning. A third
- * finger landing before they move makes a three-finger tap of it, never a pinch. Locked (the default) they never
- * navigate, and a tap still undoes. One finger is the finger tool's ({@link FingerTool}); a second takes back what it
+ * finger landing before they move makes a three-finger tap of it, never a pinch. Locked they pan but never zoom (the
+ * owner, 2026-11-09: sideways a page is taller than the screen, "when lock is enabled it doesnt scroll.. allowing scroll
+ * when it's on would solve the problem"), and a tap still undoes. One finger is the finger tool's ({@link FingerTool}); a second takes back what it
  * drew before this sees them. The pen, down or near, stops it ({@code DrawingPad}). And the Zoom button's words. Pure,
  * checked on the desktop ({@code PinchPanChecks}).
  */
@@ -18,7 +19,7 @@ final class PinchPan {
 
     /** The two fingers, -1 for none; whether they navigate yet. */
     private int a = -1, b = -1;
-    private boolean moving;
+    private boolean moving, panOnly;
     /** Where they landed, view px. */
     private float downAx, downAy, downBx, downBy;
     /** Their midpoint and span at the last step, view px. */
@@ -26,12 +27,12 @@ final class PinchPan {
 
     /**
      * Fingers {@code a} and {@code b} landed at {@code ax, ay} and {@code bx, by}, view px: true if they may navigate,
-     * once they move ({@link #starts}). Never while {@code locked}, nor {@code leastSpan} apart or closer.
+     * once they move ({@link #starts}); {@code locked}, only to pan. Never {@code leastSpan} apart or closer.
      */
     boolean land(boolean locked, int a, float ax, float ay, int b, float bx, float by, float leastSpan) {
         end();
-        if (locked || Math.hypot(bx - ax, by - ay) < leastSpan) return false;
-        this.a = a; this.b = b;
+        if (Math.hypot(bx - ax, by - ay) < leastSpan) return false;
+        this.a = a; this.b = b; panOnly = locked;
         downAx = ax; downAy = ay; downBx = bx; downBy = by;
         return true;
     }
@@ -63,7 +64,7 @@ final class PinchPan {
         if (!moving) return null;
         float nx = (ax + bx) / 2, ny = (ay + by) / 2, ns = (float) Math.hypot(bx - ax, by - ay);
         if (ns < leastSpan) return null;
-        float[] gesture = {ns / span, x, y, nx, ny};
+        float[] gesture = {panOnly ? 1 : ns / span, x, y, nx, ny};
         x = nx; y = ny; span = ns;
         return gesture;
     }
@@ -74,8 +75,8 @@ final class PinchPan {
 
     /** The button's percentage: "200%". */
     static String caption(int percent) { return percent + "%"; }
-    /** Its screen-reader words: "Zoom 200%, locked". */
-    static String describe(int percent, boolean locked) { return describe(percent) + ", " + (locked ? "locked" : "unlocked"); }
+    /** Its screen-reader words: "Zoom 200%, zoom and rotation locked" (the padlock holds the app's turn too, 2026-11-10). */
+    static String describe(int percent, boolean locked) { return describe(percent) + ", " + (locked ? "zoom and rotation locked" : "unlocked"); }
     /**
      * The browser's, which has no padlock: "Zoom 200%". There two fingers always pinch and pan, as a finger is told from
      * the pen (which stops them while down or near) and a two-finger tap still undoes.

@@ -33,18 +33,21 @@ public final class SystemSettingsChecks {
         check(EdgeHold.Choice.LASSO.label.equals(DrawLayout.LASSO), "Lasso is the column's Lasso");
     }
     static void words() {
-        String[] labels = {SystemSettings.TITLE, SystemSettings.AUTO_REFRESH, SystemSettings.TWO_TAP, SystemSettings.THREE_TAP, SystemSettings.EDGE_HOLD, SystemSettings.ON, SystemSettings.OFF};
+        String[] labels = {SystemSettings.TITLE, SystemSettings.AUTO_REFRESH, SystemSettings.TWO_TAP, SystemSettings.THREE_TAP, SystemSettings.EDGE_HOLD, SystemSettings.ON, SystemSettings.OFF, SystemSettings.READ_HANDWRITING, SystemSettings.TURN_ON};
         for (String l : labels) check(l.split(" ").length <= 3 && l.matches("[A-Z][A-Za-z-]*( [A-Z][A-Za-z-]*)*"), l + ": a label, Title Case, three words at most (docs/TEXT-STYLE.md)");
         for (FingerTool.Tap t : FingerTool.Tap.values()) check(t.label.matches("[A-Z][a-z]+"), t.label + ": a chip's one word");
         for (EdgeHold.Choice c : EdgeHold.Choice.values()) check(c.label.matches("[A-Z][a-z]+"), c.label + ": a chip's one word");
         check(SystemSettings.AUTO_REFRESH_NOTE.matches("[A-Z][a-z ,]+") && SystemSettings.AUTO_REFRESH_NOTE.length() <= 40,
                 "The note: sentence case, short, no symbols");
+        check(SystemSettings.READ_HANDWRITING_NOTE.length() <= 30, "Read Handwriting's note: about 30 characters");
+        check(!SystemSettings.READ_HANDWRITING_ABOUT.contains(";"), "Read Handwriting's first-time words: no semicolon (docs/TEXT-STYLE.md)");
+        check(!SystemSettings.READ_HANDWRITING_ABOUT.toLowerCase().matches(".*\\byou(r)?\\b.*"), "Read Handwriting's first-time words: no \"you\"");
     }
     /** The sites read the gate: every flash the app makes on its own goes through it; Refresh is asked for. */
     static void wired() throws java.io.IOException {
         String pad = source("DrawingPad"), screens = source("NotebookScreens"), bar = source("InkWashBar");
         check(pad.contains("if (!flashes()) { refreshRetries = 0; unrefreshed = ghosted = false; app.redrawZen(pageArea()); return; }") && pad.contains("boolean clean = direct != null && ghosted;")
-                && pad.contains("restore, true, ghosted && flashes());") && pad.contains("if (!SystemSettings.flashes(false, app.prefs.autoRefresh())) return;") && pad.contains("return SystemSettings.flashes(asked, app.prefs.autoRefresh());"),
+                && pad.contains("restore, true, afterSplash || ghosted && flashes());") && pad.contains("boolean cleans = SystemSettings.flashes(false, app.prefs.autoRefresh());") && pad.contains("if (!cleans) return;") && pad.contains("return SystemSettings.flashes(asked, app.prefs.autoRefresh());"),
                 "The page's flashes (a page turn, zoom, erasing, an effect's trail, back from another screen) ask the gate");
         check(pad.contains("ghosted = unrefreshed = asked = true; refreshSoon(\"pinch or pan ended\"") && pad.contains("private void viewportChanged() {\n        // A zoom always refreshes, whatever Automatic Refresh says (the owner, 2026-11-06: \"force it\").\n        ghosted = unrefreshed = asked = true;"),
                 "A zoom, the pinch or the zoom button, refreshes as if asked, Automatic Refresh on or off");

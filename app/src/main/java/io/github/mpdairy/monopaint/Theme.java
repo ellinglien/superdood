@@ -34,6 +34,12 @@ final class Theme {
      * module head's rule, heavy (6 px: the one box that matters most, the selected slot).
      */
     static final float FINE = 1, BASE = 2, RULE = 3, HEAVY = 4;
+    /** A dashed edge's dash and gap, dp: an empty place to add to, a toolbar slot picked up to move. */
+    static final float[] DASH = {6, 4};
+    /** {@link #DASH} in {@code context}'s pixels. */
+    static android.graphics.DashPathEffect dashes(Context context) {
+        return new android.graphics.DashPathEffect(new float[]{Ui.dp(context, DASH[0]), Ui.dp(context, DASH[1])}, 0);
+    }
 
     /**
      * Ukulele, the one family (the owner's, CC BY 3.0; docs/DESIGN.md), in its two weights, 400 and 700 (no italics): a

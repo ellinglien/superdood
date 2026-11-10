@@ -183,13 +183,25 @@ final class ToolSwatches {
      * them ({@link #LOOK}), else a Basic tool's starting ones ({@link ToolPresets#look}).
      */
     void bring(String key, Brush brush) {
+        Double[] own = carried(brush);
+        if (own[0] != null) useSize(key, own[0]);
+        if (own[1] != null) useGrey(key, own[1]);
+    }
+    /** What the tool kept under {@code key} would draw at once {@code brush} is put in it ({@link #bring}), nothing written. */
+    Look brought(String key, Brush brush) {
+        Look now = look(key, brush);
+        Double[] own = carried(brush);
+        if (own[0] == null && own[1] == null) return now;
+        double px = own[0] != null ? ownPx(false, own[0]) : now.px;
+        return new Look(InkWashSizes.Preset.values()[nearestSize(px)], px, own[1] != null ? StrokeMath.clamp(own[1]) : now.darkness);
+    }
+    /** {@code brush}'s own px and darkness ({@link #LOOK}, else a Basic tool's starting ones), each null where it has none. */
+    private Double[] carried(Brush brush) {
         String look = store.get(lookKey(brush));
         if (look == null) look = ToolPresets.look(brush);
-        if (look == null) return;
+        if (look == null) return new Double[2];
         String[] parts = look.split(",");
-        Double px = number(parts[0]), darkness = parts.length > 1 ? number(parts[1]) : null;
-        if (px != null) useSize(key, px);
-        if (darkness != null) useGrey(key, darkness);
+        return new Double[]{number(parts[0]), parts.length > 1 ? number(parts[1]) : null};
     }
     /** The size swatch nearest {@code px} on a log scale; the first of two as near. */
     private int nearestSize(double px) {

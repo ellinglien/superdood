@@ -110,10 +110,38 @@ public final class NotebookPdfChecks {
         double a = Math.toRadians(92.5);
         check(tide != null && near(tide[0], Math.cos(a)) && near(tide[1], -Math.sin(a)), "tide turned with its tile: " + Arrays.toString(tide));
         check(pdf.words(kids.get(0)).containsKey("Tome of Checks"), "The cover says the title");
+        // Read handwriting: its best guess on its line's box, hidden; a sheet without lines has none of it.
+        NotebookPdf.Sheet bare = new NotebookPdf.Sheet(7, 1, 1, false, "", Collections.emptyList());
+        NotebookPdf.Sheet read = bare.hand(Collections.singletonList(new Transcript.Line(new float[]{100, 200, 700, 260}, new String[]{"ten potatoes", "ten potato"})));
+        String hidden = NotebookPdf.text("T", read, 1, 1000, 1000);
+        check(hidden.startsWith("BT 3 Tr\n") && hidden.contains("(ten potatoes) Tj") && !hidden.contains("ten potato)"), "The best guess in the hidden text: " + hidden);
+        // 60 px tall is 14.4 pt, ×.8 = 11.52; 600 px is 144 pt across 12 letters of .6 em: 100 × 144 ÷ (.6 × 11.52 × 12) = 173.61; the left 24 pt, the bottom 240 − 62.4.
+        check(hidden.contains("/F 11.52 Tf 173.61 Tz 1 0 0 1 24.00 177.60 Tm (ten potatoes) Tj\n"), "The line where its box is: " + hidden);
+        String plain = NotebookPdf.text("T", bare, 1, 1000, 1000);
+        check(plain.equals(NotebookPdf.text("T", bare.hand(Collections.emptyList()), 1, 1000, 1000)) && !plain.contains("potatoes") && plain.endsWith(" Tj\nET\n"), "No lines: only the title and days: " + plain);
+        NotebookPdf.Sheet odd = bare.hand(Arrays.asList(
+                new Transcript.Line(new float[]{100, 200, Float.NaN, 260}, new String[]{"nan"}), new Transcript.Line(new float[]{100, 200, 700, Float.POSITIVE_INFINITY}, new String[]{"inf"}),
+                new Transcript.Line(new float[]{700, 200, 100, 260}, new String[]{"turned"}), new Transcript.Line(new float[]{100, 260, 700, 200}, new String[]{"upside"}),
+                new Transcript.Line(new float[]{100, 200, 700, 200}, new String[]{"flat"}), new Transcript.Line(new float[]{100, 200, 700, 260}, new String[]{"  "}),
+                new Transcript.Line(new float[]{100, 200, 700, 260}, new String[0])));
+        check(NotebookPdf.text("T", odd, 1, 1000, 1000).equals(plain) && odd.line().equals(bare.line()), "Lines with no sound box or no words are left out, of the text and of the state");
+        String escaped = NotebookPdf.text("T", bare.hand(Collections.singletonList(new Transcript.Line(new float[]{100, 200, 700, 260}, new String[]{"a(b)\\c"}))), 1, 1000, 1000);
+        check(escaped.contains("(a\\(b\\)\\\\c) Tj"), "Parentheses and a backslash escaped: " + escaped);
+        check(NotebookPdf.Sheet.parse(read.line()).line().equals(read.line()), "The state keeps the lines");
         // Nothing changed: nothing drawn, the PDF not written again.
         done.pdf.setLastModified(1000_000L);
         done = update(export, docs, name, "Tome of Checks", pages, lined, DAY2);
         check(done.drawn == 0 && done.pdf.lastModified() == 1000_000L, "Nothing changed, nothing drawn or written");
+        // A transcript arriving later writes the PDF once; the same one (and one more line with no words) again does not.
+        Transcript read1 = new Transcript();
+        read1.put(pages.get(0).crc, Collections.singletonList(new Transcript.Line(new float[]{20, 30, 60, 50}, new String[]{"ten potatoes"})));
+        done = update(export, docs, name, "Tome of Checks", pages, lined, DAY2, read1);
+        check(done.pdf.lastModified() != 1000_000L && new Pdf(Files.readAllBytes(done.pdf.toPath())).content(new Pdf(Files.readAllBytes(done.pdf.toPath())).pages().get(1)).contains("(ten potatoes) Tj"), "A transcript that came later: the PDF written again, with its text");
+        done.pdf.setLastModified(1000_000L);
+        Transcript read2 = new Transcript();
+        read2.put(pages.get(0).crc, Arrays.asList(new Transcript.Line(new float[]{20, 30, 60, 50}, new String[]{"ten potatoes"}), new Transcript.Line(new float[]{20, 30, 60, 50}, new String[]{" "})));
+        done = update(export, docs, name, "Tome of Checks", pages, lined, DAY2, read2);
+        check(done.pdf.lastModified() == 1000_000L, "The same transcript: not written again");
         // Page 2 changed on Oct 24 and a third page: one drawn each, page 2 made Oct 23 changed Oct 24, page 3 under Oct 24.
         pages.set(1, packed(page(22, PEN)));
         pages.add(packed(page(3, PEN)));
@@ -231,6 +259,10 @@ public final class NotebookPdfChecks {
 
     static NotebookExport.Done update(File export, File docs, String name, String title, List<PackedPage> pages, NotebookOptions options, LocalDate today) throws IOException {
         return NotebookExport.update(export, name, pages, null, new NotebookExport.Covers(name, CoverDesign.DEFAULT, W, H, null, null, -1), options, null, null, new NotebookExport.Documents(docs, title, today));
+    }
+
+    static NotebookExport.Done update(File export, File docs, String name, String title, List<PackedPage> pages, NotebookOptions options, LocalDate today, Transcript transcript) throws IOException {
+        return NotebookExport.update(export, name, pages, null, new NotebookExport.Covers(name, CoverDesign.DEFAULT, W, H, null, null, -1), options, null, null, new NotebookExport.Documents(docs, title, today, transcript));
     }
 
     // A small PDF reader: the table, objects, pages, outline, content and images.
