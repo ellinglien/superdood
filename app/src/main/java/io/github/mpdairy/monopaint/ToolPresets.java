@@ -79,7 +79,7 @@ final class ToolPresets {
             {"Fineliner", "Lively liner", "lively-liner.M00l700000000at_000zz0000000000000_0_100_1jz_88z0000000000600000nz0.pg5zxt", "swell, grainy", "19"},
             // Stipple and Hatch (the new modules spec), the web lab's presets: dots scattered along the stroke, crisp lines that cross with pressure
             {"Fineliner", "Stipple pen", "stipple-pen.M07i0clcli0_000zz0000000000000_0_000_1jz_0000000000000000000nz0.h6q", "pen dots", "22274", "34,0.384"},
-            {"Fineliner", "Hatch pen", "hatch-pen.M08at7x901zzi0_000zz0000000000000_0_000_1jz_0000000000000000000nz0.x3", "crosshatching", "1191"},
+            {"Fineliner", "Hatch pen", "hatch-pen.M08at7x901zzi0_000zz0000000000000zz008bi00000000001_0_000_1jz_0000000000000000000nz0.x3", "crosshatching", "1191"},
             {"Fineliner", "Hand hatch", "hand-hatch-pen.M0ceeat901i0i0p6i0_000zz0000000000000_0_000_1jz_0000000000000000000nz0.x3", "hand hatching", "1191"},
             {"Fineliner", "Neat hatch", "neat-hatch.M0ceeat901i05ecli0_000zz0000000000000_0_000_1jz_0000000000000000000nz0.x3", "tidy hatching", "1191"},
             // Blend (the new modules spec), the web lab's: a white gel pen, white ink over dark
@@ -88,7 +88,7 @@ final class ToolPresets {
             // a gel pen, smooth and bold; a fountain pen that swells pressed and pools where it starts
             {"Fineliner", "Ballpoint", "ballpoint.M00at00005e003m_000zz0000000000077_0_177_0_85ei000000000000000nz0.2ez", "grainy, skips", "3131"},
             {"Fineliner", "Gel pen", "gel-pen.M00wd0000000000_000zz5e00000000000_0_000_0_0000000000000000000nz0.2f0", "smooth, bold", "3132"},
-            {"Fineliner", "Fountain pen", "fountain-pen.M00i000at00003m_03mzzwe00000000000_0_000_0_8qz0000000000000000nz0.2f1", "pools at start", "3133"},
+            {"Fineliner", "Fountain pen", "fountain-pen.M00i000at00003m_03mzzwe00000000000zz008bi00000000001_0_000_0_8qz0000000000000000nz0.2f1", "pools at start", "3133"},
             // The owner's pens (2026-10-27): Brush Studio saves (docs/brush-lab/favourites.txt), kept as made, renamed
             {"Fineliner", "Cheap ballpoint", "cheap-ballpoint.M00i00000002g4l_000zzi00000000003l_0_000_1jz_8h77a00000000000000nz0.ir1", "blots if slow", "24301", "3.5,0.8"},
             {"Fineliner", "Smooth fountain", "smooth-fountain.M00i00000000h3p_000zz1u00000000000_0_000_1jz_8ag00000000007h0000nz0.ir1", "thins at speed", "24301"},
@@ -105,7 +105,7 @@ final class ToolPresets {
             {"Brush pen", "Tilt brush", "lean-brush.M10i0rsw80000at_000v50000000000000_0_000_1jz_8wded00jl0000ck0000nz0.69opxg", "wider on tilt", "5"},
             // Wet brush (the wet brush spec; the owner, 2026-10-22: "yep go for it"): MonoPaint's wet brush pen on the wet
             // canvas, ink in water held between strokes (Wet on a Wash), replacing the old line and wash (RETIRED)
-            {"Brush pen", "Wet brush", "wet-brush.M10i0d2o50000at_1ul0000000000_0_000_7i0ee_8yrfo00000000ny0000nz0.2g3", "ink in water", "3171"},
+            {"Brush pen", "Wet brush", "wet-brush.M10i0d2o50000at_1ul0000000000zz008bi0000000001_0_000_7i0ee_8yrfo00000000ny0000nz0.2g3", "ink in water", "3171"},
             {"Brush pen", "Pooling brush", "pooling-brush.M10i0mwmc0000at_000u5d87f000000000_0_000_1jz_8qp0000fh0000he0000nz0.ib8b3u", "pools if slow", "10"},
             // The engine's choices no preset showed (the owner's list, 2026-10-22; PresetPictures builds them): Control's Springy
             {"Brush pen", "Springy brush", "springy-brush.M10ssati000003m_000zz0000000000000_0_000_0_4weatg7000000ee0000nz0.2fg", "bouncy swell", "3148"},
@@ -189,10 +189,10 @@ final class ToolPresets {
             // media, papers and Control on the wet canvas, so washes painted while wet merge, and dry back with a dark edge,
             // blooms and granulation from their Wash's and Paper's dials; the old ones RETIRED
             {"Watercolor", "Soft wash", "soft-wash.M60i0000000007q_1wva200000000_0_0fk_7_8la0000000000000000nz0.t4mf73", "even, pale", "1761283695"},
-            {"Watercolor", "Wet blooms", "wet-blooms.M60i000000000ji_1z5gk00f6e400_0_000_7js_8mx0000000000000000nz0.1s13pn4", "blooms", "3871688080"},
+            {"Watercolor", "Wet blooms", "wet-blooms.M60i000000000ji_1z5gk00f6e400zz008bi0000000001_0_000_7js_8mx0000000000000000nz0.1s13pn4", "blooms", "3871688080"},
             // Watercolour backrun (the owner, 2026-11-06), Backrun until then (its code name and seed kept)
-            {"Watercolor", "Watercolour backrun", "backrun.M60i000000000gv_1t10000c8gj00_0_13f_7_8sl0000000000000000nz0.ib8b3u", "pale backruns", "1107254586"},
-            {"Watercolor", "Granulating", "granulating.M60i000000000ac_1uk0000fh0000_0_186_7_8me0000000000000000nz0.1t996q7", "grainy blooms", "3945846607"},
+            {"Watercolor", "Watercolour backrun", "backrun.M60i000000000gv_1t10000c8gj00zz008bi0000000001_0_13f_7_8sl0000000000000000nz0.ib8b3u", "pale backruns", "1107254586"},
+            {"Watercolor", "Granulating", "granulating.M60i000000000ac_1uk0000fh0000zz008bi0000000001_0_186_7_8me0000000000000000nz0.1t996q7", "grainy blooms", "3945846607"},
             {"Watercolor", "Slow bloom", "slow-bloom.M60i000000000i6_1yh0000fc2a00_0_1g7_7ss_8j90000000000000000nz0.vkxdda", "slow blooms", "1909600750"},
             {"Watercolor", "Pooling wash", "pooling-wash.M60i000000000g7_1x3at00770000_0_190_7qzll_8g70000000000000000nz0.373k3", "runs downhill", "5370051"},
             {"Watercolor", "Tilt blend", "tilt-blend.M60i000000000js_1y6at00900000_0_05e_7ulee_8g70000000000000000nz0.4t449", "rock to blend", "8076825"},
@@ -203,7 +203,7 @@ final class ToolPresets {
             // Stipple: a sponge print in a flat wash
             {"Watercolor", "Stipple sponge", "stipple-sponge.M67g7eewei0_1cl0000770000_0_000_1jz_0000000000000000000nz0.h6p", "sponged dots", "22273"},
             // Blend, the web lab's: a wash that goes only where the page is still blank, behind the lines
-            {"Watercolor", "Wash behind", "wash-behind.M60i000000000at_1ulat00770000zz2_0_000_1jz_0000000000000000000nz0.11kx", "behind marks", "48705"},
+            {"Watercolor", "Wash behind", "wash-behind.M60i000000000at_1ulat00770000zz208bi0000000001_0_000_1jz_0000000000000000000nz0.11kx", "behind marks", "48705"},
             // Wash comb (the Stump spec): a five-line Rake that is all stump (Smear, Own paint 0, Soften 1, Pick up 1): combs a wash into streaks
             {"Watercolor", "Wash comb", "wash-comb.M65zzlli000000000_1ulat00770000_3zzll00zz_000_1jz_0000000000000000000nz0.7", "combs washes", "7"},
             // The wet smudge spec's Dirty brush (no paint of its own), a Smear that keeps what it picks up for the next
@@ -224,7 +224,7 @@ final class ToolPresets {
             // as the watercolour washes do, a pen line kept crisp beneath; the old ones RETIRED
             {"Ink wash", "Line and wash", "line-and-wash.M70i07pmj0000wd_0pipk0000ke0000000_0_000_7_8ls0000000000000000nz0.1t996q7", "pen and wash", "3945846607"},
             {"Ink wash", "Wet ink", "wet-ink.M70i000000000xb_0h9pe9c00nl0000000_0_000_7_8o50000000000000000nz0.51j8ud", "feathered line", "304908421"},
-            {"Ink wash", "Grey wash", "grey-wash.M70i000000000po_1ls00j4000000_0_000_7_8q90000000000000000nz0.69opxg", "feathers", "379066948"},
+            {"Ink wash", "Grey wash", "grey-wash.M70i000000000po_1ls00j4000000zz008bi0000000001_0_000_7_8q90000000000000000nz0.69opxg", "feathers", "379066948"},
             {"Ink wash", "Flat wash", "flat-wash.M70i08u860000vx_1gv00jp860000_0_000_7_8re0000000000000000nz0.demerg", "flat, even", "810620476"},
             {"Ink wash", "Slow ink wash", "slow-ink-wash.M70i000nt0000q5_0ts000000cs0000000_0_000_7ss_8qi0000000000000000nz0.1s13pn4", "slow-drying", "3871688080"},
             // Float (suminagashi): ink that floats on water, and Clear water (Smear, Own paint 0, Pick up .9) to alternate with it
@@ -245,14 +245,14 @@ final class ToolPresets {
             {"Gouache", "Gouache water", "gouache-water.M80b70000000054_2zz00_4i0ll_000_7llat_83z0000000000000000nz0.2fo", "lifts paint", "3156"},
             // Cracking paint (explore-presets, 2026-11-01; PresetPictures builds it), Cracks until 2026-11-06 (its code name and
             // seed kept): thick opaque paint, Slow, not Wet, as Later's Cracks goes only with Instant, Quick or Slow; it crazes as it ages
-            {"Gouache", "Cracking paint", "cracks.M80zz0000000077_2zzll_0_000_2clcl0js_3p6ll00000000000000nz0_0_cll6p.2hh", "ages, cracks", "3221", "65,0.8"},
+            {"Gouache", "Cracking paint", "cracks.M80zz0000000077_2zzllzz008bi0000000001_0_000_2clcl0js_3p6ll00000000000000nz0_0_cll6p.2hh", "ages, cracks", "3221", "65,0.8"},
             // Oils, Wet too: they drag what they cross and get dirtier as they go; Loaded oils runs out (Paint Load)
             {"Oils", "Wet oils", "wet-oils.M90i0000000003k_2zz00_2llp6zz_000_7ne_8d30000ty0000000000nz0.2ft", "drags, mixes", "3161"},
             {"Oils", "Loaded oils", "loaded-oils.M99vleei0000000005e_2zz00_2llp6zz00js_000_7ne_1ss0000000000000000nz0.2fu", "runs out", "3162"},
-            {"Oils", "Flat oils", "flat-oils.M925aeei0000000004h_2zz00_2llp6zz_000_7ne_8fh0000k30000000000nz0.2fv", "flat, drags", "3163"},
-            {"Oils", "Broad oils", "broad-oils.M93i00zz0034_2zz00_2llp6zz_000_7ne_8j30000gw0000000000nz0.2fw", "broad, drags", "3164"},
-            {"Oils", "Tilt oils", "tilt-oils.M90i00000000020_2zz00_0_000_7ll_8kp0000ht0000000000nz0.2fx", "tilt to widen", "3165"},
-            {"Oils", "Oil glaze", "oil-glaze.M90i0000000003k_2js00_0_000_7ne_8d30000ty0000000000nz0.2fy", "thin, mixes", "3166"},
+            {"Oils", "Flat oils", "flat-oils.M925aeei0000000004h_2zz00zz008bi0000000001_2llp6zz_000_7ne_8fh0000k30000000000nz0.2fv", "flat, drags", "3163"},
+            {"Oils", "Broad oils", "broad-oils.M93i00zz0034_2zz00zz008bi0000000001_2llp6zz_000_7ne_8j30000gw0000000000nz0.2fw", "broad, drags", "3164"},
+            {"Oils", "Tilt oils", "tilt-oils.M90i00000000020_2zz00zz008bi0000000001_0_000_7ll_8kp0000ht0000000000nz0.2fx", "tilt to widen", "3165"},
+            {"Oils", "Oil glaze", "oil-glaze.M90i0000000003k_2js00zz008bi0000000001_0_000_7ne_8d30000ty0000000000nz0.2fy", "thin, mixes", "3166"},
             // Pastels
             {"Pastels", "Chisel pastel", "chisel-pastel.Ma1j2eei000008c00at_34z5w_0_2sl_1jz_89i0000000000000000nz000000000530000005000c099zz.t4mf73", "on ribbed", "1"},
             {"Pastels", "Soft pastel", "soft-pastel.Ma0i000007s00at_3b98o_0_3nj_1jz_8hg0000000000000000nz000000000530000005000c099zz.51j8ud", "on felt", "3"},
@@ -264,24 +264,24 @@ final class ToolPresets {
             {"Pastels", "Crayon scratch", "crayon-scratch.Ma0p600000000at_7ll1_0_1i0_0_0000000000000000000nz0.2fa", "scratches out", "3142"},
             // Dry brush
             {"Dry brush", "Dry round", "dry-round.Mb0i00000in0074_2k700_0_2r6_1jz_8ny0000000000000000nz0.t4mf73", "opaque, ribbed", "1", "86,0.686"},
-            {"Dry brush", "Scumble", "scumble.Mb0i00000xd000d_2oi00_0_4f9_1jz_8ce0000000000000000nz0.1s13pn4", "on crumpled", "2"},
+            {"Dry brush", "Scumble", "scumble.Mb0i00000xd000d_2oi00zz008bi0000000001_0_4f9_1jz_8ce0000000000000000nz0.1s13pn4", "on crumpled", "2"},
             {"Dry brush", "Flat dry", "flat-dry.Mb25aeei00000sg0067_2n200_0_2d8_1jz_8l10000000000000000nz0.51j8ud", "flat, ribbed", "3"},
-            {"Dry brush", "Dry glaze", "dry-glaze.Mb25aeei00000lx0033_1caat00770000_0_1l5_1jz_8l40000000000000000nz0.1t996q7", "glaze", "4"},
-            {"Dry brush", "Grainy wash", "grainy-wash.Mb0i00000vq0026_10rat00770000_0_1p6_1jz_8i70000000000000000nz0.15660dh", "rough, flat", "6"},
+            {"Dry brush", "Dry glaze", "dry-glaze.Mb25aeei00000lx0033_1caat00770000zz008bi0000000001_0_1l5_1jz_8l40000000000000000nz0.1t996q7", "glaze", "4"},
+            {"Dry brush", "Grainy wash", "grainy-wash.Mb0i00000vq0026_10rat00770000zz008bi0000000001_0_1p6_1jz_8i70000000000000000nz0.15660dh", "rough, flat", "6"},
             {"Dry brush", "Bristle brush", "bristle-brush.Mb6rolljsqzi0_000zz0000000000000_0_1ll_1jz_8i00000000000000000nz0.209", "runs dry", "2601"},
             // A fan brush (explore-nibs): hair lines in an arc, more of them down as it presses
             {"Dry brush", "Fan brush", "fan-brush.Mbfb2g7i0at_000zz0000000000000_0_000_0_0000000000000000000nz0.2gz", "hair lines", "3203", "40,1"},
             // Hake
             {"Hake", "Wet hake", "wet-hake.Mc3i00zzhf59_1orat00770000_0_000_1jz_85b0000000000000000nz0.t4mf73", "streaky wash", "1"},
-            {"Hake", "Rough hake", "rough-hake.Mc3i01zzkh8h_1vyat00770000_0_1i0_1jz_8c30000000000000000nz0.1s13pn4", "on cold press", "2"},
+            {"Hake", "Rough hake", "rough-hake.Mc3i01zzkh8h_1vyat00770000zz008bi0000000001_0_1i0_1jz_8c30000000000000000nz0.1s13pn4", "on cold press", "2"},
             // Cover hake: the owner's Brush Lab save of it (2026-10-28), in place of its roll (cover-hake.Mc3i00zzedct_2lu00_0_000_1jz_89d0000000000000000nz0.1t996q7, "semi-opaque")
-            {"Hake", "Cover hake", "cover-hake.Mc3i00mb00e8_2t52w_0_000_2clcl0js_80000zz000000000000zz0.1t996q7", "covers, flat", "4"},
-            {"Hake", "Flat hake", "flat-hake.Mc3i01zz9a7e_1dxat00770000_0_1i0_1jz_88w0000000000000000nz0.1ifv2mx", "flat, even", "9"},
+            {"Hake", "Cover hake", "cover-hake.Mc3i00mb00e8_2t52wzz008bi0000000001_0_000_2clcl0js_80000zz000000000000zz0.1t996q7", "covers, flat", "4"},
+            {"Hake", "Flat hake", "flat-hake.Mc3i01zz9a7e_1dxat00770000zz008bi0000000001_0_1i0_1jz_88w0000000000000000nz0.1ifv2mx", "flat, even", "9"},
             // Flat brush (the owner, 2026-11-06), Big sky until then (its code name and seed kept)
             {"Hake", "Flat brush", "big-sky.Mc3i00zz896c_1sbat00770000_0_000_1jz_86n0000000000000000nz0.1uhentb", "smooth wash", "14", "85,0.541"},
             // Anything goes: the owner's Brush Lab save (2026-11-06), kept as made in its saved style, named as the owner did
             // (PresetPictures builds it): a flat nib of covering paint, Fast wet, turning with the pen's tilt
-            {"Anything goes", "Opaque flat", "opaque-flat.Md25aivhx000000005s_2u200_0_000_1g6_8zz00000000zz00jr00zz0.wxnf4u", "turns on tilt", "1991437662"},
+            {"Anything goes", "Opaque flat", "opaque-flat.Md25aivhx000000005s_2u200zz008bi0000000001_0_000_1g6_8zz00000000zz00jr00zz0.wxnf4u", "turns on tilt", "1991437662"},
             // Print, set by hand (PresetPictures builds them): Screentone's five patterns, then ink and dry media through Print
             // Shading (Ben-Day, Rosette, Halftone; Mezzotint, Dither, Engraving, Wavy Lines)
             {"Print", "Dot tone", "dot-tone.Me0i00000000000_60e0_0_000_0_0000000000000000000nz0.2e5", "even dots", "3101"},
@@ -496,14 +496,23 @@ final class ToolPresets {
         for (String[] row : ToolSlots.FIRST) if (brush.name().equalsIgnoreCase(row[1]) && Brush.read(row[1] + "\t" + row[2]).sameAs(brush)) return row[3] + "," + row[4];
         return null;
     }
-    /** The retired preset {@code brush} is (the same name and settings), or null: one a slot or the library still holds. */
+    /**
+     * The retired preset {@code brush} is (the same name and settings), or null: one a slot or the library still holds.
+     * Or the Basic tool it was before that took Second Ink: a random half of the washes and paints, and two pens, come
+     * with it On (the owner, 2026-11-10: "can we randomize the grey and shade switch? just for ones that fill spaces
+     * well, lines should be black mostly"; shuffled once, seed 20261110), and one kept from before is the same but grey.
+     */
     static synchronized Preset retired(Brush brush) {
         if (retiredByIdentity == null) {
             Map<String, Preset> map = new HashMap<>();
             for (Preset p : RETIRED_ALL) map.put(p.brush().identity(), p);
             retiredByIdentity = map;
         }
-        return retiredByIdentity.get(brush.identity());
+        Preset was = retiredByIdentity.get(brush.identity());
+        if (was != null || ResolvedBrush.second(brush.parts) || !brush.parts.choice(BrushPart.MEDIUM).has(PartDial.SECOND)) return was;
+        ModularBrush on = brush.parts.copy();
+        on.part(BrushPart.MEDIUM).set(PartDial.SECOND, 1);
+        return find(Brush.of(on));
     }
     private static Map<String, Preset> retiredByIdentity;
     /**

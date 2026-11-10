@@ -58,8 +58,19 @@ final class Fridge {
 
     /** The size the page goes at: its own when it is no wider than {@link #WIDE_MOST} and fits the server, else Social. */
     static ExportSize size(int width, int height) { return width <= WIDE_MOST && height <= HEIGHT_MOST ? ExportSize.PAGE : ExportSize.SOCIAL; }
-    /** Page {@code place}'s PNG as Export Page writes it at {@link #size}; Social when that is over {@link #BYTES_MOST}. */
-    static byte[] png(String title, int place, int width, int height, List<PackedPage> pages, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing, Magnets.Tiles tiles) throws IOException {
+    /** The Fridge window's tick that puts the page's template in (the owner, 2026-11-10: "fridge posts... they shouldn't have the template visible ideally... or that should be an option"). */
+    static final String TEMPLATE = "Template";
+    /** Whether page {@code place}'s copy would show a template's guides (the Fridge window offers {@link #TEMPLATE} then). */
+    static boolean templated(int place, int count, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing) {
+        int bottom = TracingPaper.stacks(tracing, count).first(place);
+        return !options.pageTemplate(pageTemplates != null && bottom < pageTemplates.size() ? pageTemplates.get(bottom) : null).equals(NotebookTemplate.BLANK);
+    }
+    /**
+     * Page {@code place}'s PNG as Export Page writes it at {@link #size}, on plain paper unless {@code template} (the
+     * notebook's copies leave the guides out too); Social when that is over {@link #BYTES_MOST}.
+     */
+    static byte[] png(String title, int place, int width, int height, List<PackedPage> pages, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing, Magnets.Tiles tiles, boolean template) throws IOException {
+        if (!template) { options = options.withTemplate(NotebookTemplate.BLANK); pageTemplates = null; }
         for (ExportSize size = size(width, height); ; size = ExportSize.SOCIAL) {
             byte[] png = PageExport.bytes(title, place, PageExport.PNG, size, pages, options, pageTemplates, tracing, tiles, LocalDate.now().toEpochDay());
             if (png.length <= BYTES_MOST) return png;

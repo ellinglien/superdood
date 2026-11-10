@@ -176,6 +176,12 @@ enum PartDial {
      * Graphite's dials, written only when on ({@link ModularCode#ADDED}); never rolled or varied.
      */
     SOLUBLE(BrushPart.MEDIUM, "soluble", "Dissolves", 0, "Off", "On"),
+    /**
+     * Second Ink (the owner, 2026-11-09): marks the brush as one whose paint copies show in the notebook's second ink
+     * ({@link ResolvedBrush#second}); the screen stays grey. Last of Ink's, Wash's, Cover's, Charcoal's and Graphite's
+     * dials, written only when on ({@link ModularCode#ADDED}); never rolled or varied.
+     */
+    SECOND(BrushPart.MEDIUM, "second", "Second Ink", 0, "Off", "On"),
     // Carry
     PICK(BrushPart.CARRY, "pick", "Pick Up Paint", 0, 1, .4),
     LAY(BrushPart.CARRY, "lay", "Lay Down Paint", 0, 1, .5),

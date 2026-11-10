@@ -47,14 +47,18 @@ final class FridgeWindow {
     /** Page {@code place} of {@code book} (a snapshot, wet paint laid; released here), notebook {@code name}: its PNG made, then the send window. */
     void open(DrawingBook.Snapshot book, String name, int place) {
         worker.execute(() -> {
-            byte[] png; Bitmap preview;
+            // The page on plain paper, and with its template too where it has one ([0] plain, [1] templated, else null).
+            byte[][] png = new byte[2][]; Bitmap[] preview = new Bitmap[2];
             try {
                 List<PackedPage> pages;
                 try { pages = book.packed(); } finally { book.release(); }
-                png = Fridge.png(NotebookPdf.title(name), place, book.width, book.height, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles());
                 BitmapFactory.Options half = new BitmapFactory.Options();
                 half.inSampleSize = 2;
-                preview = BitmapFactory.decodeByteArray(png, 0, png.length, half);
+                boolean templated = Fridge.templated(place, pages.size(), book.options, book.pageTemplates, book.tracing);
+                for (int t = 0; t < (templated ? 2 : 1); t++) {
+                    png[t] = Fridge.png(NotebookPdf.title(name), place, book.width, book.height, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles(), t == 1);
+                    preview[t] = BitmapFactory.decodeByteArray(png[t], 0, png[t].length, half);
+                }
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
                 Log.w(TAG, "page: " + e);
                 app.runOnUiThread(() -> app.message(e instanceof Fridge.Failed ? e.getMessage() : PageExport.FAILED));
@@ -64,10 +68,10 @@ final class FridgeWindow {
         });
     }
 
-    private void window(byte[] png, Bitmap preview, String notebook, int page) {
+    private void window(byte[][] pngs, Bitmap[] previews, String notebook, int page) {
         LinearLayout column = column();
         ImageView picture = new ImageView(app);
-        picture.setImageBitmap(preview);
+        picture.setImageBitmap(previews[0]);
         picture.setAdjustViewBounds(true);
         picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
         picture.setContentDescription("Page " + page);
@@ -80,6 +84,14 @@ final class FridgeWindow {
         mine.ticked(on[0]); shared.ticked(on[1]);
         ticks.addView(mine, new LinearLayout.LayoutParams(-2, -2));
         ticks.addView(shared, LabUi.after(app, -2, 44, 16));
+        // Template, off: the page goes on plain paper; ticked, with its template's guides. Only on a page that has one.
+        boolean[] template = {false};
+        if (pngs[1] != null) {
+            LabButton guides = new LabButton(app, 0, Fridge.TEMPLATE, false);
+            guides.ticked(false);
+            guides.setOnClickListener(v -> { template[0] = !template[0]; guides.ticked(template[0]); picture.setImageBitmap(previews[template[0] ? 1 : 0]); });
+            ticks.addView(guides, LabUi.after(app, -2, 44, 16));
+        }
         LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
         below.topMargin = app.dp(8);
         column.addView(ticks, below);
@@ -87,7 +99,7 @@ final class FridgeWindow {
                 .setPositiveButton(Fridge.SEND, null).setNegativeButton(Fridge.CANCEL, null);
         if (!Fridge.cards(app.prefs.fridgeCards()).isEmpty()) builder.setNeutralButton(Fridge.SENT_PAGES, (d, w) -> sentList());
         AlertDialog dialog = builder.create();
-        dialog.setOnDismissListener(d -> { if (preview != null) picture.setImageBitmap(null); });
+        dialog.setOnDismissListener(d -> picture.setImageBitmap(null));
         dialog.show();
         app.compactDialog(dialog, 600);
         Button send = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
@@ -100,7 +112,7 @@ final class FridgeWindow {
         };
         mine.setOnClickListener(tick); shared.setOnClickListener(tick);
         send.setOnClickListener(v -> {
-            Runnable go = () -> send(dialog, send, png, name.getText().toString(), caption.getText().toString(), on[0], on[1], notebook, page);
+            Runnable go = () -> send(dialog, send, pngs[template[0] ? 1 : 0], name.getText().toString(), caption.getText().toString(), on[0], on[1], notebook, page);
             if (on[0] && app.prefs.fridgeOwn() == null) ownName(go); else go.run();
         });
     }

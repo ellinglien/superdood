@@ -4130,3 +4130,9 @@ makeVars = function (B, locks) {
   CHOICES.medium = keep.filter(c => c.k !== "vector" || c.k === B.medium.k);
   try { return makeVarsVec(B, locks); } finally { CHOICES.medium = keep; }
 };
+// Second Ink (the owner, 2026-11-09; the app's PartDial.SECOND, key second): last of Ink's, Wash's, Cover's, Charcoal's and
+// Graphite's dials, Off or On. It only marks the brush (copies show it in the notebook's second ink); the lab reads and writes
+// it only. Written only when on, so every older code is as before.
+DIALS.medium.second = { label: "Second Ink", choices: ["Off", "On"], def: 0 };
+for (const k of ["ink", "wash", "cover", "charcoal", "graphite"]) choiceOf("medium", k).dials.push("second");
+ADDED.add("medium.second");

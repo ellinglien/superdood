@@ -15,7 +15,7 @@ final class ShapeStroke {
     ShapeStroke(ToneDocument document, ToolSettings settings, int shade, float x, float y) {
         this.document=document; this.shade=shade; geometry=new ShapeGeometry(settings,document.width,document.height,x,y);
         previous=new int[document.height*4];next=new int[previous.length];
-        document.begin();
+        document.beginShape();
     }
     void preview(float x, float y) {
         if(ended || !Float.isFinite(x) || !Float.isFinite(y)) return;
@@ -55,7 +55,7 @@ final class ShapeStroke {
      * selected layer as one Undo step: a shape as the Manta commits it ({@code ShapePreview.finish}) and as Replay draws it.
      */
     static boolean lay(ToneDocument document,int[] spans,int shade) {
-        document.begin();
+        document.beginShape();
         for(int y=0;y<document.height;y++)for(int part=0;part<4;part+=2) {
             int at=y*4+part;document.paintSpan(spans[at],spans[at+1],y,shade);
         }

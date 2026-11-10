@@ -32,7 +32,7 @@ final class StrokeStart {
     /**
      * What comes before a shape (Shapes) of a slot whose brush is {@code parts}, the Manta's ({@code InkWash.shape}), the
      * browser's ({@code shapeDown}) and a replay's: what settles laid first, a hidden pair shown, no masking fluid, a
-     * Drying wash dropped, and the layer that brush's strokes go to selected.
+     * Drying wash dropped, the layer that brush's strokes go to selected, and its ink the brush's (Second Ink).
      */
     static void shape(ToneDocument document, ModularBrush parts, WatercolorSession session) {
         session.settleBefore(document, session.onWater(document, parts));
@@ -40,6 +40,7 @@ final class StrokeStart {
         document.paintMaskingFluid(false);
         session.dry("shape");
         ModularStroke.selectLayer(document, parts);
+        document.shapeInk(ResolvedBrush.second(parts) ? 255 : 0);
     }
 
     /** As {@link #start}, unmirrored: the eraser's or {@code brush}'s stroke, a Filled Shape's outline filled at the lift. */

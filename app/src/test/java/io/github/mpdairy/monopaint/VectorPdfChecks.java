@@ -210,13 +210,13 @@ public final class VectorPdfChecks {
         for (int x = 40; x < 160; x++) marks.setTone(x, 60, 0);
         marks.finish();
         ToneDocument lined = VectorInkChecks.page();
-        check(NotebookExport.vectorLayers(NotebookExport.flatten(Arrays.asList(marks, lined), new boolean[2]), null).size() == 1, "lines on the top page as vectors");
-        check(NotebookExport.vectorLayers(NotebookExport.flatten(Arrays.asList(lined, marks), new boolean[2]), null).isEmpty(), "lines under another page's marks stay pixels");
-        check(NotebookExport.vectorLayers(NotebookExport.flatten(Arrays.asList(lined, marks), new boolean[]{false, true}), null).size() == 1, "a hidden page over them doesn't count");
+        check(NotebookExport.vectorLayers(NotebookExport.flatten(Arrays.asList(marks, lined), new boolean[2], 0), null).size() == 1, "lines on the top page as vectors");
+        check(NotebookExport.vectorLayers(NotebookExport.flatten(Arrays.asList(lined, marks), new boolean[2], 0), null).isEmpty(), "lines under another page's marks stay pixels");
+        check(NotebookExport.vectorLayers(NotebookExport.flatten(Arrays.asList(lined, marks), new boolean[]{false, true}, 0), null).size() == 1, "a hidden page over them doesn't count");
         // Three layers (2026-11-06, Vector Ink on the layer in use): layer 2's lines, over its own pen's marks, as vectors;
         // layer 1's, under layer 2's marks, stay pixels; a hidden layer's are neither, and leave the layer under free.
         ToneDocument three = VectorInkChecks.mixed();
-        List<ToneDocument.Layer> v = NotebookExport.vectorLayers(NotebookExport.flatten(Collections.singletonList(three), new boolean[1]), null);
+        List<ToneDocument.Layer> v = NotebookExport.vectorLayers(NotebookExport.flatten(Collections.singletonList(three), new boolean[1], 0), null);
         check(v.size() == 1 && VectorInkChecks.same(v.get(0).lines, three.lines(3)), "layer 2's lines over its pen's marks as vectors, layer 1's under them pixels");
         // Its PDF page: the picture keeps layer 2's pen's marks and layer 1's lines' pixels, without layer 2's lines' pixels.
         List<PackedPage> pages = Collections.singletonList(NotebookPdfChecks.packed(three));
@@ -228,7 +228,7 @@ public final class VectorPdfChecks {
         for (int y = 0; y < three.height; y++) for (int x = 0; x < three.width; x++) check(shown[y * three.width + x] == DotPattern.exportGray(under.compositeTone(x, y)), "its picture without layer 2's lines' pixels alone at " + x + "," + y);
         check(pdf.text.contains("/Lines "), "layer 2's lines drawn over it");
         InkWashLayers.setStep(three, 2, NotebookOptions.HIDDEN);
-        v = NotebookExport.vectorLayers(NotebookExport.flatten(Collections.singletonList(three), new boolean[1]), null);
+        v = NotebookExport.vectorLayers(NotebookExport.flatten(Collections.singletonList(three), new boolean[1], 0), null);
         check(v.size() == 1 && VectorInkChecks.same(v.get(0).lines, three.lines(1)), "layer 2 hidden: its lines neither, layer 1's as vectors");
     }
 

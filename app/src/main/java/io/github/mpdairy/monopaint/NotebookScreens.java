@@ -1170,6 +1170,10 @@ final class NotebookScreens {
                 chips(row, OFF_ON, o.nibPreview ? 1 : 0, i -> { if (app.book == book && !app.busy() && (i == 1) != book.options().nibPreview) app.setNotebookOptions(book.options().withNibPreview(i == 1)); });
                 value = o.nibPreview ? NotebookRules.ON : NotebookRules.OFF;
                 break;
+            case SECOND_INK:
+                chips(row, SecondInk.NAMES, o.ink, i -> { if (app.book == book && !app.busy() && i != book.options().ink) app.setNotebookOptions(book.options().withInk(i)); });
+                value = SecondInk.NAMES[o.ink] + ". " + LibraryCard.SECOND_INK_NOTE;
+                break;
             case NO_ERASING:
                 chips(row, OFF_ON, o.noErasing ? 1 : 0, i -> { if ((i == 1) != book.options().noErasing) tapSetting(part); });
                 value = o.noErasing ? NotebookRules.ON : NotebookRules.OFF;

@@ -6,7 +6,7 @@ import java.util.List;
 /** The Fridge ({@link Fridge}, 2026-11-06): its requests, its answers read, the cards kept; no network. */
 public final class FridgeChecks {
     public static void main(String[] args) {
-        requests(); size(); answers(); kept(); words();
+        requests(); template(); size(); answers(); kept(); words();
         System.out.println("PASS: The Fridge: the send's address encodes and cuts its name and caption, shared=1 only with My Fridge; the page goes at Page up to 1600 wide, else Social, under 3 MB; answers read with the server's words as notes; cards kept and taken down by id");
     }
     static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
@@ -29,6 +29,12 @@ public final class FridgeChecks {
         check(Fridge.deleteBody(card).equals("{\"id\":\"ab12\",\"del\":\"s3cr\\\\et\"}"), "A take-down's request");
     }
 
+    static void template() {
+        NotebookOptions lined = NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.LINED);
+        java.util.List<String> own = java.util.Arrays.asList(null, NotebookOptions.ownKey(NotebookTemplate.BLANK));
+        check(!Fridge.templated(0, 2, NotebookOptions.DEFAULT, null, null) && Fridge.templated(0, 2, lined, own, null) && !Fridge.templated(1, 2, lined, own, null),
+                "The Template tick only where the page shows a template: the notebook's, not a page's own Blank");
+    }
     static void size() {
         check(Fridge.size(1785, 2387) == ExportSize.SOCIAL, "The Manta's page is wider than 1600: Social");
         int[] manta = ExportSize.SOCIAL.of(1785, 2387);

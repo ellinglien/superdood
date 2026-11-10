@@ -17,6 +17,7 @@ public final class LaterChecks {
         Assets.install(Assets.folder(Assets.FOLDER));
         if (args.length > 0 && args[0].equals("older")) { for (String[] t : older()) System.out.println(String.join("\t", t)); return; }
         if (args.length > 0 && args[0].equals("media")) { for (String[] t : media(LaterMediaChecks.MEDIA)) System.out.println(String.join("\t", t)); return; }
+        if (args.length > 0 && args[0].equals("second")) { for (String[] t : second()) System.out.println(String.join("\t", t)); return; }
         if (args.length > 0 && args[0].equals("later2")) { for (String[] t : media(LaterMediaChecks.LATER2)) System.out.println(String.join("\t", t)); return; }
         tables(); oldCodes(); combos(); roundTrips(); lab();
         System.out.println("PASS: Later is the seventh part (Off, Float, Mold, Fading, Lemon Juice; Float on Quick, Mold on Slow, Fading and Lemon Juice on Instant, Quick or Slow, none on Wet); "
@@ -187,6 +188,24 @@ public final class LaterChecks {
             out.add(new String[]{ModularCode.encode(b), ModularCode.encode(withoutLater(b)), "newer"});
         out.addAll(media(LaterMediaChecks.MEDIA));
         for (ToolPresets.Preset p : mischief()) out.add(new String[]{ModularCode.encode(ModularCode.decode(p.code)), p.code, "same"});
+        return out;
+    }
+    /** Second Ink On, one brush for each medium that has it: {code, the plain brush's code, newer}, which any version before it reads as the plain brush with the "Newer version" note. */
+    static List<String[]> second() {
+        List<String[]> out = new ArrayList<>();
+        java.util.Set<PartChoice> seen = new java.util.HashSet<>();
+        for (ToolPresets.Preset p : ToolPresets.all()) {
+            ModularBrush plain = ModularCode.decode(p.code), on = ModularCode.decode(p.code);
+            PartChoice m = plain.choice(BrushPart.MEDIUM);
+            if (!m.has(PartDial.SECOND) || !seen.add(m)) continue;
+            on.part(BrushPart.MEDIUM).set(PartDial.SECOND, 1);
+            // The plain brush as the older reader has it: the On code's dials read and written back with the switch Off (Angle's
+            // 45 comes back as its base-36 step, so this is not always the code the brush had before the switch was touched).
+            ModularBrush read = ModularCode.decode(ModularCode.encode(on));
+            read.part(BrushPart.MEDIUM).set(PartDial.SECOND, 0);
+            out.add(new String[]{ModularCode.encode(on), ModularCode.encode(read), "newer"});
+        }
+        check(out.size() == 5, "Second Ink is on five media: " + out.size());
         return out;
     }
     /** Later's media's codes, which any version before them (before Later, or with it) reads as their six parts and nib, Later Off, newer. */

@@ -535,10 +535,10 @@ public final class BlendChecks {
         ModularBrush.Part ink = brush(WHITE_GEL).part(BrushPart.MEDIUM), cover = brush(code("white-paint")).part(BrushPart.MEDIUM);
         check(PartDial.M_BLEND.shown(1, ink).equals("White") && PartDial.M_BLEND.shown(0, ink).equals("Darken") && PartDial.M_BLEND.shown(0, cover).equals("Cover"), "Blend Mode's options: Darken, or Opaque's Cover, then White, Behind, Invert");
         java.util.List<PartDial> dials = ink.choice.dials;
-        // Fling after them (FlickFlingChecks), then only Dissolves (explore-media).
+        // Fling after them (FlickFlingChecks), then only Dissolves and Second Ink.
         int fling = dials.indexOf(PartDial.FLING), n = fling - PartDial.SCREEN_DIALS.length;
         check(dials.get(n - 1) == PartDial.M_BLEND && dials.get(n - 2) == PartDial.ERASABLE && dials.subList(n, fling).equals(java.util.Arrays.asList(PartDial.SCREEN_DIALS))
-                && dials.subList(fling + 1, dials.size()).equals(java.util.Arrays.asList(PartDial.SOLUBLE)), "Blend after Erasable on every medium, then only Screen's (ScreenChecks), then Fling, then Dissolves");
+                && dials.subList(fling + 1, dials.size()).equals(java.util.Arrays.asList(PartDial.SOLUBLE, PartDial.SECOND)), "Blend after Erasable on every medium, then only Screen's (ScreenChecks), then Fling, then Dissolves and Second Ink");
         java.util.Map<String, String> store = new java.util.HashMap<>();
         BrushLibrary.Store st = new BrushLibrary.Store() { public String get(String k) { return store.get(k); } public void put(String k, String v) { if (v == null) store.remove(k); else store.put(k, v); } };
         BrushLab lab = new BrushLab(new ToolSlots(st, new Random(1)), 2, new Random(7));

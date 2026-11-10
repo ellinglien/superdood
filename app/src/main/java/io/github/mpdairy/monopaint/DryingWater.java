@@ -426,6 +426,8 @@ final class DryingWater {
         if (laid.tones == null) return;
         long t0 = System.nanoTime();
         document.begin(erasable, kind);
+        // Second Ink: the wash's own paint settling.
+        document.inkFlows();
         laid.tones.applyTo(document, null);
         long t1 = System.nanoTime();
         document.finishContinuation();

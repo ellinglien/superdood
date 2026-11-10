@@ -52,6 +52,7 @@ public class CodeSpecChecks {
             {"fountain-pen.M00i000at00003m_03mzzwe00000000000_0_000_0_8qz0000000000000000nz0_0_7cl5o.2f1", "Later's media: Feathering on an Instant pen, as it comes", "same"},
             {"swell-brush.M10i0q6f40000at_000t7008h000000000_0_000_1jz_8wgft00dr0000ey0000nz0_0_8ssad.1s13pn4", "Later's media: Foxing on a Quick brush pen, more spots", "same"},
             {"water-pencil.M40i000000000at_4p600zz008bi0000000001_0_000_0_25ess00000000000000nz000000000530000005000c099zz.2gp", "Water-Soluble on (Graphite's last dial): Water pencil", "same"},
+            {"h-pencil.M40i000000000at_48n00zz008bi00000000001_0_2s8_1jz_87nge00000000000000nz000000000530000005000c099zz.51j8ud", "Second Ink on (Graphite's last dial): an H pencil", "same"},
             {"dip-nib.M20i000770000at_000zzat00000000000_21t3mzz00i0cl_000_0_1ss0000000000000000nz0.2go", "Paint Load on an ink line: Dip nib, which runs dry", "same"},
             {"palette-knife.M60i000000000at_1ulat00770000_7p6_000_0_0000000000000000000nz0.2gn", "Scrape (Smudge's choice 7): the Palette knife, Depth .7", "same"},
             {"hb-pencil.M40i000000000at00ll_4e551_0_1v5_1jz_8arsr00000000000000nz000000000530000005000c099zz.pg5zxt", "Wears Down .6, last of Round's dials, on the HB pencil", "same"},

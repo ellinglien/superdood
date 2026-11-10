@@ -656,6 +656,7 @@ final class ModularStyle {
             // Keeps Paint is never rolled either: off, a smudge that starts each stroke clean, drawing nothing from random.
             // Press to Push and Press to Lift neither: off, drawing nothing from random.
             // Water-Soluble neither: off, drawing nothing from random.
+            if (d == SECOND) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
             if (d == SOLUBLE) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
             if (d == PRESS) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }
             if (d == KEEPS) { p.set(d, locked != null && locked.contains(d) && old != null && old.choice == c ? old.get(d) : 0); continue; }

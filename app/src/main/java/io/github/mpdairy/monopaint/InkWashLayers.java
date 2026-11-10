@@ -121,21 +121,26 @@ final class InkWashLayers {
             if (entry == null) continue;
             entries[k] = entry; opacity[k] = ToneDocument.stackOpacity(all.get(ToneDocument.stackOwner(k)), entry);
             if (entry.covers() || entry == all.get(ToneDocument.stackOwner(k))) kinds |= entry.kinds;
+            if (entry.ink != null && ink.ink == null) ink.ink = new byte[n];
         }
         for (int i = 0; i < n; i++) {
-            // Source-over without paper: coverage a and premultiplied tone p, both 0 to 1.
-            double a = 0, p = 0;
+            // Source-over without paper: coverage a and premultiplied tone p, both 0 to 1. Second Ink: q, each layer's
+            // darkness (a - p is the page's) times its ink share, so the inks mix by the darkness each shows.
+            double a = 0, p = 0, q = 0;
             for (int k = 0; k < places; k++) {
                 ToneDocument.Layer layer = entries[k];
                 if (layer == null) continue;
-                double c = (layer.alpha[i] & 255) * opacity[k] / 100.0 / 255;
-                p = (layer.tones[i] & 255) / 255.0 * c + p * (1 - c);
+                double c = (layer.alpha[i] & 255) * opacity[k] / 100.0 / 255, tone = (layer.tones[i] & 255) / 255.0;
+                p = tone * c + p * (1 - c);
+                if (ink.ink != null) q = (layer.ink == null ? 0 : (1 - tone) * c * (layer.ink[i] & 255)) + q * (1 - c);
                 a = c + a * (1 - c);
             }
             if (a <= 0) continue;
             ink.alpha[i] = (byte) Math.round(a * 255);
             ink.tones[i] = (byte) Math.min(255, Math.round(p / a * 255));
+            if (ink.ink != null && a - p > 0) ink.ink[i] = (byte) Math.min(255, Math.round(q / (a - p)));
         }
+        // Second Ink: the ink share rides along (above).
         // shortcut: what the eraser may take (share), the print tone and the kinds' plane start afresh (all erasable, every
         // kind laid); refine if Merge is used on pages whose permanent paint matters.
         ink.kinds = kinds;
@@ -290,6 +295,8 @@ final class InkWashLayers {
         // And the kinds of mark it holds (0 elsewhere).
         copy.kinds = layer.kinds; copy.kindBase = layer.kindBase;
         if (layer.kind != null) copy.kind = new byte[width * height];
+        // Second Ink: and each pixel's ink share (none, 0, elsewhere).
+        if (layer.ink != null) copy.ink = new byte[width * height];
         int w = Math.min(width, fromWidth - left), h = Math.min(height, fromHeight - top);
         for (int y = 0; y < h; y++) {
             int from = (y + top) * fromWidth + left, to = y * width;
@@ -298,6 +305,7 @@ final class InkWashLayers {
             if (layer.share != null) System.arraycopy(layer.share, from, copy.share, to, w);
             if (layer.print != null) System.arraycopy(layer.print, from, copy.print, to, w);
             if (layer.kind != null) System.arraycopy(layer.kind, from, copy.kind, to, w);
+            if (layer.ink != null) System.arraycopy(layer.ink, from, copy.ink, to, w);
         }
         return copy;
     }

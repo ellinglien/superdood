@@ -3,7 +3,7 @@ package io.github.mpdairy.monopaint;
 /**
  * Inkwash: the Lasso's piece plane by plane ({@link FloatingSelection#planes}): what it lifted of the selected pair's
  * wash and ink ({@link InkWashLayers}) and of the masking fluid over them, each pixel's tone, coverage, the share the
- * eraser takes, print tone and kinds ({@link ToneDocument#copyPlanes}), so the piece placed anywhere, another page too,
+ * eraser takes, print tone, kinds and ink share ({@link ToneDocument#copyPlanes}), so the piece placed anywhere, another page too,
  * looks and erases as it did. MonoPaint's {@link FloatingSelection} keeps the pose; its {@code tones} and {@code alpha}
  * are the piece's look, its ink over its wash, which the screen shows while it floats ({@link #shown}). Inkwash: each
  * half's kind planes too ({@link ToneDocument.Layer#planes}), each laid back on its plane.
@@ -21,6 +21,8 @@ final class LassoPlanes {
     private static boolean lined(int role) { return role != FLUID && plane(role) == ToneDocument.PLANE_LINES; }
     /** Each role's planes over the piece's pixels, row by row; null where it lifted nothing (no wash apart, no fluid). */
     final byte[][] tones = new byte[ROLES][], alpha = new byte[ROLES][], share = new byte[ROLES][], print = new byte[ROLES][], kind = new byte[ROLES][];
+    /** Second Ink: each role's ink shares ({@link ToneDocument.Layer#ink}); null where it lifted none. */
+    final byte[][] inks = new byte[ROLES][];
     /** Each role's kinds laid, all together, and the one kinds byte every covered pixel holds (-1: they differ), for {@link ToneDocument#layKinds}. */
     private final int[] kinds = new int[ROLES], uniform = new int[ROLES];
     /** The engine layers lifted from, by role (-1: the fluid). */
@@ -63,12 +65,14 @@ final class LassoPlanes {
             if (role != FLUID && role % 2 == 0 && wash == ink || role == FLUID && !document.hasMask()) continue;
             if (role != FLUID && plane(role) >= 0 && !document.hasPlane(planes.from[role], plane(role))) continue;
             byte[] t = new byte[n], a = new byte[n], s = new byte[n], p = new byte[n], k = new byte[n];
-            document.copyPlanes(planes.from[role], role == FLUID ? -1 : plane(role), box[0], box[1], w, h, t, a, s, p, k);
-            boolean any = false;
+            byte[] q = document.copyPlanes(planes.from[role], role == FLUID ? -1 : plane(role), box[0], box[1], w, h, t, a, s, p, k);
+            boolean any = false, inked = false;
             for (int i = 0; i < n; i++) if (inside[i] == 0) { t[i] = s[i] = p[i] = (byte) 255; a[i] = k[i] = 0; } else any |= a[i] != 0;
+            if (q != null) for (int i = 0; i < n; i++) if (inside[i] == 0) q[i] = 0; else inked |= q[i] != 0;
             // A plane with nothing in the loop is left out; the base roles stay as ever.
             if (!any && role != FLUID && plane(role) >= 0) continue;
             planes.tones[role] = t; planes.alpha[role] = a; planes.share[role] = s; planes.print[role] = p; planes.kind[role] = k;
+            if (inked) planes.inks[role] = q;
         }
         int[] found = FloatingSelection.found(planes.alpha, w, h);
         if (found == null) return null;
@@ -78,6 +82,7 @@ final class LassoPlanes {
             planes.tones[role] = FloatingSelection.crop(planes.tones[role], w, found); planes.alpha[role] = FloatingSelection.crop(planes.alpha[role], w, found);
             planes.share[role] = FloatingSelection.crop(planes.share[role], w, found); planes.print[role] = FloatingSelection.crop(planes.print[role], w, found);
             planes.kind[role] = FloatingSelection.crop(planes.kind[role], w, found);
+            if (planes.inks[role] != null) planes.inks[role] = FloatingSelection.crop(planes.inks[role], w, found);
             int all = 0, one = -2;
             for (int i = 0; i < planes.alpha[role].length; i++) {
                 if (planes.alpha[role][i] == 0) continue;
@@ -133,7 +138,7 @@ final class LassoPlanes {
                     if (role != FLUID && plane(role) < 0) document.layKinds(kinds[role], uniform[role]);
                     for (int y = area[1]; y < area[3]; y++) for (int x = area[0]; x < area[2]; x++) {
                         int i = piece.at(m, x, y);
-                        if (i >= 0 && a[i] != 0) document.layPixel(x, y, tones[role][i] & 255, a[i] & 255, share[role][i] & 255, print[role][i] & 255, kind[role][i] & 255);
+                        if (i >= 0 && a[i] != 0) document.layPixel(x, y, tones[role][i] & 255, a[i] & 255, share[role][i] & 255, print[role][i] & 255, kind[role][i] & 255, inks[role] == null ? 0 : inks[role][i] & 255);
                     }
                     changed |= changed ? document.finishWithPrevious() : document.finish();
                 }

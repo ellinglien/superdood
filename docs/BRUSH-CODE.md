@@ -5,7 +5,7 @@ kept in the library and the community library. This page is enough to read and w
 e-ink tablet, the web). Drawing the same marks as the app needs its engine as well (Java, `ModularStroke`): the code
 says *which* brush, the engine says what its strokes look like.
 
-The tables (each part's choices and dials) and 67 test codes with what they read as are in
+The tables (each part's choices and dials) and 68 test codes with what they read as are in
 [`brush-code.json`](brush-code.json), written from the app's own enums (`bash scripts/brush-code-json.sh`). The app's
 `CodeSpecChecks` and the web's `docs/brush-lab/studio-src/code-spec-check.cjs` both check against it, in
 `scripts/test_inkwash.sh`.

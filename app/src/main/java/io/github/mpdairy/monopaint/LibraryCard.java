@@ -32,16 +32,18 @@ import java.util.List;
  */
 final class LibraryCard {
     /** A row, or the name above them. */
-    enum Part { NAME, TEMPLATE, RANDOM_FROM, PAGE_COLOUR, SURFACE, TRANSPARENCY, NIB_PREVIEW, TOOLS, NO_ERASING, TIMED, LOCK_PAGES, COVER, COVER_PICTURE, SHOW_THROUGH, LAYERS, MOVE }
+    enum Part { NAME, TEMPLATE, RANDOM_FROM, PAGE_COLOUR, SURFACE, TRANSPARENCY, NIB_PREVIEW, SECOND_INK, TOOLS, NO_ERASING, TIMED, LOCK_PAGES, COVER, COVER_PICTURE, SHOW_THROUGH, LAYERS, MOVE }
     /** The strip's tile word (and the menus' row that opens it); the name's button. */
     static final String SETTINGS = "Settings", RENAME = "Rename";
     /** The rows' keys that aren't a screen's title (docs/TEXT-STYLE.md: Title Case, shown in caps). */
     static final String PAGE_COLOUR = "Page Colour", SURFACE = "Surface", SEE_THROUGH = "See-Through Pages", COVER = "Cover",
-            RANDOM_TEMPLATE = "Random Template", COVER_PICTURE = "Cover Picture", NIB_PREVIEW = "Nib Preview";
+            RANDOM_TEMPLATE = "Random Template", COVER_PICTURE = "Cover Picture", NIB_PREVIEW = "Nib Preview", SECOND_INK = "Second Ink";
+    /** Second Ink's note, said with its row to a screen reader (copies only: the screen stays grey). */
+    static final String SECOND_INK_NOTE = "Second Ink brushes show in this colour in PDF and PNG copies.";
 
     /** The rows a notebook shows, in groups, a grey-400 line between them: the page, the rules, the cover. */
     static final List<List<Part>> GROUPS = java.util.Arrays.asList(
-            java.util.Arrays.asList(Part.TEMPLATE, Part.RANDOM_FROM, Part.SURFACE, Part.NIB_PREVIEW),
+            java.util.Arrays.asList(Part.TEMPLATE, Part.RANDOM_FROM, Part.SURFACE, Part.NIB_PREVIEW, Part.SECOND_INK),
             java.util.Arrays.asList(Part.NO_ERASING, Part.TIMED, Part.LOCK_PAGES, Part.TOOLS),
             java.util.Arrays.asList(Part.COVER, Part.COVER_PICTURE));
     /**
@@ -67,6 +69,7 @@ final class LibraryCard {
             case SURFACE: return SURFACE;
             case TRANSPARENCY: return SEE_THROUGH;
             case NIB_PREVIEW: return NIB_PREVIEW;
+            case SECOND_INK: return SECOND_INK;
             case TOOLS: return NotebookLayout.TOOLS;
             case NO_ERASING: return NotebookRules.NO_ERASING;
             case TIMED: return NotebookRules.TIMED_PAGES;
@@ -102,7 +105,7 @@ final class LibraryCard {
     /** Whether Lock Pages applies, so its chips can be set (else greyed): a page is timed, by Timed Pages or a timed template's sections. */
     static boolean locksApply(NotebookOptions o) { return o.seconds > 0 || o.template.timed(); }
     /** Whether a row opens a screen ("›"); the rest are set in the row. */
-    static boolean opens(Part p) { return p != Part.PAGE_COLOUR && p != Part.TRANSPARENCY && p != Part.NIB_PREVIEW && p != Part.NO_ERASING && p != Part.LOCK_PAGES && p != Part.COVER_PICTURE; }
+    static boolean opens(Part p) { return p != Part.PAGE_COLOUR && p != Part.TRANSPARENCY && p != Part.NIB_PREVIEW && p != Part.SECOND_INK && p != Part.NO_ERASING && p != Part.LOCK_PAGES && p != Part.COVER_PICTURE; }
     /** Cover Picture's words: the page on the front cover ("Page 3"), or none. */
     static String coverPicture(int stack) { return stack < 0 ? NotebookCovers.NO_PICTURE_BUTTON : pageTitle(stack); }
     /**
@@ -216,7 +219,7 @@ final class LibraryCard {
     /** What a tap on a row does: renames, toggles No Erasing, opens a screen. */
     enum Tap { RENAME, TOGGLE, CHOOSE, NOTHING }
     static Tap tap(Part part, NotebookOptions options) {
-        if (part == null || part == Part.PAGE_COLOUR || part == Part.COVER_PICTURE || part == Part.LOCK_PAGES || part == Part.NIB_PREVIEW) return Tap.NOTHING;
+        if (part == null || part == Part.PAGE_COLOUR || part == Part.COVER_PICTURE || part == Part.LOCK_PAGES || part == Part.NIB_PREVIEW || part == Part.SECOND_INK) return Tap.NOTHING;
         return part == Part.NAME ? Tap.RENAME : part == Part.NO_ERASING ? Tap.TOGGLE : Tap.CHOOSE;
     }
     /** The screen a row opens (See-Through Pages' by a long press). */

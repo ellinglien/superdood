@@ -390,7 +390,7 @@ final class LabLayout {
     /**
      * Whether the open card has a row for {@code choice}'s dial {@code d}: every dial that draws, but on the Nomad Screen's
      * own (Cell, Angle and the newsprint three), which its card has no room for beside a medium's own; there Screen picks
-     * the print alone, where its row fits (not beside Ink's eleven), then Fling where its row fits too, then Dissolves,
+     * the print alone, where its row fits (not beside Ink's eleven), then Fling where its row fits too, then Dissolves, then Second Ink,
      * and Tone keeps its Cell and Angle.
      */
     boolean shows(PartChoice choice, PartDial d) {
@@ -398,7 +398,7 @@ final class LabLayout {
         int k = SPARE.indexOf(d);
         if (!compact || choice == PartChoice.TONE || k < 0 && !d.underScreen()) return true;
         if (d.underScreen()) return false;
-        // Screen's row first, then Fling's, then Dissolves': each where the medium's own rows and those before it that show leave room.
+        // Screen's row first, then Fling's, Dissolves' and Second Ink's: each where the medium's own rows and those before it that show leave room.
         int dials = 0, stacked = 0;
         for (PartDial c : choice.dials) {
             int s = SPARE.indexOf(c);
@@ -450,7 +450,7 @@ final class LabLayout {
         return new ToolsLayout(width, height).cardWidth >= ToolsLayout.CARD_LEAST && lab.right >= lab.column / 2;
     }
     /** The Nomad's rows past a medium's own, each shown only where it fits, in this order ({@link #shows}). */
-    private static final java.util.List<PartDial> SPARE = java.util.Arrays.asList(PartDial.SCREEN, PartDial.FLING, PartDial.SOLUBLE);
+    private static final java.util.List<PartDial> SPARE = java.util.Arrays.asList(PartDial.SCREEN, PartDial.FLING, PartDial.SOLUBLE, PartDial.SECOND);
     /** Whether dial {@code d}, with {@code options}, lays its segments under its label: a choice dial whose segments don't fit beside it, and isn't a menu button. */
     boolean stacks(PartDial d, String[] options) { return d != PartDial.DIR && d.choice() && !segmentsBeside(options) && !menu(d, options); }
     /** A choice dial whose segments don't fit beside its label: the label on a line of its own, the segments under it, its rule. */

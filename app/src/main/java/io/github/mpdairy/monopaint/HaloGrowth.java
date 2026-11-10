@@ -683,6 +683,8 @@ final class HaloGrowth {
         int kind = 0;
         for (HaloGrowth g : halos) { erasable = Math.min(erasable, g.erasable); kind |= g.kind; }
         document.begin(erasable, kind);
+        // Second Ink: the stroke's own paint growing out.
+        document.inkFlows();
         int W = document.width;
         int[] row = new int[W];
         Arrays.fill(row, -1);

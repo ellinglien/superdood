@@ -356,6 +356,8 @@ final class FloatWater {
     void show(Shown s) {
         if (s == STILL) return;
         document.begin(s.print ? erasable : 1, kind); // Inkwash: the films float on the plane the print lays on
+        // Second Ink: the films drifting, and their print, are the paint each stroke floated.
+        document.inkFlows();
         if (s.tones != null) s.tones.applyTo(document, null);
         if (s.print) { prepared = null; preparedAt = null; }
         shown = s.box;
@@ -375,6 +377,7 @@ final class FloatWater {
         if (bath.strokes() > 1) {
             bath.undoLast();
             document.begin(1, kind);
+            document.inkFlows();
             full(false);
             commit();
             age = 0;

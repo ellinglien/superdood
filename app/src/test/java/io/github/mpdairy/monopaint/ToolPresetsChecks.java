@@ -158,6 +158,8 @@ public final class ToolPresetsChecks {
             ModularBrush b = p.brush().parts, old = null;
             for (ToolPresets.Preset q : ToolPresets.retired()) if (q.name.equals(oldName(p.name)) && q.style == p.style) old = q.brush().parts;
             check(old != null, p.name + " replaced an old one");
+            // But for Second Ink, which some took later (the mix, 2026-11-10).
+            if (ResolvedBrush.second(b)) old.part(BrushPart.MEDIUM).set(PartDial.SECOND, 1);
             for (BrushPart part : BrushPart.values()) if (part != BrushPart.LIFE && part.ordinal() < BrushPart.SIX)
                 check(ModularCode.encode(b).split("_")[part.ordinal()].replaceAll("^.*\\.M[67]", "").equals(ModularCode.encode(old).split("_")[part.ordinal()].replaceAll("^.*\\.M[67]", "")),
                         p.name + ": its " + part + " is the old one's");
@@ -313,6 +315,14 @@ public final class ToolPresetsChecks {
     static void pinned() {
         Set<String> now = new HashSet<>();
         for (String[] row : rows()) now.add(row[2]);
+        // A Basic tool that took Second Ink (the mix, 2026-11-10) is still known as it was, grey: ToolPresets.retired.
+        for (String[] pin : PINNED) if (!now.contains(pin[0])) {
+            ModularBrush on = ModularCode.decode(pin[0]);
+            if (!on.choice(BrushPart.MEDIUM).has(PartDial.SECOND)) continue;
+            on.part(BrushPart.MEDIUM).set(PartDial.SECOND, 1);
+            for (String[] row : ToolPresets.ROWS)
+                if (row[2].equals(ModularCode.encode(on)) && ToolPresets.retired(Brush.read(row[1] + "\t" + pin[0])) == ToolPresets.named(row[1])) now.add(pin[0]);
+        }
         for (String[] pin : PINNED) check(now.contains(pin[0]) && drawn(pin[0]).equals(pin[1]), pin[0] + " is still known and draws as it did");
     }
     // 49 re-pinned 2026-11-01: those on a textured paper drawn on their surfaces made whole, and the wet washes on Smooth pooling to their rim (the surface spec).

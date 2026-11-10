@@ -5,6 +5,16 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.2.3 (2026-11-10)
+
+- **Second Ink in the copies** (2026-11-09, the owner): what a Second Ink brush drew shows in the notebook's ink in PDF and PNG copies (Export Now, Export Page at every size) and on the Fridge; the tablet stays grey. A page without any exports as before; choosing another ink writes the pages that have some again. The Layers copy stays grey.
+- **Second Ink, a brush's switch** (2026-11-09, the owner): Brush Lab's Medium part has a **Second Ink** dial (Off, On) for Ink, Wash, Opaque, Charcoal and Graphite, kept in the share code and read by Brush Studio; an older version opens such a code as the plain brush, "Newer version, some parts differ".
+- **Second Ink on some Basic tools** (2026-11-10, the owner): a random half of the washes and paints come with Second Ink On, the rest stay grey; pens stay black, but Hatch pen and Fountain pen. On the Tools page: Ink wash, Watercolour wash, Watercolour backrun, Granulating, Cracking paint and Opaque flat. A tool already in a slot or the library stays as it was; pick it again on the Tools page for the new one.
+- **Second Ink, chosen per notebook** (2026-11-09, the owner): Notebook Settings has a Second Ink row, **Blue**, **Sepia**, **Red**, **Green**, **Violet**; the colour Second Ink brushes show in copies. The inks' colours are the owner's, tuned by eye (2026-11-10): Blue is a blue-black, after Quink's.
+- **Fridge pages on plain paper** (2026-11-10, the owner: "fridge posts... they shouldn't have the template visible
+  ideally... or that should be an option"): a page goes to the Fridge without its template's lines or grid; the send
+  window's new **Template** tick, on a page that has one, puts them back.
+
 ## 1.2.2 (2026-11-10)
 
 - **Zen Mode's fan closes as you draw** (2026-11-10, the owner: "adjust the always open fan to close when a pen touches
@@ -16,6 +26,7 @@ with each change; when cutting a release, retitle that section with the new vers
   pen, stitch and watercolor splatter for the tray"): the owner's texture-pen drawing with each one's marks at its tip.
 - **Plainer notebook names** (2026-11-10, the owner: "simplify the notebook name generator to be what it was ages ago...
   adjective noun"): a new notebook is called something like "Brisk Bean 26-11-10". Names already given stay.
+
 ## 1.2.1 (2026-11-10)
 
 - **Read Handwriting, for Search on the shelf** (2026-11-09, opt-in): System Settings' Read Handwriting reads the

@@ -108,7 +108,7 @@ final class PageExport {
         NotebookTemplate template = options.pageTemplate(pageTemplates != null && bottom < pageTemplates.size() ? pageTemplates.get(bottom) : null);
         synchronized (DocumentCodec.ONE_PAGE) {
             List<ToneDocument> layers = NotebookExport.layers(pages, stacks, place, tracing, template);
-            ToneDocument.Snapshot page = NotebookExport.flatten(layers, NotebookExport.hidden(stacks, place, tracing));
+            ToneDocument.Snapshot page = NotebookExport.flatten(layers, NotebookExport.hidden(stacks, place, tracing), options.ink);
             boolean guides = template.shared(page.width, page.height) != null;
             if (choice.equals(LAYERS)) { psd(out, page, tiles, guides, size); return; }
             long key = NotebookExport.pageKey(NotebookExport.stackKey(pages, stacks, place, tracing), template);
@@ -176,7 +176,7 @@ final class PageExport {
         // The merged image: the PNG's greys at that size (High Res's drawn a strip at a time).
         PsdWriter.Channel merged = new PsdWriter.Channel(oh);
         byte[] line = new byte[ow];
-        if (high) PngRender.high(page, true, tiles, guides, (greys, count) -> {
+        if (high) PngRender.high(page, true, tiles, guides, false, (greys, count) -> {
             for (int r = 0; r < count; r++) { for (int x = 0; x < ow; x++) line[x] = (byte) greys[r * ow + x]; merged.row(line); }
         });
         else {

@@ -87,7 +87,7 @@ screen, a pinch out back to it; 2026-11-01, `ZoomFitChecks.browser`) with its `w
 | File | What changed, and why |
 |---|---|
 | `ToneDocument` | Block writes (`setTones`, `coverTones`, `smearTones`, `eraseTones`), reads (`strokeBaseTones`, `strokeBasePixels`, `strokeBaseKept`, `layerDarkness`, `compositeToneWithout`, `compositeToneKept`, `baseComposite`, `foundTiles`, `foundComposite`, `visibleLayers`, `touched`, `maskShield`, `maskLiftable`), `restack`/`setLayersVisible`/`setLayersShown` (visibility and opacity as one step, a layer's step, 2026-11-06), linked undo (`finishWithPrevious`), tile-at-a-time settle; one place for undo capture; Erasable's per-layer share (`Layer.share`, `begin(erasable)`, the one write rule), the masking fluid's too (`beginFluid`; `maskHatch` hatches only what lifts). The engine writes the page through these. |
-| `DocumentCodec`, `BookCodec` | TSM5: tagged sections after TSM4's body (Erasable's shares, `ERAS`; wax's, `MSHR`; the kinds of mark, `KIND`; kind planes, `PLNS`, a layer's look in the layers' part; Show Kinds' steps, `KSHN`, a byte), written only when a page needs one; the single-page fast paths open TSM4/TSM5 (see "Erasable", "Resist" and "Kind layers" below). |
+| `DocumentCodec`, `BookCodec` | TSM5: tagged sections after TSM4's body (Erasable's shares, `ERAS`; wax's, `MSHR`; the kinds of mark, `KIND`; kind planes, `PLNS`, a layer's look in the layers' part; Show Kinds' steps, `KSHN`, a byte), written only when a page needs one; Second Ink's shares, `INKS`: per layer a mask byte (bit 0 its pixels, bit n+1 plane n **as memory holds it**, so Vector Ink's plane is bit 5 although `PLNS` keeps it in the Pen plane) then a byte a pixel per set bit, exact length, written only when a share is nonzero, applied after `linePlanes`, a bit for an absent plane fails the file, older versions skip it; the single-page fast paths open TSM4/TSM5 (see "Erasable", "Resist" and "Kind layers" below). |
 | `DrawingPad` | Draws with Scribulor strokes on ink/wash layer pairs; the finger tool (erase, smudge or a slot's brush); the hovering nib's outline (`HoverNib`); erasing shows paper; pen speed; auto full-refresh at pauses; drying ticker; native area render; the hatch drawn by a static `drawMask` Brush Lab's test page shares; two fingers a tap until they move, then MonoPaint's pinch and pan (`PinchPan`), the page's map from `PageView`. Heaviest edit. |
 | `PaintActivity` | Scribulor bar replaces MonoPaint's controls (upstream ones built but hidden, `53b444a`); automatic names, rename/delete, PNG copy on leaving; Brush Lab and Tools page launch (Tools → Brush Lab → Tools, the slots' start carried through); slots, swatches; the side bar in MonoPaint's tool column place. |
 | `ViewportBitmap`, `viewport_bitmap.c` (+ new `compose.h`) | Native rendering of a changed area, not only whole pages (`84a568e`). |
@@ -565,6 +565,50 @@ bar files are untouched.
 |---|---|---|
 | `ToneDocument` | +157 −40 | `Layer.print`: per layer, a byte a pixel, the print tone (255 none; null until a screened gesture calls `printing()`), carried as `Layer.share` is: `copy`, copy-on-write, `expand`, Undo (`beforePrint`, `TileEdit.printBefore/After`; a tile captured before the layer had one restores to 255), `cancel`, `restoreSpan`, `clear`. `setPrints` (Undo capture, the masking fluid's shield), `strokeBasePrints`, `basePrints` (shared, as `baseTones`), `printTone`. `eraseTones`/`eraseTone` lower it with the coverage they take (a pixel with print tone and no paint is erased too). `copyShare` is `copyPlane`, `sameShare` `samePlane`. A gesture without a screen never touches it: pages and strokes without one write exactly as before. Generic: any hidden per-layer tone a tool builds on. |
 | `DocumentCodec` | +42 −16 | TSM5's `PRNT` section: each layer's flag and print tone, written only when some pixel holds some (an all-255 plane, a screened stroke undone, writes nothing), so every other page is byte for byte; `ERAS` and `PRNT` read by one `perLayer`. A reader from before skips it and opens the drawing as it shows. |
+
+#### Second Ink's ink share (2026-11-09, branch `second-ink`): upstream files touched
+
+Spec `docs/superpowers/specs/2026-11-09-second-ink-design.md`, plan `docs/superpowers/plans/2026-11-09-second-ink.md`
+(Tasks 1 to 4: the engine, the dial, every gesture's declaration and every carrier; the file and the copies don't keep
+or show it yet). Beside the
+share and the print tone a layer or plane keeps a third optional byte a pixel, `Layer.ink`: how much of the ink there
+is second ink (0 none, 255 all; null: none anywhere). Unlike the other two, no stroke writes it as it draws and the
+screen never reads it. A gesture says what its paint is after `begin` (`inking(share)`, or `inkFlows()` for paint that
+moves by itself), and `finish` sets the shares once (`mixInk`), over the tiles the gesture captured, from the darkness
+it added: `(d0·i0 + (d1 − d0)·g) / d1`. A pixel left with no darkness holds none; one left lighter keeps its ink
+(erasing), but on the opaque plane a declared ink takes it over by what it lightened. Paint that flows takes the ink
+round it (`inkAround`: the 5×5 pixels as found, by darkness, read from a summed table made once a tile, so the cost
+a pixel doesn't grow with the area; then outward pass by pass over clear paper). A gesture with no second ink on a
+plane without `ink` does no work per pixel, and first ink does none in a tile that held no second ink.
+
+Who declares (Task 4): a brush's stroke, `ResolvedBrush.inks` after `begin` (`ModularStroke.begin`, `WetPaintStroke`):
+its Second Ink dial's share, or `inkFlows()` for a smudge that lays none of its own paint (Own paint 0). A shape is
+its slot's brush's ink: `StrokeStart.shape` leaves it (`ToneDocument.shapeInk`), `ShapeStroke` begins with
+`beginShape`. Copy Strokes' reflected copies declare what their stroke did (`Darkening.ink`, `flows`; `layAgain`).
+Paint that moves by itself declares `inkFlows()`: the wet canvas (`WetWatercolor.lay` and `advance`,
+`WetCanvas.Drag`), drying (`DryingWater`), the Float bath (`FloatWater`), blooms (`HaloGrowth`), Blend
+(`ModularStroke.blendOther`). Tools with no brush (fills, pictures, the erasers, Sharp ink, masking fluid) declare
+nothing: first ink. A page with no second ink does none of the ink arithmetic (`layPixel`, `sinkUnder`, the Lasso's
+lift, Merge). What moves whole
+pixels carries each one's share and sets `inkCarried`: the Lasso (`copyPlanes` returns the ink block, `LassoPlanes.inks`,
+`layPixel`'s mix by the darkness laid over the darkness that shows through), `sinkUnder`, the crop
+(`InkWashLayers.croppedOne`), Merge (`InkWashLayers.flattened`, each layer's ink by the darkness it shows). Later's
+media that grow a mark past its pixels (`finished`) give the paint grown the mean share of what the mark laid on
+clear paper (of all of it when it laid none there).
+
+Cost (desktop, a 1404×1872 page, a size-60 wash's whole drying, with against without second ink on the plane): Grey
+wash 157 against 125 ms (41 ticks, 192 finishes of about 10 tiles), Wet gouache 76 against 47 ms, Soft wash on Slow
+47 against 23 ms (16 finishes of 45 tiles). The finish passes unchanged pixels in a loop of its own (`unchanged`), and
+in a tile whose paint is all one ink (`oneInk`) asks the sums only for paint new on clear paper.
+
+| File | Why |
+|---|---|
+| `ToneDocument` | `Layer.ink`, `Layer.inked()`; carried as `Layer.print` is: `copy`, `release`, copy-on-write (`own`, `bind`), the constructor's size check, Undo (`capture`, `beforeInk`, `foundInks`, `TileEdit.inkBefore/After`, `restoreTile`; a tile captured before the layer had one restores to 0), the continuation's merge, `cancel`, `restoreSpan`, `clear`, Later's media and Fading (`finished`'s joined tiles, `stepFade`'s `patch`), the history's byte counts. `inking`, `inkFlows`, `inkFound`, `inkAround`/`around`, `mixInk` (the array made at the first share that isn't 0, after `writable()`, so no snapshot sees it). Live pages' Undo (`takeBack`, `takeBackClear`) puts each pixel's ink back itself and tells `finish` to leave it (`inkCarried`). A larger page (`expanded`) and Keep Reflection (`reflected`) move each pixel's ink with it, as its print. `onWhite` is open to the package's checks. Task 4: `copyPlanes` gives each pixel's ink too, `layPixel` takes one (`liftPixel` none), `sinkUnder` keeps the sunk paint's, `finished` gives a Later mark's grown paint its share; `mixInk`'s `unchanged` and `oneInk`. Not yet: the file (Task 5), copies (Task 6); a merge replayed from the stroke log (`StrokeLog.Merge`) keeps no ink. |
+| `WetWatercolor` | `lay` and `advance`, where they open a gesture of their own, declare `inkFlows()` after `begin` (two lines, marked `// Inkwash:`). |
+| `ShapeStroke` | Its two `begin()` are `beginShape()` (the shape's ink with the gesture). |
+
+Checks: `SecondInkChecks`. Generic: a per-pixel property set from a gesture's before and after at its finish, at no
+cost to the stroke's own writes.
 
 #### Screen and Tone (2026-10-19): no upstream files touched
 
@@ -5930,6 +5974,41 @@ from the manifest: nothing of ML Kit starts, and nothing downloads, until Read H
 An older build reading a PDF state record with the new ninth field takes it as unreadable (a fresh PDF, or "Name 2.pdf"; nothing is lost).
 
 Generic: `DocumentCodec.log`.
+
+## Second Ink's brush switch (2026-11-09, branch `second-ink-notebook`)
+
+- `PartDial.SECOND` (key `second`, "Second Ink", Off/On): last of Ink's, Wash's, Cover's, Charcoal's and Graphite's dials (after Dissolves),
+  last in `ModularCode.ADDED` (written only when on, so every older code is byte for byte; a version before it reads an On code as the plain
+  brush with "Newer version", pinned in `scripts/test_inkwash.sh` against c7ebd5bb). Never rolled (`ModularStyle`). `ResolvedBrush.second(b)`
+  is the switch; nothing in the engine reads it yet. `LabLayout.shows`: on the Nomad a spare row after Dissolves. The web lab (`newmods.js`) reads and writes it.
+
+## Second Ink in the copies (2026-11-10, branch `second-ink-notebook`): upstream files touched
+
+Plan Task 6. The screen, thumbnails, the live page and Draw Together never read `Layer.ink`; only a copy does.
+
+- `PagePicture.Composite.row(y, out, share, from)`: beside each pixel's tone, second ink's share of its darkness (a mark's
+  darkness times its `Layer.ink`, laid over what is under as its tone is; text boxes' letters over it as black). `inked()`:
+  whether a shown mark holds any. Vector Ink's planes count as first ink (the PDF draws its lines as grey vectors).
+- `NotebookExport`: `flatten(layers, hidden, ink)` and `cover(…, ink)` set `Snapshot.ink` (the notebook's, `NotebookOptions.ink`).
+  `inks`/`greys(…, inks)` fill the shares, under the magnets as much as shows (the shares ride in the stamped picture's red).
+  A page with some is an 8-bit RGB PNG (colour type 2), each channel `grey + ink × share × (255 − grey) / 255²`
+  (`channel`, the grey calibrated first); `read` takes it (`Png.colour`) and `imageDictionary` writes `/DeviceRGB`,
+  `/Colors 3`. A page without any takes the grey paths untouched: byte for byte (`SecondInkCopyChecks.BEFORE`, from 583462fc).
+- The key: an RGB PNG carries its page's key mixed with its ink (`inkKey`; the first ink's is the page's own), so
+  `update` finds it only under the ink it was drawn in (`Png.key`) and another ink draws those pages again. The PDF's
+  record keeps the plain keys (a page's days don't move); the ink its pictures are in goes in `.lines.txt`, a last line
+  "ink 1", unless it is the first (so every record there is stays as it was): another ink writes the PDF again, the next
+  time too if its writing failed. `inked()` counts only marks that can show (their layer shown, at some opacity).
+- `PngRender`: Social shrinks the shares weighed by darkness; High Res carries each pixel's share beside its grey
+  (`Strips`: bits 8 to 15) into an RGB `Png`. shortcut: a Vector Ink line over second ink counts as black ink, and a
+  sharp dry stroke takes its page pixel's share. The Layers copy (`PsdWriter`) reads the grey alone.
+- Fridge: its PNG is `PageExport.bytes`, so it follows; the server (`png_size`) doesn't look at the colour type.
+
+| File | Lines | Why |
+|---|---|---|
+| `ToneDocument` | +2 | `Snapshot.ink`: the notebook's ink for a copy of the page; the page keeps none. |
+
+Checks: `SecondInkCopyChecks`.
 
 ## The app turns by itself (2026-11-10)
 

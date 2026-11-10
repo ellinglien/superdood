@@ -64,6 +64,9 @@ import java.util.zip.CRC32;
  * <p>Page Colour (the owner, 2026-10-23) adds {@code PCOL} (one byte, the paper tone new pages start on), only when not
  * white: versions before it skip it and add white pages. The pages keep their own tone, so they show the same in any version.
  *
+ * <p>Second Ink (the owner, 2026-11-09) adds {@code SINK} (one byte, the index of the ink the copies show it in), only when not
+ * Blue: versions before it skip it and read every other option as before.
+ *
  * <p>Page Settings (the owner, 2026-10-23) adds {@code PRUL} (the page count, then a byte a page: its own No Erasing and
  * Timed Pages, {@link NotebookRules#own}), only when a page has a rule of its own: versions before it skip it and keep the
  * notebook's rules on every page.
@@ -99,7 +102,7 @@ final class BookOptions {
             NO_ERASING = tag("NERS"), ONE_BRUSH = tag("ONEB"), BRUSHES = tag("BRSH"), PAGE_TEMPLATES = tag("PTPL"), TIMED = tag("TIMD"), TIMED_SECONDS = tag("TSEC"), LOCK = tag("LOCK"),
             PAPER = tag("PAPM"), GHOST = tag("GHST"), STEPS = tag("STEP"), STRENGTH = tag("PSTR"), STACKS = tag("STAK"),
             LAST = tag("LAST"), GUIDES_SHOWN = tag("GSHN"), PAGE_COLOUR = tag("PCOL"), PAGE_RULES = tag("PRUL"), PAGE_SECONDS = tag("PTIM"), LOCK_PAGES = tag("TLCK"), NIB_PREVIEW = tag("NIBP"),
-            SURFACE = tag("SURF"), PAGE_SURFACES = tag("PSRF"), PAGE_FAVES = tag("PFAV");
+            SURFACE = tag("SURF"), SECOND_INK = tag("SINK"), PAGE_SURFACES = tag("PSRF"), PAGE_FAVES = tag("PFAV");
     static int tag(String name) { byte[] b = name.getBytes(java.nio.charset.StandardCharsets.US_ASCII); return (b[0] & 255) << 24 | (b[1] & 255) << 16 | (b[2] & 255) << 8 | (b[3] & 255); }
 
     /**
@@ -288,6 +291,7 @@ final class BookOptions {
         if (options.lockPages) records.add(new Entry(LOCK_PAGES, options.lockPagesBytes()));
         if (!options.nibPreview) records.add(new Entry(NIB_PREVIEW, options.nibPreviewBytes()));
         if (options.surface != BrushTexture.DEFAULT) records.add(new Entry(SURFACE, options.surfaceBytes()));
+        if (options.ink != SecondInk.DEFAULT) records.add(new Entry(SECOND_INK, options.inkBytes()));
         TracingPaper t = covers.tracing;
         if (t != null) {
             if (t.paper != TracingPaper.PLAIN) records.add(new Entry(PAPER, t.paperBytes()));
@@ -323,7 +327,8 @@ final class BookOptions {
         options = options.readBrushes(bytes(found.get(BRUSHES), file));
         options = options.readMinutes(bytes(found.get(TIMED), file)).readSeconds(bytes(found.get(TIMED_SECONDS), file));
         options = options.readLockPages(bytes(found.get(LOCK_PAGES), file)).readNibPreview(bytes(found.get(NIB_PREVIEW), file))
-                .readSurface(bytes(found.get(SURFACE), file));
+                .readSurface(bytes(found.get(SURFACE), file))
+                .readInk(bytes(found.get(SECOND_INK), file));
         return options;
     }
     /** Each page's template key, a line a page (empty for none); null when none is set. */

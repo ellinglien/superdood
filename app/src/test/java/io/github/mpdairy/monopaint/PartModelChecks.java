@@ -50,11 +50,24 @@ public final class PartModelChecks {
                 && PartChoice.STAMP.defaultOf(PartDial.STAMP_SPACING) == .12 && PartChoice.STAMP.defaultOf(PartDial.INK_FADE) == .22, "The Stamp's dials (mischief-lab-2.html): Size, Spacing, Turns (On), Ink Fade, then Flick");
         check(PartChoice.HATCH.defaultOf(PartDial.HEAD_TURN) == 1 && PartChoice.HATCH.labelOf(PartDial.HEAD_TURN).equals("Lines Follow") && ModularCode.ADDED.contains(PartDial.BUILD_UP), "Hatch's lines fixed by default, named Lines Follow; Build-up written only when on");
         String screen = " screen cell sangle mis gain uneven fling";
-        check(dials(PartChoice.INK).equals("wet line pool splatter bleed bloom lines offset chaos erase blend" + screen + " soluble"), "Ink's dials, Erasable, Blend then Screen's, Water-Soluble last");
-        check(dials(PartChoice.WASH).equals("wet pool bleed bloom backrun line erase blend" + screen), "Wash's dials, Erasable, Blend then Screen's last");
-        check(dials(PartChoice.COVER).equals("cover impasto erase blend" + screen) && dials(PartChoice.CHARCOAL).equals("spread hold dust erase blend" + screen + " soluble") && dials(PartChoice.GRAPHITE).equals("grade spread erase blend" + screen + " soluble")
-                && ModularCode.ADDED.contains(PartDial.SOLUBLE) && PartDial.SOLUBLE.def == 0 && PartDial.SOLUBLE.label.equals("Dissolves"),
+        check(dials(PartChoice.INK).equals("wet line pool splatter bleed bloom lines offset chaos erase blend" + screen + " soluble second"), "Ink's dials, Erasable, Blend then Screen's, Water-Soluble, Second Ink last");
+        check(dials(PartChoice.WASH).equals("wet pool bleed bloom backrun line erase blend" + screen + " second"), "Wash's dials, Erasable, Blend then Screen's, Second Ink last");
+        check(dials(PartChoice.COVER).equals("cover impasto erase blend" + screen + " second") && dials(PartChoice.CHARCOAL).equals("spread hold dust erase blend" + screen + " soluble second") && dials(PartChoice.GRAPHITE).equals("grade spread erase blend" + screen + " soluble second")
+                && ModularCode.ADDED.contains(PartDial.SOLUBLE) && PartDial.SOLUBLE.def == 0 && PartDial.SOLUBLE.label.equals("Dissolves")
+                && ModularCode.ADDED.contains(PartDial.SECOND) && PartDial.SECOND.def == 0 && PartDial.SECOND.label.equals("Second Ink") && PartDial.SECOND.key.equals("second") && !PartChoice.RESIST.has(PartDial.SECOND) && !PartChoice.VECTOR.has(PartDial.SECOND),
                 "Cover's, charcoal's, graphite's dials, Erasable, Blend then Screen's last (charcoal's and graphite's Water-Soluble after, written only when on)");
+        for (PartChoice c : new PartChoice[]{PartChoice.INK, PartChoice.WASH, PartChoice.COVER, PartChoice.CHARCOAL, PartChoice.GRAPHITE}) {
+            // A brush that never touches the switch writes its code as before; On round-trips and says so.
+            ToolPresets.Preset p = null;
+            for (ToolPresets.Preset q : ToolPresets.all()) if (p == null && ModularCode.decode(q.code).choice(BrushPart.MEDIUM) == c && !ResolvedBrush.second(ModularCode.decode(q.code))) p = q;
+            ModularBrush off = ModularCode.decode(p.code), on = ModularCode.decode(p.code);
+            on.part(BrushPart.MEDIUM).set(PartDial.SECOND, 1);
+            String code = ModularCode.encode(on);
+            ModularBrush back = ModularCode.decode(code);
+            check(!ResolvedBrush.second(off) && ResolvedBrush.second(on) && ResolvedBrush.second(back) && ModularCode.encode(back).equals(code) && ModularCode.encode(off).equals(p.code)
+                    && !code.equals(p.code) && !ModularCode.newer(code) && ModularWords.plainWords(on).contains(ModularWords.SECOND_INK) && !ModularWords.plainWords(off).contains(ModularWords.SECOND_INK),
+                    c + "'s Second Ink round-trips, is written only when On, and is said in This brush: " + code);
+        }
         check(dials(PartChoice.TONE).equals("pattern ttone cell sangle"), "Screentone's dials");
         check(String.join(",", PartChoice.INK.optionsOf(PartDial.M_BLEND)).equals("Darken,White,Behind,Invert") && String.join(",", PartChoice.COVER.optionsOf(PartDial.M_BLEND)).equals("Cover,White,Behind,Invert")
                 && ModularCode.ADDED.contains(PartDial.M_BLEND) && PartDial.M_BLEND.label.equals("Blend Mode"), "Blend Mode: the medium's own way first (Opaque's Cover), then White, Behind, Invert; written only when not 0");

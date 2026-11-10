@@ -42,8 +42,8 @@ final class ToolSlots {
             {"STEADY", "Steady line", "steady-line.M00il00000000at_000zz0000000000000_0_00r_1jz_84w0000000000000000nz0.51j8ud", "3", "1.0"},
             {"FELT", "Verve felt", "verve-felt.M30i0776o0q00u1_000zz0000920000000_0_d00_0_8i00000zz0000400000nz0.jjds6x", "4", "1.0"},
             {"FUDE", "Fude fountain", "fude-fountain.M20ss007700003m_000zzat00000000000_0_000_0_8at0000i000ll000000nz01.1s13pn4", "11", "1.0"},
-            {"WASH", "Ink wash", "ink-wash.M60i0000000007q_1wva200000000_0_0fk_7_8zz0000000000000000nz0.t4mf73", "85", "0.541"},
-            {"WATERCOLOUR", "Watercolour wash", "watercolour-washy.M60i04o4b0000ji_1zz8t00ag9600_1zzex_000_7js_8zz0000000000000000zz0.1s13pn4", "275", "0.227"},
+            {"WASH", "Ink wash", "ink-wash.M60i0000000007q_1wva200000000zz008bi0000000001_0_0fk_7_8zz0000000000000000nz0.t4mf73", "85", "0.541"},
+            {"WATERCOLOUR", "Watercolour wash", "watercolour-washy.M60i04o4b0000ji_1zz8t00ag9600zz008bi0000000001_1zzex_000_7js_8zz0000000000000000zz0.1s13pn4", "275", "0.227"},
             {"OIL", "Rob boss", "rob-boss.M99vleei0000000005e_2zg00_2llydzzn7_000_7ne_1ss0000000000000000nz0.2fu", "114", "0.424"},
             {"BENDAY", "Ben-Day brush", "ben-day-brush.Me1zzeezz00000000ll_0i0000000000000000zz065ji000at_0_000_0_25ess00000000000000nz0.2ef", "17", "1.0"},
             {"HIGHLIGHTER", "High lighter", "high-lighter.M31e1zzp60000000000_1007700000000zz2_0_000_0_0000000000000000000nz0.2f2", "34", "0.102"}};

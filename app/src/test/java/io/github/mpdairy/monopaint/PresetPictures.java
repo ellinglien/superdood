@@ -40,6 +40,8 @@ public final class PresetPictures {
 
     // ---- The brushes ----
 
+    /** The Basic tools that come with Second Ink On ({@link ToolPresets#ROWS}); the bar's Ink wash and Watercolour wash do too ({@link ToolSlots#FIRST}). */
+    static final List<String> SECOND_INK = java.util.Arrays.asList("Dry glaze", "Wet brush", "Broad oils", "Cover hake", "Wash behind", "Wet blooms", "Tilt oils", "Cracking paint", "Flat hake", "Granulating", "Rough hake", "Grainy wash", "Watercolour backrun", "Flat oils", "Oil glaze", "Opaque flat", "Grey wash", "Scumble", "Hatch pen", "Fountain pen");
     static List<Made> made() {
         List<Made> out = new ArrayList<>();
         // Print: Screentone, a broad fill (Tone's own size) laid as a pattern.
@@ -437,6 +439,8 @@ public final class PresetPictures {
             out.add(new Made("Watercolor", "Watercolour splatter", "blooming dots", 4107326823L, b));
         }
         for (Made m : out) m.brush.normalize();
+        // The fixed random mix (the owner, 2026-11-10; shuffled once, seed 20261110): these come with Second Ink On.
+        for (Made m : out) if (SECOND_INK.contains(m.name)) m.brush.part(BrushPart.MEDIUM).set(PartDial.SECOND, 1);
         return out;
     }
     /** The old Wet brush (Brush pen, line and wash; {@link ToolPresets#RETIRED}) the Wet one follows. */

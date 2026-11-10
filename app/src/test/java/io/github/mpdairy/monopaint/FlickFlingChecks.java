@@ -70,7 +70,7 @@ public final class FlickFlingChecks {
         // Flick last, but for Round's and Chisel's Wears Down after it (branch explore-knife).
         for (PartChoice c : BrushPart.TIP.choices()) check(c.dials.get(c.dials.size() - (c.has(PartDial.WEAR) ? 2 : 1)) == PartDial.FLICK, c + ": Flick last");
         for (PartChoice c : BrushPart.MEDIUM.choices())
-            check(c.has(PartDial.M_BLEND) == c.has(PartDial.FLING) && (!c.has(PartDial.FLING) || c.dials.get(c.dials.size() - (c.has(PartDial.SOLUBLE) ? 2 : 1)) == PartDial.FLING), c + ": Fling last of every medium with Blend (but Dissolves, after it)");
+            check(c.has(PartDial.M_BLEND) == c.has(PartDial.FLING) && (!c.has(PartDial.FLING) || c.dials.get(c.dials.indexOf(PartDial.FLING)) == PartDial.FLING && c.dials.subList(c.dials.indexOf(PartDial.FLING) + 1, c.dials.size()).stream().allMatch(d -> d == PartDial.SOLUBLE || d == PartDial.SECOND)), c + ": Fling last of every medium with Blend (but Dissolves and Second Ink, after it)");
         check(ModularCode.ADDED.contains(PartDial.FLICK) && ModularCode.ADDED.contains(PartDial.FLING) && PartDial.FLICK.key.equals("flick") && PartDial.FLING.key.equals("fling")
                 && PartDial.FLICK.label.equals("Flick") && PartDial.FLING.label.equals("Fling") && PartDial.FLICK.def == 0 && PartDial.FLING.def == 0, "keys, labels, off by default, written only when on");
         for (ToolPresets.Preset p : ToolPresets.all()) {

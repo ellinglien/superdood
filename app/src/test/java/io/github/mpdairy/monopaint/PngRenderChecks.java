@@ -40,7 +40,7 @@ public final class PngRenderChecks {
     static byte[] pdfAsBefore(ToneDocument d, NotebookTemplate template) throws Exception {
         PackedPage packed = PackedPage.of(DrawingBook.encode(d));
         List<ToneDocument> layers = NotebookExport.layers(Arrays.asList(packed), new PageStacks(new boolean[1]), 0, null, template);
-        ToneDocument.Snapshot page = NotebookExport.flatten(layers, new boolean[1]);
+        ToneDocument.Snapshot page = NotebookExport.flatten(layers, new boolean[1], 0);
         long key = NotebookExport.pageKey(packed.crc, template);
         byte[] png = NotebookExport.png(page, key, PageExportChecks.tiles(), template.shared(d.width, d.height) != null);
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();

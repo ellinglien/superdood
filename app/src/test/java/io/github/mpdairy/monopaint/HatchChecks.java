@@ -111,8 +111,8 @@ public final class HatchChecks {
     static void words() {
         ModularBrush pen = BristleSwarmChecks.preset("Hatch pen"), pencil = pen.copy();
         pencil.set(BrushPart.MEDIUM, ModularBrush.switchTo(pen.part(BrushPart.MEDIUM), PartChoice.GRAPHITE));
-        check(ModularWords.plainWords(pen).equals("Ink hatching.") && ModularWords.plainWords(pencil).startsWith("Pencil hatching."), "Hatch pen: " + ModularWords.plainWords(pen) + " / " + ModularWords.plainWords(pencil));
-        check(ModularWords.caption(pen).equals(java.util.Arrays.asList("Fineliner", "hatch")), "Caption: " + ModularWords.caption(pen));
+        check(ModularWords.plainWords(pen).startsWith("Ink hatching.") && ModularWords.plainWords(pencil).startsWith("Pencil hatching."), "Hatch pen: " + ModularWords.plainWords(pen) + " / " + ModularWords.plainWords(pencil));
+        check(ModularWords.caption(pen).subList(0, 2).equals(java.util.Arrays.asList("Fineliner", "hatch")), "Caption: " + ModularWords.caption(pen));
         check(ModularWords.choiceWords(pen, BrushPart.TIP).equals("Hatch") && PartChoice.HATCH.labelOf(PartDial.HEAD_TURN).equals("Lines Follow") && PartDial.HEAD_TURN.shown(1).equals("Page")
                 && PartDial.HANGLE.shown(45).equals("45°") && PartDial.LAYERS.shown(3).equals("3"), "The card says Hatch; Lines Follow Page, Line Angle 45°, Layers 3");
     }

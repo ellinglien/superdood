@@ -672,7 +672,7 @@ final class WetWatercolor {
     private boolean lay(boolean strokeActive, long budgetNanos) {
         if (queued.isEmpty()) return false;
         long start = System.nanoTime();
-        if (!strokeActive) document.begin(erasable, kinds);
+        if (!strokeActive) { document.begin(erasable, kinds); document.inkFlows(); } // Inkwash: Second Ink, paint that moves keeps its ink
         do layNext(); while (!queued.isEmpty() && System.nanoTime() - start < budgetNanos);
         return !strokeActive && finishSlice();
     }
@@ -1144,7 +1144,7 @@ final class WetWatercolor {
             spreadPhase = spreadCursor = spreadPairs = spreadStep = 0;
         }
         if (!planSpread(start, budgetNanos)) return false;
-        if (!strokeActive) document.begin(erasable, kinds);
+        if (!strokeActive) { document.begin(erasable, kinds); document.inkFlows(); } // Inkwash: Second Ink, as lay's
         batch.clear();
         int count = Math.min(maxTiles, frameRemaining);
         int left = 0, top = 0, right = 0, bottom = 0;

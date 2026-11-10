@@ -22,8 +22,13 @@ final class NotebookFixture {
         return page;
     }
 
+    /** The Basic tool, in the first ink: the fixture's pages are grey (Second Ink's copies are SecondInkCopyChecks'). */
     static ModularBrush brush(String style, String name) {
-        for (String[] row : ToolPresets.ROWS) if (row[0].equals(style) && row[1].equals(name)) return ModularCode.decode(row[2]);
+        for (String[] row : ToolPresets.ROWS) if (row[0].equals(style) && row[1].equals(name)) {
+            ModularBrush b = ModularCode.decode(row[2]);
+            if (ResolvedBrush.second(b)) b.part(BrushPart.MEDIUM).set(PartDial.SECOND, 0);
+            return b;
+        }
         throw new AssertionError("No preset " + style + " " + name);
     }
 

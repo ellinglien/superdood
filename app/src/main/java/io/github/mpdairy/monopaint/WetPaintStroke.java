@@ -105,6 +105,7 @@ final class WetPaintStroke implements DrawingStroke {
         own = dirties ? (float) (1 - .3 * r.carry.pick) : 1;
         // Inkwash: on the wet paint's plane (WetCanvas#kinds).
         document.begin(r.erase, canvas.kinds(r));
+        r.inks(document);
         canvas.wet.beginStroke();
     }
 

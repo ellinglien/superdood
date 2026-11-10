@@ -385,6 +385,16 @@ final class ResolvedBrush {
     final double dust;
     /** How much of its paint the eraser takes, 0 (permanent) to 1 (Erasable; every brush before it: 1). */
     final double erase;
+    /** Second Ink on ({@link #second(ModularBrush)}): its paint shows in the notebook's second ink in copies. */
+    final boolean second;
+    /**
+     * Second Ink: what a gesture that lays this brush's paint says of it, after its begin: all second ink or none
+     * ({@link ToneDocument#inking}), the paint it moves with it; a smudge that lays none of its own, the ink of the paint it
+     * moves ({@link ToneDocument#inkFlows}).
+     */
+    void inks(ToneDocument document) {
+        if (carry != null && load == 0) document.inkFlows(); else document.inking(second ? 255 : 0);
+    }
     /** The kind of mark it lays ({@link ToneDocument#KIND_PEN} and the like), for an eraser that takes one kind; 0 when the brush lays no paint of its own (a finger's smudge). Opaque paint (Cover) adds {@link ToneDocument#KIND_OPAQUE}: its own plane. */
     final int kind;
     /** Inkwash: the kind its Medium is, paint of its own or not: the plane a smudge with none of its own works on ({@code ModularStroke.kinds}). */
@@ -605,6 +615,8 @@ final class ResolvedBrush {
      */
     /** Water-Soluble on ({@link PartDial#SOLUBLE}): the mark lies with the washes, as paint, so Clear Water dissolves it. */
     static boolean soluble(ModularBrush b) { return b.part(BrushPart.MEDIUM).get(PartDial.SOLUBLE, 0) > 0; }
+    /** Second Ink on ({@link PartDial#SECOND}): the brush's paint shows in the notebook's second ink in copies. */
+    static boolean second(ModularBrush b) { return b.part(BrushPart.MEDIUM).get(PartDial.SECOND, 0) > 0; }
     static boolean washes(ModularBrush b) {
         if (b.choice(BrushPart.LIFE) != PartChoice.WET_PAINT || b.choice(BrushPart.CARRY) == PartChoice.CLEAR_WATER) return false;
         PartChoice m = b.choice(BrushPart.MEDIUM);
@@ -879,6 +891,7 @@ final class ResolvedBrush {
         this.grav = grav;
         this.dust = mk == PartChoice.CHARCOAL && !mode.lays() && screen == null ? M.get(DUST) : 0;
         this.erase = M.get(ERASABLE, 1);
+        this.second = second(B);
         // Opaque paint is Paint to the eraser, on a plane of its own over pen ({@link ToneDocument#KIND_OPAQUE}). A texture
         // (Stipple, Hatch, Hand Hatch, Print Shading, Screentone) is Paint whatever its medium, so Pen erases only pen lines
         // (the owner, 2026-10-29: "a way to erase one or the other"); on the Paint plane under pen, it looks as it did.

@@ -9,7 +9,8 @@ The app opens on the notebook you were last in; the shelf shows the rest. A note
 own settings: a page template (or one of the tablet's own templates), which tools it keeps, rules such as No
 Erasing, One Brush and Timed Pages, and a cover design.
 Notebooks are saved as you draw, in `Document/Superdood` on the tablet; PNG and PDF copies are made only when
-you ask (Export).
+you ask (Export). The copies are grey, as the tablet is, but for what a Second Ink brush drew: that shows in the
+notebook's Second Ink (Notebook Settings: Blue, Sepia, Red, Green, Violet), there and on the Fridge.
 
 ## The drawing screen
 
@@ -36,7 +37,7 @@ Every brush is built from its parts (Control, Tip, Medium, Rework, Drying and Af
 a short share code. The **Tools page** is the library: ready brushes grouped by what they do (Pens, Markers, Brushes,
 Washes, Paint, Dry Media, Print, Odd Ones) and your own: tap a slot, then a brush for it. Tapping the selected slot
 again picks it up, and a tap on another slot swaps the two, with their sizes and greys (the toolbar's order). **Brush Lab** (a slot's long press, Edit Brush) makes
-and changes them, with a test page beside the dials. A few brushes are deliberately unpredictable: Vanishing ink and Lemon juice (ink that
+and changes them, with a test page beside the dials; its Medium part's **Second Ink** dial (Off, On; Ink, Wash, Opaque, Charcoal and Graphite) marks a brush whose paint copies show in the notebook's second ink. About half of the Basic washes and paints come with it On (Ink wash and Watercolour wash among them), and two pens, Hatch pen and Fountain pen. The two inks blend where they meet, by how dark each is, and paint keeps its ink wherever it goes: a wet wash running or drying, a smudge, the Lasso, a merged layer, a mark that changes later; shapes and fills take their brush's ink, and pictures are first ink. A few brushes are deliberately unpredictable: Vanishing ink and Lemon juice (ink that
 fades, or appears minutes later), Mold, Flick and Fling, Spirograph, Stamp and Crayon. They say what they do, and
 the plain pens never surprise you.
 

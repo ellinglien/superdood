@@ -373,6 +373,8 @@ final class ModularStroke implements LiftingStroke {
     void begin() {
         // Inkwash: a stroke on water lays on its bath's plane, as the bath's shows and print do.
         if (fluid(r)) document.beginFluid(1); else document.begin(r.erase, kind());
+        // Second Ink: every stroke of a brush begins here (a quick stroke's and a fill's too), so its ink is said here.
+        r.inks(document);
         // Crayon: wax takes wax, so layers build up and Scratch scrapes them; masking fluid still keeps it out.
         if (r.rule == ResolvedBrush.Rule.CRAYON) document.takesOnWax();
         // Screen: it builds on its layer's print tone, which the layer gets now if it has none.
@@ -1606,6 +1608,8 @@ final class ModularStroke implements LiftingStroke {
         document.selectLayer(o.layer);
         try {
             document.begin(r.erase, o.kind);
+            // Second Ink: paint that was there, moved.
+            document.inkFlows();
             ModularCompose wash = new ModularCompose(ModularCompose.of(document), r, paper);
             wash.carry(o.plane);
             FloatTiles none = new FloatTiles(document.width, document.height, 0);

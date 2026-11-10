@@ -85,19 +85,19 @@ enum PartChoice {
     // Medium
     /** A line; Wet loosens it into a wash around it. */
     INK(BrushPart.MEDIUM, "ink", "Ink", WET, "dry", "wet",
-            WET, LINE, POOL, SPLATTER, BLEED, BLOOM, LINES, OFFSET, CHAOS, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SOLUBLE),
+            WET, LINE, POOL, SPLATTER, BLEED, BLOOM, LINES, OFFSET, CHAOS, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SOLUBLE, SECOND),
     /** Transparent paint: it only darkens what's under it. */
     WASH(BrushPart.MEDIUM, "wash", "Wash", WET, "flat", "wet",
-            WET, POOL, BLEED, BLOOM, BACKRUN, LINE, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING),
+            WET, POOL, BLEED, BLOOM, BACKRUN, LINE, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SECOND),
     /** Opaque body colour (the prototype's Cover): light covers dark; thick paint (Impasto) is lit from the upper left. */
     COVER(BrushPart.MEDIUM, "cover", "Opaque", PartDial.COVER, "thin", "opaque",
-            PartDial.COVER, IMPASTO, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING),
+            PartDial.COVER, IMPASTO, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SECOND),
     /** Dry dust: it catches the high points first; fuzz and specks from the stick, not the paper. */
     CHARCOAL(BrushPart.MEDIUM, "charcoal", "Charcoal", SPREAD, "crisp", "messy",
-            SPREAD, HOLD, DUST, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SOLUBLE),
+            SPREAD, HOLD, DUST, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SOLUBLE, SECOND),
     /** Pencil, 6H to 8B: fills the texture with each pass. */
     GRAPHITE(BrushPart.MEDIUM, "graphite", "Graphite", GRADE, "hard", "soft",
-            GRADE, SPREAD, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SOLUBLE),
+            GRADE, SPREAD, ERASABLE, M_BLEND, SCREEN, CELL, S_ANGLE, MIS, S_GAIN, UNEVEN, FLING, SOLUBLE, SECOND),
     /**
      * Masking fluid or wax (the new modules spec): laid as a crisp ink line onto the page's masking fluid, which nothing
      * takes on; its one dial, Erasable, is how much of it the eraser lifts (1, masking fluid; off, wax, which stays as a

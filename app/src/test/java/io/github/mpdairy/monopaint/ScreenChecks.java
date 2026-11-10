@@ -110,8 +110,8 @@ public final class ScreenChecks {
                 && ModularCode.encode(back).equals(ModularCode.encode(all)), "Cell, Angle, Misregister, Ink gain and Uneven round-trip: " + seg(ModularCode.encode(all)));
         check(ModularCode.encode(set(screened(ink, 2), PartDial.CELL, 6)).equals(ModularCode.encode(screened(ink, 2))), "a dial at its default isn't written");
         for (PartChoice c : new PartChoice[]{PartChoice.INK, PartChoice.WASH, PartChoice.COVER, PartChoice.CHARCOAL, PartChoice.GRAPHITE}) {
-            // Then Fling, last of all (FlickFlingChecks), but Dissolves after it (explore-media).
-            java.util.List<PartDial> dials = c.has(PartDial.SOLUBLE) ? c.dials.subList(0, c.dials.size() - 1) : c.dials;
+            // Then Fling, last of all (FlickFlingChecks), but Dissolves and Second Ink after it.
+            java.util.List<PartDial> dials = c.dials.subList(0, c.dials.indexOf(PartDial.FLING) + 1);
             check(dials.subList(dials.size() - 7, dials.size() - 1).equals(Arrays.asList(PartDial.SCREEN_DIALS)) && dials.get(dials.size() - 8) == PartDial.M_BLEND && dials.get(dials.size() - 1) == PartDial.FLING, c + ": Screen's dials after Blend, then Fling");
         }
         check(!PartChoice.RESIST.has(PartDial.SCREEN) && PartDial.SCREEN.key.equals("screen") && PartDial.CELL.key.equals("cell") && PartDial.S_ANGLE.key.equals("sangle")

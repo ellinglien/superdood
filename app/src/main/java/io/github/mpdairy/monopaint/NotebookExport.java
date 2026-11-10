@@ -47,10 +47,19 @@ final class NotebookExport {
     /** As above, with the page's template guides under its marks when {@code guides} (every notebook prints them; the page must hold them). */
     static byte[] png(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles, boolean guides) { return png(page, crc, tiles, guides, null); }
     /** As above, carrying {@code vectors} (null: none) in its {@link #VECTORS} chunk: {@link #vectorPng}'s. */
-    private static byte[] png(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles, boolean guides, byte[] vectors) { return png(greys(page, tiles, guides), page.width, page.height, crc, DPI, vectors); }
+    private static byte[] png(ToneDocument.Snapshot page, long crc, Magnets.Tiles tiles, boolean guides, byte[] vectors) {
+        PagePicture.Composite composite = PagePicture.Composite.of(page, guides, 0);
+        byte[] inks = inks(composite, page);
+        return png(greys(composite, page, tiles, inks), inks, page.ink, page.width, page.height, crc, DPI, vectors);
+    }
     /** {@code greys} ({@code w × h}, a byte a pixel) as {@link #png} writes a page's, at {@code dpi} (Export Page's Social: the page's print size). */
-    static byte[] png(byte[] greys, int w, int h, long crc, int dpi) { return png(greys, w, h, crc, dpi, null); }
-    private static byte[] png(byte[] greys, int w, int h, long crc, int dpi, byte[] vectors) {
+    static byte[] png(byte[] greys, int w, int h, long crc, int dpi) { return png(greys, null, 0, w, h, crc, dpi, null); }
+    /**
+     * As above; with {@code inks} ({@link #inks}; null: none, the grey PNG as ever) an 8-bit RGB one, each pixel's second
+     * ink in notebook ink {@code ink}'s colour ({@link #channel}), carrying {@link #inkKey} of {@code crc}.
+     */
+    static byte[] png(byte[] greys, byte[] inks, int ink, int w, int h, long crc, int dpi, byte[] vectors) {
+        int rgb = SecondInk.rgb(ink), channels = inks == null ? 1 : 3;
         // At most 16 greys (pen and pencil on plain paper, mostly): a palette of exactly those, 1, 2 or 4 bits a pixel,
         // lossless and far smaller; more (washes, magnets' soft edges): 8-bit grey as always.
         boolean[] seen = new boolean[256];
@@ -59,18 +68,19 @@ final class NotebookExport {
         byte[] palette = null;
         int[] index = null;
         int bits = 8;
-        if (n <= 16) {
+        if (n <= 16 && inks == null) {
             palette = new byte[n]; index = new int[256];
             for (int g = 0, k = 0; g < 256; g++) if (seen[g]) { index[g] = k; palette[k++] = (byte) g; }
             bits = n <= 2 ? 1 : n <= 4 ? 2 : 4;
         }
-        int stride = (w * bits + 7) / 8, perByte = 8 / Math.min(8, bits);
+        int stride = (w * bits + 7) / 8 * channels, perByte = 8 / Math.min(8, bits);
         byte[] previous = new byte[stride], current = new byte[stride], filtered = new byte[stride + 1], best = new byte[stride + 1];
         ByteArrayOutputStream data = new ByteArrayOutputStream();
         Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION);
         try (DeflaterOutputStream zip = new DeflaterOutputStream(data, deflater, 65536)) {
             for (int y = 0; y < h; y++) {
-                if (palette == null) System.arraycopy(greys, y * w, current, 0, w);
+                if (inks != null) for (int x = 0, i = y * w; x < w; x++, i++) for (int c = 0; c < 3; c++) current[3 * x + c] = (byte) channel(greys[i] & 255, inks[i] & 255, rgb >> 16 - 8 * c & 255);
+                else if (palette == null) System.arraycopy(greys, y * w, current, 0, w);
                 else {
                     java.util.Arrays.fill(current, (byte) 0);
                     for (int x = 0; x < w; x++) current[x / perByte] |= index[greys[y * w + x] & 255] << (8 - bits - x % perByte * bits);
@@ -81,7 +91,7 @@ final class NotebookExport {
                     filtered[0] = (byte) type; long sum = 0;
                     for (int x = 0; x < stride; x++) {
                         int v = current[x] & 255;
-                        if (type == 1) v -= x > 0 ? current[x - 1] & 255 : 0;
+                        if (type == 1) v -= x >= channels ? current[x - channels] & 255 : 0;
                         else if (type == 2) v -= previous[x] & 255;
                         filtered[x + 1] = (byte) v; sum += Math.abs((byte) v);
                     }
@@ -97,14 +107,14 @@ final class NotebookExport {
             png.write(SIGNATURE);
             ByteArrayOutputStream header = new ByteArrayOutputStream();
             DataOutputStream ihdr = new DataOutputStream(header);
-            ihdr.writeInt(w); ihdr.writeInt(h); ihdr.writeByte(bits); ihdr.writeByte(palette == null ? 0 : 3); ihdr.writeByte(0); ihdr.writeByte(0); ihdr.writeByte(0);
+            ihdr.writeInt(w); ihdr.writeInt(h); ihdr.writeByte(bits); ihdr.writeByte(inks != null ? 2 : palette == null ? 0 : 3); ihdr.writeByte(0); ihdr.writeByte(0); ihdr.writeByte(0);
             chunk(png, "IHDR", header.toByteArray());
             if (palette != null) {
                 byte[] plte = new byte[3 * n];
                 for (int k = 0; k < n; k++) plte[3 * k] = plte[3 * k + 1] = plte[3 * k + 2] = palette[k];
                 chunk(png, "PLTE", plte);
             }
-            about(png, dpi, crc);
+            about(png, dpi, inks == null ? crc : inkKey(crc, ink));
             if (vectors != null) chunk(png, VECTORS, vectors);
             chunk(png, "IDAT", data.toByteArray());
             chunk(png, "IEND", new byte[0]);
@@ -126,21 +136,38 @@ final class NotebookExport {
      */
     static byte[] greys(ToneDocument.Snapshot page, Magnets.Tiles tiles, boolean guides) { return greys(PagePicture.Composite.of(page, guides, 0), page, tiles); }
     /** As above, of {@code composite} (the page's, perhaps without some layers: {@link PagePicture.Composite#of}). */
-    static byte[] greys(PagePicture.Composite composite, ToneDocument.Snapshot page, Magnets.Tiles tiles) {
+    static byte[] greys(PagePicture.Composite composite, ToneDocument.Snapshot page, Magnets.Tiles tiles) { return greys(composite, page, tiles, null); }
+    /** A page's second-ink shares for {@link #greys} to fill, a byte a pixel; null when {@code composite} shows no second ink: its copy is grey, as ever. */
+    static byte[] inks(PagePicture.Composite composite, ToneDocument.Snapshot page) { return composite.inked() ? new byte[page.width * page.height] : null; }
+    /** A copy's channel (its ink's {@code c}, 0 to 255) where its grey is {@code grey} and second ink's share of that darkness {@code share}: between black's grey and the ink's. */
+    static int channel(int grey, int share, int c) { return grey + (c * share * (255 - grey) + 32512) / 65025; }
+    /** Mixed into the key an RGB PNG carries, for notebook ink {@code ink}: another ink draws the page's copy again, and only a page with second ink; the first ink's key is the page's own. */
+    static long inkKey(long key, int ink) {
+        if (ink == SecondInk.DEFAULT) return key;
+        CRC32 c = new CRC32(); c.update(("second ink " + ink).getBytes(StandardCharsets.UTF_8));
+        return (key ^ c.getValue()) & 0xffffffffL;
+    }
+    /** As above, second ink's share of each pixel's darkness into {@code inks} ({@link #inks}; null: none), under the magnets as much as shows. */
+    static byte[] greys(PagePicture.Composite composite, ToneDocument.Snapshot page, Magnets.Tiles tiles, byte[] inks) {
         int w = page.width, h = page.height;
         int[] row = new int[w];
         // The page's greys, a byte a pixel; with magnets, the whole page as its PNG copy shows it first, its tiles stamped on.
         byte[] greys = new byte[w * h];
         if (tiles != null && page.magnets != null && !page.magnets.isEmpty()) {
             int[] stamped = new int[w * h];
+            // Second ink rides in the red, as a white ink would show: what a tile leaves of it is the red over the grey.
             for (int y = 0; y < h; y++) {
-                composite.row(y, row);
-                for (int x = 0; x < w; x++) { int g = DotPattern.exportGray(row[x]); stamped[y * w + x] = 0xff000000 | g << 16 | g << 8 | g; }
+                composite.row(y, row, inks, y * w);
+                for (int x = 0; x < w; x++) { int g = DotPattern.exportGray(row[x]); stamped[y * w + x] = 0xff000000 | (inks == null ? g : channel(g, inks[y * w + x] & 255, 255)) << 16 | g << 8 | g; }
             }
             Magnets.stamp(stamped, w, h, page.magnets, tiles);
-            for (int i = 0; i < greys.length; i++) greys[i] = (byte) (stamped[i] >> 8 & 255);
+            for (int i = 0; i < greys.length; i++) {
+                int g = stamped[i] >> 8 & 255, red = stamped[i] >> 16 & 255;
+                greys[i] = (byte) g;
+                if (inks != null && red != channel(g, inks[i] & 255, 255)) inks[i] = (byte) (red <= g ? 0 : Math.min(255, ((red - g) * 255 + (255 - g) / 2) / (255 - g)));
+            }
         } else for (int y = 0; y < h; y++) {
-            composite.row(y, row);
+            composite.row(y, row, inks, y * w);
             for (int x = 0; x < w; x++) greys[y * w + x] = (byte) DotPattern.exportGray(row[x]);
         }
         return greys;
@@ -204,17 +231,20 @@ final class NotebookExport {
     /**
      * A grey PNG as {@link #png} writes it: its size, its page's CRC (-1 if none), its image data, its bits a pixel, its
      * palette's greys (null: 8-bit grey), the lines a PDF draws over it ({@link #vectorPng}; null: none) and its pixels an
-     * inch ({@link #DPI}, or twice that for a sharp page's PDF picture).
+     * inch ({@link #DPI}, or twice that for a sharp page's PDF picture). Or, {@code colour}, the 8-bit RGB one of a page
+     * with second ink, its CRC mixed with its ink ({@link #inkKey}).
      */
     static final class Png {
-        final int width, height; final long crc; final byte[] data; final int bits; final byte[] palette, vectors; final int dpi;
-        Png(int width, int height, long crc, byte[] data) { this(width, height, crc, data, 8, null, null, DPI); }
-        Png(int width, int height, long crc, byte[] data, int bits, byte[] palette, byte[] vectors, int dpi) { this.width = width; this.height = height; this.crc = crc; this.data = data; this.bits = bits; this.palette = palette; this.vectors = vectors; this.dpi = dpi; }
+        final int width, height; final long crc; final byte[] data; final int bits; final byte[] palette, vectors; final int dpi; final boolean colour;
+        Png(int width, int height, long crc, byte[] data) { this(width, height, crc, data, 8, null, null, DPI, false); }
+        Png(int width, int height, long crc, byte[] data, int bits, byte[] palette, byte[] vectors, int dpi, boolean colour) { this.width = width; this.height = height; this.crc = crc; this.data = data; this.bits = bits; this.palette = palette; this.vectors = vectors; this.dpi = dpi; this.colour = colour; }
+        /** Its page's key (-1: none) when the notebook's ink is {@code ink}: an RGB PNG drawn in another ink gives another's ({@link #inkKey} undoes itself). */
+        long key(int ink) { return colour && crc >= 0 ? inkKey(crc, ink) : crc; }
         /** Its size on the page, in the page's pixels ({@link #DPI}). */
         int pageWidth() { return (int) ((long) width * DPI / dpi); }
         int pageHeight() { return (int) ((long) height * DPI / dpi); }
     }
-    /** Reads {@link #png}'s kinds of PNG (8-bit grey, or a palette of greys at 1, 2 or 4 bits; not interlaced); null for any other file. */
+    /** Reads {@link #png}'s kinds of PNG (8-bit grey or RGB, or a palette of greys at 1, 2 or 4 bits; not interlaced); null for any other file. */
     static Png read(byte[] file) {
         if (file.length < 8) return null;
         for (int i = 0; i < 8; i++) if (file[i] != SIGNATURE[i]) return null;
@@ -223,7 +253,7 @@ final class NotebookExport {
         int width = 0, height = 0, bits = 8, dpi = DPI; long crc = -1;
         byte[] palette = null, vectors = null;
         ByteArrayOutputStream data = new ByteArrayOutputStream();
-        boolean header = false, indexed = false;
+        boolean header = false, indexed = false, rgb = false;
         while (b.remaining() >= 12) {
             int length = b.getInt();
             if (length < 0 || length > b.remaining() - 8) return null;
@@ -236,8 +266,8 @@ final class NotebookExport {
             if (name.equals("IHDR")) {
                 java.nio.ByteBuffer h = java.nio.ByteBuffer.wrap(body);
                 width = h.getInt(); height = h.getInt(); bits = h.get(); int colour = h.get();
-                indexed = colour == 3;
-                if (!(bits == 8 && colour == 0 || indexed && (bits == 1 || bits == 2 || bits == 4)) || h.get() != 0 || h.get() != 0 || h.get() != 0) return null;
+                indexed = colour == 3; rgb = colour == 2;
+                if (!(bits == 8 && (colour == 0 || rgb) || indexed && (bits == 1 || bits == 2 || bits == 4)) || h.get() != 0 || h.get() != 0 || h.get() != 0) return null;
                 header = true;
             } else if (name.equals("PLTE")) {
                 if (length % 3 != 0 || length == 0 || length > 3 * 16) return null;
@@ -254,7 +284,7 @@ final class NotebookExport {
                 if (perMetre > 0) dpi = (int) Math.max(1, Math.round(perMetre * .0254));
             } else if (name.equals(VECTORS)) vectors = body;
             else if (name.equals("IDAT")) data.write(body, 0, body.length);
-            else if (name.equals("IEND")) return header && width > 0 && height > 0 && indexed == (palette != null) && (!indexed || palette.length <= 1 << bits) ? new Png(width, height, crc, data.toByteArray(), bits, indexed ? palette : null, vectors, dpi) : null;
+            else if (name.equals("IEND")) return header && width > 0 && height > 0 && indexed == (palette != null) && (!indexed || palette.length <= 1 << bits) ? new Png(width, height, crc, data.toByteArray(), bits, indexed ? palette : null, vectors, dpi, rgb) : null;
         }
         return null;
     }
@@ -263,16 +293,16 @@ final class NotebookExport {
 
     /** A page's PNG, read when its turn comes ({@link NotebookPdf#write}). */
     interface PngAt { Png get(int page) throws IOException; }
-    /** A PNG's image data as a PDF image's dictionary, up to its stream: 8-bit grey, or its palette of greys indexed. */
+    /** A PNG's image data as a PDF image's dictionary, up to its stream: 8-bit grey or RGB, or its palette of greys indexed. */
     static String imageDictionary(Png png) {
-        StringBuilder space = new StringBuilder("/DeviceGray");
+        StringBuilder space = new StringBuilder(png.colour ? "/DeviceRGB" : "/DeviceGray");
         if (png.palette != null) {
             space = new StringBuilder("[/Indexed /DeviceGray " + (png.palette.length - 1) + " <");
             for (byte g : png.palette) space.append(String.format(Locale.ROOT, "%02x", g & 255));
             space.append(">]");
         }
         return "<< /Type /XObject /Subtype /Image /Width " + png.width + " /Height " + png.height + " /ColorSpace " + space + " /BitsPerComponent " + png.bits
-                + " /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent " + png.bits + " /Columns " + png.width + " >> /Length " + png.data.length + " >>\nstream\n";
+                + " /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors " + (png.colour ? 3 : 1) + " /BitsPerComponent " + png.bits + " /Columns " + png.width + " >> /Length " + png.data.length + " >>\nstream\n";
     }
     /** {@code pixels} at {@link #DPI} in points (72 an inch). */
     static String points(int pixels) { return String.format(Locale.ROOT, "%.2f", pixels * 72.0 / DPI); }
@@ -363,13 +393,14 @@ final class NotebookExport {
         String[] named = plan.named;
         File pngs = new File(folder, name);
         if (!pngs.isDirectory() && !pngs.mkdirs()) throw new IOException("Could not make " + pngs);
-        // What is there now, by the CRC each PNG carries (pages alike, blank ones between drawn ones, keep one each).
+        // What is there now, by the CRC each PNG carries (pages alike, blank ones between drawn ones, keep one each); a
+        // colour one's as the notebook's ink leaves it: drawn in another ink, it isn't found.
         Map<Long, java.util.ArrayDeque<File>> found = new HashMap<>();
         File[] there = pngs.listFiles();
         if (there != null) for (File f : there) {
             if (!f.getName().matches("\\d{3}\\.png")) continue;
             Png png = read(Files.readAllBytes(f.toPath()));
-            if (png != null && png.crc >= 0) found.computeIfAbsent(png.crc, k -> new java.util.ArrayDeque<>()).add(f);
+            if (png != null && png.crc >= 0) found.computeIfAbsent(png.key(options.ink), k -> new java.util.ArrayDeque<>()).add(f);
         }
         long[] crcs = plan.crcs;
         // What the PDF said of each page last time, by key, and this time's keys in its order: the days follow a page.
@@ -405,9 +436,9 @@ final class NotebookExport {
                 File target = new File(pngs, front ? FRONT_PNG : BACK_PNG);
                 Png png = target.isFile() ? read(Files.readAllBytes(target.toPath())) : null;
                 long keptOn = -1;
-                if (png == null || png.crc != key) {
+                if (png == null || png.key(options.ink) != key) {
                     byte[] bytes;
-                    try { synchronized (DocumentCodec.ONE_PAGE) { bytes = png(cover(front, covers, own, front ? pictured : null), key, tiles); } }
+                    try { synchronized (DocumentCodec.ONE_PAGE) { bytes = png(cover(front, covers, own, front ? pictured : null, options.ink), key, tiles); } }
                     catch (IOException | RuntimeException e) { target.delete(); continue; }
                     write(target, bytes); made++;
                 } else { kept++; keptOn = day(target.lastModified()); }
@@ -438,7 +469,7 @@ final class NotebookExport {
                 else try { synchronized (DocumentCodec.ONE_PAGE) {
                     List<ToneDocument> layers = layers(all, stacks, i, tracing, null);
                     sheet = said(crcs[i], named[i], layers);
-                    ToneDocument.Snapshot page = flatten(layers, hidden(stacks, i, tracing));
+                    ToneDocument.Snapshot page = flatten(layers, hidden(stacks, i, tracing), options.ink);
                     vectors = twin(page, crcs[i], tiles, twin);
                 } }
                 catch (IOException | RuntimeException e) { sheet = new NotebookPdf.Sheet(crcs[i], 0, 0, false, named[i], java.util.Collections.emptyList()); }
@@ -447,7 +478,7 @@ final class NotebookExport {
                 try {
                     List<ToneDocument> layers = layers(all, stacks, i, tracing, null);
                     sheet = said(crcs[i], named[i], layers);
-                    page = flatten(layers, hidden(stacks, i, tracing));
+                    page = flatten(layers, hidden(stacks, i, tracing), options.ink);
                 }
                 catch (IOException | RuntimeException e) { target.delete(); continue; }
                 byte[] bytes = png(page, crcs[i], tiles, false);
@@ -465,6 +496,9 @@ final class NotebookExport {
             String n = f.getName();
             if (n.matches("\\d{3}\\.png") && Integer.parseInt(n.substring(0, 3)) > crcs.length || n.endsWith(".moving") || n.endsWith(VECTOR_PNG) && !twins.contains(n)) f.delete();
         }
+        // The ink the PDF's pictures are in, where it isn't the first: another ink's copies are drawn again under the same
+        // keys, and the PDF follows them even if its writing failed the first time (this record is written after it).
+        if (options.ink != SecondInk.DEFAULT) lines.append("ink ").append(options.ink).append('\n');
         // A record from before says nothing of the lines: the PDF written again once, with them.
         boolean pictures = !lines.toString().equals(linesWere);
         File target = NotebookPdf.update(documents.folder, state, name, documents.title, options.template.equals(NotebookTemplate.BLANK) ? "" : options.template.label, said,
@@ -477,7 +511,7 @@ final class NotebookExport {
     }
     /** A page's own PDF picture ({@link #vectorPng}: its lines as vectors, sharp at 2 ×) beside its PNG copy: hidden, by its key (".1a2b3c4d.pdf.png"). */
     static final String VECTOR_PNG = ".pdf.png";
-    /** Beside them, after {@link #LINES_MARK}, each page's key and whether its PDF picture is one (1) or its PNG copy (0), a line each. */
+    /** Beside them, after {@link #LINES_MARK}, each page's key and whether its PDF picture is one (1) or its PNG copy (0), a line each; then the notebook's second ink, "ink 1", unless it is the first. */
     static final String LINES_STATE = ".lines.txt", LINES_MARK = "pictures 2\n";
     static String vectorName(long key) { return String.format(Locale.ROOT, ".%08x", key) + VECTOR_PNG; }
     /** {@code page}'s {@link #vectorPng} written to {@code twin}: 1 when it has one, else 0 (none written). */
@@ -533,7 +567,7 @@ final class NotebookExport {
         List<byte[]> pngs = new ArrayList<>();
         List<NotebookPdf.Sheet> said = new ArrayList<>();
         // A page that doesn't decode has no PNG and no PDF page, as in update.
-        if (covers != null) try { synchronized (DocumentCodec.ONE_PAGE) { pngs.add(png(cover(true, covers, covers.front, plan.pictured), plan.coverKeys[0], tiles)); } said.add(new NotebookPdf.Sheet(plan.coverKeys[0], today, today, true, "", java.util.Collections.emptyList())); }
+        if (covers != null) try { synchronized (DocumentCodec.ONE_PAGE) { pngs.add(png(cover(true, covers, covers.front, plan.pictured, options.ink), plan.coverKeys[0], tiles)); } said.add(new NotebookPdf.Sheet(plan.coverKeys[0], today, today, true, "", java.util.Collections.emptyList())); }
         catch (IOException | RuntimeException e) { /* no cover page */ }
         for (int i = 0; i < plan.sheets; i++) synchronized (DocumentCodec.ONE_PAGE) {
             NotebookPdf.Sheet sheet;
@@ -541,7 +575,7 @@ final class NotebookExport {
             try {
                 List<ToneDocument> layers = layers(pages, plan.stacks, i, tracing, null);
                 sheet = said(plan.crcs[i], plan.named[i], layers);
-                page = flatten(layers, hidden(plan.stacks, i, tracing));
+                page = flatten(layers, hidden(plan.stacks, i, tracing), options.ink);
             } catch (IOException | RuntimeException e) { continue; }
             byte[] picture = vectorPng(page, plan.crcs[i], tiles, false);
             pngs.add(picture != null ? picture : png(page, plan.crcs[i], tiles, false));
@@ -566,11 +600,13 @@ final class NotebookExport {
         for (int p = stacks.first(s), k = 0; p <= stacks.last(s); p++, k++) hidden[k] = tracing != null && stacks.size(s) > 1 && tracing.step(p) == TracingPaper.HIDDEN;
         return hidden;
     }
-    /** A stack's {@code layers} (read, {@link #layers}) as the one page its PNG shows ({@link PageStacks#flatten}). */
-    static ToneDocument.Snapshot flatten(List<ToneDocument> layers, boolean[] hidden) {
+    /** A stack's {@code layers} (read, {@link #layers}) as the one page its PNG shows ({@link PageStacks#flatten}), its second ink the notebook's {@code ink} ({@link NotebookOptions#ink}). */
+    static ToneDocument.Snapshot flatten(List<ToneDocument> layers, boolean[] hidden, int ink) {
         List<ToneDocument.Snapshot> snapshots = new ArrayList<>();
         for (ToneDocument layer : layers) snapshots.add(layer.layerSnapshot());
-        return PageStacks.flatten(snapshots, hidden);
+        ToneDocument.Snapshot page = PageStacks.flatten(snapshots, hidden);
+        page.ink = ink;
+        return page;
     }
     /** What the PDF says of a page beyond its days: its template's name and its magnets' words, from its shown layers. */
     static NotebookPdf.Sheet said(long key, String template, List<ToneDocument> layers) {
@@ -617,12 +653,14 @@ final class NotebookExport {
         return (crc ^ c.getValue()) & 0xffffffffL;
     }
     static File pdf(File folder, String name) { return new File(folder, name + ".pdf"); }
-    /** A cover as its PNG shows it: its page (blank for none) on its paper, the front's picture from {@code pictured}'s page. */
-    private static ToneDocument.Snapshot cover(boolean front, Covers covers, PackedPage own, PackedPage pictured) throws IOException {
+    /** A cover as its PNG shows it: its page (blank for none) on its paper, the front's picture from {@code pictured}'s page, its second ink the notebook's {@code ink}. */
+    private static ToneDocument.Snapshot cover(boolean front, Covers covers, PackedPage own, PackedPage pictured, int ink) throws IOException {
         ToneDocument page = own == null ? new ToneDocument(covers.width, covers.height) : DocumentCodec.read(new ByteArrayInputStream(own.bytes()));
         NotebookCovers.Picture picture = pictured == null ? null : NotebookCovers.of(DocumentCodec.read(new ByteArrayInputStream(pictured.bytes())).layerSnapshot());
         page.placePaper(NotebookCovers.paper(front, covers.design, covers.name, page.width, page.height, picture), () -> NotebookCovers.paper(front, covers.design, covers.name, page.width, page.height, picture, true));
-        return page.layerSnapshot();
+        ToneDocument.Snapshot shown = page.layerSnapshot();
+        shown.ink = ink;
+        return shown;
     }
 
     /** A notebook renamed: its PNGs' folder and its PDF follow; copies already under the new name win. */

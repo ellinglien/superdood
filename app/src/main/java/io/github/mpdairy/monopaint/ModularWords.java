@@ -254,6 +254,7 @@ final class ModularWords {
         if (keepsPaint(b) && !tone && !crayon) items.add("keeps paint");
         String erasable = resist || tone ? "" : erasable(b);
         if (!erasable.isEmpty()) items.add(lower(erasable));
+        if (ResolvedBrush.second(b)) items.add("second ink");
         if (ResolvedBrush.soluble(b)) items.add("water melts it");  // the owner, 2026-11-02: say to use Water over it
         PartChoice paper = b.choice(BrushPart.PAPER);
         if (paper != PartChoice.PLAIN && paper != usual(style, BrushPart.PAPER)) items.add(lower(paper.label));
@@ -364,6 +365,8 @@ final class ModularWords {
         if (tone) out.add("Scrapes off in streaks.");
         // Water-Soluble says what water does to it (explore-media).
         if (ResolvedBrush.soluble(b)) out.add(DISSOLVES);
+        // Second Ink says where copies show it.
+        if (ResolvedBrush.second(b)) out.add(SECOND_INK);
         // Behind and Invert say what they do to what is there.
         if (blend(b) == 2) out.add("Goes behind marks.");
         if (blend(b) == 3) out.add("Inverts what's under it.");
@@ -616,6 +619,8 @@ final class ModularWords {
     /** Smudge's Press on: Press to Push (a Smear) or Press to Lift (Clear Water), {@link PartDial#PRESS} (parts.js pressed). */
     /** Water-Soluble's sentence ({@link PartDial#SOLUBLE}). */
     static final String DISSOLVES = "Dissolves into a wash with water.";
+    /** Second Ink's sentence ({@link PartDial#SECOND}). */
+    static final String SECOND_INK = "Shows in the notebook's second ink in copies.";
     /** Paint Load on a line (no body): its ink runs dry into streaks ({@link LineStamper}), "Runs dry.", tagged "runs dry". */
     static boolean runsDry(ModularBrush b) { return runsOut(b) && ResolvedBrush.of(b, 8, 1).body == null; }
     static boolean pressed(ModularBrush b) { return b.part(BrushPart.CARRY).get(PRESS, 0) > 0; }

@@ -212,6 +212,10 @@ final class PagePicture {
     static final class Composite {
         private final int width, visible, paper;
         private final byte[][] tones, alpha;
+        /** Inkwash: each place's second-ink shares ({@link ToneDocument.Layer#ink}; null: none). Vector Ink's planes have none: its lines are first ink in every copy. */
+        private final byte[][] ink;
+        private int inked = -1;
+        private int[] second;
         private final int[] opacity;
         /** A cover's paper pixels ({@link ToneDocument#paperPixels}), or null: {@link #paper} everywhere. */
         private final byte[] ground;
@@ -252,33 +256,52 @@ final class PagePicture {
             this.width = width; this.height = height; this.paper = paper; this.ground = ground; this.view = view;
             source = view == null ? null : new int[width];
             int places = ToneDocument.stackSize(layers.size());
-            tones = new byte[places][]; alpha = new byte[places][]; opacity = new int[places];
+            tones = new byte[places][]; alpha = new byte[places][]; ink = new byte[places][]; opacity = new int[places];
             int n = 0;
             // Inkwash: each layer's base and kind planes, in the page's order.
             for (int k = Math.max(0, from); k < Math.min(to, places); k++) {
                 ToneDocument.Layer entry = ToneDocument.stacked(layers, k);
                 if (entry == null) continue;
                 ToneDocument.Layer layer = layers.get(ToneDocument.stackOwner(k));
-                if (layer.visible && !ToneDocument.linesPlace(k, without)) { tones[n] = entry.tones; alpha[n] = entry.alpha; opacity[n++] = ToneDocument.stackOpacity(layer, entry); }
+                if (layer.visible && !ToneDocument.linesPlace(k, without)) { tones[n] = entry.tones; alpha[n] = entry.alpha; ink[n] = ToneDocument.stackPlane(k) == ToneDocument.PLANE_LINES ? null : entry.ink; opacity[n++] = ToneDocument.stackOpacity(layer, entry); }
             }
             visible = n;
         }
+        /** Inkwash: whether {@code page} shows second ink, from its layers alone: no guides or letters drawn for it. */
+        static boolean inked(ToneDocument.Snapshot page) { return new Composite(page.width, page.height, page.layers, page.paper, null, null).inked(); }
+        /** Inkwash: whether a mark that can show (its layer shown, at some opacity) holds second ink: its copies are in colour ({@link NotebookExport#inks}). */
+        boolean inked() {
+            for (int n = 0; inked < 0 && n < visible; n++) if (ink[n] != null) for (int i = 0; i < ink[n].length; i++) if (ink[n][i] != 0 && ((alpha[n][i] & 255) * opacity[n] + 50) / 100 != 0) { inked = 1; break; }
+            if (inked < 0) inked = 0;
+            return inked == 1;
+        }
         /** Row {@code y}'s tones (0 black, 255 white) into {@code out}. */
-        void row(int y, int[] out) {
+        void row(int y, int[] out) { row(y, out, null, 0); }
+        /**
+         * As above and, into {@code share} from {@code from} on (null: not wanted, as the screen never does), second ink's
+         * share of each pixel's darkness, 0 to 255: a mark's second ink (its darkness times its {@link ToneDocument.Layer#ink})
+         * laid over what is under as its tone is, and the letters' black over it, then as a share of the darkness there. A
+         * copy shows the pixel's grey g as {@code g + ink × share × (255 − g) / 255²} a channel ({@link NotebookExport#channel}).
+         */
+        void row(int y, int[] out, byte[] share, int from) {
             if (view != null) view.row(y, 0, width, width, height, source);
+            if (share != null && second == null) second = new int[width];
             for (int x = 0, at = y * width; x < width; x++, at++) {
                 int i = view == null ? at : source[x];
-                if (i < 0) { out[x] = paper; continue; }
-                int result = ground == null ? paper : ground[i] & 255;
+                if (i < 0) { out[x] = paper; if (share != null) second[x] = 0; continue; }
+                int result = ground == null ? paper : ground[i] & 255, s = 0;
                 for (int n = 0; n < visible; n++) {
                     int a = alpha[n][i] & 255;
                     if (a == 0) continue;
                     if (opacity[n] != 100) a = (a * opacity[n] + 50) / 100;
                     result = ((tones[n][i] & 255) * a + result * (255 - a) + 127) / 255;
+                    if (share != null) s = ((ink[n] == null ? 0 : ((255 - (tones[n][i] & 255)) * (ink[n][i] & 255) + 127) / 255) * a + s * (255 - a) + 127) / 255;
                 }
                 out[x] = result;
+                if (share != null) second[x] = s;
             }
-            if (texts != null) texts.row(y, out, width);
+            if (texts != null) { texts.row(y, out, width); if (share != null) texts.row(y, second, width); }
+            if (share != null) for (int x = 0; x < width; x++) { int dark = 255 - out[x]; share[from + x] = (byte) (dark <= 0 ? 0 : Math.min(255, (second[x] * 255 + dark / 2) / dark)); }
         }
         /**
          * Row {@code y}'s marks alone, over nothing: each pixel's coverage ({@code cover}, 0 to 255) and its tone times its

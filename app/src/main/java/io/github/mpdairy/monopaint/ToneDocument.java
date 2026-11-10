@@ -25,6 +25,8 @@ final class ToneDocument {
     private byte[] share;
     /** Inkwash: the bound layer's {@link Layer#print}, or null. */
     private byte[] print;
+    /** Inkwash: the bound layer's {@link Layer#ink}, or null. */
+    private byte[] ink;
     /** Inkwash: the bound layer's {@link Layer#kind}, or null. */
     private byte[] kind;
     /** What marks are: a bit each (Pen, Paint, Pencil), {@link Layer#kind}. */
@@ -134,6 +136,13 @@ final class ToneDocument {
          */
         byte[] print;
         /**
+         * Inkwash: Second Ink's share of each pixel's ink, 0 (none: the first ink) to 255 (all), or null where no
+         * second-ink brush has drawn on the layer (every pixel 0). A gesture never writes it stroke by stroke: its finish
+         * sets it from the darkness the gesture added ({@link ToneDocument#inking}, {@link ToneDocument#inkFlows}).
+         * Never shown on the tablet: copies colour by it. Erasing leaves it where paint stays, Undo restores it.
+         */
+        byte[] ink;
+        /**
          * Inkwash: the kinds of mark each pixel holds (a bit each: {@link #KIND_PEN}, {@link #KIND_PAINT}, {@link #KIND_PENCIL}), for an
          * eraser that takes one kind. Null while every pixel holds the same kinds ({@link #kinds}): one kind or none, or more
          * where a piece of them all was laid at once (the Lasso's {@link ToneDocument#layKinds}, a merge).
@@ -169,7 +178,7 @@ final class ToneDocument {
         boolean covers() { for(byte a:alpha) if(a!=0) return true; return false; }
         /** Inkwash: its kind plane {@code p}, or null. */
         Layer plane(int p) { return planes==null?null:planes[p]; }
-        /** Inkwash: the layer's look as one plane ({@link #sheets}): itself when it has no planes, else a new layer of its pixels (no share, print or kinds). */
+        /** Inkwash: the layer's look as one plane ({@link #sheets}): itself when it has no planes, else a new layer of its pixels (no share, print, ink or kinds). */
         Layer flattened() {
             if(planes==null) return this;
             byte[] t=new byte[alpha.length], a=new byte[alpha.length];
@@ -198,7 +207,7 @@ final class ToneDocument {
         // Saves own immutable array references. Only a subsequently edited layer is copied.
         Layer copy() {
             Layer copy;
-            synchronized(this) { shared=true; holds++; copy=new Layer(name,visible,tones,alpha); copy.opacity=opacity; copy.share=share; copy.print=print; copy.kind=kind; copy.kinds=kinds; copy.kindBase=kindBase; copy.lines=lines; }
+            synchronized(this) { shared=true; holds++; copy=new Layer(name,visible,tones,alpha); copy.opacity=opacity; copy.share=share; copy.print=print; copy.ink=ink; copy.kind=kind; copy.kinds=kinds; copy.kindBase=kindBase; copy.lines=lines; }
             Layer[] own=planes;
             if(own!=null) { copy.planes=new Layer[PLANES]; for(int p=0;p<PLANES;p++) if(own[p]!=null) copy.planes[p]=own[p].copy(); }
             copy.source=this; return copy;
@@ -208,12 +217,18 @@ final class ToneDocument {
             if(planes!=null) for(Layer p:planes) if(p!=null) p.release();
             Layer layer=source; source=null;
             if(layer==null) return;
-            synchronized(layer) { if(layer.tones==tones&&layer.alpha==alpha&&layer.share==share&&layer.print==print&&layer.kind==kind&&layer.holds>0&&--layer.holds==0) layer.shared=false; }
+            synchronized(layer) { if(layer.tones==tones&&layer.alpha==alpha&&layer.share==share&&layer.print==print&&layer.ink==ink&&layer.kind==kind&&layer.holds>0&&--layer.holds==0) layer.shared=false; }
         }
         /** Inkwash: whether some pixel holds print tone ({@link #print}): what a file must keep ({@link DocumentCodec}). */
         boolean prints() {
             if(print==null) return false;
             for(byte p:print) if(p!=(byte)255) return true;
+            return false;
+        }
+        /** Inkwash: whether some pixel holds second ink ({@link #ink}), on its base or a plane. */
+        boolean inked() {
+            if(ink!=null) for(byte s:ink) if(s!=0) return true;
+            if(planes!=null) for(Layer p:planes) if(p!=null&&p.inked()) return true;
             return false;
         }
         /** Inkwash: the kinds pixel {@code i} holds: those of its plane, else the layer's; paint of no known kind counts as all. */
@@ -268,6 +283,8 @@ final class ToneDocument {
          * each on its copy here (immutable, shared), as their pixels show in this snapshot.
          */
         final java.util.List<FadingInk.Mark> fades;
+        /** Inkwash: the notebook's second ink ({@link SecondInk}'s index) for a copy of the page ({@link NotebookExport#flatten}); the page itself keeps none. */
+        int ink;
         Snapshot(ToneDocument document) {
             width=document.width; height=document.height; active=document.active; paper=document.paper; surface=document.surface; paperPixels=document.paperPixels; wear=document.wear; guides=document.guides; clock=document.clock; kindsShown=document.kindsShown; sections=document.sections; log=document.log.saved(document.top());
             for(Layer layer:document.layers) layers.add(layer.copy());
@@ -637,7 +654,7 @@ final class ToneDocument {
     }
     /** {@code layer} as {@code view} shows it: each pixel its source's, paper where that is off the page. */
     private Layer reflected(Layer layer,Mirrors.View view,int[] source) {
-        byte[] tones=new byte[width*height], alpha=new byte[width*height], kept=layer.share==null?null:new byte[width*height], printed=layer.print==null?null:new byte[width*height], kinded=layer.kind==null?null:new byte[width*height];
+        byte[] tones=new byte[width*height], alpha=new byte[width*height], kept=layer.share==null?null:new byte[width*height], printed=layer.print==null?null:new byte[width*height], inked=layer.ink==null?null:new byte[width*height], kinded=layer.kind==null?null:new byte[width*height];
         for(int y=0;y<height;y++) {
             view.row(y,0,width,width,height,source);
             for(int x=0,i=y*width;x<width;x++,i++) {
@@ -646,10 +663,11 @@ final class ToneDocument {
                 tones[i]=layer.tones[s]; alpha[i]=layer.alpha[s];
                 if(kept!=null) kept[i]=layer.share[s];
                 if(printed!=null) printed[i]=layer.print[s];
+                if(inked!=null) inked[i]=layer.ink[s];
                 if(kinded!=null) kinded[i]=layer.kind[s];
             }
         }
-        Layer out=new Layer(layer.name,layer.visible,tones,alpha); out.opacity=layer.opacity; out.share=kept; out.print=printed; out.kind=kinded; out.kinds=layer.kinds; out.kindBase=layer.kindBase; return out;
+        Layer out=new Layer(layer.name,layer.visible,tones,alpha); out.opacity=layer.opacity; out.share=kept; out.print=printed; out.ink=inked; out.kind=kinded; out.kinds=layer.kinds; out.kindBase=layer.kindBase; return out;
     }
     /**
      * What the gesture in progress has changed, as the page shows it: the composite tone of each pixel of the {@code w}
@@ -702,7 +720,7 @@ final class ToneDocument {
     /** {@code tiles} of {@code target} (layer {@code index} or a plane of it) taken back as {@link #takeBack} says, as one gesture, joined to the one before when {@code joined}; whether it changed any. */
     private boolean takeBack(int index,Layer target,java.util.List<TileEdit> tiles,java.util.BitSet changed,boolean joined) {
         int columns=columns();
-        selectLayer(index); begin(target,0,1);
+        selectLayer(index); begin(target,0,1); inkCarried=true;
         for(TileEdit tile:tiles) {
             int left=tile.key%columns*TILE, top=tile.key/columns*TILE, tileWidth=Math.min(TILE,width-left), rows=Math.min(TILE,height-top), half=tile.before.length/2;
             if(top>=height||half!=tileWidth*rows) continue;
@@ -711,13 +729,14 @@ final class ToneDocument {
             for(int row=0;row<rows;row++) for(int col=0,t=row*tileWidth;col<tileWidth;col++,t++) {
                 int i=(top+row)*width+left+col;
                 if(tones[i]!=now[t]||alpha[i]!=now[half+t]) continue;
-                byte kept=tile.shareBefore==null?(byte)255:tile.shareBefore[t], printed=tile.printBefore==null?(byte)255:tile.printBefore[t], kinded=tile.kindBefore==null?0:tile.kindBefore[t];
+                byte kept=tile.shareBefore==null?(byte)255:tile.shareBefore[t], printed=tile.printBefore==null?(byte)255:tile.printBefore[t], inked=tile.inkBefore==null?0:tile.inkBefore[t], kinded=tile.kindBefore==null?0:tile.kindBefore[t];
                 boolean tone=was[t]!=now[t]||was[half+t]!=now[half+t];
-                if(!tone&&(share==null||share[i]==kept)&&(print==null||print[i]==printed)&&(kind==null||kind[i]==kinded)) continue;
+                if(!tone&&(share==null||share[i]==kept)&&(print==null||print[i]==printed)&&(ink==null||ink[i]==inked)&&(kind==null||kind[i]==kinded)) continue;
                 if(!wrote) { wrote=true; capture(tile.key); writable(); }
                 tones[i]=was[t]; alpha[i]=was[half+t];
                 if(share!=null) share[i]=kept;
                 if(print!=null) print[i]=printed;
+                if(ink!=null) ink[i]=inked;
                 if(kind!=null) kind[i]=kinded;
                 if(tone) changed.set(i);
             }
@@ -745,6 +764,7 @@ final class ToneDocument {
                 into.kinds|=from.kinds;
                 if(from.share!=null&&into.share==null) into.share=paper(width,height);
                 if(from.print!=null&&into.print==null) into.print=paper(width,height);
+                if(from.ink!=null&&into.ink==null) into.ink=new byte[width*height];
                 if(from.kind!=null&&into.kind==null&&!into.covers()) { into.kindBase=from.kindBase; into.kind=new byte[width*height]; }
                 ArrayList<TileEdit> tiles=new ArrayList<>();
                 for(int key=0;key<keys;key++) {
@@ -754,7 +774,7 @@ final class ToneDocument {
                     if(!marked) continue;
                     byte[] none=new byte[was.length]; Arrays.fill(none,0,none.length/2,(byte)255);
                     tiles.add(new TileEdit(key,was,shared(none,true),from.share==null?null:copyPlane(from.share,key),null,
-                            from.print==null?null:copyPlane(from.print,key),null,from.kind==null?null:copyPlane(from.kind,key),null));
+                            from.print==null?null:copyPlane(from.print,key),null,from.ink==null?null:copyPlane(from.ink,key),null,from.kind==null?null:copyPlane(from.kind,key),null));
                 }
                 any|=takeBack(index,into,tiles,changed,joined||any);
             }
@@ -782,6 +802,9 @@ final class ToneDocument {
         final Layer layer;
         /** The gesture's permanent share ({@link #begin(double)}), which a copy keeps. */
         final int permanent;
+        /** Second Ink: the gesture's ink as it declared it ({@link #inking}; -1: none) and whether its paint flows ({@link #inkFlows}), which a copy declares too. */
+        final int ink;
+        final boolean flows;
         /** By tile key, each pixel's factor, {@link #TILE} to a row; null for a tile left as it was. */
         final float[][] factors;
         /** Which {@link #BLOCK}-pixel blocks of the page it changed, {@link #across} to a row. */
@@ -789,7 +812,7 @@ final class ToneDocument {
         final int across;
         /** The pixels it changed: {x0, y0, x1, y1}, exclusive. */
         final int[] box;
-        private Darkening(Layer layer,int permanent,float[][] factors,boolean[] blocks,int across,int[] box) { this.layer=layer; this.permanent=permanent; this.factors=factors; this.blocks=blocks; this.across=across; this.box=box; }
+        private Darkening(Layer layer,int permanent,int ink,boolean flows,float[][] factors,boolean[] blocks,int across,int[] box) { this.layer=layer; this.permanent=permanent; this.ink=ink; this.flows=flows; this.factors=factors; this.blocks=blocks; this.across=across; this.box=box; }
     }
     /**
      * Inkwash: the one step since {@code mark} ({@link #lastStep}) as a {@link Darkening}, when it is one gesture's change
@@ -822,7 +845,7 @@ final class ToneDocument {
             }
             factors[tile.key]=f;
         }
-        return x0<x1?new Darkening(e.layer,permanent,factors,blocks,across,new int[]{x0,y0,x1,y1}):null;
+        return x0<x1?new Darkening(e.layer,permanent,inkShare,inkFlowing,factors,blocks,across,new int[]{x0,y0,x1,y1}):null;
     }
     /**
      * Inkwash: {@code change} laid again on its layer, carried by the affine map {@code t} ({a, b, c, d, e, f}: {@code x' =
@@ -856,6 +879,8 @@ final class ToneDocument {
         if(!any) return false;
         // On the stroke's own plane (or base).
         begin(change.layer,0,1-change.permanent/255.0);
+        if(change.ink>=0) inking(change.ink);
+        if(change.flows) inkFlows();
         int left=x0, right=x1;
         Cores.Rows rows=(top,bottom,worker)->{
             int[] grays=new int[right-left], owns=change.permanent>0?new int[right-left]:null;
@@ -1060,13 +1085,14 @@ final class ToneDocument {
             if(layer.shared) {
                 layer.tones=layer.tones.clone(); layer.alpha=layer.alpha.clone(); if(layer.share!=null) layer.share=layer.share.clone();
                 if(layer.print!=null) layer.print=layer.print.clone();
+                if(layer.ink!=null) layer.ink=layer.ink.clone();
                 if(layer.kind!=null) layer.kind=layer.kind.clone();
                 layer.shared=false; layer.holds=0;
                 if(layer==bound) bind(layer);
             }
         }
     }
-    private void bind(Layer layer) { bound=layer; tones=layer.tones; alpha=layer.alpha; share=layer.share; print=layer.print; kind=layer.kind; }
+    private void bind(Layer layer) { bound=layer; tones=layer.tones; alpha=layer.alpha; share=layer.share; print=layer.print; ink=layer.ink; kind=layer.kind; }
     private void idle() { if(editing) throw new IllegalStateException("Finish the current gesture first"); }
     void selectLayer(int index) {
         idle(); Layer layer=layers.get(index); if(active!=index)revision++;
@@ -1166,17 +1192,21 @@ final class ToneDocument {
      * has none) w × h block at x, y, which must lie on the page, every plane row by row: tones, coverage, the share the
      * eraser takes (255 where the layer has none), print tone (255 where none) and kinds as {@link #layPixel} takes them
      * ({@link Layer#kindsAt} with {@link Layer#permanentAt} shifted by {@link #PERMANENT}; 0 under no coverage). Inkwash:
-     * its kind plane {@code plane} ({@link #PLANES}; -1: its base; blank where the layer has none).
+     * its kind plane {@code plane} ({@link #PLANES}; -1: its base; blank where the layer has none). Second Ink: returns
+     * its ink shares, the same block ({@link Layer#ink}); null when it has none.
      */
-    void copyPlanes(int index,int plane,int x,int y,int w,int h,byte[] t,byte[] a,byte[] s,byte[] p,byte[] k) {
+    byte[] copyPlanes(int index,int plane,int x,int y,int w,int h,byte[] t,byte[] a,byte[] s,byte[] p,byte[] k) {
         Layer layer=index<0?mask:plane<0?layers.get(index):layers.get(index).plane(plane);
+        byte[] n=layer==null||layer.ink==null?null:new byte[w*h];
         for(int row=0;row<h;row++) for(int col=0,at=row*w,i=(y+row)*width+x;col<w;col++,at++,i++) {
             int c=layer==null?0:layer.alpha[i]&255;
             t[at]=layer==null?(byte)255:layer.tones[i]; a[at]=(byte)c;
             s[at]=layer==null||layer.share==null?(byte)255:layer.share[i];
             p[at]=layer==null||layer.print==null?(byte)255:layer.print[i];
             k[at]=(byte)(c==0?0:layer.kindsAt(i)|layer.permanentAt(i)<<PERMANENT);
+            if(n!=null) n[at]=layer.ink[i];
         }
+        return n;
     }
     /**
      * Inkwash: before the Lasso's piece is laid in this gesture ({@link #layPixel}): the layer notes the {@code kinds} it
@@ -1194,9 +1224,10 @@ final class ToneDocument {
      * Inkwash: the Lasso's piece ({@link LassoPlanes}) laid on pixel x, y in a gesture, as a sheet over what the pixel
      * holds ({@link #overTone}), its share, print tone and kinds ({@link #copyPlanes}) with it: the share the eraser
      * takes weighed by each sheet's part of the coverage, the darker print tone, both pixels' kinds. No masking fluid
-     * shields it: it is the paint moved, not painted.
+     * shields it: it is the paint moved, not painted. Second Ink: its ink share {@code inked} with it ({@link Layer#ink}),
+     * mixed with the pixel's by the darkness each shows, the pixel's through the sheet; the gesture's finish leaves it.
      */
-    void layPixel(int x,int y,int gray,int coverage,int kept,int printed,int kinds) {
+    void layPixel(int x,int y,int gray,int coverage,int kept,int printed,int kinds,int inked) {
         if(!editing) throw new IllegalStateException("No active gesture");
         if(x<0||y<0||x>=width||y>=height||coverage==0) return;
         int i=y*width+x, under=alpha[i]&255, laid=sheet(gray,coverage,tones[i]&255,under), a=laid&255, rest=under*(255-coverage);
@@ -1204,25 +1235,35 @@ final class ToneDocument {
         s=under==0?kept:Math.min(255,(kept*coverage*255+s*rest+a*255/2)/(a*255));
         p=under==0?printed:Math.min(printed,p);
         if(under!=0&&kind!=null) kinds|=bound.kindsAt(i)|bound.permanentAt(i)<<PERMANENT;
-        lay(x,y,laid>>>8,a,s,p,kinds);
+        if(inked!=0||ink!=null) {
+            int dp=255-onWhite(gray,coverage), du=(255-onWhite(tones[i]&255,under))*(255-coverage)/255;
+            inked=dp+du==0?0:(dp*inked+du*(ink==null?0:ink[i]&255)+(dp+du)/2)/(dp+du);
+        }
+        lay(x,y,laid>>>8,a,s,p,kinds,inked);
     }
     /** Inkwash: the Lasso lifting pixel x, y off the layer in a gesture ({@link LassoPlanes}): bare, every plane. */
     void liftPixel(int x,int y) {
         if(!editing) throw new IllegalStateException("No active gesture");
-        if(x>=0&&y>=0&&x<width&&y<height) lay(x,y,255,0,255,255,0);
+        if(x>=0&&y>=0&&x<width&&y<height) lay(x,y,255,0,255,255,0,0);
     }
-    /** Writes every plane of a pixel, capturing its tile for Undo first; a share or print tone the layer lacks gives it that plane. */
-    private void lay(int x,int y,int gray,int coverage,int kept,int printed,int kinds) {
+    /**
+     * Writes every plane of a pixel, capturing its tile for Undo first; a share, print tone or ink share the layer lacks
+     * gives it that plane. The gesture carries its pixels' ink ({@link #inkCarried}).
+     */
+    private void lay(int x,int y,int gray,int coverage,int kept,int printed,int kinds,int inked) {
         int i=y*width+x;
+        inkCarried=true;
         if((tones[i]&255)==gray&&(alpha[i]&255)==coverage&&(share==null?kept==255:(share[i]&255)==kept)
-                &&(print==null?printed==255:(print[i]&255)==printed)&&(kind==null||kind[i]==(byte)kinds)) return;
+                &&(print==null?printed==255:(print[i]&255)==printed)&&(kind==null||kind[i]==(byte)kinds)&&(ink==null?inked==0:(ink[i]&255)==inked)) return;
         capture((y/TILE)*columns()+x/TILE);
         writable();
         if(share==null&&kept!=255) { bound.share=paper(width,height); share=bound.share; }
         if(print==null&&printed!=255) { bound.print=paper(width,height); print=bound.print; }
+        if(ink==null&&inked!=0) { bound.ink=new byte[width*height]; ink=bound.ink; }
         tones[i]=(byte)gray; alpha[i]=(byte)coverage;
         if(share!=null) share[i]=(byte)kept;
         if(print!=null) print[i]=(byte)printed;
+        if(ink!=null) ink[i]=(byte)inked;
         if(kind!=null) kind[i]=(byte)kinds;
         markDirty(x,y,x+1,y+1);
     }
@@ -1312,15 +1353,16 @@ final class ToneDocument {
     }
     /** A copy of {@code layer} on a larger transparent canvas, offset by {@code left} and {@code top}. */
     private Layer expanded(Layer layer,int w,int h,int left,int top) {
-        byte[] ink=paper(w,h), coverage=new byte[w*h], kept=layer.share==null?null:paper(w,h), printed=layer.print==null?null:paper(w,h), kinded=layer.kind==null?null:new byte[w*h];
+        byte[] tones=paper(w,h), coverage=new byte[w*h], kept=layer.share==null?null:paper(w,h), printed=layer.print==null?null:paper(w,h), inked=layer.ink==null?null:new byte[w*h], kinded=layer.kind==null?null:new byte[w*h];
         for(int y=0;y<height;y++) {
-            System.arraycopy(layer.tones,y*width,ink,(y+top)*w+left,width);
+            System.arraycopy(layer.tones,y*width,tones,(y+top)*w+left,width);
             System.arraycopy(layer.alpha,y*width,coverage,(y+top)*w+left,width);
             if(kept!=null) System.arraycopy(layer.share,y*width,kept,(y+top)*w+left,width);
             if(printed!=null) System.arraycopy(layer.print,y*width,printed,(y+top)*w+left,width);
+            if(inked!=null) System.arraycopy(layer.ink,y*width,inked,(y+top)*w+left,width);
             if(kinded!=null) System.arraycopy(layer.kind,y*width,kinded,(y+top)*w+left,width);
         }
-        Layer next=new Layer(layer.name,layer.visible,ink,coverage); next.opacity=layer.opacity; next.share=kept; next.print=printed; next.kind=kinded; next.kinds=layer.kinds; next.kindBase=layer.kindBase; return next;
+        Layer next=new Layer(layer.name,layer.visible,tones,coverage); next.opacity=layer.opacity; next.share=kept; next.print=printed; next.ink=inked; next.kind=kinded; next.kinds=layer.kinds; next.kindBase=layer.kindBase; return next;
     }
     private void markAllDirty() { grow(0,0,width,height); }
     private void addEdit(Edit edit) {
@@ -1570,13 +1612,15 @@ final class ToneDocument {
     private final HashMap<Integer, byte[]> beforeShare = new HashMap<>();
     /** Inkwash: beside {@link #before}, on a layer with a {@link Layer#print}: each captured tile's print tones as the gesture found them (under {@link #before}'s lock). */
     private final HashMap<Integer, byte[]> beforePrint = new HashMap<>();
+    /** Inkwash: beside {@link #before}, on a layer with a {@link Layer#ink}: each captured tile's ink shares as the gesture found them (under {@link #before}'s lock). */
+    private final HashMap<Integer, byte[]> beforeInk = new HashMap<>();
     /** Inkwash: beside {@link #before}, on a layer with a {@link Layer#kind}: each captured tile's kinds as the gesture found them (under {@link #before}'s lock). */
     private final HashMap<Integer, byte[]> beforeKind = new HashMap<>();
     /**
      * {@link #before} and {@link #beforeShare} by tile key, made at a gesture's begin: looked up without a map, and by a
      * band's writer without taking the lock (a band captures and reads only its own tiles).
      */
-    private byte[][] foundTiles, foundShares, foundPrints, foundKinds;
+    private byte[][] foundTiles, foundShares, foundPrints, foundInks, foundKinds;
     /**
      * While open, a gesture's writers may run on several threads at once, each in its own rows of whole {@link #TILE}
      * tile rows, with {@link #setTones}, {@link #coverTones}, {@link #restoreSpan}, {@link #strokeBaseTones},
@@ -1716,7 +1760,7 @@ final class ToneDocument {
         for(Layer layer:source) if(layer.planes!=null) { if(layer.planes.length!=PLANES) throw new IllegalArgumentException("Invalid planes"); for(Layer p:layer.planes) if(p!=null) all.add(p); }
         for(Layer layer:all)
             if(layer.tones.length!=width*height||layer.alpha.length!=width*height||layer.share!=null&&layer.share.length!=width*height
-                    ||layer.print!=null&&layer.print.length!=width*height||layer.kind!=null&&layer.kind.length!=width*height) throw new IllegalArgumentException("Invalid layer pixels");
+                    ||layer.print!=null&&layer.print.length!=width*height||layer.ink!=null&&layer.ink.length!=width*height||layer.kind!=null&&layer.kind.length!=width*height) throw new IllegalArgumentException("Invalid layer pixels");
         layers.addAll(source); this.mask=mask;
         selectLayer(active); captured=new boolean[columns()*((height+TILE-1)/TILE)]; clearDirty();
     }
@@ -1744,7 +1788,7 @@ final class ToneDocument {
     }
     /** Inkwash: pixel {@code i} of {@code layer} over white, its base and kind planes as one ({@link #sheets}), opacity left out. */
     private static int look(Layer layer,int i) { int s=sheets(layer,i); return onWhite(s>>>8,s&255); }
-    private static int onWhite(int tone,int alpha) { return (tone*alpha+255*(255-alpha)+127)/255; }
+    static int onWhite(int tone,int alpha) { return (tone*alpha+255*(255-alpha)+127)/255; }
     /** Whether this gesture has changed anything in the tile holding page pixel {@code x, y}; where it hasn't, every pixel is as the gesture found it. */
     boolean touched(int x, int y) { return captured[(y/TILE)*columns()+x/TILE]; }
     int strokeBaseTone(int x, int y) {
@@ -1868,6 +1912,190 @@ final class ToneDocument {
         if(!editing) throw new IllegalStateException("No active gesture");
         if(print==null) { bound.print=paper(width,height); print=bound.print; }
     }
+    /** Inkwash: how much of the gesture in progress's paint is second ink, 0 to 255 ({@link #inking}); -1: none declared, first ink. */
+    private int inkShare = -1;
+    /** Inkwash: the gesture in progress moves paint already on the page ({@link #inkFlows}). */
+    private boolean inkFlowing;
+    /** Inkwash: the gesture in progress writes each pixel's ink share with the pixel (Undo taken back, {@link #takeBack}): its finish leaves them. */
+    private boolean inkCarried;
+    /**
+     * Inkwash: the gesture in progress's paint is {@code share} second ink, 0 (none) to 255 (all) ({@link Layer#ink}, Second
+     * Ink); not called, none. Nothing changes while it draws: its finish mixes the ink into each pixel it darkened, by
+     * the darkness added ({@link #mixInk}). Masking fluid holds no ink. Call it after {@link #begin(double)}.
+     */
+    void inking(int share) {
+        if(!editing) throw new IllegalStateException("No active gesture");
+        if(share<0||share>255) throw new IllegalArgumentException("Invalid ink share");
+        inkShare=share;
+    }
+    /**
+     * Inkwash: the gesture in progress moves paint that is already there (wet paint settling, running, bleeding; a smudge
+     * that lays none of its own): a pixel it darkens takes the ink of the paint round it, whatever {@link #inking} said.
+     * Call it after {@link #begin(double)}.
+     */
+    void inkFlows() {
+        if(!editing) throw new IllegalStateException("No active gesture");
+        inkFlowing=true;
+    }
+    /**
+     * Inkwash: the gesture's ink into each pixel it changed ({@link Layer#ink}), once, at its finish, over the tiles it
+     * captured. With darkness over white {@code d0} as found and {@code d1} now, and the ink found {@code i0}: no
+     * darkness, no ink; darker, the gesture's ink {@code g} mixed in by the darkness added, {@code (d0·i0 + (d1 − d0)·g)
+     * / d1}; lighter on the opaque plane under a declared ink, cover paint takes the ink over by what it lightened;
+     * else as found (erasing and lifting leave what stays its ink). {@code g} is the declared share, or for paint that
+     * flows the ink round the pixel ({@link #inkAround}, a tile at a time). The layer gets its ink plane at the first
+     * share that isn't 0, its arrays its own first ({@link #writable}), so no snapshot sees the gesture's shares.
+     */
+    private void mixInk() {
+        boolean cover=false, own=false;
+        for(Layer layer:layers) cover|=layer.plane(PLANE_OPAQUE)==bound;
+        int cols=columns(), declared=Math.max(0,inkShare);
+        int[] mixed=new int[TILE*TILE], dark=inkFlowing?new int[(TILE+5)*(TILE+5)]:null, inked=inkFlowing?new int[(TILE+5)*(TILE+5)]:null;
+        Arrays.fill(mixed,-1);
+        java.util.BitSet waiting=null;
+        for(Map.Entry<Integer, byte[]> entry:before.entrySet()) {
+            int key=entry.getKey(), x0=key%cols*TILE, y0=key/cols*TILE, w=Math.min(TILE,width-x0);
+            byte[] tile=entry.getValue(), found=foundInks[key];
+            int half=tile.length/2, rows=half/w;
+            // First ink where the gesture found none (most strokes on a page that holds some): nothing to mix.
+            boolean none=!inkFlowing&&declared==0;
+            if(none&&found!=null) for(byte share:found) if(share!=0) { none=false; break; }
+            if(none) continue;
+            // Paint that flows asks the ink round each pixel. Where all the paint found there is one ink (most tiles: a wash of
+            // one ink, drying), that is the answer wherever paint was; the sums wait for paint new on clear paper.
+            int one=-3;
+            boolean sums=false, any=false;
+            // Each pixel's share to be where it changes, nothing written yet (so the loop stays tight; most pixels of a
+            // captured tile are as found, most that changed keep their ink): -1 as it is, -2 paint with none round it.
+            for(int row=0,p=0;row<rows;row++) for(int col=0,i=(y0+row)*width+x0;col<w;col++,p++,i++) {
+                // Past the pixels as found, in a loop of its own (several times quicker than testing each one here).
+                int same=unchanged(tile,half,tones,alpha,p,i,w-col);
+                col+=same; p+=same; i+=same;
+                if(col==w) { p--; continue; }
+                int t0=tile[p]&255, a0=tile[half+p]&255, t1=tones[i]&255, a1=alpha[i]&255;
+                if(inkFlowing) {
+                    if(one==-3) one=oneInk(x0,y0,w,rows,tile,found);
+                    // One ink here and the pixel dark before and after (onWhite under 255): it keeps its share, as the mix below would say.
+                    if(one>=0&&a0*(255-t0)>127&&a1*(255-t1)>127) continue;
+                }
+                int d0=255-onWhite(t0,a0), d1=255-onWhite(t1,a1), i0=found==null?0:found[p]&255, to=i0;
+                if(d1==0) to=0;
+                else if(d1>d0) {
+                    int g=declared;
+                    if(inkFlowing) {
+                        if(one>=0&&d0>0) g=one;
+                        else if(one==-1) g=-1;
+                        else {
+                            if(!sums) { sums=true; inkAround(x0,y0,w,rows,tile,found,dark,inked); }
+                            int t=row*(w+5)+col, weight=around(dark,t,w+5); g=weight==0?-1:(around(inked,t,w+5)+weight/2)/weight;
+                        }
+                    }
+                    to=g<0?-2:(d0*i0+(d1-d0)*g+d1/2)/d1;
+                } else if(d1<d0&&cover&&inkShare>=0&&!inkFlowing) to=i0+Math.round((inkShare-i0)*(d0-d1)/(float)d0);
+                // The plane holds the found share still (nothing wrote this tile since it was captured).
+                if(to!=i0) { mixed[p]=to; any=true; }
+            }
+            if(!any) continue;
+            for(int row=0,p=0;row<rows;row++) for(int col=0,i=(y0+row)*width+x0;col<w;col++,p++,i++) {
+                int to=mixed[p];
+                if(to==-1) continue;
+                mixed[p]=-1;
+                if(to==-2) { if(waiting==null) waiting=new java.util.BitSet(); waiting.set(i); continue; }
+                if(ink==null?to==0:(ink[i]&255)==to) continue;
+                if(!own) { own=true; writable(); if(ink==null) { bound.ink=new byte[width*height]; ink=bound.ink; } }
+                ink[i]=(byte)to;
+            }
+        }
+        if(waiting==null) return;
+        // Paint that ran onto clear paper, past any the gesture found: it takes the ink set round it this finish, by its
+        // darkness now, pass by pass outward (a pass reads only pixels set before it); what none reaches is first ink.
+        // A pass looks at those due: all that wait first, then only the ones beside a pixel the pass before set.
+        java.util.BitSet due=waiting;
+        for(int pass=0;pass<64&&!due.isEmpty();pass++) {
+            java.util.BitSet left=(java.util.BitSet)waiting.clone(), next=new java.util.BitSet();
+            for(int i=due.nextSetBit(0);i>=0;i=due.nextSetBit(i+1)) {
+                int x=i%width, y=i/width, x0=Math.max(0,x-2), x1=Math.min(width-1,x+2), y0=Math.max(0,y-2), y1=Math.min(height-1,y+2), weight=0, sum=0;
+                for(int ny=y0;ny<=y1;ny++) for(int nx=x0;nx<=x1;nx++) {
+                    int n=ny*width+nx;
+                    if(waiting.get(n)) continue;
+                    int d=255-onWhite(tones[n]&255,alpha[n]&255);
+                    weight+=d; sum+=d*(ink[n]&255);
+                }
+                if(weight==0) continue;
+                left.clear(i);
+                for(int ny=y0;ny<=y1;ny++) next.set(ny*width+x0,ny*width+x1+1);
+                int to=(sum+weight/2)/weight;
+                if((ink[i]&255)==to) continue;
+                if(!own) { own=true; writable(); }
+                ink[i]=(byte)to;
+            }
+            next.and(left); waiting=left; due=next;
+        }
+        for(int i=waiting.nextSetBit(0);i>=0;i=waiting.nextSetBit(i+1)) if(ink[i]!=0) { if(!own) { own=true; writable(); } ink[i]=0; }
+    }
+    /** Inkwash: how many of the {@code n} pixels from {@code p} of a captured {@code tile} (coverages from {@code half}) are as found, up to the first that isn't, the page's being {@code tones}, {@code alpha} from {@code i}. */
+    private static int unchanged(byte[] tile,int half,byte[] tones,byte[] alpha,int p,int i,int n) {
+        int k=0;
+        while(k<n&&tile[p+k]==tones[i+k]&&tile[half+p+k]==alpha[i+k]) k++;
+        return k;
+    }
+    /**
+     * Inkwash: the one ink share of all the paint in the {@code w} by {@code h} tile at {@code x0, y0} and the 2 pixels
+     * round it as the gesture found them ({@code tile}, {@code found} or null); -1 no paint there, -2 more than one.
+     * Paint is any coverage, so no less than {@link #inkAround} weighs: with one share here, its mean is that share.
+     * A tile whose shares are all one answers that share without looking for its paint (right where there is any).
+     */
+    private int oneInk(int x0,int y0,int w,int h,byte[] tile,byte[] found) {
+        int one=-1, half=w*h;
+        if(found==null) one=0;
+        else {
+            int p=1;
+            while(p<half&&found[p]==found[0]) p++;
+            if(p==half) one=found[0]&255;
+            else for(p=0;p<half;p++) if(tile[half+p]!=0) { int s=found[p]&255; if(one<0) one=s; else if(s!=one) return -2; }
+        }
+        for(int py=0;py<h+4;py++) for(int px=0;px<w+4;px++) {
+            if(py>=2&&py<h+2&&px==2) px=w+2;
+            int x=x0-2+px, y=y0-2+py;
+            if(x<0||y<0||x>=width||y>=height) continue;
+            int s=inkFound(x,y);
+            if(s==one||(strokeBasePixel(x,y)&255)==0) continue;
+            if(one<0) one=s; else return -2;
+        }
+        return one;
+    }
+    /**
+     * Inkwash: the paint round each pixel of the {@code w} by {@code h} tile at {@code x0, y0} as the gesture found it
+     * ({@code tile}, its ink shares {@code found} or null), for {@link #around}: over the tile and the 2 pixels round it
+     * ({@link #strokeBasePixel}, {@link #inkFound}), {@code w + 5} a row, into {@code dark} the sum of the darkness of
+     * every pixel above and left of each place and into {@code inked} that of darkness × ink share. Then the 5×5 pixels
+     * round any pixel cost four reads, however many the gesture darkened.
+     */
+    private void inkAround(int x0,int y0,int w,int h,byte[] tile,byte[] found,int[] dark,int[] inked) {
+        int pw=w+5, half=w*h;
+        // The 2 pixels round the tile, then the tile itself, each at its place; then every place the sum up to it.
+        for(int py=0;py<h+4;py++) for(int px=0;px<w+4;px++) {
+            if(py>=2&&py<h+2&&px==2) px=w+2;
+            int x=x0-2+px, y=y0-2+py, q=(py+1)*pw+px+1, d=0;
+            if(x>=0&&y>=0&&x<width&&y<height) { int f=strokeBasePixel(x,y); d=255-onWhite(f>>>8,f&255); }
+            dark[q]=d; inked[q]=d==0?0:d*inkFound(x,y);
+        }
+        for(int row=0,p=0;row<h;row++) for(int col=0,q=(row+3)*pw+3;col<w;col++,p++,q++) {
+            int d=255-onWhite(tile[p]&255,tile[half+p]&255);
+            dark[q]=d; inked[q]=found==null?0:d*(found[p]&255);
+        }
+        Arrays.fill(dark,0,pw,0); Arrays.fill(inked,0,pw,0);
+        for(int py=1;py<h+5;py++) {
+            int q=py*pw, rowDark=0, rowInked=0;
+            dark[q]=0; inked[q]=0;
+            for(int px=1;px<pw;px++) {
+                q++; rowDark+=dark[q]; rowInked+=inked[q];
+                dark[q]=dark[q-pw]+rowDark; inked[q]=inked[q-pw]+rowInked;
+            }
+        }
+    }
+    /** Inkwash: from {@link #inkAround}'s sums ({@code pw} a row), that of the 5×5 pixels round the tile's pixel at row × {@code pw} + column {@code t}. */
+    private static int around(int[] sums,int t,int pw) { return sums[t+5*pw+5]-sums[t+5]-sums[t+5*pw]+sums[t]; }
     /** Inkwash: layer {@code index}'s print tone at page pixel {@code x, y} ({@link Layer#print}): 255 where none. */
     int printTone(int index,int x,int y) {
         // Inkwash: the darkest of its base's and its kind planes'.
@@ -1983,6 +2211,11 @@ final class ToneDocument {
         return pixels;
     }
     void begin() { begin(maskTarget,1); }
+    /** Second Ink: the ink share shapes lay ({@link #beginShape}): their slot's brush's ({@code StrokeStart.shape}). */
+    private int shapeInk;
+    void shapeInk(int share) { idle(); shapeInk=share; }
+    /** A shape's gesture ({@code ShapeStroke}): {@link #begin()}, its paint the ink {@link #shapeInk} says. */
+    void beginShape() { begin(); inking(shapeInk); }
     /**
      * Begins a gesture whose paint the eraser takes {@code erasable} of, 0 (permanent) to 1 (all, as {@link #begin()}).
      * Below 1 the layer gets its {@link Layer#share} if it has none (every pixel all erasable until then). Masking fluid
@@ -2066,7 +2299,7 @@ final class ToneDocument {
         // kind (its base) leaves them on the last (a Clear Water drop on floating ink, then the float reads the ink's plane).
         if(!fluid&&target!=layers.get(active)) selected=target;
         permanent=!(erasable<1)?0:(int)Math.round(255*(1-Math.max(0,erasable)));
-        waxTakes=false; layingOver=false;
+        waxTakes=false; layingOver=false; inkShare=-1; inkFlowing=false; inkCarried=false;
         writable();
         if(permanent>0&&share==null) { bound.share=paper(width,height); share=bound.share; }
         laying=fluid?0:kinds&KIND_ALL;
@@ -2078,8 +2311,8 @@ final class ToneDocument {
             if(Integer.bitCount(now)>1&&bound.kind==null) { bound.kindBase=(byte)was; bound.kind=new byte[width*height]; kind=bound.kind; }
             bound.kinds=(byte)now;
         }
-        if(foundTiles==null||foundTiles.length!=captured.length) { foundTiles=new byte[captured.length][]; foundShares=new byte[captured.length][]; foundPrints=new byte[captured.length][]; foundKinds=new byte[captured.length][]; }
-        editing = true; synchronized(before) { before.clear(); beforeShare.clear(); beforePrint.clear(); beforeKind.clear(); } lastBaseTile=null;lastBaseKey=-1;glazed.clear();
+        if(foundTiles==null||foundTiles.length!=captured.length) { foundTiles=new byte[captured.length][]; foundShares=new byte[captured.length][]; foundPrints=new byte[captured.length][]; foundInks=new byte[captured.length][]; foundKinds=new byte[captured.length][]; }
+        editing = true; synchronized(before) { before.clear(); beforeShare.clear(); beforePrint.clear(); beforeInk.clear(); beforeKind.clear(); } lastBaseTile=null;lastBaseKey=-1;glazed.clear();
     }
     void setTone(int x,int y,int gray) {
         if (!editing) throw new IllegalStateException("No active gesture");
@@ -2241,6 +2474,14 @@ final class ToneDocument {
         byte[] s=shareOf(key); int w=Math.min(TILE,width-(x/TILE)*TILE);
         return s==null?255:s[(y%TILE)*w+x%TILE]&255;
     }
+    /** Inkwash: pixel {@code x, y}'s ink share as this gesture found it ({@link Layer#ink}); 0 without one. */
+    private int inkFound(int x,int y) {
+        if(ink==null) return 0;
+        int key=(y/TILE)*columns()+x/TILE;
+        if(!captured[key]) return ink[y*width+x]&255;
+        byte[] s=foundInks[key]; int w=Math.min(TILE,width-(x/TILE)*TILE);
+        return s==null?0:s[(y%TILE)*w+x%TILE]&255;
+    }
     /** Tile {@code key}'s shares as this gesture found it, or null (a band's own tile: see {@link #foundShares}). */
     private byte[] shareOf(int key) { return foundShares[key]; }
     /**
@@ -2380,6 +2621,7 @@ final class ToneDocument {
             System.arraycopy(tile,tile.length/2+offset,alpha,y*width+start,stop-start);
             if(share!=null) { byte[] s=shareOf(key); if(s!=null) System.arraycopy(s,offset,share,y*width+start,stop-start); else Arrays.fill(share,y*width+start,y*width+stop,(byte)255); }
             if(print!=null) { byte[] p=foundPrints[key]; if(p!=null) System.arraycopy(p,offset,print,y*width+start,stop-start); else Arrays.fill(print,y*width+start,y*width+stop,(byte)255); }
+            if(ink!=null) { byte[] n=foundInks[key]; if(n!=null) System.arraycopy(n,offset,ink,y*width+start,stop-start); else Arrays.fill(ink,y*width+start,y*width+stop,(byte)0); }
             if(kind!=null) { byte[] k=foundKinds[key]; if(k!=null) System.arraycopy(k,offset,kind,y*width+start,stop-start); else Arrays.fill(kind,y*width+start,y*width+stop,(byte)0); }
         }
         markDirty(x,y,end,y+1);
@@ -2423,10 +2665,10 @@ final class ToneDocument {
     /** Keeps a tile as this gesture found it, for Undo, before its first change. */
     private void capture(int key) {
         if(captured[key]) return;
-        byte[] tile=shared(copyTile(key),true), kept=share==null?null:shared(copyPlane(share,key),false), printed=print==null?null:shared(copyPlane(print,key),false), kinded=kind==null?null:shared(copyPlane(kind,key),false);
-        foundTiles[key]=tile; foundShares[key]=kept; foundPrints[key]=printed; foundKinds[key]=kinded;
-        if(bands||sharing) synchronized(before) { before.put(key,tile); if(kept!=null) beforeShare.put(key,kept); if(printed!=null) beforePrint.put(key,printed); if(kinded!=null) beforeKind.put(key,kinded); captured[key]=true; }
-        else { before.put(key,tile); if(kept!=null) beforeShare.put(key,kept); if(printed!=null) beforePrint.put(key,printed); if(kinded!=null) beforeKind.put(key,kinded); captured[key]=true; }
+        byte[] tile=shared(copyTile(key),true), kept=share==null?null:shared(copyPlane(share,key),false), printed=print==null?null:shared(copyPlane(print,key),false), inked=ink==null?null:shared(copyPlane(ink,key),false), kinded=kind==null?null:shared(copyPlane(kind,key),false);
+        foundTiles[key]=tile; foundShares[key]=kept; foundPrints[key]=printed; foundInks[key]=inked; foundKinds[key]=kinded;
+        if(bands||sharing) synchronized(before) { before.put(key,tile); if(kept!=null) beforeShare.put(key,kept); if(printed!=null) beforePrint.put(key,printed); if(inked!=null) beforeInk.put(key,inked); if(kinded!=null) beforeKind.put(key,kinded); captured[key]=true; }
+        else { before.put(key,tile); if(kept!=null) beforeShare.put(key,kept); if(printed!=null) beforePrint.put(key,printed); if(inked!=null) beforeInk.put(key,inked); if(kinded!=null) beforeKind.put(key,kinded); captured[key]=true; }
     }
     /** Grows the area to render again by {@code left..right, top..bottom}, right and bottom exclusive. */
     private void markDirty(int l,int t,int r,int b) {
@@ -2544,21 +2786,25 @@ final class ToneDocument {
             int x0 = Math.max(b[0], tx), x1 = Math.min(b[2], Math.min(width, tx + TILE)), y1 = Math.min(b[3], Math.min(height, ty + TILE));
             if (x0 < x1) for (int y = Math.max(b[1], ty); y < y1; y++) restoreSpan(x0, x1, y);
         }
+        // Inkwash: the gesture's ink, once, here (never while it draws); a page without second ink is passed by whole.
+        if (!inkCarried && bound != mask && (ink != null || inkShare > 0 && !inkFlowing)) mixInk();
         editing = false;lastBaseTile=null;lastBaseKey=-1;glazed.clear();
         boolean sink = layingOver; layingOver = false;
         ArrayList<TileEdit> tiles = new ArrayList<>();
         for (Map.Entry<Integer, byte[]> entry : before.entrySet()) {
-            captured[entry.getKey()] = false; foundTiles[entry.getKey()] = null; foundShares[entry.getKey()] = null; foundPrints[entry.getKey()] = null; foundKinds[entry.getKey()] = null;
+            captured[entry.getKey()] = false; foundTiles[entry.getKey()] = null; foundShares[entry.getKey()] = null; foundPrints[entry.getKey()] = null; foundInks[entry.getKey()] = null; foundKinds[entry.getKey()] = null;
             byte[] kindBefore = beforeKind.get(entry.getKey()), kindAfter = kind == null ? null : shared(copyPlane(kind, entry.getKey()), false);
             byte[] after = shared(copyTile(entry.getKey()), true), shareBefore = beforeShare.get(entry.getKey()), shareAfter = share == null ? null : shared(copyPlane(share, entry.getKey()), false);
             byte[] printBefore = beforePrint.get(entry.getKey()), printAfter = print == null ? null : shared(copyPlane(print, entry.getKey()), false);
             // A stroke that leaves the print tone as it was (any but a screened one) keeps one copy of it, not two.
             if (printBefore != null && Arrays.equals(printBefore, printAfter)) printAfter = printBefore;
+            byte[] inkBefore = beforeInk.get(entry.getKey()), inkAfter = ink == null ? null : shared(copyPlane(ink, entry.getKey()), false);
+            if (inkBefore != null && Arrays.equals(inkBefore, inkAfter)) inkAfter = inkBefore;
             if (kindBefore != null && Arrays.equals(kindBefore, kindAfter)) kindAfter = kindBefore;
-            if (!Arrays.equals(entry.getValue(), after) || !samePlane(shareBefore, shareAfter) || !samePlane(printBefore, printAfter) || !samePlane(kindBefore, kindAfter, (byte)0))
-                tiles.add(new TileEdit(entry.getKey(), entry.getValue(), after, shareBefore, shareAfter, printBefore, printAfter, kindBefore, kindAfter));
+            if (!Arrays.equals(entry.getValue(), after) || !samePlane(shareBefore, shareAfter) || !samePlane(printBefore, printAfter) || !samePlane(inkBefore, inkAfter, (byte)0) || !samePlane(kindBefore, kindAfter, (byte)0))
+                tiles.add(new TileEdit(entry.getKey(), entry.getValue(), after, shareBefore, shareAfter, printBefore, printAfter, inkBefore, inkAfter, kindBefore, kindAfter));
         }
-        before.clear(); beforeShare.clear(); beforePrint.clear(); beforeKind.clear();
+        before.clear(); beforeShare.clear(); beforePrint.clear(); beforeInk.clear(); beforeKind.clear();
         Layer edited=bound; bind(selected);
         if (tiles.isEmpty()) return false;
         boolean linked = false;
@@ -2569,11 +2815,11 @@ final class ToneDocument {
             for (TileEdit tile : previous.tiles) merged.put(tile.key, tile);
             for (TileEdit tile : tiles) {
                 TileEdit old = merged.get(tile.key);
-                merged.put(tile.key, old == null ? tile : new TileEdit(tile.key, old.before, tile.after, old.shareBefore, tile.shareAfter, old.printBefore, tile.printAfter, old.kindBefore, tile.kindAfter));
+                merged.put(tile.key, old == null ? tile : new TileEdit(tile.key, old.before, tile.after, old.shareBefore, tile.shareAfter, old.printBefore, tile.printAfter, old.inkBefore, tile.inkAfter, old.kindBefore, tile.kindAfter));
             }
             tiles = new ArrayList<>();
             for (TileEdit tile : merged.values())
-                if (!Arrays.equals(tile.before, tile.after) || !samePlane(tile.shareBefore, tile.shareAfter) || !samePlane(tile.printBefore, tile.printAfter) || !samePlane(tile.kindBefore, tile.kindAfter, (byte)0)) tiles.add(tile);
+                if (!Arrays.equals(tile.before, tile.after) || !samePlane(tile.shareBefore, tile.shareAfter) || !samePlane(tile.printBefore, tile.printAfter) || !samePlane(tile.inkBefore, tile.inkAfter, (byte)0) || !samePlane(tile.kindBefore, tile.kindAfter, (byte)0)) tiles.add(tile);
         }
         for (Edit edit : redo) historyBytes -= edit.bytes;
         if (!redo.isEmpty()) log = log.upTo(top());
@@ -2628,13 +2874,13 @@ final class ToneDocument {
         }
         if(above.isEmpty()) return;
         // The pixels the gesture changed that something above it covers.
-        int[] at=new int[64]; int count=0, kinds=0; boolean shares=false, prints=false;
+        int[] at=new int[64]; int count=0, kinds=0; boolean shares=false, prints=false, inks=false;
         for(TileEdit tile:tiles) {
             int tx=tile.key%columns()*TILE, ty=tile.key/columns()*TILE, w=Math.min(TILE,width-tx), h=Math.min(TILE,height-ty), half=w*h;
             for(int j=0;j<half;j++) {
                 if(tile.before[j]==tile.after[j]&&tile.before[half+j]==tile.after[half+j]) continue;
                 int i=(ty+j/w)*width+tx+j%w; boolean covered=false;
-                for(Layer q:above) if(q.alpha[i]!=0) { covered=true; kinds|=q.kindsAt(i); shares|=q.share!=null&&q.share[i]!=(byte)255; prints|=q.print!=null&&q.print[i]!=(byte)255; }
+                for(Layer q:above) if(q.alpha[i]!=0) { covered=true; kinds|=q.kindsAt(i); shares|=q.share!=null&&q.share[i]!=(byte)255; prints|=q.print!=null&&q.print[i]!=(byte)255; inks|=q.ink!=null&&q.ink[i]!=0; }
                 if(!covered) continue;
                 if(count==at.length) at=Arrays.copyOf(at,count*2);
                 at[count++]=i;
@@ -2644,8 +2890,11 @@ final class ToneDocument {
         Layer keep=selected;
         try {
             begin(target,0,1);
+            // Second Ink: what sinks keeps its ink, mixed with the base's by the darkness each shows; these gestures carry it.
+            inkCarried=true;
             if(shares&&share==null) { bound.share=paper(width,height); share=bound.share; }
             if(prints&&print==null) { bound.print=paper(width,height); print=bound.print; }
+            if(inks&&this.ink==null) { bound.ink=new byte[width*height]; this.ink=bound.ink; }
             int was=bound.kinds; if(was==0&&bound.covers()) was=KIND_ALL;
             // A bare base taking two kinds at once: every pixel with coverage gets its own byte, but the file wants a base (1 to 7).
             if(Integer.bitCount(was|kinds)>1&&kind==null) { bound.kindBase=(byte)(was!=0?was:kinds); bound.kind=new byte[width*height]; kind=bound.kind; }
@@ -2656,34 +2905,41 @@ final class ToneDocument {
                 double cover=a/255.0, ink=(tones[i]&255)*cover, kept=share==null||a==0?0:kept(a,share[i]&255)/255.0;
                 if(kept>0) perm=bound.permanentAt(i);
                 int printed=print==null?255:print[i]&255;
+                // Darkness over white, and that times the ink share: each plane's shows through those over it. Only where
+                // some plane here holds ink (the base has its plane by now if one above does).
+                boolean mixes=this.ink!=null;
+                double dark=mixes?255-onWhite(tones[i]&255,a):0, second=mixes?dark*(this.ink[i]&255):0;
                 for(Layer q:above) {
                     int qa=q.alpha[i]&255;
                     if(qa==0) continue;
                     double f=qa/255.0, qk=q.share==null?0:kept(qa,q.share[i]&255)/255.0;
+                    if(mixes) { double qd=255-onWhite(q.tones[i]&255,qa); dark=qd+dark*(1-f); second=(q.ink==null?0:qd*(q.ink[i]&255))+second*(1-f); }
                     ink=(q.tones[i]&255)*f+ink*(1-f); cover=f+cover*(1-f); kept=qk+kept*(1-qk);
                     own|=q.kindsAt(i); if(qk>0) perm|=q.kindsAt(i);
                     if(q.print!=null) printed=Math.min(printed,q.print[i]&255);
                 }
                 int na=(int)Math.round(cover*255), nk=Math.min(na,(int)Math.round(kept*255));
-                put(i,na==0?255:Math.min(255,(int)Math.round(ink/cover)),na,shareOf(nk,na),printed,own|perm<<PERMANENT);
+                put(i,na==0?255:Math.min(255,(int)Math.round(ink/cover)),na,shareOf(nk,na),printed,own|perm<<PERMANENT,dark<=0?0:(int)Math.round(second/dark));
             }
             finishWithPrevious();
             // Each plane above lets go of what sank.
             for(Layer q:above) {
                 begin(q,0,1);
-                for(int c=0;c<count;c++) if(alpha[at[c]]!=0) put(at[c],tones[at[c]]&255,0,255,255,0);
+                inkCarried=true;
+                for(int c=0;c<count;c++) if(alpha[at[c]]!=0) put(at[c],tones[at[c]]&255,0,255,255,0,0);
                 finishWithPrevious();
             }
         } finally { selected=keep; bind(selected); }
     }
-    /** Inkwash: writes pixel {@code i} of the bound layer whole (tone, coverage, and its share, print tone and kinds where it keeps them), capturing its tile first. */
-    private void put(int i,int gray,int coverage,int kept,int printed,int kinds) {
+    /** Inkwash: writes pixel {@code i} of the bound layer whole (tone, coverage, and its share, print tone, kinds and ink share where it keeps them), capturing its tile first. */
+    private void put(int i,int gray,int coverage,int kept,int printed,int kinds,int inked) {
         int x=i%width, y=i/width;
         capture((y/TILE)*columns()+x/TILE);
         writable();
         tones[i]=(byte)gray; alpha[i]=(byte)coverage;
         if(share!=null) share[i]=(byte)kept;
         if(print!=null) print[i]=(byte)printed;
+        if(ink!=null) ink[i]=(byte)inked;
         if(kind!=null) kind[i]=(byte)kinds;
         markDirty(x,y,x+1,y+1);
     }
@@ -2714,11 +2970,12 @@ final class ToneDocument {
             if(marked) {
                 before.put(key,tile); if(share!=null) beforeShare.put(key,foundShares[key]=copyPlane(share,key)); foundTiles[key]=tile; captured[key]=true;
                 if(printed!=null) beforePrint.put(key,foundPrints[key]=printed);
+                if(ink!=null) beforeInk.put(key,foundInks[key]=copyPlane(ink,key));
                 if(kinded!=null) beforeKind.put(key,foundKinds[key]=kinded);
             }
         }
         if(!before.isEmpty()) {
-            Arrays.fill(tones,(byte)255); Arrays.fill(alpha,(byte)0); if(share!=null) Arrays.fill(share,(byte)255); if(print!=null) Arrays.fill(print,(byte)255); markAllDirty();
+            Arrays.fill(tones,(byte)255); Arrays.fill(alpha,(byte)0); if(share!=null) Arrays.fill(share,(byte)255); if(print!=null) Arrays.fill(print,(byte)255); if(ink!=null) Arrays.fill(ink,(byte)0); markAllDirty();
         }
         return finish();
     }
@@ -2753,10 +3010,10 @@ final class ToneDocument {
         // A shared base's reader sees each tile captured or as restored, never between.
         synchronized (before) {
             for (Map.Entry<Integer, byte[]> tile : before.entrySet()) {
-                restoreTile(tile.getKey(), tile.getValue(), beforeShare.get(tile.getKey()), beforePrint.get(tile.getKey()), beforeKind.get(tile.getKey())); captured[tile.getKey()] = false;
-                foundTiles[tile.getKey()] = null; foundShares[tile.getKey()] = null; foundPrints[tile.getKey()] = null; foundKinds[tile.getKey()] = null;
+                restoreTile(tile.getKey(), tile.getValue(), beforeShare.get(tile.getKey()), beforePrint.get(tile.getKey()), beforeInk.get(tile.getKey()), beforeKind.get(tile.getKey())); captured[tile.getKey()] = false;
+                foundTiles[tile.getKey()] = null; foundShares[tile.getKey()] = null; foundPrints[tile.getKey()] = null; foundInks[tile.getKey()] = null; foundKinds[tile.getKey()] = null;
             }
-            before.clear(); beforeShare.clear(); beforePrint.clear(); beforeKind.clear();
+            before.clear(); beforeShare.clear(); beforePrint.clear(); beforeInk.clear(); beforeKind.clear();
         }
         lastBaseTile=null; lastBaseKey=-1; glazed.clear(); editing = false;
         bind(selected);
@@ -2775,7 +3032,7 @@ final class ToneDocument {
             int index=ownerOf(edit.layer);
             // Any other layer is masking fluid, laid since the page last had none. Inkwash: a plane's layer is selected, the plane read.
             if(index<0) { mask=edit.layer; bind(mask); } else { selectLayer(index); selected=edit.layer; bind(selected); }
-            for (TileEdit tile : edit.tiles) restoreTile(tile.key, forward ? tile.after : tile.before, forward ? tile.shareAfter : tile.shareBefore, forward ? tile.printAfter : tile.printBefore, forward ? tile.kindAfter : tile.kindBefore);
+            for (TileEdit tile : edit.tiles) restoreTile(tile.key, forward ? tile.after : tile.before, forward ? tile.shareAfter : tile.shareBefore, forward ? tile.printAfter : tile.printBefore, forward ? tile.inkAfter : tile.inkBefore, forward ? tile.kindAfter : tile.kindBefore);
             if(index<0) bind(selected);
         }
         if(edit.linesLayer!=null) { edit.linesLayer.lines=forward?edit.linesAfter:edit.linesBefore; revision++; }
@@ -2892,11 +3149,19 @@ final class ToneDocument {
         byte[] tones = new byte[w * h], alpha = new byte[w * h];
         boolean[] mark = new boolean[w * h];
         for (int y = 0; y < h; y++) { System.arraycopy(layer.tones, (t + y) * width + l, tones, y * w, w); System.arraycopy(layer.alpha, (t + y) * width + l, alpha, y * w, w); }
+        // Second Ink: the mark's darkness and that times its ink share, over all of it and over what it laid on clear paper.
+        boolean grows = margin > 0 && layer.ink != null;
+        long dark = 0, inked = 0, clearDark = 0, clearInked = 0;
         for (int j = 0; j < keys.length; j++) {
             int x0 = keys[j] % cols * TILE, y0 = keys[j] / cols * TILE, tw = Math.min(TILE, width - x0), half = after[j].length / 2;
             for (int p = 0; p < half; p++) {
                 int x = x0 + p % tw - l, y = y0 + p / tw - t;
-                if (x >= 0 && y >= 0 && x < w && y < h && (before[j][p] != after[j][p] || before[j][half + p] != after[j][half + p])) mark[y * w + x] = true;
+                if (x < 0 || y < 0 || x >= w || y >= h || before[j][p] == after[j][p] && before[j][half + p] == after[j][half + p]) continue;
+                mark[y * w + x] = true;
+                if (!grows) continue;
+                long d = 255 - onWhite(tones[y * w + x] & 255, alpha[y * w + x] & 255), s = d * (layer.ink[(t + y) * width + l + x] & 255);
+                dark += d; inked += s;
+                if (before[j][half + p] == 0) { clearDark += d; clearInked += s; }
             }
         }
         ArrayList<Edit> steps = new ArrayList<>();
@@ -2909,10 +3174,38 @@ final class ToneDocument {
             int key = ty * cols + tx;
             if (stepped.contains(key)) continue;
             byte[] as = shared(tile(tones, alpha, w, tx * TILE - l, ty * TILE - t, Math.min(TILE, width - tx * TILE), Math.min(TILE, height - ty * TILE)), true);
-            byte[] shares = layer.share == null ? null : shared(copyPlane(layer.share, key), false), prints = layer.print == null ? null : shared(copyPlane(layer.print, key), false), kinds = layer.kind == null ? null : shared(copyPlane(layer.kind, key), false);
-            last.tiles.add(new TileEdit(key, as, as, shares, shares, prints, prints, kinds, kinds));
-            int more = 64 + stepBytes(as) + stepBytes(shares) + stepBytes(prints) + stepBytes(kinds);
+            byte[] shares = layer.share == null ? null : shared(copyPlane(layer.share, key), false), prints = layer.print == null ? null : shared(copyPlane(layer.print, key), false), inks = layer.ink == null ? null : shared(copyPlane(layer.ink, key), false), kinds = layer.kind == null ? null : shared(copyPlane(layer.kind, key), false);
+            last.tiles.add(new TileEdit(key, as, as, shares, shares, prints, prints, inks, inks, kinds, kinds));
+            int more = 64 + stepBytes(as) + stepBytes(shares) + stepBytes(prints) + stepBytes(inks) + stepBytes(kinds);
             last.bytes += more; historyBytes += more;
+        }
+        // Second Ink: paint the technique grows onto clear paper is the mark's ink (stitches, threads, spots). The clear
+        // pixels it may reach hold the mark's share from now (it shows only once paint comes; the file keeps it), on the
+        // after side of the stroke's steps too, so Undo takes it and Redo gives it.
+        // The share is the mean of the paint it laid on clear paper (under the rest lies other paint, whose ink is mixed
+        // in there), of all of it when none; 0 is written too, over what an earlier mark left round itself.
+        // shortcut: one share for the whole mark, its paint's mean; take the nearest pixel's if a stroke across both inks grows wrong.
+        if (clearDark > 0) { dark = clearDark; inked = clearInked; }
+        int grown = dark == 0 ? 0 : (int) ((inked + dark / 2) / dark);
+        boolean wrote = false;
+        if (grows) for (int p = 0; p < w * h; p++) {
+            int i = (t + p / w) * width + l + p % w;
+            if (onWhite(tones[p] & 255, alpha[p] & 255) != 255 || layer.ink[i] == (byte) grown) continue;
+            if (!wrote) { wrote = true; own(layer); }
+            layer.ink[i] = (byte) grown;
+        }
+        if (wrote) {
+            java.util.HashSet<Integer> set = new java.util.HashSet<>();
+            for (int s = steps.size() - 1; s >= 0; s--) for (int k = 0; k < steps.get(s).tiles.size(); k++) {
+                Edit e = steps.get(s); TileEdit tile = e.tiles.get(k);
+                int tx = tile.key % cols * TILE, ty = tile.key / cols * TILE;
+                if (tx < l || tx > r || ty < t || ty > b || !set.add(tile.key)) continue;
+                byte[] inks = shared(copyPlane(layer.ink, tile.key), false);
+                if (samePlane(tile.inkAfter, inks, (byte) 0)) continue;
+                e.tiles.set(k, new TileEdit(tile.key, tile.before, tile.after, tile.shareBefore, tile.shareAfter, tile.printBefore, tile.printAfter, tile.inkBefore, inks, tile.kindBefore, tile.kindAfter));
+                int more = stepBytes(inks) - (tile.inkAfter != tile.inkBefore ? stepBytes(tile.inkAfter) : 0);
+                e.bytes += more; historyBytes += more;
+            }
         }
         // The work itself, on copies only, so it may run off the drawing thread ({@link #laterWork}).
         final int pageW = width, pageH = height;
@@ -3026,15 +3319,15 @@ final class ToneDocument {
                 int t0 = b[p] & 255, a0 = b[half + p] & 255, t1 = a[p] & 255, a1 = a[half + p] & 255;
                 if (t0 == t1 && a0 == a1) continue;
                 int share = m.share(j, p, t), was = FadingInk.mix(t0, a0, t1, a1, m.share(j, p, m.shown)), next = FadingInk.mix(t0, a0, t1, a1, share);
-                // Gone at last, a pixel back to one never painted holds no share or print tone either, one that looked gone sooner too.
+                // Gone at last, a pixel back to one never painted holds no share, print tone or ink share either, one that looked gone sooner too.
                 if (was == next && !(done && share == 0 && a0 == 0)) continue;
                 at[count] = p; from[count] = was; to[count] = next | (a0 == 0 && share == 0 ? BLANK : 0); count++;
                 int x = x0 + p % w, y = y0 + p / w, k = y * m.width + x;
                 if (off || (layer.tones[k] & 255) != was >>> 8 || (layer.alpha[k] & 255) != (was & 255)) continue;
                 if (!changed) { own(layer); revision++; changed = true; }
                 layer.tones[k] = (byte) (next >>> 8); layer.alpha[k] = (byte) next;
-                // Back to a pixel never painted: no share or print tone (255) either.
-                if ((to[count - 1] & BLANK) != 0) { if (layer.share != null) layer.share[k] = (byte) 255; if (layer.print != null) layer.print[k] = (byte) 255; }
+                // Back to a pixel never painted: no share or print tone (255) or ink share (0) either.
+                if ((to[count - 1] & BLANK) != 0) { if (layer.share != null) layer.share[k] = (byte) 255; if (layer.print != null) layer.print[k] = (byte) 255; if (layer.ink != null) layer.ink[k] = 0; }
                 l = Math.min(l, x); r = Math.max(r, x); tp = Math.min(tp, y); bt = Math.max(bt, y);
             }
             if (r >= 0 && onPage) grow(l, tp, r + 1, bt + 1);
@@ -3043,11 +3336,11 @@ final class ToneDocument {
                 TileEdit tile = e.tiles.get(k);
                 if (tile.key != key || tile.before.length != 2 * half || e.serial < first) continue;
                 boolean mine = own != null && own.contains(e);
-                byte[][] before = mine ? null : patch(tile.before, tile.shareBefore, tile.printBefore, half, at, from, to, count), after = patch(tile.after, tile.shareAfter, tile.printAfter, half, at, from, to, count);
+                byte[][] before = mine ? null : patch(tile.before, tile.shareBefore, tile.printBefore, tile.inkBefore, half, at, from, to, count), after = patch(tile.after, tile.shareAfter, tile.printAfter, tile.inkAfter, half, at, from, to, count);
                 if (before == null && after == null) continue;
-                if (before == null) before = new byte[][]{tile.before, tile.shareBefore, tile.printBefore};
-                if (after == null) after = new byte[][]{tile.after, tile.shareAfter, tile.printAfter};
-                e.tiles.set(k, new TileEdit(key, before[0], after[0], before[1], after[1], before[2], after[2], tile.kindBefore, tile.kindAfter));
+                if (before == null) before = new byte[][]{tile.before, tile.shareBefore, tile.printBefore, tile.inkBefore};
+                if (after == null) after = new byte[][]{tile.after, tile.shareAfter, tile.printAfter, tile.inkAfter};
+                e.tiles.set(k, new TileEdit(key, before[0], after[0], before[1], after[1], before[2], after[2], before[3], after[3], tile.kindBefore, tile.kindAfter));
                 patched.add(e);
             }
         }
@@ -3056,18 +3349,19 @@ final class ToneDocument {
         return changed && onPage;
     }
     /**
-     * An Undo step's side of a tile ({@code tile}, its {@code shares} and {@code prints}, null where all 255) with each of
-     * its {@code count} pixels {@code at} that holds {@code from} holding {@code to}, and one left with no coverage no
-     * share or print tone: copies {tile, shares, prints}, or null if no pixel did.
+     * An Undo step's side of a tile ({@code tile}, its {@code shares} and {@code prints}, null where all 255, and its
+     * {@code inks}, null where all 0) with each of its {@code count} pixels {@code at} that holds {@code from} holding
+     * {@code to}, and one left with no coverage no share, print tone or ink share: copies {tile, shares, prints, inks},
+     * or null if no pixel did.
      */
-    private static byte[][] patch(byte[] tile, byte[] shares, byte[] prints, int half, int[] at, int[] from, int[] to, int count) {
+    private static byte[][] patch(byte[] tile, byte[] shares, byte[] prints, byte[] inks, int half, int[] at, int[] from, int[] to, int count) {
         byte[][] out = null;
         for (int c = 0; c < count; c++) {
             int p = at[c];
             if ((tile[p] & 255) != from[c] >>> 8 || (tile[half + p] & 255) != (from[c] & 255)) continue;
-            if (out == null) out = new byte[][]{tile.clone(), shares == null ? null : shares.clone(), prints == null ? null : prints.clone()};
+            if (out == null) out = new byte[][]{tile.clone(), shares == null ? null : shares.clone(), prints == null ? null : prints.clone(), inks == null ? null : inks.clone()};
             out[0][p] = (byte) (to[c] >>> 8); out[0][half + p] = (byte) to[c];
-            if ((to[c] & BLANK) != 0) { if (out[1] != null) out[1][p] = (byte) 255; if (out[2] != null) out[2][p] = (byte) 255; }
+            if ((to[c] & BLANK) != 0) { if (out[1] != null) out[1][p] = (byte) 255; if (out[2] != null) out[2][p] = (byte) 255; if (out[3] != null) out[3][p] = 0; }
         }
         return out;
     }
@@ -3089,7 +3383,7 @@ final class ToneDocument {
         for (int k = time.size() - 1; k >= undone; k--) if (time.get(k) != null) redo.addLast(time.get(k));
     }
     private static boolean changesNothing(Edit e) {
-        for (TileEdit t : e.tiles) if (!Arrays.equals(t.before, t.after) || !samePlane(t.shareBefore, t.shareAfter) || !samePlane(t.printBefore, t.printAfter)) return false;
+        for (TileEdit t : e.tiles) if (!Arrays.equals(t.before, t.after) || !samePlane(t.shareBefore, t.shareAfter) || !samePlane(t.printBefore, t.printAfter) || !samePlane(t.inkBefore, t.inkAfter, (byte)0)) return false;
         return true;
     }
 
@@ -3164,9 +3458,10 @@ final class ToneDocument {
     }
     /**
      * Tile {@code key} back to {@code data}, with its shares {@code kept} on a layer with a share and its print tones
-     * {@code printed} on one with a print (null: all 255, as before it had them).
+     * {@code printed} on one with a print (null: all 255, as before it had them), its ink shares {@code inked} on one
+     * with ink (null: all 0).
      */
-    private void restoreTile(int key, byte[] data, byte[] kept, byte[] printed, byte[] kinded) {
+    private void restoreTile(int key, byte[] data, byte[] kept, byte[] printed, byte[] inked, byte[] kinded) {
         writable();
         int x = key % columns() * TILE, y = key / columns() * TILE;
         int w = Math.min(TILE, width - x), h = Math.min(TILE, height - y);
@@ -3175,6 +3470,7 @@ final class ToneDocument {
             System.arraycopy(data,w*h+row*w,alpha,(y+row)*width+x,w);
             if (share != null) { if (kept != null) System.arraycopy(kept, row * w, share, (y + row) * width + x, w); else Arrays.fill(share, (y + row) * width + x, (y + row) * width + x + w, (byte)255); }
             if (print != null) { if (printed != null) System.arraycopy(printed, row * w, print, (y + row) * width + x, w); else Arrays.fill(print, (y + row) * width + x, (y + row) * width + x + w, (byte)255); }
+            if (ink != null) { if (inked != null) System.arraycopy(inked, row * w, ink, (y + row) * width + x, w); else Arrays.fill(ink, (y + row) * width + x, (y + row) * width + x + w, (byte)0); }
             if (kind != null) { if (kinded != null) System.arraycopy(kinded, row * w, kind, (y + row) * width + x, w); else Arrays.fill(kind, (y + row) * width + x, (y + row) * width + x + w, (byte)0); }
         }
         grow(x, y, x + w, y + h);
@@ -3185,11 +3481,13 @@ final class ToneDocument {
         final byte[] shareBefore, shareAfter;
         /** Inkwash: its print tones ({@link Layer#print}) before and after, on a layer with them; null: every pixel 255. */
         final byte[] printBefore, printAfter;
+        /** Inkwash: its ink shares ({@link Layer#ink}) before and after, on a layer with them; null: every pixel 0. */
+        final byte[] inkBefore, inkAfter;
         /** Inkwash: its kinds ({@link Layer#kind}) before and after, on a layer with them; null: every pixel 0. */
         final byte[] kindBefore, kindAfter;
-        TileEdit(int key, byte[] before, byte[] after, byte[] shareBefore, byte[] shareAfter, byte[] printBefore, byte[] printAfter, byte[] kindBefore, byte[] kindAfter) {
+        TileEdit(int key, byte[] before, byte[] after, byte[] shareBefore, byte[] shareAfter, byte[] printBefore, byte[] printAfter, byte[] inkBefore, byte[] inkAfter, byte[] kindBefore, byte[] kindAfter) {
             this.key = key; this.before = before; this.after = after; this.shareBefore = shareBefore; this.shareAfter = shareAfter;
-            this.printBefore = printBefore; this.printAfter = printAfter; this.kindBefore = kindBefore; this.kindAfter = kindAfter;
+            this.printBefore = printBefore; this.printAfter = printAfter; this.inkBefore = inkBefore; this.inkAfter = inkAfter; this.kindBefore = kindBefore; this.kindAfter = kindAfter;
         }
     }
     private static final class StackState {
@@ -3266,10 +3564,10 @@ final class ToneDocument {
             if(previous.wear!=next.wear) { off+=previous.wear==null?0:previous.wear.bytes(); on+=next.wear==null?0:next.wear.bytes(); }
             bytes=(int)Math.min(Integer.MAX_VALUE,256+Math.max(off,on));
         }
-        /** The bytes {@code layer}'s pixels take, its shares, print and kinds too; 0 for none. */
+        /** The bytes {@code layer}'s pixels take, its shares, print, ink and kinds too; 0 for none. */
         private static long held(Layer layer) {
             if(layer==null) return 0;
-            long bytes=(long)layer.tones.length*(2+(layer.share!=null?1:0)+(layer.print!=null?1:0)+(layer.kind!=null?1:0));
+            long bytes=(long)layer.tones.length*(2+(layer.share!=null?1:0)+(layer.print!=null?1:0)+(layer.ink!=null?1:0)+(layer.kind!=null?1:0));
             if(layer.planes!=null) for(Layer p:layer.planes) bytes+=held(p);
             return bytes;
         }
@@ -3279,6 +3577,7 @@ final class ToneDocument {
             this.tiles = tiles; int count = 0;
             for (TileEdit tile : tiles) count += 64 + stepBytes(tile.before) + stepBytes(tile.after) + stepBytes(tile.shareBefore) + stepBytes(tile.shareAfter)
                     + stepBytes(tile.printBefore) + (tile.printAfter != tile.printBefore ? stepBytes(tile.printAfter) : 0)
+                    + stepBytes(tile.inkBefore) + (tile.inkAfter != tile.inkBefore ? stepBytes(tile.inkAfter) : 0)
                     + stepBytes(tile.kindBefore) + (tile.kindAfter != tile.kindBefore ? stepBytes(tile.kindAfter) : 0);
             bytes = count;
         }

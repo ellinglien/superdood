@@ -28,7 +28,7 @@ final class ModularCode {
      * every tip's Flick and every Blend medium's Fling (Stage 2); Drag's and Smear's Paint Load and Starting Load (the
      * oil paint spec); the hand's Spiro drives, Grey Shift and Gradient; Wet's Stays Wet (the wet paint spec); the hand's
      * Tilt Shading; Smear's and Clear Water's Press (Press to Push, Press to Lift); Round's and Chisel's Wears Down; Ink's, Charcoal's and
-     * Graphite's Dissolves (Water-Soluble).
+     * Graphite's Dissolves (Water-Soluble); Ink's, Wash's, Cover's, Charcoal's and Graphite's Second Ink.
      */
     static final Set<PartDial> ADDED = Collections.unmodifiableSet(EnumSet.of(PartDial.TILT_RANGE, PartDial.RUNS, PartDial.DRIPS,
             PartDial.G_POOL, PartDial.SINK, PartDial.BLEND, PartDial.DUST, PartDial.GS, PartDial.GD, PartDial.GW, PartDial.INK_LOAD, PartDial.ERASABLE, PartDial.M_BLEND, PartDial.BUILD_UP, PartDial.SOFTEN, PartDial.KEEPS,
@@ -36,7 +36,7 @@ final class ModularCode {
             PartDial.FLICK, PartDial.FLING, PartDial.PLOAD, PartDial.PMIN, PartDial.P_DRIVE, PartDial.S_DRIVE, PartDial.T_DRIVE,
             PartDial.SHIFT, PartDial.SHIFT_ORDER, PartDial.SHIFT_GREYS, PartDial.SHIFT_BAR, PartDial.SHIFT_ANY, PartDial.SHIFT_ANY2,
             PartDial.GRADIENT, PartDial.GRAD_TO, PartDial.GRAD_LEN, PartDial.STAYS_WET, PartDial.SIDE_SHADE, PartDial.PRESS, PartDial.WEAR,
-            PartDial.STEADY_HAND, PartDial.LONG_STICK, PartDial.SOLUBLE));
+            PartDial.STEADY_HAND, PartDial.LONG_STICK, PartDial.SOLUBLE, PartDial.SECOND));
     /** Steps across a dial's range: the most two base-36 digits hold. */
     static final int STEPS = 1295;
     /** A name's slug may hold digits after its first letter (2026-10-31); older codes, letters only, still match. */

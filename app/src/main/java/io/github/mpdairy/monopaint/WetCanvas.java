@@ -191,6 +191,8 @@ final class WetCanvas {
             boolean[] done = {false};
             onLayer(() -> {
                 document.begin(erase, kind);
+                // Second Ink: the wet paint it carries on keeps its ink.
+                document.inkFlows();
                 if (at == 0) wet.beginStroke();
                 for (; at < pts.count && System.nanoTime() - t0 < SLICE_NS; at++) {
                     sweep.to(at);
