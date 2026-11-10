@@ -1442,6 +1442,8 @@ final class DrawingPad extends View {
     static final long PEN_AWAY_MS = HoverNib.AWAY_MS;
     /** How long after a popup closes the page refreshes, once Android has redrawn under it. */
     static final long CLOSED_MS = 300;
+    /** The pen landed on the page with Zen's fan open: it closes when the pen lifts. */
+    private boolean fanClosesOnLift;
     /** An undo or redo re-rendering at least this share of the page refreshes it. */
     static final float LARGE_CHANGE = .1f;
     /** The page changed on the panel since its last full refresh. */
@@ -1604,7 +1606,17 @@ final class DrawingPad extends View {
                 || !app.resumed || !hasWindowFocus()) return true;
         // Inkwash: a picture being placed (Import Image) takes every touch, the pen's and the fingers', until Place or Cancel.
         if (placer.touch(event)) return true;
-        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) layLiveNow();
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) {
+            layLiveNow();
+            // The pen on the page closes Zen's open fan (the owner, 2026-11-10; it stayed open while drawing from 2026-11-06)
+            // once it lifts: closed as the stroke began, the clean of the fan's area broke the line still being drawn.
+            // System Settings' Zen Fan, Stays Open, keeps it.
+            fanClosesOnLift = app.zenFanOpen() && !app.prefs.zenFanStays();
+        }
+        if (fanClosesOnLift && (event.getActionMasked() == MotionEvent.ACTION_UP || event.getActionMasked() == MotionEvent.ACTION_CANCEL)) {
+            fanClosesOnLift = false;
+            post(app::closeZenFan);
+        }
         // The pen on the page, landing or lifting: seen now (navigation, finger taps and the finger tool wait on it).
         if (!Ui.fingersOnly(event)) penSeen = SystemClock.uptimeMillis();
         if (historyTap(event)) return true;

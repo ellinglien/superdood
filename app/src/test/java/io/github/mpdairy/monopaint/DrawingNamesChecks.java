@@ -79,7 +79,8 @@ public final class DrawingNamesChecks {
         for (int i = 0; i < 2000; i++) {
             String name = DrawingNames.notebook(day, new Random(i), taken -> false), title = name.substring(11);
             check(name.startsWith("2026-10-18_") && DrawingNames.titled(name) && title.matches("[A-Z][a-z]*( [A-Za-z][a-z]*)+ 26-10-18"), "Its date, hidden, then a title in capitals, its day at the end: " + name);
-            check(BrushNames.titles(new Random(i).nextLong()).contains(title.substring(0, title.length() - 9)), "One of its seed's titles: " + name);
+            String[] words = title.substring(0, title.length() - 9).toLowerCase(java.util.Locale.ROOT).split(" ");
+            check(words.length == 2 && BrushNames.adjectives().contains(words[0]) && BrushNames.produce().contains(words[1]), "An adjective and a fruit or vegetable: " + name);
             check(DrawingFiles.validName(name + " 99") && NotebookLayout.fits(DrawingNames.shown(name + " 99", today)), "A valid file name that fits every shelf, with a number too: " + name);
             check(!DrawingNames.auto(name) && DrawingNames.described(name, Collections.singletonList("ink-wash"), t -> false) == null,
                     "A notebook is never renamed by what's drawn in it: " + name);

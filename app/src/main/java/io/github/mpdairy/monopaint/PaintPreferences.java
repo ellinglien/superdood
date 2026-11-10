@@ -56,6 +56,9 @@ final class PaintPreferences {
     /** Zen Mode as last left: a new install starts without it, in the side bar the Start Here guide shows (the owner, 2026-11-09). */
     boolean zen() { return flag("zen_on", false); }
     void setZen(boolean value) { setFlag("zen_on", value); }
+    /** System Settings' Zen Fan: whether the fan stays open while the pen draws on the page (closes at first, 2026-11-10). */
+    boolean zenFanStays() { return flag("zen_fan_stays", false); }
+    void setZenFanStays(boolean value) { setFlag("zen_fan_stays", value); }
     boolean fridgeAgreed() { return flag("fridge_agreed", false); }
     void setFridgeAgreed(boolean value) { setFlag("fridge_agreed", value); }
     /** Read Handwriting (System Settings): On only once its first-time words are agreed to. */

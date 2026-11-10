@@ -24,7 +24,7 @@ path, documents, layers and wet media are MonoPaint's work, and the fork keeps M
 - **Read Handwriting** (off until you turn it on in System Settings) lets the shelf's Search find words in your pen
   writing. It uses Google's ML Kit (closed source), downloaded only when you switch it on. The writing stays on the
   tablet; Google gets usage stats, never the writing. Notebook PDFs then carry each line's best reading as hidden text.
-- **A brush engine**: every brush is built using six modules -- Tip, Medium, Smudge, Paper, Drying, and Control -- and can generate a short
+- **A brush engine**: every brush is built from six parts -- Control, Tip, Medium, Affects Page, Drying and After -- and can generate a short
   share code. There are nine tool slots on the side bar and a library of brushes (some pens, pencils, markers, charcoal, ink wash,
   watercolour, gouache, oils) and you can tweak them in app in the **Brush Lab** (hold a slot, Edit Brush).
 - **[Brush Studio](https://superdood.org/studio/)** is a web brush making companion that reads and writes the same codes.
@@ -37,7 +37,7 @@ Whatever is new will be in [CHANGELOG.md](CHANGELOG.md); a tour of the screens i
 
 ### From a release (about 5 minutes, no coding)
 
-1. **Download** `superdood-1.2.1.apk` from the [latest release](https://github.com/ellinglien/superdood/releases/latest).
+1. **Download** `superdood-1.2.2.apk` from the [latest release](https://github.com/ellinglien/superdood/releases/latest).
 2. **On the Supernote:** Settings → Security & Privacy → turn on **Sideloading**.
 3. **On your computer** (Mac, Windows or Linux): install
    [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases). Plug the Supernote in with its USB
@@ -51,7 +51,7 @@ With Google's [platform tools](https://developer.android.com/tools/releases/plat
 Supernote connected by USB (`adb devices` should list it):
 
 ```sh
-adb install -r superdood-1.2.1.apk     # the .apk you downloaded
+adb install -r superdood-1.2.2.apk     # the .apk you downloaded
 adb shell cmd package compile -m speed -f ing.ell.mybaddrawings     # optional: compiles it ahead of time
 ```
 

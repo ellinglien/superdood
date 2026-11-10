@@ -13,8 +13,9 @@ package io.github.mpdairy.monopaint;
  * far again the thin arc ({@link #LINE}); under the wedges, along the foot, the column's Dropper, Lasso, droplet and
  * layer button in a row, and Zoom over them ({@link #cell}). Just outside the arc the column's tools
  * stand out in its order from the side edge (the slots, then Fill in, Smudge and Eraser), each its own sector. The gap
- * hits nothing ({@link #NONE}). Only a tap on Zen's circle ({@link #LEAVE}) closes it, a hold there leaves Zen Mode
- * (the owner, 2026-11-06: "Keep tray open when drawing - press to close"; picking a tool keeps it open, 2026-11-04).
+ * hits nothing ({@link #NONE}). A tap on Zen's circle ({@link #LEAVE}) closes it, and so does the pen drawing on the page
+ * unless System Settings' Zen Fan says Stays Open (the owner, 2026-11-10; 2026-11-06 to then it stayed open: "Keep tray
+ * open when drawing - press to close"); a hold on the circle leaves Zen Mode; picking a tool keeps it open (2026-11-04).
  * Mirrored from the bottom-right corner with the column on the right. Sizes and greys are the
  * toolbar's own steps ({@link ToolSwatches#sizeAt}, {@link ShadeStrip}). All in dp, screen coordinates (y down). Pure,
  * checked on the desktop ({@code ZenFanChecks}); the browser's too, through the engine.

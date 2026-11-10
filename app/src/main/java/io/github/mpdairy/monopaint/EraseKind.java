@@ -12,15 +12,18 @@ final class EraseKind {
     /** Show Kinds' columns, a kind each after Everything (docs/TEXT-STYLE.md: Title Case, two words at most), and what each is. */
     static final String[] LABELS = {"Everything", "Pen", "Paint", "Dry Media"};
     static final int[] KINDS = {0, ToneDocument.KIND_PEN, ToneDocument.KIND_PAINT, ToneDocument.KIND_PENCIL};
-    /** The eraser's choices' words, and the target each sets. */
-    static final String[] CHOICES = {"Everything", "Layer 1", "Layer 2", "Layer 3"};
+    /**
+     * The eraser's choices' words, and the target each sets: the layers top down, as the layer button and its hold show
+     * them (the owner, 2026-11-10: "it's in the opposite order as the layers view").
+     */
+    static final String[] CHOICES = {"Everything", "Layer 3", "Layer 2", "Layer 1"};
     private static final int LAYER = 8;
-    static final int[] TARGETS = {0, 1 << LAYER, 2 << LAYER, 3 << LAYER};
+    static final int[] TARGETS = {0, 3 << LAYER, 2 << LAYER, 1 << LAYER};
     /** The result in two words, said when a choice is made. */
-    private static final String[] NOTES = {"Erasing everything", "Erasing layer 1", "Erasing layer 2", "Erasing layer 3"};
+    private static final String[] NOTES = {"Erasing everything", "Erasing layer 3", "Erasing layer 2", "Erasing layer 1"};
 
     /** The Eraser tile's mark for each choice (none for Everything). */
-    static final String[] MARKS = {"", "1", "2", "3"};
+    static final String[] MARKS = {"", "3", "2", "1"};
     static String note(int choice) { return NOTES[choice]; }
     /** The choice that sets {@code target}, 0 (Everything) for any other. */
     static int choice(int target) { for (int i = 1; i < TARGETS.length; i++) if (TARGETS[i] == target) return i; return 0; }

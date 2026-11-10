@@ -253,13 +253,13 @@ final class DrawLayout {
             {"Soft pencil", "tip_hb_pencil"}, {"Soft charcoal", "tip_soft_charcoal"}, {"Soft pastel", "tip_soft_pastel"},
             {"Wax crayon", "tip_wax_crayon"},
             {"Soft wash", "tip_soft_wash"}, {"Slow bloom", "tip_soft_wash"}, {"Watercolour backrun", "tip_soft_wash"},
-            {"Granulating", "tip_soft_wash"}, {"Watercolour splatter", null},
+            {"Granulating", "tip_soft_wash"}, {"Watercolour splatter", "tip_watercolour_splatter"},
             {"Flat wash", "tip_soft_wash"}, {"Wet gouache", "tip_loaded_oils"}, {"Opaque flat", "tip_loaded_oils"},
             {"Cracking paint", "tip_loaded_oils"}, {"Wet oils", "tip_loaded_oils"}, {"Loaded oils", "tip_loaded_oils"}, {"Dry round", "tip_loaded_oils"}, {"Flat brush", "tip_comb"},
             {"Gradient tone", "tip_gradient"}, {"Rosette ink", "tip_rosette"}, {"Halftone brush", "tip_halftone"}, {"Newsprint", null},
             {"Riso", "tip_riso"},
             {"Photocopier", null},
-            {"Engraving pen", "tip_engraving_pen"}, {"Wavy-line pen", "tip_wavy_line_pen"}, {"Pixel pen", null}, {"Stitch pen", null},
+            {"Engraving pen", "tip_engraving_pen"}, {"Wavy-line pen", "tip_wavy_line_pen"}, {"Pixel pen", "tip_pixel_pen"}, {"Stitch pen", "tip_stitch_pen"},
             {"Fill in", "tip_fill_in"}, {"Water", "tip_water_brush"}};
     /**
      * A long press, as the Manta's Android counts one (ViewConfiguration on Android 11: 500 ms held, the touch slop 8 dp):

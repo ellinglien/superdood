@@ -35,6 +35,7 @@ final class SystemSettingsPanel {
         String[] holdLabels = new String[holds.length];
         for (int i = 0; i < holds.length; i++) holdLabels[i] = holds[i].label;
         row(app, list, SystemSettings.EDGE_HOLD, SystemSettings.EDGE_HOLD_NOTE, holdLabels, prefs.edgeHold().ordinal(), holds.length, i -> prefs.setEdgeHold(holds[i]));
+        row(app, list, SystemSettings.ZEN_FAN, SystemSettings.ZEN_FAN_NOTE, new String[]{SystemSettings.CLOSES, SystemSettings.STAYS_OPEN}, prefs.zenFanStays() ? 1 : 0, 2, i -> prefs.setZenFanStays(i == 1));
         row(app, list, SystemSettings.FRIDGE, SystemSettings.FRIDGE_NOTE, onOff, prefs.fridgeAgreed() ? 0 : 1, 2, i -> prefs.setFridgeAgreed(i == 0));
         row(app, list, SystemSettings.READ_HANDWRITING, SystemSettings.READ_HANDWRITING_NOTE, onOff, prefs.readHandwriting() ? 0 : 1, 2, i -> app.readHandwriting(i == 0));
         return list;

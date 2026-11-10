@@ -228,7 +228,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   the browser's foot only since 2026-11-06, the owner: "it shouldn't be a browser, it should be the local app version": the app's Edit Brush is it, and Brush Lab shares to it); over those **Stamp ▾** for a Stamp; at the top, for a Basic tool changed in Brush Lab only, **Reset to Default** (the owner's words, 2026-10-27; at the top since 2026-10-28; the Tools page's too, plain words before Edit in Brush Lab, 2026-11-03).
 
 - **Light popouts beside the column, 2026-10-22** (the owner: "long press eraser menu, make it smaller and lighter so
-  it doesn't leave ghosts on the screen after"): the eraser's choices (**Everything**, **Layer 1**, **Layer 2**, **Layer 3**)
+  it doesn't leave ghosts on the screen after"): the eraser's choices (**Everything**, **Layer 3**, **Layer 2**, **Layer 1**)
   and **Clear page**, an offer, a short label: words in captions on white, a fine grey outline, no boxes; the one in use
   a small dot before it and bold (said ", in use"), never ink-filled.
 - **Notes on the drawing screen, 2026-10-22** (the owner: "the system update alerts... got cut off by the canvas. maybe
@@ -255,7 +255,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   while on: the column on the right), **System Settings** (2026-11-04, the owner's name for it; Iconoir settings) last: a popup where the menu was
   (2026-11-06; its own page with a bar ‹ **Back** until then), the title **System Settings** (no job line, "For every notebook." gone, 2026-11-06); its rows **Automatic Refresh** (**On**, **Off**; under it "After
   page turns, zoom and erasing"), **Finger Action** (above, 2026-11-06), **Two-Finger Tap** and **Three-Finger Tap** (**Undo**, **Redo**, **Refresh**,
-  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**), **Read Handwriting** (2026-11-09; **On**, **Off**; under it "For Search on the shelf"; asks first, in sentences, with **Turn On** and **Not Now**; a failed download says "Download failed" and shows Off). The shelf's Search (2026-11-09, beside the Tools page library's, the same words and the same field): **Search**, × **Close search**, no finds "Nothing found", "3 pages unread" (or "1 page unread") under the finds while some are still to read, results paged with the screen-reader words **Newer results** and **Older results**. Refresh is the column's word for a flash; the
+  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**), **Zen Fan** (2026-11-10; **Closes**, **Stays Open**; under it "When the pen draws on the page"), **Read Handwriting** (2026-11-09; **On**, **Off**; under it "For Search on the shelf"; asks first, in sentences, with **Turn On** and **Not Now**; a failed download says "Download failed" and shows Off). The shelf's Search (2026-11-09, beside the Tools page library's, the same words and the same field): **Search**, × **Close search**, no finds "Nothing found", "3 pages unread" (or "1 page unread") under the finds while some are still to read, results paged with the screen-reader words **Newer results** and **Older results**. Refresh is the column's word for a flash; the
   owner's "flashes" stays out of the app's words. **Export Now** (the one way the PDF and PNGs are made) and **Delete Notebook**
   are Notebook Settings' foot, Rename its name's button. **Show Kinds** (2026-10-28, the column's eye until 2026-11-06,
   the menu's row since, its popup beside the column; the page drawn on's: **Pen**, **Paint**, **Dry Media** side by side, each eye
@@ -449,16 +449,11 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   A new name repeats none of the library's ten latest in its form or a word (the part's and describer's aside), and
   none it has. -y and -ish words are welcome. Every new name wraps whole to two lines of the narrowest card; drawings
   stay adjective-produce ("dapper-fig"); saved names never change (older ones such as "Weeping Hake of Blooms" stay).
-- **A new notebook's title** (the owner, 2026-10-29: "mostly deadpan"; the template in it "not necessary"): from
-  `names/traits.txt`'s [title], Title Case, in fourteen forms ("Field Notes on Scones", "Letters to a Walrus" and): "Several Opinions About Soup", "A Brief Inventory of
-  Lint", "Notes Toward a Better Spoon", "The Pamphlet of Mild Concerns", "Doodles for a Goose", "Mistakes Volume
-  Three", "Probably Fine", "The Lukewarm Pamphlet", "Spoons I Have Known", "In Defence of Fog", "Advice from a
-  Puffin", "Minutes of the Pigeon Committee"; about one in six with a made-up word ("The Flimwhistle Papers",
-  "Doodles for a Pobblewick", "Wobblefuzz and Other Concerns"). Its day at the end, "26-10-28" (the cover's date line
-  and the settings' "Made Oct 28, 2026" say it in full). Names may be whimsical; instructions, buttons and notes stay
-  plain. Only letters, numbers, spaces and - (a file name: no apostrophes or commas, so "Mistakes Volume Three"),
-  whole on every shelf tile; names given before never change (still "Oct 19 brisk-bean notebook", "Tome of the Damp
-  Wanderer").
+- **A new notebook's title** (the owner, 2026-11-10: "simplify the notebook name generator to be what it was ages
+  ago... adjective noun"): an adjective and a fruit or vegetable from `names/adjectives.txt` and `names/produce.txt`,
+  Title Case: "Brisk Bean", "Dapper Fig", "Smug Turnip". Its day at the end, "26-10-28" (the cover's date line and the
+  settings' "Made Oct 28, 2026" say it in full). Names given before never change (the 2026-10-23 to 2026-11-10 titles
+  such as "Several Opinions About Soup", still "Oct 19 brisk-bean notebook", "Tome of the Damp Wanderer").
 - **A long name wraps** (the owner: "maybe we extend the cards to accomodate"): two lines on Tools page and library
   cards (on a card too short for both, the caption's line gives way to a whole two-line name), in Brush Lab's bar (at
   16 sp) and in the label beside the column when a slot's brush changes; cut with … only past two lines, and on the one-line brush line.
@@ -510,7 +505,8 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   "This brush" says the drying, then After: "Dries at once. Fades away in
   20 s."
 - **The eraser's choices** (long press on the Eraser, the owner, 2026-10-20; layers since 2026-11-08, "rename them just
-  layers 1 etc instead of pen paint etc"): **Everything**, **Layer 1**, **Layer 2**, **Layer 3** (Pen, Paint and Dry Media
+  layers 1 etc instead of pen paint etc"): **Everything**, **Layer 3**, **Layer 2**, **Layer 1**, top down as the layer
+  button shows them (2026-11-10) (Pen, Paint and Dry Media
   until then; those stay Show Kinds' columns), the Eraser tile's mark while a layer is chosen (**1**, **2**, **3**), and
   the note "Erasing layer 1" / "Erasing everything".
 - **Control:** Steady, Press Wide, Press Dark, Press Both, Springy, Tilt Shade, Tilt Turn, Flick, Custom.

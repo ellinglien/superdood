@@ -32,7 +32,7 @@ public final class DrawLayoutChecks {
     static void fingerTaps() throws java.io.IOException {
         String pad = source("DrawingPad");
         check(!pad.contains("ZEN_TAP_MS") && !pad.contains("redoWaiting") && pad.contains("FingerTool.Tap tap = FingerTool.tap(fingers, app.prefs.twoFingerTap(), app.prefs.threeFingerTap());") && pad.contains("if (tap == FingerTool.Tap.UNDO) app.undo(); else if (tap == FingerTool.Tap.REDO) app.redo(); else refreshAsked(")
-                && pad.contains("if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) layLiveNow();")
+                && pad.contains("if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isPen(event, 0)) {\n            layLiveNow();")
                 && pad.contains("private void suspend(boolean staying) {\n        layLiveNow();") && pad.contains("if (page != document) { layLiveNow(); app.live.shown(page); }"),
                 "A two- and a three-finger tap do System Settings' choices (Undo and Redo at first), both at once (no three-finger double tap for Zen Mode since 2026-11-02)");
         // Another page shown stays on the drawing screen: only the page's fast ink goes blank, or the column, the page bar
@@ -1046,13 +1046,14 @@ public final class DrawLayoutChecks {
             check(app.contains("zenDot.setVisibility(open ? View.VISIBLE : View.GONE);") && app.contains("if (zenDot == null || inkWashBar == null || !zenFanOpen()) return;")
                             && app.contains("zenDot.show(inkWash.look(tool), inkWash.brush(tool), DrawLayout.greys(tool));") && source("SwatchBar").contains("app.showZenDot();"),
                     "Zen Mode: the brush's nib and grey over the circle while the fan is open, the plain circle while it is closed");
-            // The fan stays open while drawing (the owner, 2026-11-06: "Keep tray open when drawing - press to close"): nothing
-            // closes it on a touch outside; Zen's circle's tap does, and round the circle too; a hold there leaves Zen Mode.
+            // The pen drawing on the page closes the fan unless System Settings' Zen Fan says Stays Open (the owner, 2026-11-10;
+            // from 2026-11-06 it stayed open: "Keep tray open when drawing - press to close"); a finger outside doesn't;
+            // Zen's circle's tap does, and round the circle too; a hold there leaves Zen Mode.
             check(!app.contains("Ui.outside(zenFan") && !fanView.contains("app.closeZenFan()") && fanView.contains("if (at == ZenFan.OUTSIDE) return false;")
                             && fanView.contains("else if (was == ZenFan.LEAVE && at == ZenFan.LEAVE && !held) app.zenTapped();")
                             && fanView.contains("if (item == ZenFan.LEAVE) app().zenHeld();") && !source("ZenFan").contains("closes(")
-                            && !pad.contains("app.zenFanOpen()"),
-                    "Zen Mode's fan: drawing keeps it open, the nib's ring still shows; only a tap on Zen's circle closes it, a hold leaves Zen Mode");
+                            && pad.contains("fanClosesOnLift = app.zenFanOpen() && !app.prefs.zenFanStays();") && pad.contains("fanClosesOnLift = false;\n            post(app::closeZenFan);"),
+                    "Zen Mode's fan: the pen drawing closes it unless Zen Fan says Stays Open; a tap on Zen's circle closes it, a hold leaves Zen Mode");
             check(wet.contains("shown == WetLook.State.DRY ? R.drawable.ic_drop_dashed") && !wet.contains("DashPathEffect") && WetLook.icon(WetLook.State.DRY).equals("ic_drop_dashed"),
                     "The dry drop the owner's dashed drop (2026-10-27), the wet ones the owner's half and full drops");
         } catch (java.io.IOException e) { throw new AssertionError("the sources: " + e); }

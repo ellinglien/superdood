@@ -22,13 +22,12 @@ final class DrawingNames {
     }
 
     /**
-     * A new notebook's name on disk, its date then "_" and a title from a seed {@code random} draws
-     * ({@link BrushNames#titles}), e.g. "2026-10-23_Several Opinions About Soup 26-10-23" (it sorts by date in Files; its cover's date
-     * line and its settings' "Made Oct 23, 2026" say the date), shown as "Several Opinions About Soup 26-10-23" ({@link #shown}); its day
-     * at the end (the owner, 2026-10-28): the first of the seed's forms that {@link #fits} with it and a number, else the
-     * first without it; adjective-produce ("2026-10-18 brisk-bean notebook", as
-     * names were before 2026-10-23) when traits.txt has no titles. Another drawn where {@code taken} rejects it, a number
-     * added only when they run out. Never changed by what's drawn in it.
+     * A new notebook's name on disk, its date then "_" and an adjective and a fruit or vegetable {@code random} draws
+     * (adjectives.txt, produce.txt; the owner, 2026-11-10: "simplify the notebook name generator to be what it was ages
+     * ago... adjective noun"; titles from traits.txt 2026-10-23 to 2026-11-10), e.g. "2026-10-23_Brisk Bean 26-10-23" (it
+     * sorts by date in Files; its cover's date line and its settings' "Made Oct 23, 2026" say the date), shown as "Brisk
+     * Bean 26-10-23" ({@link #shown}); its day at the end (the owner, 2026-10-28) where it {@link #fits}. Another drawn
+     * where {@code taken} rejects it, a number added only when they run out. Never changed by what's drawn in it.
      */
     static String notebook(LocalDate date, Random random, Predicate<String> taken) {
         for (int tries = 0; tries < 40; tries++) {
@@ -38,15 +37,12 @@ final class DrawingNames {
         return unused(notebookWords(date, random), taken);
     }
     private static String notebookWords(LocalDate date, Random random) {
-        List<String> titles = BrushNames.titles(random.nextLong());
-        // Ends with its day as "26-10-28" (the owner, 2026-10-28): a shorter title first, no day only when none fits.
-        for (String day : new String[]{" " + date.format(java.time.format.DateTimeFormatter.ofPattern("yy-MM-dd")), ""})
-            for (String title : titles) {
-                String name = date + "_" + title + day;
-                if (fits(name + " 99")) return name;
-            }
-        return date + " " + BrushNames.pick(BrushNames.adjectives(), random) + "-" + BrushNames.pick(BrushNames.produce(), random) + " notebook";
+        String title = capital(BrushNames.pick(BrushNames.adjectives(), random)) + " " + capital(BrushNames.pick(BrushNames.produce(), random));
+        // Ends with its day as "26-10-28" (the owner, 2026-10-28), unless that doesn't fit.
+        String dated = date + "_" + title + " " + date.format(java.time.format.DateTimeFormatter.ofPattern("yy-MM-dd"));
+        return fits(dated + " 99") ? dated : date + "_" + title;
     }
+    private static String capital(String word) { return word.isEmpty() ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1); }
     /** Whether a notebook may be named {@code name}: a valid file name that fits every shelf tile and title ({@link NotebookLayout#fits}). */
     static boolean fits(String name) { return DrawingFiles.validName(name) && NotebookLayout.fits(shown(name, LocalDate.now())); }
     /** Whether {@code name} is a title's (a date then "_", {@link #notebook}): the shelf shows it without its date. */

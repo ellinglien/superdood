@@ -106,8 +106,8 @@ public final class EraseKindChecks {
         check(ResolvedBrush.of(ScreenChecks.screened(steady, 6), 8, .6).kind == ToneDocument.KIND_PAINT && ResolvedBrush.of(steady, 8, .6).kind == ToneDocument.KIND_PEN,
                 "Ben-Day ink lays Paint, the plain pen Pen");
         check(EraseKind.LABELS.length == 4 && EraseKind.KINDS[0] == 0 && EraseKind.choiceOf(EraseKind.KINDS[3]) == 3 && EraseKind.LABELS[3].equals("Dry Media") && EraseKind.choiceOf(7) == 0, "Show Kinds' four columns, Everything first");
-        check(java.util.Arrays.asList(EraseKind.CHOICES).equals(java.util.Arrays.asList("Everything", "Layer 1", "Layer 2", "Layer 3")) && EraseKind.TARGETS[0] == 0 && EraseKind.MARKS[0].isEmpty() && EraseKind.MARKS[2].equals("2")
-                && EraseKind.choice(EraseKind.TARGETS[3]) == 3 && EraseKind.choice(ToneDocument.KIND_PEN) == 0 && EraseKind.layerOf(EraseKind.TARGETS[2]) == 2 && EraseKind.layerOf(0) == 0, "the eraser's four choices, Everything then the layers");
+        check(java.util.Arrays.asList(EraseKind.CHOICES).equals(java.util.Arrays.asList("Everything", "Layer 3", "Layer 2", "Layer 1")) && EraseKind.TARGETS[0] == 0 && EraseKind.MARKS[0].isEmpty() && EraseKind.MARKS[2].equals("2")
+                && EraseKind.choice(EraseKind.TARGETS[3]) == 3 && EraseKind.choice(ToneDocument.KIND_PEN) == 0 && EraseKind.layerOf(EraseKind.TARGETS[2]) == 2 && EraseKind.layerOf(0) == 0, "the eraser's four choices, Everything then the layers top down");
         check(EraseKind.takes(EraseKind.TARGETS[2], ToneDocument.KIND_PEN) == (EraseKind.TARGETS[2] | ToneDocument.KIND_PAINT | ToneDocument.KIND_PENCIL) && EraseKind.takes(EraseKind.TARGETS[2], 0) == EraseKind.TARGETS[2]
                 && EraseKind.takes(EraseKind.TARGETS[1], ToneDocument.KIND_ALL) == 0, "Show Kinds limits a layer's eraser to the kinds shown, its layer kept; every kind hidden, it is refused");
     }
@@ -247,7 +247,7 @@ public final class EraseKindChecks {
         ToneDocument p = mixed();
         InkWashLayers.pickLayer(p, 3);
         ErasableChecks.ink(p, ErasableChecks.preset("Steady line"));
-        EraseBothStroke e = new EraseBothStroke(p, 120f, EraseKind.TARGETS[3]);
+        EraseBothStroke e = new EraseBothStroke(p, 120f, EraseKind.TARGETS[1]);
         for (int x = 0; x <= W; x += 20) e.sample(x, 100, 1f, Float.NaN, Float.NaN);
         int[] shown = new int[W * H];
         e.erasedTones(0, 0, W, H, shown);

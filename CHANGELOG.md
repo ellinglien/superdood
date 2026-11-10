@@ -5,6 +5,17 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.2.2 (2026-11-10)
+
+- **Zen Mode's fan closes as you draw** (2026-11-10, the owner: "adjust the always open fan to close when a pen touches
+  the rest of the page", "maybe add something that allows users to switch in the system settings"): the pen on the page
+  closes it as the pen lifts (closed as the pen landed, a quick mark came out broken). System Settings' new Zen Fan row (Closes, Stays Open) keeps it open as before.
+- **The eraser's layers top down** (2026-11-10, the owner: "it's in the opposite order as the layers view"): its hold
+  lists Everything, Layer 3, Layer 2, Layer 1, as the layer button stacks them.
+- **Pictures for Pixel pen, Stitch pen and Watercolour splatter** (2026-11-10, the owner: "can we do a drawing for pixel
+  pen, stitch and watercolor splatter for the tray"): the owner's texture-pen drawing with each one's marks at its tip.
+- **Plainer notebook names** (2026-11-10, the owner: "simplify the notebook name generator to be what it was ages ago...
+  adjective noun"): a new notebook is called something like "Brisk Bean 26-11-10". Names already given stay.
 ## 1.2.1 (2026-11-10)
 
 - **Read Handwriting, for Search on the shelf** (2026-11-09, opt-in): System Settings' Read Handwriting reads the

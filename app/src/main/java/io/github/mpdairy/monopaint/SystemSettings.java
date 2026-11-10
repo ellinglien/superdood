@@ -15,6 +15,8 @@ final class SystemSettings {
     static final String AUTO_REFRESH_NOTE = "After erasing and screen changes";
     /** The edge strip is the Manta's alone (the owner, 2026-11-05: "(manta only) is enough"). */
     static final String EDGE_HOLD_NOTE = "Manta only";
+    /** Zen Mode's fan as the pen draws on the page (the owner, 2026-11-10: "close when a pen touches the rest of the page", "allows users to switch in the system settings"): Closes, or Stays Open as it did from 2026-11-06. */
+    static final String ZEN_FAN = "Zen Fan", ZEN_FAN_NOTE = "When the pen draws on the page", CLOSES = "Closes", STAYS_OPEN = "Stays Open";
     /** The Fridge ({@link Fridge}, 2026-11-06): On once its first time's words are agreed to; Off, they show again before the next send. */
     static final String FRIDGE = Fridge.SHARED, FRIDGE_NOTE = "Off asks before sending";
     /** Read Handwriting (docs/superpowers/specs/2026-11-09-read-handwriting-design.md): its row, note and first-time words. */
