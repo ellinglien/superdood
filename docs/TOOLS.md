@@ -5,14 +5,22 @@ A short map of the screens. The full story of each tool, and why it works the wa
 
 ## The shelf and notebooks
 
-The app opens on the notebook you were last in; the shelf shows the rest. A notebook has up to 100 pages and its
+<img src="images/tour/shelf.png" alt="The shelf: notebook covers in rows" width="360"> <img src="images/tour/notebook-pages.png" alt="A notebook's page view: one page large, with the others along the bottom" width="360">
+
+The app opens on the notebook you were last in; the shelf shows the rest. A notebook has up to 250 pages and its
 own settings: a page template (or one of the tablet's own templates), which tools it keeps, rules such as No
 Erasing, One Brush and Timed Pages, and a cover design.
 Notebooks are saved as you draw, in `Document/Superdood` on the tablet; PNG and PDF copies are made only when
 you ask (Export). The copies are grey, as the tablet is, but for what a Second Ink brush drew: that shows in the
 notebook's Second Ink (Notebook Settings: Blue, Sepia, Red, Green, Violet), there and on the Fridge.
 
+A new install opens on **Start Here**, a short drawn guide:
+
+<img src="images/tour/guide-pages.png" alt="Pages of the Start Here guide, drawn by hand" width="540">
+
 ## The drawing screen
+
+<img src="images/tour/zen-fan.png" alt="Zen Mode with the fan open in the corner: sizes, greys, page previews and the tools on the arc" width="360"> <img src="images/tour/drawing-screen.png" alt="The drawing screen out of Zen Mode: the side bar of tools, and the page bar along the top" width="360">
 
 - **Zen Mode and the fan**: the app opens in Zen Mode with the fan open, a quarter circle from the corner. Along its side
   edge two wedges set the size and the grey. Past them a ring of page previews (the page drawn on has a tab; + adds a
@@ -33,7 +41,9 @@ notebook's Second Ink (Notebook Settings: Blue, Sepia, Red, Green, Violet), ther
 
 ## Brushes
 
-Every brush is built from its parts (Control, Tip, Medium, Rework, Drying and After; the paper is the notebook's Surface), each with a few dials, and saved as
+<img src="images/tour/brush-toolbox.png" alt="The Tools page: the brush library grouped by kind" width="360"> <img src="images/tour/brush-lab.png" alt="Brush Lab: a brush's parts and dials beside a test page" width="360">
+
+Every brush is built from its parts (Control, Tip, Medium, Affects Page, Drying and After; the paper is the notebook's Surface), each with a few dials, and saved as
 a short share code. The **Tools page** is the library: ready brushes grouped by what they do (Pens, Markers, Brushes,
 Washes, Paint, Dry Media, Print, Odd Ones) and your own: tap a slot, then a brush for it. Tapping the selected slot
 again picks it up, and a tap on another slot swaps the two, with their sizes and greys (the toolbar's order). **Brush Lab** (a slot's long press, Edit Brush) makes
