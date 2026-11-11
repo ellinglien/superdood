@@ -3,7 +3,7 @@
 Bug reports and ideas are welcome as issues. For a bug, say which tablet (Manta or Nomad), its firmware version,
 what you did and what you expected. Leave device serial numbers and personal drawings out of logs and screenshots.
 
-Before proposing a feature, read [PHILOSOPHY.md](PHILOSOPHY.md): the app keeps few, clear tools on purpose, and a
+Before proposing a feature: the app keeps few, clear tools on purpose, and a
 change that adds a tool, mode or setting has to earn its place (System Settings, the owner's from 2026-11-04, holds
 the few app-wide ones and stays small). Words the app shows follow
 [docs/TEXT-STYLE.md](docs/TEXT-STYLE.md).

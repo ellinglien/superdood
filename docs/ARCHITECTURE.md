@@ -34,8 +34,7 @@ but hidden; Superdood's column replaces them, and a page's layers are in Page Se
 `Device` is the only class that identifies hardware. Code asks it about a named
 fact, such as `landscapeTilt` or `compactControls`, and asks `DirectEink` about
 the e-ink driver's buffer. It never checks for a model. `PanelPreviewLayout`
-previews a smaller tablet's panel (the Manta's Nomad simulation). See
-[DEVICES.md](DEVICES.md) for the profiles and how to add a tablet.
+previews a smaller tablet's panel (the Manta's Nomad simulation).
 
 ## Tools
 

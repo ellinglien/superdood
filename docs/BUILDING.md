@@ -43,8 +43,8 @@ The app id is `ing.ell.mybaddrawings` since 2026-10-30; before that it was `app.
 install's brushes and settings across, `./gradlew -PlegacyId :app:assembleRelease` builds the old id once more,
 signed with the old key (`legacy.storeFile`, `legacy.keyAlias`, `legacy.storePassword`, `legacy.keyPassword` in
 `keystore.properties`). Installed over the old app and opened once, it leaves its private state in
-`Document/Superdood/.handover`; the new app takes it on its first launch with file access (`HandOver.java`,
-`docs/RENAMING.md`). Nobody else needs this.
+`Document/Superdood/.handover`; the new app takes it on its first launch with file access (`HandOver.java`).
+Nobody else needs this.
 
 ## Checks
 
@@ -87,4 +87,4 @@ page two (add `raw` or `dots` for logical tones or the tablet's dot pattern).
 
 - The Java package `io.github.mpdairy.monopaint`, the native library `monopaint_display` and the `.mpaint` file
   extension are MonoPaint's and stay, so the fork can keep taking MonoPaint's fixes and its files stay readable.
-- The visible name has one switch, `AppName.NAME`; see `docs/RENAMING.md`.
+- The visible name has one switch, `AppName.NAME`.
