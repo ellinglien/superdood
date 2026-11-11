@@ -5,6 +5,13 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.2.4 (2026-11-11)
+
+- **Finer sizes on Zen Mode's fan** (2026-11-11, the owner: "i find it kind of hard to get precise small sizes"): the
+  size wedge runs on the size slider's scale, each doubling of size the same length of it, so sizes 1.5 to 10 px have
+  about 9 mm of it (about 1.3 mm before). The marker no longer sits where the wedge is as wide as the line; the nib
+  preview still shows it.
+
 ## 1.2.3 (2026-11-10)
 
 - **Second Ink in the copies** (2026-11-09, the owner): what a Second Ink brush drew shows in the notebook's ink in PDF and PNG copies (Export Now, Export Page at every size) and on the Fridge; the tablet stays grey. A page without any exports as before; choosing another ink writes the pages that have some again. The Layers copy stays grey.

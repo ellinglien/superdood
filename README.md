@@ -29,7 +29,7 @@ A tour of the screens, with screenshots, is in [docs/TOOLS.md](docs/TOOLS.md).
 
 ### From a release it takes about 5 minutes and no coding
 
-1. **Download** `superdood-1.2.3.apk` from the [latest release](https://github.com/ellinglien/superdood/releases/latest).
+1. **Download** `superdood-1.2.4.apk` from the [latest release](https://github.com/ellinglien/superdood/releases/latest).
 2. **On the Supernote:** Settings → Security & Privacy → turn on **Sideloading**.
 3. **On your computer** (Mac, Windows or Linux): install
    [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases). Plug the Supernote in with its USB

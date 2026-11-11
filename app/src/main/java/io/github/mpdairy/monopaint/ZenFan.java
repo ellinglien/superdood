@@ -202,39 +202,27 @@ final class ZenFan {
         return Math.max(0, Math.min(previews() - 1, (int) ((round(sx, sy) - START) * previews() / (SWEEP - START))));
     }
 
-    /** Page px a dp: both tablets' 300 dpi panels at 160 dp an inch, so a line's page px at 100% are its screen px. */
-    static final float PAGE_PX = 300f / 160;
     /**
-     * The size wedge's width across at {@code up} dp up the side edge, dp: from the side edge to the gap's side, or to the
-     * arc past its widest ({@link #wedgeEnd}). Its marker reads as the line's width there (the owner, 2026-11-04: "it
-     * indicates the size of the tool... so it should be closer to the size actually shown").
-     */
-    static double width(double up) { return up <= wedgeStart() || up >= WEDGE ? 0 : Math.min((up - wedgeStart()) * SIN / COS, Math.sqrt(INNER * INNER - (up + TUCKED) * (up + TUCKED)) - TUCKED); }
-    /** The broadest line the wedge shows true, page px: its width where widest. */
-    static double truest() { return wedgeEnd()[0] * PAGE_PX; }
-    /**
-     * Where size {@code px}'s marker sits, dp from the point up the side edge: where the wedge is as wide as the line at
-     * 100% ({@link #width}); a broader one, past the widest, on the rest of the edge on the toolbar's log scale up to its
-     * broadest ({@link ModularSizes#MAX}).
+     * Where size {@code px}'s marker sits, dp from the point up the side edge: the toolbar slider's log scale
+     * ({@link ToolSwatches#position}) from the wedge's corner to its top, so each doubling of size gets the same length
+     * and the fine pens have room (the owner, 2026-11-11: "i find it kind of hard to get precise small sizes"; until
+     * then the marker sat where the wedge was as wide as the line, which left sizes 1.5 to 10 px about 8 dp).
      */
     static float sizeUp(double px) {
-        double most = truest(), top = wedgeEnd()[1];
-        if (px <= most) return (float) (wedgeStart() + Math.max(0, px) / PAGE_PX * COS / SIN);
-        return (float) (top + (WEDGE - top) * Math.min(1, Math.log(px / most) / Math.log(ModularSizes.MAX / most)));
+        return (float) (wedgeStart() + (WEDGE - wedgeStart()) * ToolSwatches.position(Math.max(ModularSizes.MIN, px)));
     }
     /** The size at ({@code sx}, {@code sy}), page px: {@link #sizeUp}'s inverse at its height, to the toolbar slider's nearest step ({@link ToolSwatches#sizeAt}). */
     double size(float sx, float sy) { return size(sx, sy, px -> px); }
     /**
      * As {@link #size(float, float)} for a brush that draws {@code drawn}(px) page px wide at size px (its typical drawn
-     * width, {@link FootprintSweep#typicalWidth}): the slider's step whose line is nearest the wedge's width there (the
+     * width, {@link FootprintSweep#typicalWidth}): the slider's step whose line is nearest the scale's size there (the
      * owner, 2026-11-07: the marker "doesn't always take into account the control stuff"), so its marker stays put on the
      * lift (a ratio taken at the old size made it jump, then drift).
      */
     double size(float sx, float sy, java.util.function.DoubleUnaryOperator drawn) {
-        double up = Math.min(WEDGE, local(sx, sy)[1]), most = truest(), top = wedgeEnd()[1];
-        double px = up <= top ? (up - wedgeStart()) * SIN / COS * PAGE_PX : most * Math.pow(ModularSizes.MAX / most, (up - top) / (WEDGE - top));
         // At the wedge's corner and below it, the finest: a floor, so the finest sizes stay a tap away.
-        double want = Math.max(ModularSizes.MIN, px);
+        double t = StrokeMath.clamp((local(sx, sy)[1] - wedgeStart()) / (WEDGE - wedgeStart()));
+        double want = ModularSizes.MIN * Math.pow(ModularSizes.MAX / ModularSizes.MIN, t);
         // shortcut: a binary search, so a brush whose line narrows as its size grows may land on a near step, not the nearest; search all steps if one does.
         int lo = 0, hi = SIZE_STEPS.length - 1;
         while (lo < hi) { int mid = (lo + hi) / 2; if (drawn.applyAsDouble(SIZE_STEPS[mid]) < want) lo = mid + 1; else hi = mid; }

@@ -45,7 +45,7 @@ public final class ZenFanChecks {
         check(ZenFan.PREVIEW_W == new DrawLayout(1024, 1365).previewWidth() && ZenFan.PREVIEW_H == new DrawLayout(1024, 1365).previewHeight(), "the ring's previews the Manta's page bar's");
         // All 13 previews round the X (the owner, 2026-11-07), the circle as large as that takes; the X a 48 dp target at least.
         check(ZenFan.previews() == 13 && 2 * ZenFan.LEAVE_R >= 48, "13 previews in the ring (" + ZenFan.previews() + ")");
-        System.out.println("PASS: Zen Mode's fan on the four screens, both hands, 1 to " + ToolSlots.COUNT + " slots, " + mm(ZenFan.OUTER) + " mm out: the X at Zen's icon, the fan's point tucked " + Math.round(ZenFan.TUCK) + " dp from it, the X's target clear of the fan's; one stroke width; size along the side edge (its marker where the wedge is as wide as the line at 100%, up to " + Math.round(ZenFan.truest()) + " px) and grey along the foot "
+        System.out.println("PASS: Zen Mode's fan on the four screens, both hands, 1 to " + ToolSlots.COUNT + " slots, " + mm(ZenFan.OUTER) + " mm out: the X at Zen's icon, the fan's point tucked " + Math.round(ZenFan.TUCK) + " dp from it, the X's target clear of the fan's; one stroke width; size along the side edge (the slider's log scale) and grey along the foot "
                 + "in the quarter's upper part, a white gap " + Math.round(ZenFan.CLEAR) + " dp wide hitting nothing; " + ZenFan.previews() + " page previews in a ring as far from them as from the arc; the column's tools round the arc in its order (slots, Fill in, Smudge, Eraser; "
                 + mm(Math.PI / 2 * (ZenFan.LINE + ZenFan.OUTER) / 2 / manta.items()) + " by " + mm(ZenFan.OUTER + ZenFan.REACH - ZenFan.LINE) + " mm each on the Manta), their butts on the arc but the Eraser's; the toolbar's size and grey steps, "
                 + "round-tripping through their markers; mirrored exactly; inside the screen; the Dropper, the Lasso and the droplet in a row along the foot under the wedges, the layer button over it, clear of the wedges, the ring and the X, inside its mask; the mask " + manta.mask().size() + " rectangles hugging its paper, strokes beside it showing");
@@ -269,24 +269,20 @@ public final class ZenFanChecks {
         ZenFan fan = ZenFan.at(1024, 1365, ToolSlots.COUNT, false);
         float[] corner = local(fan, 0, ZenFan.wedgeStart()), tips = local(fan, 0, ZenFan.WEDGE);
         check(fan.size(corner[0], corner[1]) == ToolSwatches.sizeAt(0) && fan.size(tips[0], tips[1]) == ToolSwatches.sizeAt(1), "size: finest at the wedge's corner, broadest at its top");
-        // Each of the toolbar's steps: its marker where the wedge is as wide as its line at 100% (page px are the panel's), and back.
+        // Each of the toolbar's steps: its marker on the slider's log scale up the wedge, and back.
         double was = 0, wasUp = 0;
-        int honest = 0;
         for (int i = 0; i <= 400; i++) {
             double px = ToolSwatches.sizeAt(i / 400.0);
             float up = ZenFan.sizeUp(px);
             check(up >= wasUp && up <= ZenFan.WEDGE, "size " + px + "'s marker no lower than a finer one's");
             wasUp = up;
-            if (px <= ZenFan.truest()) {
-                honest++;
-                check(Math.abs(ZenFan.width(up) - px / ZenFan.PAGE_PX) < .01 && (px == 0 || Math.abs(below(fromX(new float[]{(float) ZenFan.width(up), up}), ZenFan.SPLIT) + ZenFan.CLEAR / 2) < .01),
-                        "size " + px + " px: the wedge " + ZenFan.width(up) + " dp wide at its marker, the line's width");
-            }
             float[] at = local(fan, 0, up);
             check(fan.size(at[0], at[1]) == px, "size " + px + " through its marker and back (" + fan.size(at[0], at[1]) + ")");
         }
-        check(ZenFan.sizeUp(ModularSizes.MAX) == ZenFan.WEDGE && Math.abs(ZenFan.sizeUp(ZenFan.truest()) - ZenFan.wedgeEnd()[1]) < .01 && honest > 300,
-                "sizes up to the wedge's widest (" + Math.round(ZenFan.truest()) + " px) true to width, broader ones past it to the top");
+        // The fine pens' room (the owner, 2026-11-11: "precise small sizes"): 1.5 to 10 px about a third of the wedge, 7 mm or more.
+        float fine = ZenFan.sizeUp(10) - ZenFan.sizeUp(ModularSizes.MIN);
+        check(ZenFan.sizeUp(ModularSizes.MIN) == ZenFan.wedgeStart() && ZenFan.sizeUp(ModularSizes.MAX) == ZenFan.WEDGE && fine * 25.4 / 160 >= 7,
+                "sizes 1.5 to 10 px " + mm(fine) + " mm of the wedge, the finest at its corner, the broadest at its top");
         for (float up = ZenFan.wedgeStart(); up <= ZenFan.WEDGE; up += .5f) {
             float[] p = local(fan, 0, up);
             double px = fan.size(p[0], p[1]);
