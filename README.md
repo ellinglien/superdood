@@ -6,6 +6,8 @@ A sketchbook journal thing for the Supernote Manta e-ink tablet, with a set of t
 
 Website: [superdood.org](https://superdood.org)
 
+**Download:** [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk) (the latest release) · [all releases](https://github.com/ellinglien/superdood/releases) · [how to install](#how-to-install)
+
 ## Built on MonoPaint
 
 This app is a fork of the wonderful [MonoPaint](https://github.com/mpdairy/monopaint) by mpdairy. Its fast e-ink pen
@@ -29,7 +31,7 @@ A tour of the screens, with screenshots, is in [docs/TOOLS.md](docs/TOOLS.md).
 
 ### From a release it takes about 5 minutes and no coding
 
-1. **Download** `superdood-1.2.4.apk` from the [latest release](https://github.com/ellinglien/superdood/releases/latest).
+1. **Download** [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk), the latest release (or pick it from the [release page](https://github.com/ellinglien/superdood/releases/latest), under Assets).
 2. **On the Supernote:** Settings → Security & Privacy → turn on **Sideloading**.
 3. **On your computer** (Mac, Windows or Linux): install
    [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases). Plug the Supernote in with its USB
