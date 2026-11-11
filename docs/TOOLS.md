@@ -14,13 +14,9 @@ Notebooks are saved as you draw, in `Document/Superdood` on the tablet; PNG and 
 you ask (Export). The copies are grey, as the tablet is, but for what a Second Ink brush drew: that shows in the
 notebook's Second Ink (Notebook Settings: Blue, Sepia, Red, Green, Violet), there and on the Fridge.
 
-A new install opens on **Start Here**, a short drawn guide:
-
-<img src="images/tour/guide-pages.png" alt="Pages of the Start Here guide, drawn by hand" width="540">
-
 ## The drawing screen
 
-<img src="images/tour/zen-fan.png" alt="Zen Mode with the fan open in the corner: sizes, greys, page previews and the tools on the arc" width="360"> <img src="images/tour/drawing-screen.png" alt="The drawing screen out of Zen Mode: the side bar of tools, and the page bar along the top" width="360">
+<img src="images/tour/zen-fan.png" alt="Zen Mode with the fan open in the corner: sizes, greys, page previews and the tools on the arc" width="360">
 
 - **Zen Mode and the fan**: the app opens in Zen Mode with the fan open, a quarter circle from the corner. Along its side
   edge two wedges set the size and the grey. Past them a ring of page previews (the page drawn on has a tab; + adds a
