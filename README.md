@@ -1,6 +1,6 @@
 # Superdood
 
-<img src="docs/images/superdood-manta-photo.jpg" alt="Superdood on a Supernote Manta: SUPER DOOD drawn in ink and grey wash, little monsters around it, a pen beside the tablet" width="480">
+<img src="docs/images/superdood-manta-screen.png" alt="Superdood's drawing screen on the Manta: SUPER DOOD lettered in hatched ink inside a scribbled circle, the brushes down the side" width="480">
 
 A sketchbook journal thing for the Supernote Manta e-ink tablet, with a set of tools that are useful and occasionally unpredictable.
 
