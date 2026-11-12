@@ -2,7 +2,7 @@
 
 <img src="docs/images/superdood-manta-screen.png" alt="Superdood's drawing screen on the Manta: SUPER DOOD lettered in hatched ink inside a scribbled circle, the brushes down the side" width="480">
 
-A sketchbook journal thing for the Supernote Manta e-ink tablet, with a set of tools that are useful and occasionally unpredictable.
+A sketchbook journal thing for Supernote e-ink tablets, with a set of tools that are useful and occasionally unpredictable.
 
 Website: [superdood.org](https://superdood.org)
 
