@@ -43,7 +43,7 @@ Nothing is installed on your computer. To update later, do it again. Your notebo
 
 ### With Android Sideloader
 
-Use this if you're on Safari or Firefox.
+Use this if you can't install from the browser, for example if you only have Safari or Firefox.
 
 1. Download [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk).
 2. On the Supernote, turn on **Sideloading** (as above).
