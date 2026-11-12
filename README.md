@@ -6,7 +6,7 @@ A sketchbook journal thing for the Supernote Manta e-ink tablet, with a set of t
 
 Website: [superdood.org](https://superdood.org)
 
-**Download:** [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk) (the latest release) · [all releases](https://github.com/ellinglien/superdood/releases) · [how to install](#how-to-install)
+**Install:** [superdood.org/install](https://superdood.org/install.html), one click from Chrome or Edge · or download [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk) · [all releases](https://github.com/ellinglien/superdood/releases) · [how to install](#how-to-install)
 
 ## Built on MonoPaint
 
@@ -29,15 +29,29 @@ A tour of the screens, with screenshots, is in [docs/TOOLS.md](docs/TOOLS.md).
 
 ## How to Install
 
-### From a release it takes about 5 minutes and no coding
+### Easiest: from your browser (about 2 minutes, no coding)
 
-1. **Download** [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk), the latest release (or pick it from the [release page](https://github.com/ellinglien/superdood/releases/latest), under Assets).
-2. **On the Supernote:** Settings → Security & Privacy → turn on **Sideloading**.
+1. **On the Supernote:** Settings → Security & Privacy → turn on **Sideloading**.
+2. **On a computer**, plug the Supernote in with its USB cable and open
+   [superdood.org/install](https://superdood.org/install.html) in **Chrome** or **Edge**. Click **Install Superdood**,
+   pick the Supernote in the box that opens, and tap **Allow** on the Supernote if it asks.
+3. **On the Supernote:** open **Superdood** and allow file access when it asks: notebooks live in
+   `Document/Superdood`, where they survive updates and reinstalls (and can sync).
+
+Nothing is installed on the computer: the page talks to the Supernote over USB (with the open-source
+[Tango](https://github.com/yume-chan/ya-webadb) library), installs the latest release and compiles it ahead of time
+so drawing stays smooth. Run it again to update; your notebooks are kept.
+
+### Or with Android Sideloader (Safari, Firefox, or if the page can't reach the Supernote)
+
+1. **Download** [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk), the latest release (or pick it from the
+   [release page](https://github.com/ellinglien/superdood/releases/latest), under Assets).
+2. **On the Supernote:** turn on **Sideloading**, as above.
 3. **On your computer** (Mac, Windows or Linux): install
    [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases). Plug the Supernote in with its USB
-   cable, open Android Sideloader, click **Choose APK file**, pick the `.apk`, then **Install APK**.
-4. **On the Supernote:** open **Superdood** and allow file access when it asks: notebooks live in
-   `Document/Superdood`, where they survive updates and reinstalls (and can sync).
+   cable, open Android Sideloader, click **Choose APK file**, pick the `.apk`, then **Install APK**. On a Mac, if it
+   says Android Sideloader can't be opened, right-click it and choose **Open**.
+4. **On the Supernote:** open **Superdood** and allow file access when it asks.
 
 ### From source
 
