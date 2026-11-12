@@ -1373,6 +1373,25 @@ final class ToneDocument {
     /** Bottom-to-top source-over composition on the page's {@linkplain #paperTone paper}. Brushes read only the active layer. */
     int compositeTone(int x,int y) { return compositeToneWithout(x,y,0,-1); }
     /**
+     * {@link #compositeTone} at page indices {@code at[0..n)} ({@code y*width+x}; negative: skipped) into {@code out}: the
+     * layers looked up once, not per pixel, for Real Mirror's scattered reads (2026-11-12: per pixel, 62% of a stroke's
+     * time and the pen lagging up to 1.4 s on the Manta).
+     */
+    void compositeTonesAt(int[] at,int n,int[] out) {
+        int end=stackSize(layers.size()), m=0; byte[][] t=new byte[end][], al=new byte[end][]; int[] op=new int[end];
+        for(int k=0;k<end;k++) {
+            Layer layer=stacked(layers,k); int owner=stackOwner(k);
+            if(layer==null||!layers.get(owner).visible) continue;
+            t[m]=layer.tones; al[m]=layer.alpha; op[m++]=stackOpacity(layers.get(owner),layer);
+        }
+        for(int o=0;o<n;o++) {
+            int i=at[o]; if(i<0) continue;
+            int result=paperAt(i);
+            for(int j=0;j<m;j++) { int a=((al[j][i]&255)*op[j]+50)/100; result=((t[j][i]&255)*a+result*(255-a)+127)/255; }
+            out[o]=result;
+        }
+    }
+    /**
      * {@link #compositeTone} of the {@code w} by {@code h} block at {@code x, y}, row by row into {@code out} from
      * {@code offset}, {@code stride} apart: the stack looked up once, not a pixel at a time (Live pages: a mirrored
      * stroke's 3 M pixels took seconds on the Manta so).

@@ -338,6 +338,7 @@ final class MirrorShow {
         return new Mirrors.Tones() {
             @Override public int tone(int x, int y) { return page.compositeTone(x, y); }
             @Override public void tones(int x, int y, int w, int[] out) { page.compositeTones(x, y, w, 1, out, 0, w); }
+            @Override public void tonesAt(int[] at, int n, int width, int[] out) { page.compositeTonesAt(at, n, out); }
         };
     }
     /** Whether the ring's box meets {@code x0, y0} to {@code x1, y1} (exclusive). */
@@ -348,13 +349,18 @@ final class MirrorShow {
     }
     /** {@link #draw}'s rows {@code top} to {@code bottom} (inclusive). */
     private boolean drawRows(int[] pixels, int x0, int y0, int w, int top, int bottom, boolean dots, Mirrors.Tones page, int paper, boolean guides, boolean live) {
-        int[] source = view == null ? null : new int[w], guideFrom = new int[Mirrors.MOST], guideTo = new int[Mirrors.MOST];
+        int[] source = view == null ? null : new int[w], at = new int[w], reflected = new int[w], guideFrom = new int[Mirrors.MOST], guideTo = new int[Mirrors.MOST];
         // The page's tones under this row, read a run at a time as first needed: a live copy darkens what it lies over.
         int[] under = new int[TILE];
         boolean changed = false;
         for (int y = top; y <= bottom; y++) {
             int row = y - y0, from = 0, to = 0;
-            if (source != null) view.row(y, x0, x0 + w, width, height, source);
+            if (source != null) {
+                view.row(y, x0, x0 + w, width, height, source);
+                // The row's reflected sources read in one pass: per pixel, each read walked the layers again.
+                for (int col = 0; col < w; col++) { int s = source[col]; at[col] = s >= 0 && s != y * width + x0 + col ? s : -1; }
+                page.tonesAt(at, w, width, reflected);
+            }
             // The guides' spans on this row, each mirror's (a pixel's centre within HALF_WIDTH of it): only those pixels look for a dash.
             int spans = 0;
             if (guides) for (Mirrors.Line m : shown.lines) { int[] span = Mirrors.guideSpan(m, y, x0, x0 + w); if (span != null) { guideFrom[spans] = span[0]; guideTo[spans++] = span[1]; } }
@@ -362,7 +368,7 @@ final class MirrorShow {
             if (source == null && !live && spans == 0 && !ring) continue;
             for (int col = 0; col < w; col++) {
                 int x = x0 + col, tone = -1;
-                if (source != null) { int s = source[col]; if (s != y * width + x) tone = s < 0 ? paper : page.tone(s % width, s / width); }
+                if (source != null) { int s = source[col]; if (s != y * width + x) tone = s < 0 ? paper : reflected[col]; }
                 int o = live ? overlayAt(x, y) : NONE;
                 if (o >= 0 && darkens) {
                     if (tone < 0 && x >= to) { from = x; to = Math.min(x0 + w, x + TILE); page.tones(from, y, to - from, under); }

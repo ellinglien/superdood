@@ -22,3 +22,6 @@ __pycache__/
 docs/brush-lab/dial-demo.html
 docs/brush-lab/match-lab.html
 .claude/
+
+# The install page's npm packages (docs/site-src/install)
+node_modules/

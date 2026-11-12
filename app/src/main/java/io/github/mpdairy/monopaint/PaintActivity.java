@@ -141,6 +141,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         // Draw once (the wet paint spec's experiment): launched with --ez drawOnce true or false, kept until changed.
         if (getIntent() != null && getIntent().hasExtra(PaintPreferences.DRAW_ONCE)) prefs.setDrawOnce(getIntent().getBooleanExtra(PaintPreferences.DRAW_ONCE, false));
         QuickStroke.drawOnce = prefs.drawOnce();
+        // The Nomad preview on the Manta (its menu row went in the refocus, 2026-10-24): --ez nomad_mode true or false.
+        if (getIntent() != null && getIntent().hasExtra("nomad_mode")) prefs.setSimulateSmallerPanel(getIntent().getBooleanExtra("nomad_mode", false));
         // Inkwash: one finger draws with the finger tool (FingerTool), two or three tap to undo or redo; with Zoom unlocked
         // two also pinch and pan once they move (PinchPan). Locked at first, the choice kept.
         navigationLocked = prefs.navigationLocked();
@@ -233,7 +235,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         });
         // A fresh install opens on the Start Here notebook, given once (deleted, it stays gone).
         if (!preferences.getBoolean(START_HERE_GIVEN, false))
-            store.startHere((given, error) -> {
+            store.startHere(device == Device.NOMAD, (given, error) -> {
                 // Given, the library was empty: no old drawings to make into notebooks, so no migration (and its shelf).
                 if (error == null) preferences.edit().putBoolean(START_HERE_GIVEN, true).putBoolean("randomCovers", true).putBoolean("plainPages", true).putBoolean(NotebookScreens.MIGRATED, preferences.getBoolean(NotebookScreens.MIGRATED, false) || given).apply();
             });

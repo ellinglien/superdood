@@ -246,6 +246,8 @@ final class Mirrors {
         int tone(int x, int y);
         /** The {@code w} tones of row {@code y} from {@code x}, into {@code out}: a page reads them in one pass ({@link MirrorShow#tones}). */
         default void tones(int x, int y, int w, int[] out) { for (int i = 0; i < w; i++) out[i] = tone(x + i, y); }
+        /** The tones at page indices {@code at[0..n)} ({@code y × width + x}; negative: skipped), into {@code out}: a page looks its layers up once ({@link MirrorShow#tones}). */
+        default void tonesAt(int[] at, int n, int width, int[] out) { for (int i = 0; i < n; i++) if (at[i] >= 0) out[i] = tone(at[i] % width, at[i] / width); }
     }
     /** A point near the page's centre on no mirror of {@code g}: its images all apart. */
     private static double[] seed(Group g, int width, int height) {

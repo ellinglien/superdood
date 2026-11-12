@@ -5,6 +5,17 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.2.5 (2026-11-12)
+
+- **Start Here for the Nomad** (2026-11-12, a Nomad owner on Reddit: arrows "don't quite line up"): a new install on a
+  Nomad gets its own Start Here, its arrows to the tools, the picker and Zen's circle redrawn by the owner for the
+  Nomad's screen. A Start Here already given stays as it is.
+- **Real Mirror keeps up with the pen** (2026-11-12, a Reddit report that the Mirrors other than Kaleidoscope lag): the
+  reflection is read a row at a time, so the pen trails by about 6 ms, as with Copy Strokes (up to 1.4 s before on the
+  Manta).
+- **Magnetic Poetry's words follow the pen** (2026-11-12): moving a word stays on the panel's fast black and white
+  update (the tiles' soft grey edges put every drag on the slow one, so the outline trailed).
+
 ## 1.2.4 (2026-11-11)
 
 - **Finer sizes on Zen Mode's fan** (2026-11-11, the owner: "i find it kind of hard to get precise small sizes"): the

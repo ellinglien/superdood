@@ -154,6 +154,8 @@ final class DocumentStore {
     }
     /** The owner's drawn guide to the app (2026-10-30), bundled: a fresh library's first notebook. */
     static final String START_HERE = "start-here.mpaint";
+    /** Its copy for the Nomad, the arrows into the column redrawn on the Manta's Nomad preview (2026-11-12; a Nomad owner on Reddit: arrows "don't quite line up"). */
+    static final String START_HERE_NOMAD = "start-here-nomad.mpaint";
     /** The Start Here notebook just given, which {@link #recover} opens in place of a blank page; only on {@link #IO}. */
     private String startHere;
     /**
@@ -161,12 +163,12 @@ final class DocumentStore {
      * with nothing to recover (the owner: "start the app on first load from the canvas view"); true when it did. Never over a drawing, nor
      * with one to recover.
      */
-    void startHere(Result<Boolean> result) {
+    void startHere(boolean nomad, Result<Boolean> result) {
         IO.execute(() -> {
             try {
                 // A fresh install only: nothing in the library and no working drawing to recover.
                 if (files.drawingCount() > 0 || exists(recovery)) { result.complete(false, null); return; }
-                byte[] bytes = Assets.bytes(START_HERE);
+                byte[] bytes = Assets.bytes(nomad ? START_HERE_NOMAD : START_HERE);
                 String path = java.time.LocalDate.now() + "_Start Here";
                 write(new AtomicFile(files.drawing(path)), output -> output.write(bytes));
                 startHere = path;

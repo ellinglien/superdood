@@ -1048,7 +1048,7 @@ final class DrawingPad extends View {
         // Off the panel while it can still be presented; it never outlives the display it was drawn for.
         hideOutline();
         removeCallbacks(retry); removeCallbacks(reconnect); recovery.restart();
-        if (previewDirect != null) { previewDirect.close(); previewDirect = null; previewArea.setEmpty(); }
+        if (previewDirect != null) { previewDirect.close(); previewDirect = null; previewArea.setEmpty(); fastCopy = null; }
         if (endingFast != null) { endingFast.close(); endingFast = null; endingArea.setEmpty(); }
         if (ringDirect != null) { ringDirect.close(); ringDirect = null; ringArea.setEmpty(); }
         if (direct != null) { direct.close(); direct = null; }
@@ -1137,7 +1137,7 @@ final class DrawingPad extends View {
             previewArea.union(ringArea); ringDirect = null; ringArea.setEmpty();
         }
         if (previewDirect == null) { then.run(); flush(true); return; }
-        endingFast = previewDirect; previewDirect = null;
+        endingFast = previewDirect; previewDirect = null; fastCopy = null;
         endingArea.union(previewArea); previewArea.setEmpty();
         then.run();
         flush(true);
@@ -1175,8 +1175,30 @@ final class DrawingPad extends View {
     private void queueView(Rect r) { pending.add(r.left, r.top, r.right, r.bottom); }
     /** Returns to the gray session, queueing everything the fast one showed. */
     private void closeFastPreview() {
-        previewDirect.close(); previewDirect = null;
+        previewDirect.close(); previewDirect = null; fastCopy = null;
         queueView(previewArea); previewArea.setEmpty();
+    }
+    /** The fast preview's copy of the canvas, black and white; held only while a preview shows. */
+    private Bitmap fastCopy;
+    private int[] fastRow;
+    /**
+     * {@code source}'s {@code r} as the fast plane takes it, each pixel its nearer of black and white: the plane refuses
+     * a grey, and a refused frame put the rest of a preview on the slow gray mode (2026-11-12: Magnetic Poetry's tiles
+     * have soft grey edges, so every drag's first frame failed and the outline trailed the pen). The gray session shows
+     * the real greys when the preview ends ({@link #closeFastPreview} queues all it showed).
+     */
+    private Bitmap blackWhite(Bitmap source, Rect r) {
+        if (fastCopy == null || fastCopy.getWidth() != source.getWidth() || fastCopy.getHeight() != source.getHeight())
+            fastCopy = Bitmap.createBitmap(source.getWidth(), source.getHeight(), Bitmap.Config.ARGB_8888);
+        int left = Math.max(0, r.left), right = Math.min(source.getWidth(), r.right), w = right - left;
+        if (w <= 0) return fastCopy;
+        if (fastRow == null || fastRow.length < w) fastRow = new int[w];
+        for (int y = Math.max(0, r.top), end = Math.min(source.getHeight(), r.bottom); y < end; y++) {
+            source.getPixels(fastRow, 0, w, left, y, w, 1);
+            for (int i = 0; i < w; i++) fastRow[i] = (fastRow[i] >> 8 & 255) < 128 ? 0xff000000 : 0xffffffff;
+            fastCopy.setPixels(fastRow, 0, w, left, y, w, 1);
+        }
+        return fastCopy;
     }
     /**
      * Finishes the gesture, lays a Drying wash still settling and releases the panel, e.g. before a
@@ -1242,7 +1264,13 @@ final class DrawingPad extends View {
                     presenting.set(patch[0], patch[1], patch[2], patch[3]);
                     long presentStart = timing.active() ? System.nanoTime() : 0;
                     long presentNanos = System.nanoTime();
-                    int result = target.present(presented(), presenting);
+                    int result;
+                    try { result = target.present(presented(), presenting); }
+                    catch (IllegalStateException grey) {
+                        // The fast plane refuses greys: the patch again in black and white, rather than the slow mode for the rest of the preview.
+                        if (target != previewDirect) throw grey;
+                        result = target.present(blackWhite(presented(), presenting), presenting);
+                    }
                     pace.presented(System.nanoTime() - presentNanos, SystemClock.uptimeMillis());
                     if (timing.active()) { timing.present(System.nanoTime() - presentStart, result); target.presentParts(presentParts); timing.presentParts(presentParts); }
                     if (result < 0) {
@@ -1985,7 +2013,7 @@ final class DrawingPad extends View {
         renderDirty(); flush(true);
         // A failed present closed it and went back to the gray session.
         if (previewDirect == null) { ringDirect = null; return; }
-        ringArea.union(previewArea); previewArea.setEmpty(); previewDirect = null;
+        ringArea.union(previewArea); previewArea.setEmpty(); previewDirect = null; fastCopy = null;
     }
     /** What a refused touch draws: nothing ({@link PaintActivity#allowStroke}). */
     private static final DrawingStroke REFUSED = new DrawingStroke() {

@@ -6028,3 +6028,20 @@ tablet is held a new way. **The engine is untouched.**
 
 **Checks:** `RotationSuggestionChecks`, `PinchPanChecks` (desktop). `OrientationChecks` rewritten for the turn by itself
 and the lock (device; compiled, not run here); `RotationPromptChecks` deleted with the prompt. Generic: none.
+
+## Play menu lag (2026-11-12)
+
+A Reddit user: Kaleidoscope "worked great, but the others in that tab lagged pretty significantly". Measured on the
+Manta with `simpleperf` and the stroke timing log, with a simulated pen in a scratch notebook. **The engine is
+untouched.**
+
+| File | Change | Why |
+|---|---|---|
+| `ToneDocument` (upstream) | +19 `compositeTonesAt` | `compositeTone` at a list of page indices, the layers looked up once: Real Mirror read each reflected pixel with `compositeTone`, walking the layer list per pixel (62% of a stroke's time; pen lag 176 ms median, 1.4 s worst; after: 6 and 8 ms, as Copy Strokes). Generic: any scattered read of the page. |
+| `Mirrors.Tones`, `MirrorShow` | +2, +8 | `tonesAt` (a default that reads per pixel); `drawRows` reads a row's reflected sources in one call. |
+| `DrawingPad` (upstream) | +30 `blackWhite` | A fast preview's patch the fast plane refused for a grey (`direct_eink.c`, untouched) is sent again as its nearer of black and white, not the slow gray mode for the rest of the preview: Magnetic Poetry's tiles have soft grey edges, so every drag's first frame failed and the outline trailed the pen. The gray session shows the real greys when the preview ends, as before. Only what was refused before changes. |
+| `PaintActivity` | +2 | `--ez nomad_mode true/false` on launch: the Nomad preview, its menu row gone since the refocus. |
+
+Replay Page holds the UI thread 110–160 ms a step (every 600 ms; the brush engine replaying), but any touch ends a
+replay, so it blocks nothing; left as it is. **Checks:** `MirrorChecks` (row reads match per-pixel reads over two
+layers).

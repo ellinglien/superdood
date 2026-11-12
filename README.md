@@ -45,7 +45,7 @@ Nothing is installed on your computer. To update later, do it again. Your notebo
 
 Use this if you can't install from the browser, for example if you only have Safari or Firefox.
 
-1. Download [superdood-1.2.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.4/superdood-1.2.4.apk).
+1. Download [superdood-1.2.5.apk](https://github.com/ellinglien/superdood/releases/download/v1.2.5/superdood-1.2.5.apk).
 2. On the Supernote, turn on **Sideloading** (as above).
 3. On your computer, install [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases).
    On a Mac, if it won't open, right-click it and choose **Open**.
