@@ -11,7 +11,8 @@ import java.util.function.Consumer;
  * job, then a short list, each row its name and its chips ({@link LabButton#chip}, the chosen one filled): Automatic
  * Refresh (On, Off; its caption under it), Finger Action (2026-11-06, the menu's row until then: Nothing, Eraser,
  * Smudge and the slots' brushes by name, three chips a line), Two-Finger Tap and Three-Finger Tap ({@link
- * FingerTool.Tap}), Edge Strip Hold ({@link EdgeHold.Choice}). Words are {@link SystemSettings}'; a tap saves at once in
+ * FingerTool.Tap}), Edge Strip Hold ({@link EdgeHold.Choice}), Zen Fan, Nomad Size (a Manta), #inktober52, Fridge Name (once this tablet
+ * has the Fridge's key: its one chip the name, a tap the name prompt), Read Handwriting. Words are {@link SystemSettings}'; a tap saves at once in
  * {@link PaintPreferences}, which the drawing screen reads as it acts; a tap redraws only its row's chips (e-ink).
  */
 final class SystemSettingsPanel {
@@ -35,8 +36,12 @@ final class SystemSettingsPanel {
         String[] holdLabels = new String[holds.length];
         for (int i = 0; i < holds.length; i++) holdLabels[i] = holds[i].label;
         row(app, list, SystemSettings.EDGE_HOLD, SystemSettings.EDGE_HOLD_NOTE, holdLabels, prefs.edgeHold().ordinal(), holds.length, i -> prefs.setEdgeHold(holds[i]));
+        if (app.canSimulate())
+            row(app, list, SystemSettings.NOMAD_SIZE, SystemSettings.NOMAD_SIZE_NOTE, onOff, app.simulating() ? 0 : 1, 2, i -> app.setSimulating(i == 0));
         row(app, list, SystemSettings.ZEN_FAN, SystemSettings.ZEN_FAN_NOTE, new String[]{SystemSettings.CLOSES, SystemSettings.STAYS_OPEN}, prefs.zenFanStays() ? 1 : 0, 2, i -> prefs.setZenFanStays(i == 1));
-        row(app, list, SystemSettings.FRIDGE, SystemSettings.FRIDGE_NOTE, onOff, prefs.fridgeAgreed() ? 0 : 1, 2, i -> prefs.setFridgeAgreed(i == 0));
+        row(app, list, SystemSettings.PROMPTS, SystemSettings.PROMPTS_NOTE, onOff, prefs.promptsOn() ? 0 : 1, 2, i -> prefs.setPromptsOn(i == 0));
+        if (!prefs.fridgeTablet().isEmpty())
+            row(app, list, SystemSettings.FRIDGE_NAME, null, new String[]{prefs.fridgeName().isEmpty() ? SystemSettings.ADD_NAME : prefs.fridgeName()}, 0, 1, i -> app.fridge.rename(app::systemSettingsRedrawn));
         row(app, list, SystemSettings.READ_HANDWRITING, SystemSettings.READ_HANDWRITING_NOTE, onOff, prefs.readHandwriting() ? 0 : 1, 2, i -> app.readHandwriting(i == 0));
         return list;
     }

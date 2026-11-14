@@ -21,6 +21,7 @@ public final class DrawMenusChecks {
     }
 
     private static void menus() {
+        // fileRows holds Send to the Fridge on the Manta; PaintActivity.fileMenu takes it out on a cover and greys it on a closed word's page (Prompts.sendRow, PromptsChecks).
         // The owner's order (2026-11-06): the notebook's; the page's with Show Kinds (Page Bar gone 2026-11-07); Draw Together, the Sand Timer and Play; the hand and System Settings. Finger Action System Settings' on the Manta.
         check(words(DrawLayout.fileRows(true, null, false, "Draw Together", true, true, true, true)).equals("Notebook Explorer;Notebook Settings;|;Export Page;Send to the Fridge;Import;Show Kinds;|;Draw Together*;Sand Timer;Play*;|;Left-Handed;System Settings;"),
                 "The Manta's menu: the notebook's rows, the page's, the shared and the toys, the app's, a line between each");

@@ -33,6 +33,8 @@ final class DocumentStore {
      * notebook in memory is untouched) instead of the IO thread's error stopping it.
      */
     private static Exception failure(Throwable error) { return error instanceof Exception ? (Exception) error : new IOException("Not enough memory", error); }
+    /** A short status for the screen (a damaged save's file set aside, {@link #readable}); called on {@link #IO}. */
+    volatile java.util.function.Consumer<String> notes = text -> { };
     private Snapshot pending;
     private Result<Void> pendingResult;
     private boolean scheduled;
@@ -135,7 +137,7 @@ final class DocumentStore {
                     return;
                 }
                 RecoveryCodec.Recovered read;
-                try (FileInputStream input = atomic.openRead()) { read = RecoveryCodec.read(input, this::drawingFile); }
+                try (FileInputStream input = atomic.openRead()) { read = RecoveryCodec.read(input, this::readableFile); }
                 catch (RecoveryCodec.FileChanged changed) { read = fileChanged(atomic, changed.path); }
                 result.complete(read, null);
             } catch (Exception | OutOfMemoryError e) { result.complete(null, failure(e)); }
@@ -149,8 +151,9 @@ final class DocumentStore {
         File aside = new File(recovery.getPath() + ".changed");
         if (aside.exists() && !aside.delete()) throw new IOException("Couldn't set the recovery aside");
         if (!atomic.getBaseFile().renameTo(aside)) throw new IOException("Couldn't set the recovery aside");
+        notes.accept("Unsaved changes lost");
         File file = drawingFile(path);
-        return file == null || !file.isFile() ? null : new RecoveryCodec.Recovered(BookCodec.open(readable(file)), path, false);
+        return file == null || !exists(file) ? null : new RecoveryCodec.Recovered(BookCodec.open(readable(file)), path, false);
     }
     /** The owner's drawn guide to the app (2026-10-30), bundled: a fresh library's first notebook. */
     static final String START_HERE = "start-here.mpaint";
@@ -466,43 +469,54 @@ final class DocumentStore {
             byte[] bytes = source.readFully();
             File destination = target.drawing(DrawingFiles.child(path, name));
             if (exists(destination)) {
-                if (Arrays.equals(bytes, new AtomicFile(destination).readFully())) { source.delete(); continue; }
+                if (Arrays.equals(bytes, new AtomicFile(destination).readFully())) { files.delete(DrawingFiles.child(path, name)); continue; }
                 destination = target.drawing(target.unusedName(path, name));
             }
             write(new AtomicFile(destination), output -> output.write(bytes));
             if (!Arrays.equals(bytes, new AtomicFile(destination).readFully()))
                 throw new IOException("The moved copy of " + DrawingFiles.child(path, name) + " did not match; the original was kept");
-            source.delete();
+            files.delete(DrawingFiles.child(path, name));
         }
     }
     private void write(String name, Snapshot snapshot) throws IOException {
         if (name.equals("_recovery")) { write(new AtomicFile(file(name)), output -> RecoveryCodec.write(output, snapshot.book, snapshot.path)); return; }
         if (snapshot.prepare != null) synchronized (DocumentCodec.ONE_PAGE) { snapshot.prepare.run(); }
-        // The pages it didn't change stream from the old file into the new one. Once the new one is in place, every page
-        // it wrote is read from it: the lock keeps any read off the old file from its rename until then.
-        AtomicFile atomic = new AtomicFile(file(name));
-        FileOutputStream output = null;
+        // The pages it didn't change stream from the old file into a new one beside it (DrawingFiles.fresh), synced and
+        // read back whole before it replaces anything: a page copied damaged, or a short write, never becomes the
+        // notebook, and the file it replaces stays as the previous save (DrawingFiles.commit). Once the new one is in
+        // place, every page it wrote is read from it: the lock keeps any read off the old file from its rename until then.
+        File base = file(name), fresh = DrawingFiles.fresh(base);
+        FileOutputStream output = new FileOutputStream(fresh);
         try {
-            output = atomic.startWrite();
             java.io.BufferedOutputStream buffered = new java.io.BufferedOutputStream(output, 1 << 20);
             BookCodec.write(buffered, snapshot.book);
             buffered.flush();
-            FileOutputStream written = output;
-            output = null;
-            BookCodec.replaced(snapshot.book, atomic.getBaseFile(), () -> atomic.finishWrite(written));
+            output.getFD().sync();
+            output.close();
+            if (!DrawingFiles.whole(fresh)) throw new IOException("The save didn't read back whole; the notebook was kept as it was");
         } catch (IOException | RuntimeException | OutOfMemoryError error) {
-            if (output != null) atomic.failWrite(output);
+            try { output.close(); } catch (IOException ignored) { }
+            fresh.delete();
             throw error;
         }
+        BookCodec.replaced(snapshot.book, base, () -> DrawingFiles.commit(base));
     }
-    /** {@code file} ready to read as AtomicFile would: an interrupted save's backup, if any, put back in its place first. */
-    private static File readable(File file) throws IOException {
+    /**
+     * {@code file} ready to read: a save stopped part way finished, or a damaged file set aside with its previous save put
+     * back ({@link DrawingFiles#repaired}, said on the screen); then, as AtomicFile would, an older version's interrupted
+     * save's backup, if any, put back in its place.
+     */
+    private File readable(File file) throws IOException {
+        long made = DrawingFiles.repaired(file);
+        if (made > 0) notes.accept("Opened the " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(new java.util.Date(made)) + " save");
         AtomicFile atomic = new AtomicFile(file);
         atomic.openRead().close();
         return atomic.getBaseFile();
     }
     /** A library path's file, or null if the path isn't valid. */
     private File drawingFile(String path) { try { return files.drawing(path); } catch (IOException e) { return null; } }
+    /** {@link #drawingFile} made {@link #readable}, for a recovery's pages kept in its notebook's file; null when it can't be. */
+    private File readableFile(String path) { try { File file = files.drawing(path); return exists(file) ? readable(file) : file; } catch (IOException e) { return null; } }
     private interface Contents { void writeTo(FileOutputStream output) throws IOException; }
     private static void write(AtomicFile atomic, Contents contents) throws IOException {
         FileOutputStream output = null;

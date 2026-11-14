@@ -100,6 +100,10 @@ public final class PaintActivity extends Activity implements ControlHost {
     final LiveShare share = new LiveShare(this);
     /** Send to the Fridge's windows ({@link Fridge}). */
     final FridgeWindow fridge = new FridgeWindow(this);
+    /** The Prompts notebook's Turn On screen and its words' fetch ({@link Prompts}). */
+    final PromptsWindow promptsWindow = new PromptsWindow(this);
+    /** The open #inktober52 words the Prompts notebook last fetched ({@link #promptsArrived}); null before any fetch. */
+    java.util.List<Prompts.Word> openWords;
     RotationPrompt rotationPrompt;
 
     // Panels. At most one popup is open at a time.
@@ -164,6 +168,7 @@ public final class PaintActivity extends Activity implements ControlHost {
             return pixels;
         };
         store = new DocumentStore(DrawingStorage.appPrivate(this), DrawingStorage.recovery(this));
+        store.notes = text -> runOnUiThread(() -> message(text));
         handwriting = new HandwritingQueue(this, store, prefs.readHandwriting());
         if (prefs.readHandwriting()) handwriting.on(this::readerFailed); // finishes a download or first read the app was closed in the middle of
         share.restore();
@@ -253,6 +258,7 @@ public final class PaintActivity extends Activity implements ControlHost {
                         .setCancelable(false));
             });
             else migrateThen(recovered, () -> {
+                givePromptsOnce();
                 // The working notebook as it was, open on its last page (the owner, 2026-10-21); the shelf only with none.
                 named(recovered == null || recovered.path.isEmpty() ? newName() : recovered.path);
                 replaceBook(recovered == null ? null : recovered.book);
@@ -265,6 +271,21 @@ public final class PaintActivity extends Activity implements ControlHost {
             if (handedOver) { handedOver = false; message("Brushes and settings brought over"); }
         }));
     }
+    /**
+     * The Prompts notebook ({@link Prompts#NOTEBOOK}) on the shelf, once, a blank page the size a new one has; found from
+     * then on by the path it got ({@link #prompts}). Deleted, it stays gone; not made, it is tried at the next launch.
+     */
+    private void givePromptsOnce() {
+        if (prefs.promptsGiven()) return;
+        int[] size = pad.blankSize();
+        if (size[0] <= 0 || size[1] <= 0) return;
+        store.create(Prompts.NOTEBOOK, out -> BookCodec.write(out, DrawingBook.fresh(InkWashLayers.blank(size[0], size[1])).snapshot()), (path, error) -> {
+            if (error != null) { Log.w(ProbeActivity.TAG, "Could not make " + Prompts.NOTEBOOK, error); return; }
+            prefs.setPromptsPath(path); prefs.setPromptsGiven(true);
+        });
+    }
+    /** Whether {@code path} is the Prompts notebook's: only its stored path counts, not its name. */
+    boolean prompts(String path) { return !path.isEmpty() && path.equals(prefs.promptsPath()); }
     /**
      * The loading screen stays on the panel at least this long, however quick the load (the owner, 2026-11-10: "show for
      * at least a second before it opens? just to welcome people into the experience each time"), counted from its first
@@ -1339,6 +1360,9 @@ public final class PaintActivity extends Activity implements ControlHost {
         List<DrawLayout.Row> rows = DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing);
         // A cover has no copy of its own (Page Settings is a page's alone): no Export Page there, as the browser's.
         if (book == null || DrawingBook.isCover(book.index())) rows.removeIf(r -> "exportPage".equals(r.key) || "fridge".equals(r.key));
+        // Send to the Fridge on every notebook's page again (2026-11-13), greyed on a closed word's prompt page, its note under the rows.
+        String fridgeRow = book == null ? null : Prompts.sendRow(fridgeWord(), openWords);
+        if (fridgeRow != null) rows.replaceAll(r -> "fridge".equals(r.key) ? new DrawLayout.Row(r.key, r.words, r.icon, false, true) : r);
         Runnable[] actions = new Runnable[rows.size()];
         for (int i = 0; i < actions.length; i++) {
             String key = rows.get(i).key;
@@ -1350,7 +1374,7 @@ public final class PaintActivity extends Activity implements ControlHost {
                 case "open": actions[i] = () -> pad.postDelayed(() -> { if (leaveDrawing()) leaveNotebook(); }, NotebookScreens.MENU_GONE_MS); break;
                 // Export Page: the page shown's copies, the menu Page Settings' button opens.
                 case "exportPage": actions[i] = () -> { if (book != null) exportMenu(anchor, book.stacks().of(book.index())); }; break;
-                case "fridge": actions[i] = () -> fridge.agreed(this::sendToFridge); break;
+                case "fridge": actions[i] = this::sendToFridge; break;
                 case "import": actions[i] = this::importFile; break;
                 case "sand": actions[i] = this::countdownTapped; break;
                 case "kinds": actions[i] = inkWashBar::kindsPopup; break;
@@ -1363,12 +1387,14 @@ public final class PaintActivity extends Activity implements ControlHost {
                 default: actions[i] = () -> { prefs.setToolboxRight(!prefs.toolboxRight()); applyToolboxSide(); }; break;
             }
         }
-        menu(anchor, "file menu", rows, actions, prefs.largeSettingsText() ? 256 : 240, null);
+        menu(anchor, "file menu", rows, actions, prefs.largeSettingsText() ? 256 : 240, fridgeRow);
     }
     private View systemAnchor;
     private PopupWindow systemPopup;
     /** System Settings closed and opened again, its rows drawn from the preferences (Read Handwriting's Not Now leaves its chip Off). */
     private void systemSettingsAgain() { dismiss(systemPopup); systemSettings(systemAnchor); }
+    /** System Settings drawn again, if it is open (a row changed from elsewhere: a download failed, Fridge Name saved). */
+    void systemSettingsRedrawn() { if (systemPopup != null && systemPopup.isShowing()) systemSettingsAgain(); }
     /**
      * Read Handwriting switched on or off from System Settings. On asks first (its first-time words, as the Fridge's),
      * then downloads the reader and reads every notebook; Off deletes every transcript and the reader. Not Now leaves it Off.
@@ -1393,7 +1419,7 @@ public final class PaintActivity extends Activity implements ControlHost {
         notebooks.searchChanged();
         if (!was) return;
         message("Download failed");
-        if (systemPopup != null && systemPopup.isShowing()) systemSettingsAgain();
+        systemSettingsRedrawn();
     }
     /** System Settings' popup's width, dp: Finger Action's three chips a line. */
     private static final int SYSTEM_WIDTH = 440;
@@ -1421,13 +1447,13 @@ public final class PaintActivity extends Activity implements ControlHost {
     void menu(View anchor, String name, List<DrawLayout.Row> rows, Runnable[] actions, int widthDp, String note) {
         String[] names = new String[rows.size()];
         Drawable[] icons = new Drawable[names.length];
-        boolean[] marked = new boolean[names.length];
+        boolean[] marked = new boolean[names.length], greyed = new boolean[names.length];
         for (int i = 0; i < names.length; i++) {
             DrawLayout.Row row = rows.get(i);
-            names[i] = row.words; marked[i] = row.marked;
+            names[i] = row.words; marked[i] = row.marked; greyed[i] = row.greyed;
             if (row.icon != null) icons[i] = getDrawable(getResources().getIdentifier(row.icon, "drawable", getPackageName()));
         }
-        menu(anchor, name, names, icons, actions, widthDp, marked, note);
+        menu(anchor, name, names, icons, actions, widthDp, marked, greyed, note);
     }
     /** Kind {@code choice} ({@link EraseKind#LABELS}) shown at {@code step} on the page drawn on, a change to save: it shows again once; said in a note ("Pen half"). */
     void showKind(int choice, int step) {
@@ -1503,16 +1529,18 @@ public final class PaintActivity extends Activity implements ControlHost {
      * As above, every row {@code marked} marked by the bar's right-edge bar (the mirrors on, {@link MirrorsMenu}), and
      * {@code note} (null: none) under the rows in captions, which a tap passes by; a null name is a grey-400 line between groups.
      */
-    void menu(View anchor, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked, String note) {
-        if (preparing) { built(Popups.bounds(root, anchor), name, names, icons, widthDp, marked, note); return; }
-        menuAt(Popups.bounds(root, anchor), name, names, icons, actions, widthDp, marked, note);
+    void menu(View anchor, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked, String note) { menu(anchor, name, names, icons, actions, widthDp, marked, null, note); }
+    /** As above, the rows {@code greyed} (null: none) in grey, a tap passing them by. */
+    private void menu(View anchor, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked, boolean[] greyed, String note) {
+        if (preparing) { built(Popups.bounds(root, anchor), name, names, icons, widthDp, marked, greyed, note); return; }
+        menuAt(Popups.bounds(root, anchor), name, names, icons, actions, widthDp, marked, greyed, note);
     }
     /** As above, beside {@code anchorBounds} (the root's app coordinates) rather than a view: a text box's menu ({@link TextMode}). */
-    void menuAt(RectF anchorBounds, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked) { menuAt(anchorBounds, name, names, icons, actions, widthDp, marked, null); }
-    private void menuAt(RectF anchorBounds, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked, String note) {
+    void menuAt(RectF anchorBounds, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked) { menuAt(anchorBounds, name, names, icons, actions, widthDp, marked, null, null); }
+    private void menuAt(RectF anchorBounds, String name, String[] names, Drawable[] icons, Runnable[] actions, int widthDp, boolean[] marked, boolean[] greyed, String note) {
         closePagePanel();
         dismiss(filePopup); inkWashBar.closePanel();
-        Menu menu = built(anchorBounds, name, names, icons, widthDp, marked, note);
+        Menu menu = built(anchorBounds, name, names, icons, widthDp, marked, greyed, note);
         menu.actions = actions;
         show(menu);
     }
@@ -1557,8 +1585,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         place.setMargins(dp(16), dp(DrawLayout.GROUP_LINE_ROOM), dp(16), dp(DrawLayout.GROUP_LINE_ROOM));
         rows.addView(line, place);
     }
-    private Menu built(RectF anchorBounds, String name, String[] names, Drawable[] icons, int widthDp, boolean[] marked, String note) {
-        String key = name + "|" + java.util.Arrays.toString(names) + java.util.Arrays.toString(marked) + note + widthDp + anchorBounds
+    private Menu built(RectF anchorBounds, String name, String[] names, Drawable[] icons, int widthDp, boolean[] marked, boolean[] greyed, String note) {
+        String key = name + "|" + java.util.Arrays.toString(names) + java.util.Arrays.toString(marked) + java.util.Arrays.toString(greyed) + note + widthDp + anchorBounds
                 + root.getWidth() + "x" + root.getHeight() + toolboxRight + appTurn() + Ui.fingerPress() + prefs.largeSettingsText();
         // The file menu's icons are fixed by its rows' names, so its key holds them; other menus (Play's strokes) are built each time.
         boolean keep = "file menu".equals(name);
@@ -1584,6 +1612,10 @@ public final class PaintActivity extends Activity implements ControlHost {
             // before, left the icon out, and a label that wraps beside it (Use This Page on the Cover) was cut off at the foot.
             row.setCompoundDrawables(icon, null, null, null); row.setCompoundDrawablePadding(dp(12));
             row.setFocusable(true);
+            if (greyed != null && i < greyed.length && greyed[i]) {
+                row.setTextColor(Theme.GREY_600); row.setEnabled(false);
+                if (icon != null) icon.mutate().setAlpha(110);
+            }
             row.setOnClickListener(v -> {
                 menuLeaving = android.os.SystemClock.uptimeMillis() + NotebookScreens.MENU_GONE_MS;
                 menu.dismiss();
@@ -2421,12 +2453,14 @@ public final class PaintActivity extends Activity implements ControlHost {
         leaving();
         share.send(book.snapshot(), DrawingFiles.name(drawingName), place, exporting(anchor, null));
     }
-    /** Send to the Fridge ({@link FridgeWindow}): the page shown as it is now, wet paint set first, as Export Page. */
+    /** Send to the Fridge ({@link FridgeWindow}): the page shown as it is now, wet paint set first, as Export Page; a prompt page's under its word, its band in. */
     private void sendToFridge() {
         if (book == null || drawingName.isEmpty() || busy() || DrawingBook.isCover(book.index())) return;
         leaving();
-        fridge.open(book.snapshot(), DrawingFiles.name(drawingName), book.stacks().of(book.index()));
+        fridge.open(book.snapshot(), DrawingFiles.name(drawingName), book.stacks().of(book.index()), fridgeWord());
     }
+    /** The word the page shown posts under ({@link Prompts#wordKey}); null, none. */
+    private String fridgeWord() { return Prompts.wordKey(prompts(drawingName), prefs.promptsOn(), book.template(book.index()).key); }
     /** Export Page's sizes for the PNG or Layers (the owner, 2026-11-05), each with its size for the page: "Social, 1080 × 1444"; Layers' High Res says its file is large. */
     private void sizeMenu(View anchor, int place, String choice) {
         if (book == null) return;
@@ -2484,8 +2518,8 @@ public final class PaintActivity extends Activity implements ControlHost {
      * name, which the rename then moves. Another notebook (a long press on the shelf) has no saves to follow.
      */
     void renameNotebook(String from) {
-        // Favourites keeps its name: the star finds it by it.
-        if (from.isEmpty() || NotebookStrip.favourites(from)) return;
+        // Favourites keeps its name: the star finds it by it. The Prompts notebook too: its path is how it is found.
+        if (from.isEmpty() || NotebookStrip.favourites(from) || prompts(from)) return;
         String folder = DrawingFiles.parent(from);
         NotebookNames names = NotebookNames.renaming(DrawingFiles.name(from), java.time.LocalDate.now());
         // Checked here because the store would otherwise overwrite; a case-only change (this notebook's own file) goes through.
@@ -2515,7 +2549,7 @@ public final class PaintActivity extends Activity implements ControlHost {
      */
     void deleteNotebook(String path) {
         if (path.isEmpty() || NotebookStrip.favourites(path)) return;
-        boolean open = path.equals(drawingName) && book != null;
+        boolean open = path.equals(drawingName) && book != null, prompts = prompts(path), takingPart = prompts && !prefs.fridgeTablet().isEmpty();
         Runnable delete = () -> {
             if (busy()) return;
             if (open && path.equals(drawingName)) {
@@ -2525,6 +2559,8 @@ public final class PaintActivity extends Activity implements ControlHost {
             store.delete(path, (unused, error) -> runOnUiThread(() -> {
                 if (destroyed) return;
                 if (error != null) { message("Delete failed: " + error.getMessage()); return; }
+                // The Prompts notebook gone: never made again (promptsGiven stays), its words off.
+                if (prompts) { prefs.setPromptsPath(""); prefs.setPromptsOn(false); }
                 AutoExport.delete(path);
                 handwriting.deleted(path);
             }));
@@ -2532,12 +2568,18 @@ public final class PaintActivity extends Activity implements ControlHost {
             notebooks.showShelf();
         };
         // Another notebook than the open one isn't read until it is opened: it is taken to have drawings.
-        if (open && BlankPages.empty(book)) { delete.run(); return; }
-        showDialog(new AlertDialog.Builder(this).setTitle("Delete this notebook?")
-                .setMessage("\"" + DrawingNames.shown(DrawingFiles.name(path), java.time.LocalDate.now()) + "\" and its PDF and PNG copies will be deleted. This can't be undone.")
+        // Taking part, it always asks: its pages on the Fridge stay unless Stop Taking Part goes with it.
+        if (open && BlankPages.empty(book) && !takingPart) { delete.run(); return; }
+        AlertDialog.Builder asked = new AlertDialog.Builder(this).setTitle("Delete this notebook?")
+                .setMessage("\"" + DrawingNames.shown(DrawingFiles.name(path), java.time.LocalDate.now()) + "\" and its PDF and PNG copies will be deleted. This can't be undone."
+                        + (takingPart ? " Your pages on the Fridge stay unless you also stop taking part." : ""))
                 .setPositiveButton("Delete", (d, w) -> delete.run())
-                .setNegativeButton("Cancel", null));
+                .setNegativeButton("Cancel", null);
+        if (takingPart) asked.setNeutralButton("Delete and Stop Taking Part", (d, w) -> stopTakingPart(delete));
+        showDialog(asked);
     }
+    /** Stop Taking Part ({@link FridgeWindow#leave}): this tablet's email and pages gone from the Fridge, the Prompts off, then {@code after}; unreachable, nothing changes. */
+    void stopTakingPart(Runnable after) { fridge.leave(after); }
 
     // Notebooks (docs/archive/superpowers/specs/2026-10-18-notebooks-design.md)
 
@@ -2681,7 +2723,27 @@ public final class PaintActivity extends Activity implements ControlHost {
     void openNotebook(String path) { openNotebook(path, false); }
     /** As {@link #openNotebook(String)}, on its library card when {@code card} (a shelf tile's Settings). */
     void openNotebook(String path, boolean card) {
-        openNotebook(path, () -> { if (card) notebooks.showCard(); else notebooks.showPages(book.index()); });
+        // The Prompts notebook uses the internet: the Turn On screen first, instead of it; then its words at each open.
+        if (!card && prompts(path) && !prefs.promptsOn()) { promptsWindow.turnOn(() -> { prefs.setPromptsOn(true); openNotebook(path, false); }); return; }
+        openNotebook(path, () -> {
+            if (card) { notebooks.showCard(); return; }
+            notebooks.showPages(book.index());
+            if (prompts(path) && prefs.promptsOn()) promptsWindow.words(path, book);
+        });
+    }
+    /**
+     * The Prompts notebook's open words ({@link PromptsWindow#words}), while it is still open and nothing draws: kept, and a
+     * page added at its end for each word it has none for ({@link Prompts#append}), saved as a page add is, the newest
+     * turned to. A full notebook says so.
+     */
+    void promptsArrived(String path, DrawingBook asked, java.util.List<Prompts.Word> words) {
+        if (book != asked || !path.equals(drawingName) || busy()) return;
+        openWords = words;
+        if (Prompts.toAdd(book.pageTemplates(), words).isEmpty()) return;
+        boolean[] all = {true};
+        pageEdit("add", () -> all[0] = Prompts.append(book, words));
+        if (!all[0]) message(DrawingBook.FULL);
+        if (notebooks.onPages()) notebooks.showPages(book.index());
     }
     /** A search's find (Read Handwriting): its notebook open at its page in the notebook screen, the matching lines boxed until the next tap. */
     void openFound(ShelfSearch.Found f) {
@@ -2738,6 +2800,8 @@ public final class PaintActivity extends Activity implements ControlHost {
         String path = notebook.path;
         // Favourites: Settings alone (never renamed or deleted).
         if (NotebookStrip.favourites(path)) { menu(anchor, "notebook menu", new String[]{LibraryCard.SETTINGS}, new int[]{R.drawable.ic_ph_list}, new Runnable[]{() -> openNotebook(path, true)}, prefs.largeSettingsText() ? 288 : 264); return; }
+        // The Prompts notebook: Settings and Delete (never renamed: its path is how it is found).
+        if (prompts(path)) { menu(anchor, "notebook menu", new String[]{LibraryCard.SETTINGS, "Delete"}, new int[]{R.drawable.ic_ph_list, R.drawable.ic_ph_trash}, new Runnable[]{() -> openNotebook(path, true), () -> deleteNotebook(path)}, prefs.largeSettingsText() ? 288 : 264); return; }
         menu(anchor, "notebook menu", new String[]{"Rename", LibraryCard.SETTINGS, "Delete"},
                 new int[]{R.drawable.ic_ph_pencil_simple, R.drawable.ic_ph_list, R.drawable.ic_ph_trash},
                 new Runnable[]{() -> renameNotebook(path), () -> openNotebook(path, true), () -> deleteNotebook(path)},

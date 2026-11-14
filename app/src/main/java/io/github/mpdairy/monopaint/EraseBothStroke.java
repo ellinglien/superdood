@@ -55,6 +55,8 @@ final class EraseBothStroke implements DrawingStroke {
     /** Level 1 for a whole row, and which pixels of a span are new to the stroke. */
     private final int[] ones;
     private final byte[] fresh;
+    /** A row of the fluid it lifted ({@link #lifts}), for the preview; null without fluid. */
+    private final byte[] lifted;
     private final RoundFootprint.Span erase = this::erase;
     /** Tone's scrape: the stroke's heading, and a salt of its own (which pass on the page, {@link ToneDocument#erasePasses}, and where it began), so each pass scrapes afresh. */
     private double headX = 1, headY = 0;
@@ -91,8 +93,11 @@ final class EraseBothStroke implements DrawingStroke {
         to = layer == 0 ? document.layerCount() - 1 : made ? InkWashLayers.inkOf(document, pair) : 0;
         inkLayer = InkWashLayers.inkOf(document, made ? pair : InkWashLayers.current(document));
         cut = VectorInk.Cut.of(document, kinds, from, to);
-        // Unless masking fluid shields paint (a page whose fluid has all been lifted previews again).
-        previews = !masked;
+        // Over masking fluid and wax too (the owner, 2026-11-14, of crayon: "keep it the one way. where things erase as
+        // the pen touches"): the fluid it lifts shows at lift, the rest as it goes. One set to a kind leaves the fluid
+        // whole, which the preview would hide where it went: that one still waits for the lift.
+        previews = !masked || everything;
+        lifted = lifts == null ? null : new byte[document.width];
         document.selectLayer(inkLayer);
         live = (takes & ToneDocument.KIND_PAINT) != 0 && document.hasPlane(inkLayer, ToneDocument.PLANE_WASH) ? ToneDocument.PLANE_WASH
                 : (takes & ToneDocument.KIND_PEN) != 0 && document.hasPlane(inkLayer, ToneDocument.PLANE_PEN) ? ToneDocument.PLANE_PEN : -1;
@@ -167,6 +172,8 @@ final class EraseBothStroke implements DrawingStroke {
         if (fresh.length < w) throw new IllegalArgumentException("Wider than the page");
         for (int y = 0; y < h; y++) {
             coverage.levels(left, top + y, w, 1, fresh);
+            // Where it lifts fluid the paint under it stays and the fluid goes only at lift: shown as it is till then.
+            if (lifts != null) { lifts.levels(left, top + y, w, 1, lifted); for (int x = 0; x < w; x++) if (lifted[x] != 0) fresh[x] = 0; }
             // A Tone dot the scrape left shows as it is.
             for (int x = 0; x < w; x++) if (fresh[x] == 0 || kinds == 0 && dot(left + x, top + y)) { fresh[x] = 0; out[y * w + x] = -1; }
             document.compositeTonesKept(left, top + y, w, from, to, takes, fresh, out, y * w);

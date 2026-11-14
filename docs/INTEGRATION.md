@@ -99,7 +99,7 @@ screen, a pinch out back to it; 2026-11-01, `ZoomFitChecks.browser`) with its `w
 | `PressureStroke` | None since the audit (2026-10-19): `headThickness`, for Scribulor's old pens, went back to upstream's. |
 | `ToolSettings` | `travel` made visible, an inverse helper `pressure` (the checks use it; `pressureFor`, for the old pens, went at the audit). `travel` has a knee since 2026-10-29 (the old line to .30, then on to 1 at .78; firmware 3.31.45, `docs/TILT_INPUT.md`). |
 | `ToolStroke`, `NativePen` | Read pen pressure through `ToolSettings.travel` instead of their own copies of the `.05–.45` line (2026-10-29). |
-| `DocumentStore`, `DrawingFiles`, `DrawingBrowser` | Rename and delete drawings, following `AtomicFile` backups. |
+| `DocumentStore`, `DrawingFiles`, `DrawingBrowser` | Rename and delete drawings, following `AtomicFile` backups and, since 2026-11-14, the previous save and a damaged file set aside. |
 | `Ui`, `ToolButton`, `PressOutline`, `PaletteSwatch` | Inverted selection, selected frame, pointer-indexed `outside` (palm fix), Brush Lab helpers. `ToolButton.faces`: `iconOnly` without asking Android for a frame, for a change the caller puts on the panel (2026-10-24). `ToolButton.slow`, `PressOutline.inverted` and `clicked`, `ControlRaster.draw(…, binary)`: a slow button's press inverted in one binary update, let go in the click's own frame (2026-10-25, see "Press feedback"). `markerArea` of a bar row (`SlotTile.Face`) is its side bar alone (2026-10-25, see "Side bars alone"). |
 | `ShadePicker` | Its strip's numbers and pixels (`ShadeStrip`, pure) and its pen and marker feedback (`StripMarker`) moved out, unchanged, so Scribulor's grey bar draws and follows the pen with the same code (see "The grey bar" below). |
 | `PaintPreferences` | Brush Lab Basic/Advanced flag. |
@@ -1254,7 +1254,7 @@ moving pages to the new file).
 | `DrawingBook` | small | Pages are `PackedPage`s (a `byte[]` list still makes one); `MAX_PACKED_BYTES` 200 MB; `offerPacked` (the page a save packed is kept, so leaving it needn't pack it again); the limits' words say "notebook" (`FULL`, `FULL_PAGES`, `LAST_PAGE`). |
 | `BookCodec` | rewritten | `open`/`openPages(File)`: random access, the structure and every page's header checked, no page read; `write` streams stored pages from their file and returns where each page's bytes start; `replaced`: the rename and the pages pointed into the new file under the lock; one manifest parser for both readers. |
 | `RecoveryCodec` | +70 | TSR3: only the pages not in the notebook's file, the rest by length and CRC; `read(input, drawing)` finds them; TSR1 and TSR2 still read. |
-| `DocumentStore` | +25 | `openBook` opens from the file (an interrupted save's backup put back first, as AtomicFile reads it); a named save streams and then `replaced`; `recover` and `page` read from files. |
+| `DocumentStore` | +25 | `openBook` opens from the file (a damaged file set aside and its previous save put back, `DrawingFiles.repaired`; an older version's interrupted save's backup put back, as AtomicFile reads it); a named save streams to a fresh file, is read back whole (`DrawingFiles.whole`), then put in place keeping the previous save (`DrawingFiles.commit`) and `replaced`; `recover` and `page` read from files. |
 | `BookChecks` | 2 | `packedActivePage` is a `PackedPage`. |
 
 Still whole in memory: `DocumentStore.move` (moving the library from private to shared storage, once) copies each file

@@ -18,56 +18,53 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The Fridge (the owner, 2026-11-06): a page pinned on superdood.org's fridge door, {@code /fridge}, once the owner
- * approves it, and on the tablet's own unlisted page, {@code /fridge/u/<slug>}, at once ({@code FridgeWindow} shows
- * it). The page goes as Export Page's PNG ({@link PageExport}), nothing else; each card sent is kept here, so this
- * tablet can take it down. The server's API (branch {@code fridge-server}): {@code POST /api/send} (the PNG, a name
- * and a caption in the query, {@code X-Fridge-Key} for the own page, {@code shared=1} for the door too), {@code POST
- * /api/delete} ({id, del}) and {@code POST /api/own} ({slug, title}). Pure Java but for the network: FridgeChecks.
+ * The Fridge (the owner, 2026-11-06; the Prompts, 2026-11-13): a page sent to superdood.org/fridge, a Prompts page's
+ * under its #inktober52 word ({@code FridgeWindow} shows it). The page goes as Export Page's PNG ({@link PageExport}), nothing
+ * else; each card sent is kept here, so this tablet can take it down. The server's API
+ * (superdood.org's server (server.py, not in this repo)): {@code POST /api/confirm} ({email}; a new tablet's key in the answer),
+ * {@code GET /api/confirmed} ({confirmed, name}), {@code POST /api/send?word=} (the PNG, a name and a caption in the query;
+ * {@code ?replace=<id>}, a card sent before updated in place), {@code POST /api/name} ({name}: the tablet's one name, the
+ * owner's "username", 2026-11-13), {@code POST /api/leave}, each with the tablet's {@code X-Fridge-Key}; {@code POST
+ * /api/delete} ({id, del}); {@code GET /api/words}.
+ * Personal fridges ("My Fridge", {@code /api/own}) are gone. Pure Java but for the network: FridgeChecks.
  */
 final class Fridge {
     private Fridge() { }
 
     static final String SITE = "https://superdood.org/fridge";
-    static final String SEND_API = SITE + "/api/send", DELETE_API = SITE + "/api/delete", OWN_API = SITE + "/api/own", KEY_HEADER = "X-Fridge-Key";
-    /** The server's limits: a name's and a caption's characters, the PNG's bytes and pixels; a slug's letters. */
-    static final int NAME_MOST = 40, CAPTION_MOST = 120, BYTES_MOST = 3 << 20, WIDTH_MOST = 2000, HEIGHT_MOST = 2700, SLUG_LEAST = 3, SLUG_MOST = 24;
+    static final String SEND_API = SITE + "/api/send", DELETE_API = SITE + "/api/delete", KEY_HEADER = "X-Fridge-Key";
+    static final String CONFIRM_API = SITE + "/api/confirm", CONFIRMED_API = SITE + "/api/confirmed", LEAVE_API = SITE + "/api/leave", NAME_API = SITE + "/api/name";
+    /** The server's limits: a name's and a caption's characters, the PNG's bytes and pixels. */
+    static final int NAME_MOST = 40, CAPTION_MOST = 120, BYTES_MOST = 3 << 20, WIDTH_MOST = 2000, HEIGHT_MOST = 2700;
     /** Wider than this, the page goes at Social ({@link ExportSize}), well under {@link #BYTES_MOST}. */
     static final int WIDE_MOST = 1600;
 
     /** The words (docs/TEXT-STYLE.md). */
-    static final String ROW = "Send to the Fridge", MINE = "My Fridge", SHARED = "The Fridge", NAME = "Name", CAPTION = "Caption",
-            SEND = "Send", SENDING = "Sending", CANCEL = "Cancel", NOT_NOW = "Not Now", CLOSE = "Close", COPY = "Copy Link", COPIED = "Copied",
-            SENT_PAGES = "Sent Pages", SENT_LIST = "Sent to the Fridge", TAKE_DOWN = "Take Down", MAKE = "Make", SENT = "Sent";
-    /** The first time's words: where it goes, who sees it, how it comes down, what else goes. */
-    static final String ABOUT = "This page goes online, to superdood.org/fridge. On My Fridge at once, for anyone with its link. "
-            + "On The Fridge once Elling approves it. Take it down any time, from this tablet. Nothing else is sent.";
-    /** My Fridge's name screen: its caption, and the caption while the name can't be a link. */
-    static final String OWN_ABOUT = "A short name for its link", OWN_SHORT = "3 to 24 letters or digits";
+    static final String ROW = "Send to the Fridge", NAME = "Name", CAPTION = "Caption (optional)", EMAIL = "Email",
+            SEND_LINK = "Send Link", SEND = "Send", SENDING = "Sending", CANCEL = "Cancel", NOT_NOW = "Not Now", CLOSE = "Close", COPY = "Copy Link", COPIED = "Copied",
+            SENT_PAGES = "Sent Pages", SENT_LIST = "Sent to the Fridge", TAKE_DOWN = "Take Down", SENT = "Sent";
     /** Notes. */
     static final String FAILED = "Send failed", TOO_LARGE = "Too large", TAKEN_DOWN = "Taken down", DOWN_FAILED = "Take down failed", UNDONE = "This can't be undone.";
-
-    /** The sent window's words: where the page is now. */
-    static String sentWords(boolean mine, boolean shared) {
-        return mine && shared ? "On My Fridge now. On The Fridge once approved." : mine ? "On My Fridge now." : "Waiting for approval.";
-    }
-    /** {@code slug}'s page, My Fridge's link. */
-    static String ownLink(String slug) { return SITE + "/u/" + slug; }
+    /** The email step's words: the owner's (2026-11-13), the terms, the waiting line, the check before asking. */
+    static final String EMAIL_FIRST = "We need to confirm your email address the first time you post. Superdood won't share it with anyone.",
+            TERMS = "Privacy: superdood.org/privacy.html · Terms: superdood.org/terms.html",
+            WAITING_LINK = "Waiting for you to tap the link in your email.", NOT_EMAIL = "That isn't an email address.";
+    /** Sent: shown at once, or held for the owner (flagged words, a held tablet). The server's words for an unconfirmed tablet. */
+    static final String ON_FRIDGE = "On the Fridge.", WAITING = "Waiting for a look.", CONFIRM_FIRST = "Confirm your email first.";
+    /** A page sent again, its card updated (the owner, 2026-11-13: "have whatever image it is update instead of submitting a new thing"); a name left empty, the server's words. */
+    static final String UPDATED = "Updated on the Fridge.", ADD_NAME = "Add a name.";
+    /** Stop Taking Part (the Prompts notebook's Notebook Settings, and Delete's). */
+    static final String STOP = "Stop Taking Part", STOP_NOTE = "Deletes your email and your pages on the Fridge. Your notebook stays.",
+            STOP_ASK = "Stop taking part?", STOP_ABOUT = "Your email and your pages on the Fridge will be deleted. Your notebook stays on this tablet.",
+            STOPPED = "You've stopped taking part.", UNREACHABLE = "Couldn't reach the Fridge. Try again with Wi-Fi.";
 
     // The request.
 
     /** The size the page goes at: its own when it is no wider than {@link #WIDE_MOST} and fits the server, else Social. */
     static ExportSize size(int width, int height) { return width <= WIDE_MOST && height <= HEIGHT_MOST ? ExportSize.PAGE : ExportSize.SOCIAL; }
-    /** The Fridge window's tick that puts the page's template in (the owner, 2026-11-10: "fridge posts... they shouldn't have the template visible ideally... or that should be an option"). */
-    static final String TEMPLATE = "Template";
-    /** Whether page {@code place}'s copy would show a template's guides (the Fridge window offers {@link #TEMPLATE} then). */
-    static boolean templated(int place, int count, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing) {
-        int bottom = TracingPaper.stacks(tracing, count).first(place);
-        return !options.pageTemplate(pageTemplates != null && bottom < pageTemplates.size() ? pageTemplates.get(bottom) : null).equals(NotebookTemplate.BLANK);
-    }
     /**
-     * Page {@code place}'s PNG as Export Page writes it at {@link #size}, on plain paper unless {@code template} (the
-     * notebook's copies leave the guides out too); Social when that is over {@link #BYTES_MOST}.
+     * Page {@code place}'s PNG as Export Page writes it at {@link #size}: its template in when {@code template} (a word's
+     * post, its band), else on plain paper, as before the Template tick (2026-11-10); Social when that is over {@link #BYTES_MOST}.
      */
     static byte[] png(String title, int place, int width, int height, List<PackedPage> pages, NotebookOptions options, List<String> pageTemplates, TracingPaper tracing, Magnets.Tiles tiles, boolean template) throws IOException {
         if (!template) { options = options.withTemplate(NotebookTemplate.BLANK); pageTemplates = null; }
@@ -83,14 +80,14 @@ final class Fridge {
         return s.codePointCount(0, s.length()) <= most ? s : s.substring(0, s.offsetByCodePoints(0, most)).trim();
     }
     /**
-     * The send's address: the name and caption when given (cut to the server's limits, encoded), and {@code shared=1}
-     * when it goes to My Fridge ({@code mine}, the key's page) and The Fridge both; The Fridge alone needs nothing.
+     * The send's address: its word (the word's slug; null or "", a post with no word, no {@code word=}), or {@code replace}
+     * (a card's id, null for none: that card updated, keeping its word), and the name and caption when given (cut to the server's limits, encoded).
      */
-    static String sendUrl(String name, String caption, boolean mine, boolean shared) {
+    static String sendUrl(String word, String name, String caption, String replace) {
         StringBuilder q = new StringBuilder();
+        if (replace != null) query(q, "replace", replace); else query(q, "word", word == null ? "" : word);
         query(q, "name", cut(name, NAME_MOST));
         query(q, "caption", cut(caption, CAPTION_MOST));
-        if (mine && shared) query(q, "shared", "1");
         return SEND_API + (q.length() == 0 ? "" : "?" + q);
     }
     private static void query(StringBuilder q, String key, String value) {
@@ -101,14 +98,12 @@ final class Fridge {
     static String encode(String s) {
         try { return URLEncoder.encode(s, "UTF-8").replace("+", "%20"); } catch (UnsupportedEncodingException e) { throw new IllegalStateException(e); }
     }
-    /** The slug {@code typed} makes: lower case, a dash for each run of anything else, cut to {@link #SLUG_MOST}; null when shorter than {@link #SLUG_LEAST}. */
-    static String slug(String typed) {
-        String s = (typed == null ? "" : typed).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
-        if (s.length() > SLUG_MOST) s = s.substring(0, SLUG_MOST).replaceAll("-+$", "");
-        return s.length() < SLUG_LEAST ? null : s;
-    }
-    /** My Fridge's request: its slug and its title, the name as typed. */
-    static String ownBody(String slug, String title) { return "{\"slug\":" + json(slug) + ",\"title\":" + json(cut(title, NAME_MOST)) + "}"; }
+    /** A rough check before asking the server (it checks again). */
+    static boolean emailish(String s) { return s != null && s.trim().matches("[^@\\s]{1,64}@[^@\\s]+\\.[^@\\s.]{2,}"); }
+    /** Confirm's request: the email, trimmed. */
+    static String confirmBody(String email) { return "{\"email\":" + json(email.trim()) + "}"; }
+    /** Fridge Name's request: the name, as one line. */
+    static String nameBody(String name) { return "{\"name\":" + json(cut(name, NAME_MOST)) + "}"; }
     /** A take-down's request. */
     static String deleteBody(Card card) { return "{\"id\":" + json(card.id) + ",\"del\":" + json(card.del) + "}"; }
     /** {@code s} as a JSON string. */
@@ -140,27 +135,54 @@ final class Fridge {
         String error = field(answer.body, "error");
         return error == null || error.trim().isEmpty() || error.length() > 60 ? fallback : error.trim();
     }
-    /** A send's {@code answer} as the card kept: page {@code page} of {@code notebook}, sent on {@code day}, to {@code mine}'s page ("" none) and the door when {@code shared}. */
-    static Card sent(Answer answer, String mine, boolean shared, String notebook, int page, long day) throws Failed {
-        if (!answer.ok()) throw new Failed(said(answer, FAILED), answer.code);
+    /** A send's {@code answer} as the card kept: word {@code word}'s page {@code page} of {@code notebook}, sent on {@code day}. */
+    static Card sent(Answer answer, String word, String notebook, int page, long day) throws Failed { return sent(answer, word, notebook, page, day, null); }
+    /** The same, {@code old} the card it replaced (null: none): a replace's answer has no {@code del}, so old's is kept. */
+    static Card sent(Answer answer, String word, String notebook, int page, long day, Card old) throws Failed {
+        if (!answer.ok()) throw new Failed(answer.code == 409 ? Prompts.CLOSED : said(answer, FAILED), answer.code);
         String id = field(answer.body, "id"), del = field(answer.body, "del"), url = field(answer.body, "url");
+        if (del == null && old != null && old.id.equals(id)) del = old.del;
         if (id == null || !id.matches("[A-Za-z0-9_-]{1,64}") || del == null || del.isEmpty()) throw new Failed(FAILED, answer.code);
         // Only a link on superdood.org's fridge is shown; anything else, the card's own.
         if (url == null || !url.startsWith(SITE + "/")) url = SITE + "/" + id;
-        return new Card(id, del, url, mine, shared, notebook, page, day);
+        return new Card(id, del, url, notebook, page, day, word);
+    }
+    /** What the sent window says: {@link #WAITING} when the server holds the page for a look, else {@link #UPDATED} for a card {@code replaced}, {@link #ON_FRIDGE} for a new one. */
+    static String sentNote(Answer answer, boolean replaced) { return "pending".equals(field(answer.body, "status")) ? WAITING : replaced ? UPDATED : ON_FRIDGE; }
+    /** Whether a replace's {@code answer} means its card is gone from the Fridge (404): forgotten, and the page sent as new. */
+    static boolean replacedGone(Answer answer) { return answer.code == 404; }
+    /** Whether api/confirmed's {@code answer} says this tablet's email is confirmed. */
+    static boolean confirmed(Answer answer) { return answer.ok() && isTrue(answer.body, "confirmed"); }
+    /** The name api/confirmed's {@code answer} gives this tablet ("" if none). */
+    static String nameOf(Answer answer) { String name = answer.ok() ? field(answer.body, "name") : null; return name == null ? "" : cut(name, NAME_MOST); }
+    /** The name kept after Fridge Name's {@code answer}: the server's, else {@code sent}; refused, its words, else {@link #UNREACHABLE}. */
+    static String named(Answer answer, String sent) throws Failed {
+        if (!answer.ok()) throw new Failed(said(answer, UNREACHABLE), answer.code);
+        String name = field(answer.body, "name");
+        return name == null || name.trim().isEmpty() ? cut(sent, NAME_MOST) : name;
+    }
+    /** Whether a send was refused for an email not confirmed yet (back to the email step). */
+    static boolean unconfirmed(Answer answer) { return answer.code == 403 && CONFIRM_FIRST.equals(field(answer.body, "error")); }
+    /** The tablet's key after confirm's {@code answer}: the new one it gives, else {@code key}, the one asked with; refused, its words. */
+    static String tablet(Answer answer, String key) throws Failed {
+        if (!answer.ok()) throw new Failed(said(answer, FAILED), answer.code);
+        String given = field(answer.body, "key");
+        if (given != null && given.matches("[A-Za-z0-9_-]{16,64}")) return given;
+        if (key == null || key.isEmpty()) throw new Failed(FAILED, answer.code);
+        return key;
+    }
+    /** Whether Stop Taking Part's {@code answer} means this tablet is gone: done, or already gone (403). */
+    static boolean left(Answer answer) throws Failed {
+        if (answer.ok() || answer.code == 403) return true;
+        throw new Failed(said(answer, UNREACHABLE), answer.code);
     }
     /** Whether a take-down's {@code answer} means the card is gone: done, or already gone (404, 410). */
     static boolean takenDown(Answer answer) throws Failed {
         if (answer.ok() || answer.code == 404 || answer.code == 410) return true;
         throw new Failed(said(answer, DOWN_FAILED), answer.code);
     }
-    /** My Fridge as made: {slug, key}. */
-    static String[] own(Answer answer) throws Failed {
-        if (!answer.ok()) throw new Failed(said(answer, FAILED), answer.code);
-        String slug = field(answer.body, "slug"), key = field(answer.body, "key");
-        if (slug == null || slug(slug) == null || !slug(slug).equals(slug) || key == null || key.isEmpty()) throw new Failed(FAILED, answer.code);
-        return new String[]{slug, key};
-    }
+    /** A JSON boolean field is true. */
+    static boolean isTrue(String json, String name) { return json != null && json.matches("(?s).*\"" + Pattern.quote(name) + "\"\\s*:\\s*true.*"); }
     private static final Pattern STRING = Pattern.compile("\"((?:[^\"\\\\]|\\\\.)*)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
     /** A JSON object's string field {@code name} (a flat object, as the server's), or null. */
     static String field(String json, String name) {
@@ -191,41 +213,38 @@ final class Fridge {
 
     // The cards kept.
 
-    /** A card sent from this tablet: the server's id, its take-down secret and link, where it went, and what it was. */
+    /** A card sent from this tablet: the server's id, its take-down secret and link, and what it was (its word: "" before the Prompts). */
     static final class Card {
-        final String id, del, url, mine, notebook;
-        final boolean shared;
+        final String id, del, url, notebook, word;
         final int page;
         final long day;
-        Card(String id, String del, String url, String mine, boolean shared, String notebook, int page, long day) {
-            this.id = id; this.del = del; this.url = url; this.mine = mine == null ? "" : mine; this.shared = shared; this.notebook = notebook == null ? "" : notebook; this.page = page; this.day = day;
+        Card(String id, String del, String url, String notebook, int page, long day) { this(id, del, url, notebook, page, day, ""); }
+        Card(String id, String del, String url, String notebook, int page, long day, String word) {
+            this.id = id; this.del = del; this.url = url; this.notebook = notebook == null ? "" : notebook; this.page = page; this.day = day; this.word = word == null ? "" : word;
         }
         /** The Sent list's line: "Harbour, page 5, Nov 6, 2026". */
         String label() { return (notebook.isEmpty() ? "" : notebook + ", ") + "page " + page + ", " + LibraryCard.day(LocalDate.ofEpochDay(day)); }
-        /** Its links, My Fridge's first. */
-        List<String> links() {
-            List<String> links = new ArrayList<>();
-            if (!mine.isEmpty()) links.add(ownLink(mine));
-            links.add(url);
-            return links;
-        }
     }
     /** {@code cards} as kept in the preferences: a line each, its fields URL-encoded, a space between. */
     static String encode(List<Card> cards) {
         StringBuilder s = new StringBuilder();
         for (Card c : cards)
-            s.append(encode(c.id)).append(' ').append(encode(c.del)).append(' ').append(encode(c.url)).append(' ').append(c.mine.isEmpty() ? "-" : encode(c.mine))
-                    .append(' ').append(c.shared ? 1 : 0).append(' ').append(encode(c.notebook)).append(' ').append(c.page).append(' ').append(c.day).append('\n');
+            s.append(encode(c.id)).append(' ').append(encode(c.del)).append(' ').append(encode(c.url))
+                    .append(' ').append(encode(c.notebook)).append(' ').append(c.page).append(' ').append(c.day).append(' ').append(encode(c.word)).append('\n');
         return s.toString();
     }
-    /** The cards {@link #encode} kept, a line that can't be read left out. */
+    /**
+     * The cards {@link #encode} kept (7 fields, the word last), a line that can't be read left out; lines from before the
+     * Prompts (6 fields, no word) and 1.2.5's (8: My Fridge's slug and the door's tick after the link) read without those.
+     */
     static List<Card> cards(String kept) {
         List<Card> cards = new ArrayList<>();
         for (String line : (kept == null ? "" : kept).split("\n")) {
-            String[] f = line.split(" ");
-            if (f.length != 8) continue;
+            String[] f = line.split(" ", -1);
+            if (f.length < 6 || f.length > 8) continue;
+            int n = f.length == 8 ? 5 : 3;
             try {
-                cards.add(new Card(decode(f[0]), decode(f[1]), decode(f[2]), f[3].equals("-") ? "" : decode(f[3]), f[4].equals("1"), decode(f[5]), Integer.parseInt(f[6]), Long.parseLong(f[7])));
+                cards.add(new Card(decode(f[0]), decode(f[1]), decode(f[2]), decode(f[n]), Integer.parseInt(f[n + 1]), Long.parseLong(f[n + 2]), f.length == 7 ? decode(f[6]) : ""));
             } catch (RuntimeException ignored) { }
         }
         return cards;
@@ -233,11 +252,24 @@ final class Fridge {
     private static String decode(String s) {
         try { return URLDecoder.decode(s, "UTF-8"); } catch (UnsupportedEncodingException e) { throw new IllegalStateException(e); }
     }
-    /** {@code kept} with {@code card} first. */
+    /** {@code kept} with {@code card}: in its own card's place when it was an update (same id, as the server keeps it), else first, and without a card sent before for its word (the server replaced it). */
     static String added(String kept, Card card) {
         List<Card> cards = cards(kept);
+        for (int i = 0; i < cards.size(); i++) if (cards.get(i).id.equals(card.id)) { cards.set(i, card); return encode(cards); }
+        if (!card.word.isEmpty()) cards.removeIf(c -> c.word.equals(card.word));
         cards.add(0, card);
         return encode(cards);
+    }
+    /**
+     * The card a send from page {@code page} of {@code notebook} updates (the owner, 2026-11-13: "when submitting the same
+     * page again, let's have whatever image it is update"), or null: a word's post ({@code word} its slug), its word's card;
+     * any other, the card with no word sent from the same notebook and page.
+     */
+    static Card replaces(String kept, String word, String notebook, int page) {
+        String w = word == null ? "" : word, book = notebook == null ? "" : notebook;
+        for (Card c : cards(kept))
+            if (w.isEmpty() ? c.word.isEmpty() && c.notebook.equals(book) && c.page == page : c.word.equals(w)) return c;
+        return null;
     }
     /** {@code kept} without the card {@code id}. */
     static String removed(String kept, String id) {
@@ -248,10 +280,29 @@ final class Fridge {
 
     // The network: off the main thread.
 
-    /** Sends {@code png}; {@code key} (null: none) My Fridge's. */
+    /** Sends {@code png} with this tablet's {@code key}. */
     static Answer send(String url, byte[] png, String key) throws IOException { return post(url, "image/png", png, key); }
     static Answer delete(Card card) throws IOException { return post(DELETE_API, "application/json", deleteBody(card).getBytes(StandardCharsets.UTF_8), null); }
-    static Answer own(String slug, String title) throws IOException { return post(OWN_API, "application/json", ownBody(slug, title).getBytes(StandardCharsets.UTF_8), null); }
+    /** Asks for the link that confirms {@code email}; with this tablet's {@code key}, or none (a new tablet: its key in the answer, 202 {key}). */
+    static Answer confirm(String email, String key) throws IOException { return post(CONFIRM_API, "application/json", confirmBody(email).getBytes(StandardCharsets.UTF_8), key); }
+    /** Whether this tablet's email is confirmed yet, and its name ({@link #confirmed(Answer)}, {@link #nameOf}). */
+    static Answer confirmed(String key) throws IOException { return get(CONFIRMED_API, key); }
+    /** Fridge Name: this tablet's name, on all its pages. */
+    static Answer rename(String name, String key) throws IOException { return post(NAME_API, "application/json", nameBody(name).getBytes(StandardCharsets.UTF_8), key); }
+    /** Stop Taking Part: this tablet, its email and its pages, gone from the site. */
+    static Answer leave(String key) throws IOException { return post(LEAVE_API, "application/json", "{}".getBytes(StandardCharsets.UTF_8), key); }
+    /** The open words, the current first ({@link Prompts#words} reads them). */
+    static String words() throws IOException { Answer a = get(Prompts.WORDS_API, null); if (!a.ok()) throw new Failed(FAILED, a.code); return a.body; }
+    /** A GET, as {@link #post} makes a POST. */
+    private static Answer get(String url, String key) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            c.setConnectTimeout(10_000); c.setReadTimeout(30_000);
+            if (key != null) c.setRequestProperty(KEY_HEADER, key);
+            int code = c.getResponseCode();
+            return new Answer(code, read(code < 400 ? c.getInputStream() : c.getErrorStream()));
+        } finally { c.disconnect(); }
+    }
     private static Answer post(String url, String type, byte[] body, String key) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {

@@ -2669,6 +2669,7 @@ final class DrawingPad extends View {
                 if (ended) drawFinger = -1;
                 return true;
             }
+            if (fingerChoice == FingerTool.Choice.TURN) return fingerTurn(event, index, ended);
             if (fingerChoice == FingerTool.Choice.ERASER && app.fingerPans()) return fingerPan(event, index, ended);
             int tool = fingerChoice.tool();
             if (tool == InkWash.ERASER && !app.allowStroke(tool)) refuse(drawFinger);
@@ -2726,6 +2727,15 @@ final class DrawingPad extends View {
             postDelayed(navigationFrame, Math.max(0, 16-(SystemClock.uptimeMillis()-lastNavigationFrame)));
         }
         if (ended) drawFinger = -1;
+        return true;
+    }
+    /** Turn pages' finger: on its lift a swipe across the page turns it, as inside a notebook ({@link NotebookLayout#swipe}). */
+    private boolean fingerTurn(MotionEvent event, int index, boolean ended) {
+        if (!ended) return true;
+        drawFinger = -1;
+        float density = getResources().getDisplayMetrics().density;
+        int by = NotebookLayout.swipe((event.getX(index) - fingerDownX) / density, (event.getY(index) - fingerDownY) / density);
+        if (by != 0) { app.inkWashBar.closePanel(); app.turnPage(by); }
         return true;
     }
     /** Whether the stroke in progress is the finger's. */

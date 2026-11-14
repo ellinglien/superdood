@@ -529,8 +529,10 @@ final class DrawLayout {
      */
     static final class Row {
         final String key, words, icon;
-        final boolean marked;
-        Row(String key, String words, String icon, boolean marked) { this.key = key; this.words = words; this.icon = icon; this.marked = marked; }
+        final boolean marked, greyed;
+        Row(String key, String words, String icon, boolean marked) { this(key, words, icon, marked, false); }
+        /** {@code greyed}: shown in grey, a tap passes it by (Send to the Fridge on a closed word's page). */
+        Row(String key, String words, String icon, boolean marked, boolean greyed) { this.key = key; this.words = words; this.icon = icon; this.marked = marked; this.greyed = greyed; }
         static final Row LINE = new Row(null, null, null, false);
     }
     /**
@@ -554,7 +556,8 @@ final class DrawLayout {
             rows.add(new Row("settings", NOTEBOOK_SETTINGS, "ic_ph_page_star", false));
             rows.add(Row.LINE);
             rows.add(new Row("exportPage", LibraryCard.EXPORT_PAGE, "ic_ph_upload_square", false));
-            // The Fridge (2026-11-06, Iconoir post): the Manta's alone, after Export Page, another way out for the page.
+            // The Fridge (2026-11-06, Iconoir post): the Manta's alone, after Export Page, another way out for the page; never
+            // a cover's, greyed on a closed word's prompt page (PaintActivity.fileMenu, Prompts.sendRow).
             if (column) rows.add(new Row("fridge", Fridge.ROW, "ic_ph_post", false));
         }
         rows.add(new Row("import", PictureImport.IMPORT, "ic_ph_download", false));

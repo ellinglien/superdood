@@ -125,6 +125,7 @@ final class NotebookScreens {
 
     boolean shown() { return mode != Mode.HIDDEN; }
     boolean onShelf() { return mode == Mode.SHELF; }
+    boolean onPages() { return mode == Mode.PAGES; }
 
     /** Shows the shelf, and reads it again from the library. */
     void showShelf() {
@@ -1101,7 +1102,9 @@ final class NotebookScreens {
     private void fillSettings(DrawingBook book) {
         NotebookOptions o = book.options();
         TracingPaper t = book.tracing();
-        Object shown = java.util.Arrays.asList(o, t.paper, t.strength, book.design(), app.drawingName, count(book), book.cover(), book.stacks().of(book.index()));
+        // Stop Taking Part's row in the Prompts notebook while this tablet takes part.
+        boolean takingPart = app.prompts(app.drawingName) && !app.prefs.fridgeTablet().isEmpty();
+        Object shown = java.util.Arrays.asList(o, t.paper, t.strength, book.design(), app.drawingName, count(book), book.cover(), book.stacks().of(book.index()), takingPart);
         if (shown.equals(settingsShown)) return;
         settingsShown = shown;
         settings.removeAllViews();
@@ -1109,8 +1112,9 @@ final class NotebookScreens {
         LibraryCard.Layout l = LibraryCard.settingsLayout(layout.width - 2 * layout.margin, layout.spreadHeight, name);
         TextView named = text(name, TypeStyle.TITLE);
         named.setTextSize(l.titleSp); named.setMaxLines(l.titleLines);
-        // Favourites is never renamed or deleted (NotebookStrip.FAVOURITES): no Rename, no Delete Notebook.
-        boolean kept = NotebookStrip.favourites(app.drawingName);
+        // Favourites is never renamed or deleted (NotebookStrip.FAVOURITES): no Rename, no Delete Notebook. The Prompts
+        // notebook is never renamed (its path is how it is found), but may be deleted.
+        boolean favourites = NotebookStrip.favourites(app.drawingName), kept = favourites || app.prompts(app.drawingName);
         if (!kept) named.setContentDescription(name + ". " + LibraryCard.RENAME);
         if (!kept) named.setOnClickListener(v -> tapSetting(LibraryCard.Part.NAME));
         settings.addView(named, sized(-1, -2));
@@ -1137,7 +1141,7 @@ final class NotebookScreens {
         LabButton export = new LabButton(app, 0, PictureImport.EXPORT_NOW, false), delete = new LabButton(app, 0, LibraryCard.DELETE_NOTEBOOK, false);
         export.setOnClickListener(v -> { if (app.book == book && selector == null) app.exportNow(export); });
         delete.setOnClickListener(v -> { if (app.book == book && !app.busy() && selector == null) app.deleteNotebook(app.drawingName); });
-        delete.setVisibility(kept ? View.GONE : View.VISIBLE);
+        delete.setVisibility(favourites ? View.GONE : View.VISIBLE);
         for (LabButton b : new LabButton[]{export, delete}) {
             b.setMinHeight(0); b.setMinimumHeight(0);
             LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-2, dp(LibraryCard.actionHeight(l.rowHeight)));
@@ -1145,6 +1149,21 @@ final class NotebookScreens {
             actions.addView(b, at);
         }
         settings.addView(actions, sized(-1, Math.round(l.rowHeight)));
+        // The Prompts notebook while this tablet takes part (the Prompts, 2026-11-13): Stop Taking Part, asked first.
+        if (takingPart) {
+            LabButton stop = new LabButton(app, 0, Fridge.STOP, false);
+            stop.setMinHeight(0); stop.setMinimumHeight(0);
+            stop.setOnClickListener(v -> {
+                if (app.book != book || app.busy() || selector != null) return;
+                app.showDialog(new AlertDialog.Builder(app).setTitle(Fridge.STOP_ASK).setMessage(Fridge.STOP_ABOUT)
+                        .setPositiveButton(Fridge.STOP, (d, w) -> app.stopTakingPart(() -> { if (app.book == book) fillSettings(book); }))
+                        .setNegativeButton(Fridge.CANCEL, null));
+            });
+            settings.addView(stop, sized(-2, dp(LibraryCard.actionHeight(l.rowHeight))));
+            TextView note = text(Fridge.STOP_NOTE, TypeStyle.CAPTION);
+            note.setTextColor(Theme.GREY_800);
+            settings.addView(note, sized(-1, -2));
+        }
         long edited = app.store.modified(app.drawingName);
         TextView foot = text(LibraryCard.foot(DrawingNames.isoDate(DrawingFiles.name(app.drawingName)),
                 edited <= 0 ? null : java.time.Instant.ofEpochMilli(edited).atZone(java.time.ZoneId.systemDefault()).toLocalDate(), count(book)), TypeStyle.CAPTION);

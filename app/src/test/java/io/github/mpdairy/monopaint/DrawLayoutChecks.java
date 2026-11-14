@@ -134,10 +134,11 @@ public final class DrawLayoutChecks {
             check(rows.equals(java.util.Arrays.asList(NotebookLayout.OPEN_NOTEBOOK, DrawLayout.NOTEBOOK_SETTINGS, "|", LibraryCard.EXPORT_PAGE, Fridge.ROW, PictureImport.IMPORT, EraseKind.SHOW_KINDS, "|",
                                     "Draw Together", SandTimer.NAME, DrawLayout.PLAY, "|", DrawLayout.LEFT_HANDED, SystemSettings.TITLE))
                             && menu.contains("DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing)")
-                            && menu.contains("exportMenu(anchor, book.stacks().of(book.index()))") && menu.contains("DrawingBook.isCover(book.index())) rows.removeIf(r -> \"exportPage\".equals(r.key) || \"fridge\".equals(r.key))")
+                            && menu.contains("exportMenu(anchor, book.stacks().of(book.index()))") && menu.contains("DrawingBook.isCover(book.index())) rows.removeIf(r -> \"exportPage\".equals(r.key) || \"fridge\".equals(r.key));")
+                            && menu.contains("Prompts.sendRow(fridgeWord(), openWords)") && !menu.contains("if (fridgeRow == null) rows.removeIf(")
                             && source("NotebookScreens").contains("app.exportMenu(export, place);") && app.split("\"export menu\"", -1).length == 2
                             && !app.contains("coverRows(") && app.contains("line.setBackgroundColor(Theme.GREY_400)"),
-                    "The menu (the owner's order, 2026-11-06): Notebook Explorer and Notebook Settings; Export Page (the page shown's, Page Settings' one menu, none on a cover, 2026-11-02), Import (pictures and PDFs, one row since 2026-10-29) and Show Kinds; Draw Together, the Sand Timer while it can be set and Play, marked while a toy is on; Left-Handed and System Settings; a grey-400 line between each; no Finger Action (System Settings'), Export Now, Rename, Delete or Replay Page rows: " + rows);
+                    "The menu (the owner's order, 2026-11-06): Notebook Explorer and Notebook Settings; Export Page (the page shown's, Page Settings' one menu, none on a cover, 2026-11-02), Send to the Fridge on every notebook's page, greyed on a closed word's (Prompts.sendRow, 2026-11-13), neither on a cover, Import (pictures and PDFs, one row since 2026-10-29) and Show Kinds; Draw Together, the Sand Timer while it can be set and Play, marked while a toy is on; Left-Handed and System Settings; a grey-400 line between each; no Finger Action (System Settings'), Export Now, Rename, Delete or Replay Page rows: " + rows);
             // Play the menu's row since 2026-11-06 (the column's button 2026-10-30 to 2026-11-06): its menu beside Menu, marked while a toy is on, read as the menu opens.
             check(menu.contains("case \"play\": actions[i] = () -> { if (!busy()) playMenu(anchor); };")
                             && menu.contains("DrawLayout.playOn(pad != null && (pad.words.open() || pad.text.on() || pad.shapesOn && !pad.lassoOn && !pad.dropperOn), mirrors.on())")
@@ -1138,12 +1139,12 @@ public final class DrawLayoutChecks {
     /**
      * Finger (what one finger does, {@link FingerTool}): the column's button again (the owner, 2026-10-26: "selecting
      * finger/eraser in dropdown menus is not the right way to do it"; "finger switch to toolbar. single tap to change"),
-     * no menu row; a tap its choices beside it. Its menu's rows (52 dp each: Nothing, Eraser, Smudge, Fill in and the nine slots) fit the height.
+     * no menu row; a tap its choices beside it. Its menu's rows (52 dp each: Nothing, Eraser, Smudge, Fill in, Turn pages and the nine slots) fit the height.
      * System Settings' Finger Action since 2026-11-06 (the owner: "move Finger Action out of this menu into System
      * Settings"): its choices chips, three a line, the slots by their brushes' names; the browser's menu keeps its row.
      */
     static void finger() {
-        check(FingerTool.Choice.values().length == 4 + ToolSlots.COUNT, "The finger's choices: Nothing, Eraser, Smudge, Fill in and the nine slots");
+        check(FingerTool.Choice.values().length == 5 + ToolSlots.COUNT, "The finger's choices: Nothing, Eraser, Smudge, Fill in, Turn pages and the nine slots");
         for (int[] s : SCREENS) check(FingerTool.Choice.values().length * 52 <= s[1] - 2 * DrawLayout.PAD, "The finger menu's rows fit the height at " + s[0] + "x" + s[1]);
         try {
             String app = source("PaintActivity");

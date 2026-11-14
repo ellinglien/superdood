@@ -96,17 +96,36 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   (2026-11-06, screen-reader action **Layer Visibility**): **Layer 3**, **Layer 2**, **Layer 1** top to bottom, the one
   drawn on marked, each with Show Kinds' eye (**Full**, **Half**, **Faint**, **Hidden**), said and noted "Layer 1 half";
   a stroke on a hidden layer is refused, "Layer 1 is hidden".
-- **Send to the Fridge** (2026-11-06, Iconoir post; `Fridge`, `FridgeWindow`): the menu's row after Export Page, the
-  Manta's alone, none on a cover. The first time a window headed **Send to the Fridge**, its words `Fridge.ABOUT`
-  (where, who sees it, Take it down, Nothing else is sent), **Send** and **Not Now**; System Settings' row **The
-  Fridge** (**On**, **Off**, "Off asks before sending"). Its window, headed the same: the page's preview, the fields
-  **Name** and **Caption**, the ticks **My Fridge** (the tablet's own unlisted page) and **The Fridge** (the shared
-  door), and on a page with a template **Template** (2026-11-10: off, the page goes on plain paper), **Send** ("Sending" while it goes), **Cancel**, **Sent Pages** while any are kept. My Fridge's first time: headed
-  **My Fridge**, "A short name for its link", **Name**, its link under it as typed (else "3 to 24 letters or digits"),
-  **Make**, **Cancel**. Sent: headed **Sent**, "On My Fridge now.", "On My Fridge now. On The Fridge once approved." or
-  "Waiting for approval.", the links, **Copy Link** ("Copied"), **Close**. The list headed **Sent to the Fridge**, a card
-  "Harbour, page 5, Nov 6, 2026" over its links, **Take Down** (asked "Take Down?", "This can't be undone."). Notes "Send
-  failed", "Too large", "Taken down", "Take down failed", or the server's own short words ("Try again later", "Name taken").
+- **The Prompts notebook** (2026-11-13; `Prompts`, `PromptsWindow`, `Fridge`, `FridgeWindow`): a notebook named
+  **#inktober52** on the shelf, never renamed. Opened before it is on, a window headed **#inktober52**: "Draw along with
+  #inktober52, a word a week.", in bold "This notebook uses the internet.", "It checks superdood.org for each week's word.",
+  "Nothing you draw leaves the tablet unless you choose Send to the Fridge.", small "superdood.org/privacy.html", **Turn On**
+  and **Not Now**. A page for each open word, its word across the top and "#inktober52 no. 45 · Nov 10–16" after it, no box (the owner, 2026-11-13). System Settings' row
+  **#inktober52** (**On**, **Off**; under it "Uses the internet: the week's #inktober52 word.").
+- **Send to the Fridge** (2026-11-06, Iconoir post; every notebook's again, 2026-11-13): the menu's row after Export
+  Page, on any page but a cover; greyed on a closed word's prompt page, the menu's note "This word is closed.". Its
+  window, headed the same: the page's small tilted preview; on a prompt page, the word and "no. 45 · open till Nov 23"
+  (elsewhere the page goes on plain paper, no word). The first time (the owner's
+  words, 2026-11-13): "We need to confirm your email address the first time you post. Superdood won't share it with
+  anyone.", the fields **Email**, **Name**, **Caption (optional)**, small "Privacy: superdood.org/privacy.html ·
+  Terms: superdood.org/terms.html", **Send Link** and **Cancel** (notes "That isn't an email address.", the server's
+  own); then "Waiting for you to tap the link in your email." till it sends. Confirmed: **Name**, **Caption
+  (optional)**, **Send** ("Sending" while it goes), **Cancel**, **Sent Pages** while any are kept. **Name** is required
+  (the owner, 2026-11-13: "that'll be the username"), the tablet's one name, filled in from the last one: **Send** and
+  **Send Link** are greyed while it's empty. Sent: headed **Sent**, "On the Fridge." ("Updated on the Fridge." when
+  the page was sent before and its card updated) or "Waiting for a look.", the link, **Copy Link** ("Copied"), **Close**. The list headed **Sent to
+  the Fridge**, a card "#inktober52, page 5, Nov 6, 2026" over its link, **Take Down** (asked "Take Down?", "This can't
+  be undone."). Notes "Send failed", "Too large", "Taken down", "Take down failed", "This word is closed.", or the
+  server's own short words ("Too many at once. Try again later.", "Too many today. Try again tomorrow.", "Confirm your
+  email first.", "Add a name.", "Please choose another name.").
+- **Fridge Name** (2026-11-13): System Settings' row once this tablet has taken part, its one chip the name (**Add
+  Name** before one); a tap opens the name prompt headed **Fridge Name** (**OK**, **Cancel**; empty, the field says "Add
+  a name."). Refused, the server's own words; unreachable, "Couldn't reach the Fridge. Try again with Wi-Fi.".
+- **Stop Taking Part** (2026-11-13): the Prompts notebook's Notebook Settings while the tablet takes part, under it small
+  "Deletes your email and your pages on the Fridge. Your notebook stays."; asked "Stop taking part?", "Your email and your
+  pages on the Fridge will be deleted. Your notebook stays on this tablet.", **Stop Taking Part**, **Cancel**; then "You've
+  stopped taking part." or "Couldn't reach the Fridge. Try again with Wi-Fi.". Deleting the notebook while taking part
+  adds "Your pages on the Fridge stay unless you also stop taking part." and **Delete and Stop Taking Part**.
 - **The page bar**: the page and its count as "3 / 24", a cover as **Cover** or **Back**; screen-reader text "Page 3 of
   24", "Front cover", "Back cover". Its buttons **Previous page**, **Next page** (inside a notebook also **First page** and **Last page**, 2026-11-10), **Notebook** and **New page** (the + tile after the last page,
   2026-10-24, its note in a full notebook "Notebook full, 250 pages"). On the
@@ -176,7 +195,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   notebook's name until 2026-11-02, the owner: "use it for system messages").
 - **Finger Action** (System Settings' row since 2026-11-06; the main menu's row from 2026-10-27, "Finger Action: Eraser",
   "Finger Action: Pan" in a No Erasing notebook; the side column's button from 2026-10-26): its chips **Nothing**,
-  **Eraser** (**Pan** in a No Erasing notebook), **Smudge**, the slots' brushes by name, three a line. The browser's menu
+  **Eraser** (**Pan** in a No Erasing notebook), **Smudge**, **Fill in**, **Turn pages** (a swipe across the page turns it, 2026-11-13), the slots' brushes by name, three a line. The browser's menu
   keeps its "Finger Action: Eraser" row. No button in the column.
 - **Draw Together** (the menu's last row, live branch `live-host` only, 2026-11-01, Share on Wi-Fi until 2026-11-02; marked while on): its window is
   headed **Draw Together**, each way in as its place in heading type over its code in title type (superdood.org and its
@@ -255,7 +274,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   while on: the column on the right), **System Settings** (2026-11-04, the owner's name for it; Iconoir settings) last: a popup where the menu was
   (2026-11-06; its own page with a bar ‹ **Back** until then), the title **System Settings** (no job line, "For every notebook." gone, 2026-11-06); its rows **Automatic Refresh** (**On**, **Off**; under it "After
   page turns, zoom and erasing"), **Finger Action** (above, 2026-11-06), **Two-Finger Tap** and **Three-Finger Tap** (**Undo**, **Redo**, **Refresh**,
-  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**), **Zen Fan** (2026-11-10; **Closes**, **Stays Open**; under it "When the pen draws on the page"), **Read Handwriting** (2026-11-09; **On**, **Off**; under it "For Search on the shelf"; asks first, in sentences, with **Turn On** and **Not Now**; a failed download says "Download failed" and shows Off). The shelf's Search (2026-11-09, beside the Tools page library's, the same words and the same field): **Search**, × **Close search**, no finds "Nothing found", "3 pages unread" (or "1 page unread") under the finds while some are still to read, results paged with the screen-reader words **Newer results** and **Older results**. Refresh is the column's word for a flash; the
+  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**), **Zen Fan** (2026-11-10; **Closes**, **Stays Open**; under it "When the pen draws on the page"), **Read Handwriting** (2026-11-09; **On**, **Off**; under it "For Search on the shelf"; asks first, in sentences, with **Turn On** and **Not Now**; a failed download says "Download failed" and shows Off), **#inktober52** (2026-11-13, the Prompts notebook's switch; above), **Fridge Name** (2026-11-13, once this tablet has taken part; above). The shelf's Search (2026-11-09, beside the Tools page library's, the same words and the same field): **Search**, × **Close search**, no finds "Nothing found", "3 pages unread" (or "1 page unread") under the finds while some are still to read, results paged with the screen-reader words **Newer results** and **Older results**. Refresh is the column's word for a flash; the
   owner's "flashes" stays out of the app's words. **Export Now** (the one way the PDF and PNGs are made) and **Delete Notebook**
   are Notebook Settings' foot, Rename its name's button. **Show Kinds** (2026-10-28, the column's eye until 2026-11-06,
   the menu's row since, its popup beside the column; the page drawn on's: **Pen**, **Paint**, **Dry Media** side by side, each eye

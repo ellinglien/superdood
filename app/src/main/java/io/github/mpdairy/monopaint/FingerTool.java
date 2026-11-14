@@ -31,11 +31,13 @@ final class FingerTool {
      */
     enum Choice {
         NOTHING("nothing", "Nothing"), ERASER("eraser", "Eraser"), SMUDGE("smudge", "Smudge"), FILL("fill", ToolSlots.FILL_TOOL),
+        // A swipe across the page turns it, as inside a notebook (the owner, 2026-11-13).
+        TURN("turn", "Turn pages"),
         SLOT_1("slot1", null), SLOT_2("slot2", null), SLOT_3("slot3", null),
         SLOT_4("slot4", null), SLOT_5("slot5", null), SLOT_6("slot6", null), SLOT_7("slot7", null), SLOT_8("slot8", null),
         SLOT_9("slot9", null);
         final String key;
-        /** Nothing's, Eraser's, Smudge's and Fill in's label; null for a slot. */
+        /** Nothing's, Eraser's, Smudge's, Fill in's and Turn pages' label; null for a slot. */
         private final String label;
         Choice(String key, String label) { this.key = key; this.label = label; }
         /** Whether it draws with a slot's brush. */
@@ -47,7 +49,7 @@ final class FingerTool {
         /** The bar's tool the finger draws with ({@link ToolSlots#ERASER}, {@link ToolSlots#SMUDGE}, {@link ToolSlots#FILL} or a slot); -1 for nothing. */
         int tool() {
             switch (this) {
-                case NOTHING: return -1;
+                case NOTHING: case TURN: return -1;
                 case ERASER: return ToolSlots.ERASER;
                 case SMUDGE: return ToolSlots.SMUDGE;
                 case FILL: return ToolSlots.FILL;
@@ -56,7 +58,7 @@ final class FingerTool {
         }
         /** The choice that draws with the bar's tool {@code tool} (a slot, the eraser or the smudge tool); Nothing for any other. */
         static Choice of(int tool) {
-            for (Choice c : values()) if (c != NOTHING && c.tool() == tool) return c;
+            for (Choice c : values()) if (tool >= 0 && c.tool() == tool) return c;
             return NOTHING;
         }
         /** The choice kept as {@code key}; the eraser (what a finger always did) for none or one that doesn't read. */

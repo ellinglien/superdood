@@ -37,13 +37,13 @@ public final class NotebookStripChecks {
         LocalDate today = LocalDate.of(2026, 11, 1);
         check(NotebookStrip.about(1, null, today).equals("1 page · today") && NotebookStrip.about(24, today.minusDays(1), today).equals("24 pages · yesterday")
                 && NotebookStrip.about(3, LocalDate.of(2026, 10, 17), today).equals("3 pages · Oct 17"), "a tile's words");
-        // nameSign is [\p{L}\p{N} _-] for every char of the Basic Multilingual Plane and some beyond.
-        java.util.regex.Pattern sign = java.util.regex.Pattern.compile("[\\p{L}\\p{N} _-]");
+        // nameSign is [\p{L}\p{N} _#-] for every char of the Basic Multilingual Plane and some beyond.
+        java.util.regex.Pattern sign = java.util.regex.Pattern.compile("[\\p{L}\\p{N} _#-]");
         for (int c = 0; c < 0x20000; c++) {
             if (Character.isSurrogate((char) Math.min(c, 0xffff)) && c <= 0xffff) continue;
             check(DrawingFiles.nameSign(c) == sign.matcher(new String(Character.toChars(c))).matches(), "nameSign " + Integer.toHexString(c));
         }
-        check(DrawingFiles.signsAsSpaces("Harbour, «Sketches»!").equals("Harbour, «Sketches»!".replaceAll("[^\\p{L}\\p{N} _-]+", " ")) && NotebookMigration.safeName("a,,b", "x").equals("a b"), "other signs as one space");
-        System.out.println("PASS: inside a notebook, the strip's slots (the card, the covers, the pages, +) and turns; Delete Page on the page drawn on draws on the next, never a cover; a tile's \"24 pages · yesterday\"; a name's letters, numbers, spaces, - and _ told as the Unicode regex told them");
+        check(DrawingFiles.signsAsSpaces("Harbour, «Sketches»!").equals("Harbour, «Sketches»!".replaceAll("[^\\p{L}\\p{N} _#-]+", " ")) && NotebookMigration.safeName("a,,b", "x").equals("a b"), "other signs as one space");
+        System.out.println("PASS: inside a notebook, the strip's slots (the card, the covers, the pages, +) and turns; Delete Page on the page drawn on draws on the next, never a cover; a tile's \"24 pages · yesterday\"; a name's letters, numbers, spaces, #, - and _ told as the Unicode regex told them");
     }
 }

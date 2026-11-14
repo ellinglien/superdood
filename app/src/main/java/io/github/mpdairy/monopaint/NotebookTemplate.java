@@ -98,11 +98,20 @@ final class NotebookTemplate {
             String name = key.substring(MINE.length()), dot = name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : name;
             return new NotebookTemplate(key, dot.isEmpty() ? name : dot);
         }
+        if (key.startsWith(PROMPT)) {
+            String[] f = key.substring(PROMPT.length()).split("\\|", -1);
+            if (f.length == 4 && !f[0].isEmpty() && !f[2].isEmpty()) return new NotebookTemplate(key, f[2]);
+            return BLANK;
+        }
         if (key.startsWith(RANDOM.key + SET)) return new NotebookTemplate(key, RANDOM.label);
         return BLANK;
     }
     /** Whether this is Random (with or without a set). */
     boolean random() { return key.equals(RANDOM.key) || key.startsWith(RANDOM.key + SET); }
+    /** A Prompts page's key's prefix (Prompts.key): prompt:<slug>|<number>|<word>|<week>. */
+    static final String PROMPT = "prompt:";
+    /** Whether this is a Prompts page's band (the owner, 2026-11-13: the word "cannot be drawn over or erased"). */
+    boolean prompt() { return key.startsWith(PROMPT); }
     /** Whether this is one of the owner's own templates. */
     boolean own() { return key.startsWith(MINE); }
     /** Random's set: the templates it draws from (empty: any built-in but Blank). */
@@ -146,6 +155,7 @@ final class NotebookTemplate {
     byte[] guides(int width, int height) {
         if (this == BLANK || random()) return null;
         if (own()) return picture(width, height);
+        if (prompt()) return band(width, height);
         byte[] tones = new byte[width * height];
         Arrays.fill(tones, (byte) NONE);
         int line = Math.max(1, (int) Math.round(LINE * width / 1920.0));
@@ -264,6 +274,29 @@ final class NotebookTemplate {
                 if (rows[r].charAt(k) == '1') fill(tones, width, x + k * cell, y + r * cell, x + (k + 1) * cell, y + (r + 1) * cell, PANEL);
             x += 4 * cell;
         }
+    }
+
+    /**
+     * A Prompts page's band: the word large across the page's top and "#inktober52 no. 46 · Nov 12–18" small after it,
+     * in ink, no box round them (the owner, 2026-11-13: "i just wanted to not have the box"); the page below them blank.
+     * The letters are the app's ({@link NotebookCovers#lettering}; none on the desktop, unless a check sets one).
+     */
+    private byte[] band(int width, int height) {
+        String[] f = key.substring(PROMPT.length()).split("\\|", -1);
+        byte[] tones = new byte[width * height];
+        Arrays.fill(tones, (byte) NONE);
+        NotebookCovers.Lettering letters = NotebookCovers.lettering;
+        if (letters != null) {
+            int side = Math.round(width * .04f), top = Math.round(height * .02f), tall = Math.round(height * .055f), right = width - side;
+            float big = tall * .6f, small = tall * .28f, base = top + tall * .72f;
+            String said = "#inktober52" + (f[1].isEmpty() ? "" : " no. " + f[1]) + " · " + f[3];
+            List<NotebookCovers.Words> words = Arrays.asList(
+                    new NotebookCovers.Words(f[2], side, base, big, 700),
+                    new NotebookCovers.Words(said, right - width * .42f, base, small, 400));
+            letters.letter(tones, width, height, new NotebookCovers.Label(side, top, right - side, tall,
+                    0, 0, 0, 0, 0, 0, 0, 0, new int[0], f[2], big, words));
+        }
+        return tones;
     }
 
     /** A hairline frame from (x0, y0) to (x1, y1), exclusive, {@code line} thick inside. */

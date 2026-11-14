@@ -5,6 +5,26 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.3 (2026-11-14)
+
+- **#inktober52 on the Fridge** (2026-11-13, the owner): the Fridge is a weekly drawing challenge now, drawing along
+  with @inktober's #inktober52 word. System Settings' **#inktober52** row (Off till turned on) puts a notebook named
+  #inktober52 on the shelf with a page for each week's word, the word and its dates at the top. The first send confirms
+  an email address once per tablet; each post goes up "by" the tablet's name (required, changed in System Settings'
+  **Fridge Name**). Personal fridges are gone; superdood.org/fridge is one wall, newest first.
+- **Send to the Fridge from any page** (2026-11-13): a prompt page posts with its word; any other page posts on plain
+  paper with no word. Sending the same page again updates its card in place.
+- **Nomad Size** (2026-11-13, the owner: "a mode where manta users could draw like it was a nomad"): System Settings'
+  new row on the Manta shows the Nomad's screen at its real size, centred, with the Nomad's controls.
+- **Turn pages with a finger** (2026-11-13): Finger Action's new **Turn pages** choice: a one-finger swipe across the
+  page turns it.
+- **Safer saves** (2026-11-14, after a notebook came back damaged when the app was stopped mid-save): a save is written
+  beside the notebook and read back whole before it replaces anything, and the save before it is kept. A notebook
+  found damaged opens its previous save instead ("Opened the 3:28 save"), the damaged file set aside.
+- **The eraser erases as the pen touches on a page with crayon or masking fluid** (2026-11-14, the owner: "keep it the
+  one way"): any wax or fluid on the page had made it wait for the lift. Where it lifts fluid, that still shows at lift.
+- **#** is allowed in notebook names.
+
 ## 1.2.5 (2026-11-12)
 
 - **Start Here for the Nomad** (2026-11-12, a Nomad owner on Reddit: arrows "don't quite line up"): a new install on a

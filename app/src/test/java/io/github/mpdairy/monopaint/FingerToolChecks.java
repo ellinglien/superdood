@@ -3,16 +3,17 @@ package io.github.mpdairy.monopaint;
 public final class FingerToolChecks {
     public static void main(String[] args) {
         choices(); refused(); cancels(); starts(); palms(); taps();
-        System.out.println("PASS: one finger does Nothing, Eraser (what it always did, the choice at first), Smudge, Fill in or a slot's brush, kept under its key; it never draws while the pen is down or near, for a palm-sized contact or before it moves; a second finger, the pen landing or a contact swelling to a palm's takes it back, a pressing fingertip's stroke kept; a two- or three-finger tap is ignored while the pen is near and for a second after");
+        System.out.println("PASS: one finger does Nothing, Eraser (what it always did, the choice at first), Smudge, Fill in, Turn pages or a slot's brush, kept under its key; it never draws while the pen is down or near, for a palm-sized contact or before it moves; a second finger, the pen landing or a contact swelling to a palm's takes it back, a pressing fingertip's stroke kept; a two- or three-finger tap is ignored while the pen is near and for a second after");
     }
     static void choices() {
         FingerTool.Choice[] all = FingerTool.Choice.values();
-        check(all.length == 4 + ToolSlots.COUNT, "Nothing, Eraser, Smudge, Fill in and the nine slots");
+        check(all.length == 5 + ToolSlots.COUNT, "Nothing, Eraser, Smudge, Fill in, Turn pages and the nine slots");
+        check(FingerTool.Choice.TURN.tool() == -1 && !FingerTool.Choice.TURN.slot() && FingerTool.Choice.of(-1) == FingerTool.Choice.NOTHING, "Turn pages draws nothing, and no tool is it");
         check(FingerTool.Choice.NOTHING.tool() == -1 && FingerTool.Choice.ERASER.tool() == ToolSlots.ERASER && FingerTool.Choice.SMUDGE.tool() == ToolSlots.SMUDGE
                         && FingerTool.Choice.FILL.tool() == ToolSlots.FILL && FingerTool.Choice.of(ToolSlots.FILL) == FingerTool.Choice.FILL && !FingerTool.Choice.FILL.slot(),
                 "Nothing draws nothing; Eraser, Smudge and Fill in draw with the bar's eraser, smudge tool and Fill in");
         for (int slot = 0; slot < ToolSlots.COUNT; slot++) {
-            FingerTool.Choice c = all[4 + slot];
+            FingerTool.Choice c = all[5 + slot];
             // No numbers (the owner, 2026-10-19): a slot's choice is called by the brush in it.
             int s = slot;
             check(c.tool() == slot && c.slot() && c.label(i -> i == s ? "Brush pen" : "?").equals("Brush pen") && c.key.equals("slot" + (slot + 1)),

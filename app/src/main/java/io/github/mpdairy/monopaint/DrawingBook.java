@@ -216,6 +216,7 @@ final class DrawingBook {
      * own template (or Random) puts it back to the notebook's (under Random, a new pick).
      */
     void setPageTemplate(int i,NotebookTemplate t){
+        if(template(i).prompt())return; // a Prompts page keeps its word (the owner, 2026-11-13: it "cannot be drawn over or erased")
         if(isCover(i)||i<0||i>=count())return;
         // A stack's guides are its bottom page's.
         i=stacks().bottom(i);

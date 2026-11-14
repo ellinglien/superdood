@@ -14,6 +14,11 @@ Notebooks are saved as you draw, in `Document/Superdood` on the tablet; PNG and 
 you ask (Export). The copies are grey, as the tablet is, but for what a Second Ink brush drew: that shows in the
 notebook's Second Ink (Notebook Settings: Blue, Sepia, Red, Green, Violet), there and on the Fridge.
 
+The shelf holds a notebook named **#inktober52**, the Prompts notebook. Opened the first time, it asks to turn on,
+since it uses the internet. Then it adds a page a week, the #inktober52 word, its number and its week across its top.
+**Send to the Fridge** (the menu) sends any page to superdood.org/fridge, a prompt page under its word; the first time, it confirms your email.
+**Stop Taking Part**, in its Notebook Settings, deletes your email and your pages on the Fridge; the notebook stays.
+
 ## The drawing screen
 
 <img src="images/tour/zen-fan.png" alt="Zen Mode with the fan open in the corner: sizes, greys, page previews and the tools on the arc" width="360">
@@ -29,7 +34,7 @@ notebook's Second Ink (Notebook Settings: Blue, Sepia, Red, Green, Violet), ther
   box for the size and grey of the tool in hand, and a few small buttons (Play, the timer, show or hide each kind of
   mark), used the same way. The page bar, along the top, has the notebook, Zoom and the page count, which opens the
   page previews.
-- **Fingers**: one finger does what the menu's Finger Action row says (Eraser, Smudge, a brush, or Nothing); two fingers tap to undo,
+- **Fingers**: one finger does what the menu's Finger Action row says (Eraser, Smudge, a brush, Turn pages, or Nothing; Turn pages turns the page with a swipe left or right); two fingers tap to undo,
   three to redo; with Zoom unlocked, two fingers pinch and pan; locked, they still pan (sideways a page is taller than the screen), never zoom.
 - **Play** opens the mischief: Text, Magnetic Poetry (fridge-poetry words), Shapes, Spirograph, Mirrors that copy
   each stroke, and **Replay Page**, which draws a page again, stroke by stroke.

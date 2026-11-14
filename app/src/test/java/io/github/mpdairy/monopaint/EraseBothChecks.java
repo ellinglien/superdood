@@ -83,6 +83,30 @@ public final class EraseBothChecks {
         check(stroke.finish(), "The erase changes the page");
         for (int y = 0; y < 150; y++) for (int x = 0; x < 200; x++)
             check(doc.compositeTone(x, y) == predicted[y * 200 + x], "The page after the lift is what the preview showed, at " + x + "," + y);
+        // Over masking fluid or wax somewhere on the page (the owner, 2026-11-14: crayon's wax made it erase only at lift):
+        // it previews as it goes, the fluid it lifts showing at lift, and what it shows is what the page is after.
+        ToneDocument waxed = InkWashLayers.blank(200, 150);
+        waxed.selectLayer(InkWashLayers.WASH); waxed.begin();
+        for (int y = 20; y < 130; y++) for (int x = 10; x < 190; x++) waxed.setTone(x, y, 150 + (x + y) % 60);
+        waxed.finish();
+        waxed.paintMaskingFluid(true); waxed.begin();
+        for (int y = 40; y < 90; y++) for (int x = 120; x < 160; x++) waxed.setTone(x, y, 0);
+        waxed.finish(); waxed.paintMaskingFluid(false);
+        check(waxed.hasMask(), "The page holds fluid");
+        EraseBothStroke rub = new EraseBothStroke(waxed, 30f);
+        check(rub.previews(), "A page with fluid or wax on it previews erasing as it goes");
+        for (int x = 20; x < 180; x += 4) rub.sample(x, 65, 0, Float.NaN, Float.NaN);
+        int[] showing = new int[200 * 150];
+        rub.erasedTones(0, 0, 200, 150, showing);
+        check(showing[65 * 200 + 40] == 255 && showing[65 * 200 + 140] == -1, "Paint goes under the eraser at once; where it lifts fluid, the page waits for the lift");
+        int[] before = new int[200 * 150];
+        for (int y = 0; y < 150; y++) for (int x = 0; x < 200; x++) before[y * 200 + x] = waxed.compositeTone(x, y);
+        check(rub.finish(), "The erase changes the page");
+        for (int y = 0; y < 150; y++) for (int x = 0; x < 200; x++) {
+            int shown = showing[y * 200 + x];
+            check(waxed.compositeTone(x, y) == (shown >= 0 ? shown : before[y * 200 + x]),
+                    "The page after the lift is what the preview showed, at " + x + "," + y);
+        }
         // Over other pairs: every pair is erased under it (the owner, 2026-11-05), and the preview shows the page so.
         ToneDocument pairs = InkWashLayers.blank(200, 150);
         InkWashLayers.add(pairs, true); InkWashLayers.add(pairs, true);

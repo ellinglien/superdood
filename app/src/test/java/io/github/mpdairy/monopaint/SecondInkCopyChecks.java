@@ -169,8 +169,13 @@ public final class SecondInkCopyChecks {
         check(b.key(0) == crc && s.key(1) == crc && b.key(1) != crc && s.key(0) != crc && s.crc != crc, "a copy's key is its page's in its own ink only");
         for (ExportSize size : ExportSize.values()) for (String choice : new String[]{PageExport.PNG, PageExport.PDF})
             check(Arrays.equals(copy(none, choice, size, BLUE), copy(none, choice, size, SEPIA)), "a page without second ink is the same copy in any ink: " + choice + " " + size);
-        byte[] fridge = Fridge.png("Ink", 0, W, H, packed(inked), SEPIA, null, null, PageExportChecks.tiles(), false);
+        byte[] fridge = Fridge.png("Ink", 0, W, H, packed(inked), SEPIA, null, null, PageExportChecks.tiles(), true);
         check(colour(fridge) && pixels(fridge)[30 * W + 30] == SecondInk.rgb(1), "the Fridge's page is in the notebook's ink");
+        // A word's post keeps the page's template; any other goes on plain paper (2026-11-13).
+        List<String> lined = Collections.singletonList("=lined");
+        byte[] plainPaper = Fridge.png("Ink", 0, W, H, packed(inked), SEPIA, lined, null, PageExportChecks.tiles(), false);
+        check(Arrays.equals(plainPaper, Fridge.png("Ink", 0, W, H, packed(inked), SEPIA.withTemplate(NotebookTemplate.BLANK), null, null, PageExportChecks.tiles(), true))
+                && !Arrays.equals(plainPaper, Fridge.png("Ink", 0, W, H, packed(inked), SEPIA, lined, null, PageExportChecks.tiles(), true)), "the Fridge's page on plain paper but for a word's post");
     }
 
     /** Social and High Res: the same colours at their sizes; High Res's sharp lines black over the ink. */

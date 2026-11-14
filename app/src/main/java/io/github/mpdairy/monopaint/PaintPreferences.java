@@ -12,7 +12,12 @@ import java.util.List;
 final class PaintPreferences {
     static final String FILE = "painting";
     final SharedPreferences store;
-    PaintPreferences(SharedPreferences store) { this.store = store; }
+    PaintPreferences(SharedPreferences store) {
+        this.store = store;
+        // Personal fridges are gone (2026-11-13): their consent, slug and key mean nothing to the new server.
+        if (store.contains("fridge_agreed") || store.contains("fridge_slug") || store.contains("fridge_key"))
+            store.edit().remove("fridge_agreed").remove("fridge_slug").remove("fridge_key").apply();
+    }
 
     private boolean flag(String key, boolean fallback) { return store.getBoolean(key, fallback); }
     private void setFlag(String key, boolean value) { store.edit().putBoolean(key, value).apply(); }
@@ -52,27 +57,33 @@ final class PaintPreferences {
      */
     boolean autoRefresh() { return flag("auto_refresh", false); } // off at first (the owner, 2026-11-05: "it's seeming ok")
     void setAutoRefresh(boolean value) { setFlag("auto_refresh", value); }
-    /** The Fridge ({@link Fridge}): its first time's words agreed to (System Settings' The Fridge, On); Off asks again. */
     /** Zen Mode as last left: a new install starts without it, in the side bar the Start Here guide shows (the owner, 2026-11-09). */
     boolean zen() { return flag("zen_on", false); }
     void setZen(boolean value) { setFlag("zen_on", value); }
     /** System Settings' Zen Fan: whether the fan stays open while the pen draws on the page (closes at first, 2026-11-10). */
     boolean zenFanStays() { return flag("zen_fan_stays", false); }
     void setZenFanStays(boolean value) { setFlag("zen_fan_stays", value); }
-    boolean fridgeAgreed() { return flag("fridge_agreed", false); }
-    void setFridgeAgreed(boolean value) { setFlag("fridge_agreed", value); }
+    /** System Settings' #inktober52 (the Prompts, 2026-11-13): the week's words fetched and Send to the Fridge shown; Off at first. Off deletes nothing. */
+    boolean promptsOn() { return flag("prompts_on", false); }
+    void setPromptsOn(boolean value) { setFlag("prompts_on", value); }
+    /** Whether the Prompts notebook has been given (put on the shelf) once. */
+    boolean promptsGiven() { return flag("prompts_given", false); }
+    void setPromptsGiven(boolean value) { setFlag("prompts_given", value); }
+    /** The Prompts notebook's path; "" before it is made. */
+    String promptsPath() { return store.getString("prompts_path", ""); }
+    void setPromptsPath(String value) { store.edit().putString("prompts_path", value).apply(); }
+    /** This tablet's key from the Fridge's {@code api/confirm} ({@link Fridge#confirm}); "" before. Kept here alone: never shown or logged. */
+    String fridgeTablet() { return store.getString("fridge_tablet", ""); }
+    void setFridgeTablet(String value) { store.edit().putString("fridge_tablet", value).apply(); }
+    /** This tablet's name on the Fridge (the owner, 2026-11-13: "require a name for sending to the fridge.. that'll be the username"): saved on a send and by System Settings' Fridge Name; "" before. */
+    String fridgeName() { return store.getString("fridge_name", ""); }
+    void setFridgeName(String value) { store.edit().putString("fridge_name", value).apply(); }
     /** Read Handwriting (System Settings): On only once its first-time words are agreed to. */
     boolean readHandwriting() { return flag("read_handwriting", false); }
     void setReadHandwriting(boolean value) { setFlag("read_handwriting", value); }
     /** The cards sent from this tablet ({@link Fridge#encode}), so each can be taken down. */
     String fridgeCards() { return store.getString("fridge_cards", ""); }
     void setFridgeCards(String value) { store.edit().putString("fridge_cards", value).apply(); }
-    /** My Fridge's slug and key ({@link Fridge#own}), or null before it is made. The key stays here alone: never shown or logged. */
-    String[] fridgeOwn() {
-        String slug = store.getString("fridge_slug", null), key = store.getString("fridge_key", null);
-        return slug == null || key == null ? null : new String[]{slug, key};
-    }
-    void setFridgeOwn(String[] own) { store.edit().putString("fridge_slug", own[0]).putString("fridge_key", own[1]).apply(); }
     /** System Settings' Two-Finger Tap and Three-Finger Tap ({@link FingerTool.Tap}): Undo and Redo at first. */
     FingerTool.Tap twoFingerTap() { return FingerTool.Tap.saved(store.getString(FingerTool.TWO_TAP, ""), FingerTool.TWO_FIRST); }
     FingerTool.Tap threeFingerTap() { return FingerTool.Tap.saved(store.getString(FingerTool.THREE_TAP, ""), FingerTool.THREE_FIRST); }

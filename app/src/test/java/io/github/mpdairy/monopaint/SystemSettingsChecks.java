@@ -33,7 +33,7 @@ public final class SystemSettingsChecks {
         check(EdgeHold.Choice.LASSO.label.equals(DrawLayout.LASSO), "Lasso is the column's Lasso");
     }
     static void words() {
-        String[] labels = {SystemSettings.TITLE, SystemSettings.AUTO_REFRESH, SystemSettings.TWO_TAP, SystemSettings.THREE_TAP, SystemSettings.EDGE_HOLD, SystemSettings.ON, SystemSettings.OFF, SystemSettings.READ_HANDWRITING, SystemSettings.TURN_ON};
+        String[] labels = {SystemSettings.TITLE, SystemSettings.AUTO_REFRESH, SystemSettings.TWO_TAP, SystemSettings.THREE_TAP, SystemSettings.EDGE_HOLD, SystemSettings.ON, SystemSettings.OFF, SystemSettings.READ_HANDWRITING, SystemSettings.TURN_ON, SystemSettings.FRIDGE_NAME, SystemSettings.ADD_NAME};
         for (String l : labels) check(l.split(" ").length <= 3 && l.matches("[A-Z][A-Za-z-]*( [A-Z][A-Za-z-]*)*"), l + ": a label, Title Case, three words at most (docs/TEXT-STYLE.md)");
         for (FingerTool.Tap t : FingerTool.Tap.values()) check(t.label.matches("[A-Z][a-z]+"), t.label + ": a chip's one word");
         for (EdgeHold.Choice c : EdgeHold.Choice.values()) check(c.label.matches("[A-Z][a-z]+"), c.label + ": a chip's one word");
@@ -55,6 +55,8 @@ public final class SystemSettingsChecks {
         check(source("BrushTestPad").contains("SystemSettings.flashes(false,") && !source("BrushTestPad").contains("Ui.cleanWindow("), "The test area's redraw asks the gate");
         check(bar.contains("app.pad.refreshAsked(\"Refresh button\")") && pad.contains("else refreshAsked(tap.label + \" tap\");"), "Refresh, the button or a tap, is asked for");
         check(bar.contains("EdgeHold.Choice choice = app.prefs.edgeHold();"), "The edge strip hold reads its choice");
+        check(source("SystemSettingsPanel").contains("if (app.canSimulate())\n            row(app, list, SystemSettings.NOMAD_SIZE,") && source("SystemSettingsPanel").contains("i -> app.setSimulating(i == 0));"), "Nomad Size: one row, only on a tablet that simulates one, switching the simulation");
+        check(source("SystemSettingsPanel").contains("if (!prefs.fridgeTablet().isEmpty())\n            row(app, list, SystemSettings.FRIDGE_NAME, null, new String[]{"), "Fridge Name: one row, only once this tablet has the Fridge's key");
         int flashes = 0;
         for (java.io.File f : new java.io.File("app/src/main/java/io/github/mpdairy/monopaint").listFiles())
             if (f.getName().endsWith(".java") && !f.getName().equals("Ui.java"))

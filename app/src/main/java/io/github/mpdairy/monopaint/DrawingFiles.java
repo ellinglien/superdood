@@ -16,7 +16,7 @@ final class DrawingFiles {
     /** The most letters a file name holds. */
     static final int NAME_MOST = 64;
     /** {@link #NAME_RULES} for a name that may be {@code most} letters long (fewer where the app adds to what is typed). */
-    static String nameRules(int most) { return "Use 1–" + most + " letters, numbers, spaces, - or _; _recovery is reserved"; }
+    static String nameRules(int most) { return "Use 1–" + most + " letters, numbers, spaces, #, - or _; _recovery is reserved"; }
     private final File root;
 
     DrawingFiles(File root) { this.root = root; }
@@ -27,12 +27,12 @@ final class DrawingFiles {
                 && !name.equals("_recovery");
     }
     /**
-     * Whether a name may hold {@code c}: a letter, a number, a space, - or _ (the regex [\\p{L}\\p{N} _-], spelled out:
-     * the browser's Java has no Unicode classes in its regexes).
+     * Whether a name may hold {@code c}: a letter, a number, a space, #, - or _ (the regex [\\p{L}\\p{N} _#-], spelled out:
+     * the browser's Java has no Unicode classes in its regexes). # for the Prompts notebook's name ({@link Prompts#NOTEBOOK}).
      */
     static boolean nameSign(int c) {
         int t = Character.getType(c);
-        return Character.isLetter(c) || t == Character.DECIMAL_DIGIT_NUMBER || t == Character.LETTER_NUMBER || t == Character.OTHER_NUMBER || c == ' ' || c == '_' || c == '-';
+        return Character.isLetter(c) || t == Character.DECIMAL_DIGIT_NUMBER || t == Character.LETTER_NUMBER || t == Character.OTHER_NUMBER || c == ' ' || c == '_' || c == '-' || c == '#';
     }
     /** {@code name} with every run of other signs ({@link #nameSign}) as one space. */
     static String signsAsSpaces(String name) {
@@ -111,19 +111,72 @@ final class DrawingFiles {
             if (!from.renameTo(to)) throw new IOException("Could not rename " + name(path));
             sibling(from, ".new").delete();
         }
+        // Its previous save and a damaged file set aside go with it, so a notebook given the old name never finds them.
+        for (File part : new File[]{previous(from), damaged(from)})
+            if (part.exists() && !part.renameTo(sibling(to, part.getName().substring(from.getName().length())))) throw new IOException("Could not rename " + name(path));
         return target;
     }
 
-    /** Deletes a drawing and any atomic-save backup or partial write; a drawing never saved is already gone. */
+    /** Deletes a drawing and any atomic-save backup, partial write, previous save or damaged file set aside; a drawing never saved is already gone. */
     void delete(String path) throws IOException {
         File file = drawing(path);
-        File[] parts = {file, sibling(file, ".bak"), sibling(file, ".new")};
+        File[] parts = {file, sibling(file, ".bak"), fresh(file), previous(file), damaged(file)};
         for (File part : parts) part.delete();
         for (File part : parts)
             if (part.exists()) throw new IOException("Could not delete " + name(path));
     }
 
     private static File sibling(File file, String suffix) { return new File(file.getPath() + suffix); }
+
+    // ---- Saving safely (the owner's notebook, 2026-11-14: the app stopped mid-save left a file of two saves' bytes) ----
+    /** Where a save writes before it is checked and put in place ({@link #commit}). */
+    static File fresh(File drawing) { return sibling(drawing, ".new"); }
+    /** The save before the last, kept until the next one is checked: what {@link #repaired} puts back. */
+    static File previous(File drawing) { return sibling(drawing, ".prev"); }
+    /** A notebook's file found damaged, set aside by {@link #repaired} (kept to look at, the latest only). */
+    static File damaged(File drawing) { return sibling(drawing, ".damaged"); }
+    /** Whether notebook file {@code file} reads back whole: every page and cover as its CRC-32 says (false when it can't be read as a notebook). */
+    static boolean whole(File file) {
+        BookCodec.Pages pages;
+        try { pages = BookCodec.openPages(file); } catch (IOException e) { return false; }
+        java.util.Set<PackedPage.Source> open = new java.util.HashSet<>();
+        try {
+            for (PackedPage page : pages.pages) { if (page == null) continue; if (page.file() != null) open.add(page.file()); page.bytes(); }
+            for (PackedPage page : pages.covers.pages) { if (page == null) continue; if (page.file() != null) open.add(page.file()); page.bytes(); }
+            return true;
+        } catch (IOException e) { return false; }
+        finally { for (PackedPage.Source source : open) source.close(); }
+    }
+    /**
+     * A save's last step, its {@link #fresh} file written, synced and {@link #whole}: the file it replaces kept as the
+     * {@link #previous} save, the fresh one put in its place. Stopped between the two, {@link #repaired} finishes it.
+     */
+    static void commit(File drawing) throws IOException {
+        if (drawing.exists() && !drawing.renameTo(previous(drawing))) throw new IOException("Could not keep the previous save");
+        if (!fresh(drawing).renameTo(drawing)) throw new IOException("Could not put the save in place");
+        // An older version's interrupted write (AtomicFile's backup): stale now.
+        sibling(drawing, ".bak").delete();
+    }
+    /**
+     * Notebook file {@code drawing} made ready to open: a save stopped between its renames ({@link #commit}) finished,
+     * and a damaged file set aside ({@link #damaged}) with its {@link #previous} save put back in its place, when that is
+     * whole. When the previous save was put back, ms it was made; else 0.
+     */
+    static long repaired(File drawing) throws IOException {
+        File fresh = fresh(drawing), previous = previous(drawing);
+        if (!drawing.exists()) {
+            if (fresh.isFile() && whole(fresh)) { if (!fresh.renameTo(drawing)) throw new IOException("Could not finish the save"); return 0; }
+            if (!previous.isFile() || !whole(previous)) return 0;
+            long made = previous.lastModified();
+            if (!previous.renameTo(drawing)) throw new IOException("Could not put the previous save back");
+            return made;
+        }
+        if (!previous.isFile() || whole(drawing) || !whole(previous)) return 0;
+        long made = previous.lastModified();
+        if (!drawing.renameTo(damaged(drawing))) throw new IOException("Could not set the damaged file aside");
+        if (!previous.renameTo(drawing)) throw new IOException("Could not put the previous save back");
+        return made;
+    }
     /** When drawing {@code path} was last written, ms (0: never). */
     long modified(String path) throws IOException { return modified(drawing(path)); }
     /** When a drawing was last written, counting an interrupted write's backup. */
@@ -141,6 +194,10 @@ final class DrawingFiles {
             } else if (file.isFile() && name.endsWith(EXTENSION) && !name.equals("_recovery" + EXTENSION)) {
                 String title = name.substring(0, name.length() - EXTENSION.length());
                 if (validName(title)) { contained(file); entries.add(new Entry(title, false, modified(file))); }
+            } else if (file.isFile() && name.endsWith(EXTENSION + ".prev") && !new File(file.getParentFile(), name.substring(0, name.length() - 5)).exists()) {
+                // A save stopped between its renames (commit): listed by its previous save, which opening puts back (repaired).
+                String title = name.substring(0, name.length() - EXTENSION.length() - 5);
+                if (validName(title)) { contained(file); entries.add(new Entry(title, false, file.lastModified())); }
             }
         }
         // Folders first, by name; then drawings, the last changed first (the owner's "most recent at the top").
@@ -228,9 +285,9 @@ final class DrawingFiles {
         }
     }
 
-    /** Whether a drawing file is present, counting an atomic save's backup left by an interrupted write. */
+    /** Whether a drawing file is present, counting an atomic save's backup left by an interrupted write and a save stopped between its renames. */
     static boolean exists(File file) {
-        return file.exists() || sibling(file, ".bak").exists();
+        return file.exists() || sibling(file, ".bak").exists() || previous(file).exists();
     }
 
     static final class Entry {
