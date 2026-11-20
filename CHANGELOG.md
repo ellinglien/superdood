@@ -5,6 +5,31 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.4 (2026-11-20)
+
+- **Open File** (2026-11-17, the owner: "can we make a way to open epubs and pdfs easily from the notebooks area as if
+  they were notebooks?"): the shelf's new tile, after New Notebook, makes a PDF or an EPUB a notebook of its own, named
+  after it: each page locked, a clear layer on it to draw on. An EPUB is laid out at the notebook's page size, one
+  reading size. Up to 999 pages and 200 MB; past them, the first pages and a note. A book with DRM can't be opened.
+  **Contents** in the menu lists its chapters; a tap goes to the chapter's page. One finger's swipe turns its pages,
+  whatever Finger Action says. On the shelf its cover is the book's own first page (2026-11-20, the owner: "use the
+  proper cover for the shelf"). Import's New Notebook of a PDF gets Contents, swipes and that cover too. A notebook past 250 pages
+  doesn't open in 1.3 and older.
+- **A notebook opens on the page you left** (2026-11-17, the owner: "remember place when reopening"), also one only
+  read, never drawn in (its file kept the page of its last save).
+- **Lasso to the Fridge** (2026-11-15, the owner: "a lasso select option to send to the fridge. a quick way to share"):
+  **Share on Fridge** on the Lasso's bar, for a piece the Lasso lifted, puts the piece back and sends what the loop rings, fitted
+  to a page, as a new post. Sent lists it as a piece.
+- **The Fridge door** (2026-11-15): on the shelf after New Notebook, everyone's pages as superdood.org/fridge shows them,
+  full screen. Turned on once; it uses the internet. Only the Fridge's own pages open there. A page shows as large
+  as the screen allows, with **‹ Newer** and **Older ›** to the next one (2026-11-20). On a page you sent, **Delete**
+  where Report is (the owner, 2026-11-20: "move the take down to where the 'report' button is"); Sent Pages' Take Down
+  is Delete too.
+- **No more #inktober52, just the Fridge** (2026-11-20, the owner: "remove the inktober stuff entirely actually... just
+  keep the fridge"): every post is a free post. The #inktober52 notebook is an ordinary notebook now, and its pages
+  are plain pages, no word across the top. **Stop Taking Part** is in System Settings now, under Fridge Name.
+- **No captions** (2026-11-15, the owner: "no titles for any fridge posts , just name"): Fridge posts carry a name only.
+
 ## 1.3 (2026-11-14)
 
 - **#inktober52 on the Fridge** (2026-11-13, the owner): the Fridge is a weekly drawing challenge now, drawing along

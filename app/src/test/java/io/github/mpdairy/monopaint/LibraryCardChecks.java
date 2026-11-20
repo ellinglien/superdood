@@ -58,7 +58,7 @@ public final class LibraryCardChecks {
         check(LibraryCard.GROUPS.equals(Arrays.asList(
                 Arrays.asList(LibraryCard.Part.TEMPLATE, LibraryCard.Part.RANDOM_FROM, LibraryCard.Part.SURFACE, LibraryCard.Part.NIB_PREVIEW, LibraryCard.Part.SECOND_INK),
                 Arrays.asList(LibraryCard.Part.NO_ERASING, LibraryCard.Part.TIMED, LibraryCard.Part.LOCK_PAGES, LibraryCard.Part.TOOLS),
-                Arrays.asList(LibraryCard.Part.COVER, LibraryCard.Part.COVER_PICTURE))) && LibraryCard.rows().size() == 11, "The eleven rows in three groups (Page Colour and See-Through Pages Page Settings' since 2026-11-05, no Self-Portrait Prompt) " + LibraryCard.GROUPS);
+                Arrays.asList(LibraryCard.Part.COVER, LibraryCard.Part.COVER_PICTURE))) && LibraryCard.rows().size() == 11, "The eleven rows in three groups (Page Colour and See-Through Pages Page Settings' since 2026-11-05, no Self-Portrait Prompt; no #inktober52 since 2026-11-20) " + LibraryCard.GROUPS);
         // Lock Pages (2026-10-27): Off and On in the row, greyed while nothing is timed.
         check(!LibraryCard.opens(LibraryCard.Part.LOCK_PAGES) && LibraryCard.value(LibraryCard.Part.LOCK_PAGES, d, CoverDesign.DEFAULT) == null
                 && LibraryCard.tap(LibraryCard.Part.LOCK_PAGES, d) == LibraryCard.Tap.NOTHING && LibraryCard.key(LibraryCard.Part.LOCK_PAGES).equals("Lock Pages"), "Lock Pages is set in its row");
@@ -145,7 +145,7 @@ public final class LibraryCardChecks {
                 "Random Template opens its screen; Page Colour and Cover Picture are set in their rows");
         d = random;
         for (LibraryCard.Part p : LibraryCard.Part.values()) {
-            // Show Through, Layers and Move are Page Settings' alone; Page Colour, Cover Picture, Lock Pages and Nib Preview set in their rows.
+            // Show Through, Layers and Move are Page Settings' alone; Page Colour, Cover Picture, Lock Pages, Nib Preview and Second Ink set in their rows.
             if (p == LibraryCard.Part.LOCK_PAGES || p == LibraryCard.Part.SECOND_INK || p == LibraryCard.Part.NIB_PREVIEW || p == LibraryCard.Part.PAGE_COLOUR || p == LibraryCard.Part.SHOW_THROUGH || p == LibraryCard.Part.COVER_PICTURE || p == LibraryCard.Part.LAYERS || p == LibraryCard.Part.MOVE) continue;
             LibraryCard.Tap tap = LibraryCard.tap(p, d);
             check(p == LibraryCard.Part.NAME ? tap == LibraryCard.Tap.RENAME : p == LibraryCard.Part.NO_ERASING ? tap == LibraryCard.Tap.TOGGLE

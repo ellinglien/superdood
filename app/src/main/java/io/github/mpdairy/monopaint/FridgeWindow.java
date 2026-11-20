@@ -6,6 +6,11 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -14,6 +19,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
@@ -22,9 +28,9 @@ import java.util.concurrent.Executors;
 
 /**
  * Send to the Fridge's windows ({@link Fridge}; the menu's row on any notebook's page): the page as it will go (Export
- * Page's PNG: a word's post with its band, its word under the title; any other on plain paper), Name (required, the tablet's) and Caption, Send
+ * Page's PNG on plain paper), Name (required, the tablet's), Send
  * and Cancel, and Sent Pages while any are kept; the first time, the email step before them (Send Link, then waiting for the link to be tapped); the sent window with the link and Copy Link;
- * the Sent list, each card with Take Down (asked first); Stop Taking Part's request; System Settings' Fridge Name. Each window the app's dialog ({@link
+ * the Sent list, each card with Delete (asked first); Stop Taking Part's request; System Settings' Fridge Name. Each window the app's dialog ({@link
  * PaintActivity#compactDialog}), as Send's (LiveShare); the PNG and every request on one worker, never the main thread.
  */
 final class FridgeWindow {
@@ -37,18 +43,19 @@ final class FridgeWindow {
     FridgeWindow(PaintActivity app) { this.app = app; }
 
     /**
-     * Page {@code place} of {@code book} (a snapshot, wet paint laid; released here), notebook {@code name}, posted under
-     * {@code wordKey} ({@link Prompts#wordKey}: a prompt page's own key; null, no word): its PNG made and, with a key kept,
-     * whether its email is confirmed yet; then the send window.
+     * Page {@code place} of {@code book} (a snapshot, wet paint laid; released here), notebook {@code name}: its PNG made
+     * and, with a key kept, whether its email is confirmed yet; then the send window. {@code loop}: the Lasso's (page
+     * points), the page inside it ({@link #piece}); null, the whole page.
      */
-    void open(DrawingBook.Snapshot book, String name, int place, String wordKey) {
+    void open(DrawingBook.Snapshot book, String name, int place, float[] loop) {
         String key = app.prefs.fridgeTablet();
         worker.execute(() -> {
             byte[] png; Bitmap preview;
             try {
                 List<PackedPage> pages;
                 try { pages = book.packed(); } finally { book.release(); }
-                png = Fridge.png(NotebookPdf.title(name), place, book.width, book.height, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles(), wordKey != null);
+                byte[] whole = Fridge.png(NotebookPdf.title(name), place, book.width, book.height, pages, book.options, book.tracing, WordsMode.exportTiles());
+                png = loop == null ? whole : piece(whole, book.width, loop);
                 BitmapFactory.Options small = new BitmapFactory.Options();
                 small.inSampleSize = 4;
                 preview = BitmapFactory.decodeByteArray(png, 0, png.length, small);
@@ -67,37 +74,62 @@ final class FridgeWindow {
                 if (app.prefs.fridgeName().isEmpty() && !given.isEmpty()) app.prefs.setFridgeName(given);
             } catch (IOException | RuntimeException e) { confirmed = true; }
             boolean ready = confirmed;
-            app.runOnUiThread(() -> { if (!app.destroyed) new SendWindow(png, preview, name, place + 1, wordKey).show(ready); });
+            app.runOnUiThread(() -> { if (!app.destroyed) new SendWindow(png, preview, name, place + 1, loop != null).show(ready); });
         });
     }
 
-    /** The send window: the email step first while this tablet's email isn't confirmed, then Name, Caption and Send. */
+    /**
+     * The Lasso's {@code loop} (page points on a {@code pageWidth}-wide page) cut from {@code page}'s PNG, paper outside it,
+     * fitted and centred on paper the PNG's size ({@link Fridge#fit}): a page-shaped card (the owner, 2026-11-15).
+     */
+    private static byte[] piece(byte[] page, int pageWidth, float[] loop) throws IOException {
+        Bitmap whole = BitmapFactory.decodeByteArray(page, 0, page.length);
+        if (whole == null) throw new IOException("page PNG");
+        Bitmap out = null;
+        try {
+            float k = whole.getWidth() / (float) pageWidth;
+            Path path = new Path();
+            path.moveTo(loop[0] * k, loop[1] * k);
+            for (int i = 2; i + 1 < loop.length; i += 2) path.lineTo(loop[i] * k, loop[i + 1] * k);
+            path.close();
+            RectF box = new RectF();
+            path.computeBounds(box, true);
+            if (!box.intersect(0, 0, whole.getWidth(), whole.getHeight())) throw new Fridge.Failed(Fridge.FAILED, 0);
+            float[] fit = Fridge.fit(box.left, box.top, box.right, box.bottom, whole.getWidth(), whole.getHeight());
+            out = Bitmap.createBitmap(whole.getWidth(), whole.getHeight(), Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(out);
+            canvas.drawColor(Color.WHITE);
+            canvas.translate(fit[1], fit[2]);
+            canvas.scale(fit[0], fit[0]);
+            canvas.clipPath(path);
+            canvas.drawBitmap(whole, 0, 0, new Paint(Paint.FILTER_BITMAP_FLAG));
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            out.compress(Bitmap.CompressFormat.PNG, 100, bytes);
+            if (bytes.size() > Fridge.BYTES_MOST) throw new Fridge.Failed(Fridge.TOO_LARGE, 0);
+            return bytes.toByteArray();
+        } finally { whole.recycle(); if (out != null) out.recycle(); }
+    }
+
+    /** The send window: the email step first while this tablet's email isn't confirmed, then Name and Send. */
     private final class SendWindow {
-        final byte[] png; final String notebook, slug; final int page;
+        final byte[] png; final String notebook; final int page;
+        final boolean piece;
         final LinearLayout column = column(), ask = LabUi.column(app);
         final ImageView picture = new ImageView(app);
         final TextView waiting = LabUi.text(app, Fridge.WAITING_LINK, TypeStyle.BODY), terms = LabUi.text(app, Fridge.TERMS, TypeStyle.CAPTION);
-        final EditText email, name, caption;
+        final EditText email, name;
         AlertDialog dialog; Button go;
         long waitingSince;
 
-        SendWindow(byte[] png, Bitmap preview, String notebook, int page, String wordKey) {
-            this.png = png; this.notebook = notebook; this.page = page; this.slug = Prompts.slug(wordKey);
+        SendWindow(byte[] png, Bitmap preview, String notebook, int page, boolean piece) {
+            this.png = png; this.notebook = notebook; this.page = page; this.piece = piece;
             // A small tilted preview, as a page pinned to a fridge (the mockup's).
             picture.setImageBitmap(preview);
             picture.setAdjustViewBounds(true);
             picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
             picture.setRotation(-3);
-            picture.setContentDescription("Page " + page);
+            picture.setContentDescription(piece ? "Page " + page + " " + Fridge.Card.PIECE : "Page " + page);
             column.addView(picture, new LinearLayout.LayoutParams(-1, app.dp(180)));
-            // The word and its line only for a word's post.
-            if (slug != null) {
-                TextView word = LabUi.text(app, NotebookTemplate.of(wordKey).label, TypeStyle.BODY);
-                word.setTypeface(Theme.face(700));
-                line(column, word, 8);
-                String about = Prompts.about(wordKey, app.openWords);
-                if (!about.isEmpty()) line(column, LabUi.text(app, about, TypeStyle.CAPTION), 0);
-            }
             line(ask, LabUi.text(app, Fridge.EMAIL_FIRST, TypeStyle.BODY), 0);
             email = field(ask, Fridge.EMAIL, 254);
             email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
@@ -105,7 +137,6 @@ final class FridgeWindow {
             line(column, waiting, 12);
             name = field(column, Fridge.NAME, Fridge.NAME_MOST);
             name.setText(app.prefs.fridgeName());
-            caption = field(column, Fridge.CAPTION, Fridge.CAPTION_MOST);
             line(column, terms, 8);
         }
 
@@ -130,12 +161,12 @@ final class FridgeWindow {
             if (confirmed) sendStep(); else emailStep();
         }
         boolean named() { return !Fridge.cut(name.getText().toString(), Fridge.NAME_MOST).isEmpty(); }
-        /** Email, Name, Caption, the terms, and Send Link. */
+        /** Email, Name, the terms, and Send Link. */
         void emailStep() {
             ask.setVisibility(View.VISIBLE); terms.setVisibility(View.VISIBLE); waiting.setVisibility(View.GONE);
             go.setText(Fridge.SEND_LINK); go.setEnabled(named());
         }
-        /** Name, Caption and Send. */
+        /** Name and Send. */
         void sendStep() {
             ask.setVisibility(View.GONE); terms.setVisibility(View.GONE); waiting.setVisibility(View.GONE);
             go.setText(Fridge.SEND); go.setEnabled(named());
@@ -184,27 +215,28 @@ final class FridgeWindow {
         }
 
         /**
-         * Sends the page, under its word if it has one, updating its card when one was sent from it before ({@link
-         * Fridge#replaces}; gone from the Fridge, forgotten and sent as new); the window stays, its button greyed, till the
-         * answer: sent, the name kept and the sent window; an email not confirmed, the email step; refused, its note.
+         * Sends the page, updating the card it replaces ({@link Fridge#replaces}: this page's; gone from the Fridge,
+         * forgotten and sent as new); the window stays, its button greyed, till the answer: sent, the name kept and the
+         * sent window; an email not confirmed, the email step; refused, its note. A lasso's piece always new, kept as a
+         * piece ({@link Fridge.Card#piece}).
          */
         void send() {
-            String named = Fridge.cut(name.getText().toString(), Fridge.NAME_MOST), captioned = caption.getText().toString();
+            String named = Fridge.cut(name.getText().toString(), Fridge.NAME_MOST);
             waiting.setVisibility(View.GONE);
             go.setEnabled(false); go.setText(Fridge.SENDING);
             worker.execute(() -> {
                 Fridge.Card card = null; String note, failed = null; boolean unconfirmed = false;
                 try {
                     String key = app.prefs.fridgeTablet();
-                    Fridge.Card old = Fridge.replaces(app.prefs.fridgeCards(), slug, notebook, page);
-                    Fridge.Answer answer = Fridge.send(Fridge.sendUrl(slug, named, captioned, old == null ? null : old.id), png, key);
+                    Fridge.Card old = piece ? null : Fridge.replaces(app.prefs.fridgeCards(), notebook, page);
+                    Fridge.Answer answer = Fridge.send(Fridge.sendUrl(named, old == null ? null : old.id), png, key);
                     if (old != null && Fridge.replacedGone(answer)) {
                         synchronized (FridgeWindow.this) { app.prefs.setFridgeCards(Fridge.removed(app.prefs.fridgeCards(), old.id)); }
                         old = null;
-                        answer = Fridge.send(Fridge.sendUrl(slug, named, captioned, null), png, key);
+                        answer = Fridge.send(Fridge.sendUrl(named, null), png, key);
                     }
                     unconfirmed = Fridge.unconfirmed(answer);
-                    card = Fridge.sent(answer, slug, notebook, page, LocalDate.now().toEpochDay(), old);
+                    card = Fridge.sent(answer, notebook, piece ? -page : page, LocalDate.now().toEpochDay(), old);
                     note = Fridge.sentNote(answer, old != null);
                     app.prefs.setFridgeName(named);
                     synchronized (FridgeWindow.this) { app.prefs.setFridgeCards(Fridge.added(app.prefs.fridgeCards(), card)); }
@@ -223,7 +255,7 @@ final class FridgeWindow {
     }
 
     /**
-     * Stop Taking Part: this tablet, its email and its pages gone from the Fridge, then its key, its cards and the Prompts
+     * Stop Taking Part: this tablet, its email and its pages gone from the Fridge, then its key, its cards and its name
      * forgotten here, and {@code after}; already gone (403) too. Unreachable: said, nothing forgotten, {@code after} not run.
      */
     void leave(Runnable after) {
@@ -238,7 +270,6 @@ final class FridgeWindow {
                 if (app.destroyed) return;
                 if (said != null) { app.message(said); return; }
                 synchronized (FridgeWindow.this) { app.prefs.setFridgeTablet(""); app.prefs.setFridgeCards(""); app.prefs.setFridgeName(""); }
-                app.prefs.setPromptsOn(false);
                 app.message(Fridge.STOPPED);
                 after.run();
             });
@@ -276,16 +307,16 @@ final class FridgeWindow {
                 .setPositiveButton(Fridge.CLOSE, null).setNeutralButton(Fridge.COPY, (d, w) -> copy(card.url)));
     }
 
-    /** Sent to the Fridge: each card kept, newest first, its line and links, and Take Down (asked first). */
+    /** Sent to the Fridge: each card kept, newest first, its line and links, and Delete (asked first). */
     private void sentList() {
         LinearLayout column = column();
         for (Fridge.Card card : Fridge.cards(app.prefs.fridgeCards())) {
             LinearLayout entry = LabUi.column(app);
             entry.addView(LabUi.text(app, card.label(), TypeStyle.BODY), new LinearLayout.LayoutParams(-1, -2));
             link(entry, card);
-            LabButton down = new LabButton(app, 0, Fridge.TAKE_DOWN, false);
-            down.setContentDescription(Fridge.TAKE_DOWN + ", " + card.label());
-            down.setOnClickListener(v -> confirmDown(card, entry));
+            LabButton down = new LabButton(app, 0, Fridge.DELETE, false);
+            down.setContentDescription(Fridge.DELETE + ", " + card.label());
+            down.setOnClickListener(v -> confirmDown(card, () -> entry.setVisibility(View.GONE)));
             entry.addView(down, new LinearLayout.LayoutParams(-2, -2));
             LinearLayout.LayoutParams apart = new LinearLayout.LayoutParams(-1, -2);
             apart.bottomMargin = app.dp(12);
@@ -293,24 +324,25 @@ final class FridgeWindow {
         }
         app.showDialog(new AlertDialog.Builder(app).setTitle(Fridge.SENT_LIST).setView(scroll(column)).setPositiveButton(Fridge.CLOSE, null));
     }
-    private void confirmDown(Fridge.Card card, View entry) {
-        app.showDialog(new AlertDialog.Builder(app).setTitle(Fridge.TAKE_DOWN + "?").setMessage(Fridge.UNDONE)
-                .setPositiveButton(Fridge.TAKE_DOWN, (d, w) -> takeDown(card, entry)).setNegativeButton(Fridge.CANCEL, null));
+    /** Delete asked first (the Sent list's, the door's); {@code gone} runs once it's down. */
+    void confirmDown(Fridge.Card card, Runnable gone) {
+        app.showDialog(new AlertDialog.Builder(app).setTitle(Fridge.DELETE + "?").setMessage(Fridge.UNDONE)
+                .setPositiveButton(Fridge.DELETE, (d, w) -> takeDown(card, gone)).setNegativeButton(Fridge.CANCEL, null));
     }
-    /** {@code card} taken down on superdood.org, then forgotten here; its entry gone from the list. */
-    private void takeDown(Fridge.Card card, View entry) {
+    /** {@code card} taken down on superdood.org, then forgotten here; then {@code gone}. */
+    private void takeDown(Fridge.Card card, Runnable gone) {
         worker.execute(() -> {
             String note;
             try {
                 Fridge.takenDown(Fridge.delete(card));
                 synchronized (this) { app.prefs.setFridgeCards(Fridge.removed(app.prefs.fridgeCards(), card.id)); }
-                note = Fridge.TAKEN_DOWN;
+                note = Fridge.DELETED;
             } catch (Fridge.Failed e) { note = e.getMessage(); }
-            catch (IOException | RuntimeException e) { Log.w(TAG, "take down: " + e.getClass().getSimpleName()); note = Fridge.DOWN_FAILED; }
+            catch (IOException | RuntimeException e) { Log.w(TAG, "delete: " + e.getClass().getSimpleName()); note = Fridge.DELETE_FAILED; }
             String said = note;
             app.runOnUiThread(() -> {
                 if (app.destroyed) return;
-                if (Fridge.TAKEN_DOWN.equals(said)) entry.setVisibility(View.GONE);
+                if (Fridge.DELETED.equals(said)) gone.run();
                 app.message(said);
             });
         });

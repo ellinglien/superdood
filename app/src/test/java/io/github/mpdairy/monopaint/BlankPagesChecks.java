@@ -26,7 +26,7 @@ public final class BlankPagesChecks {
         } finally { NotebookMigrationChecks.delete(dir); }
         System.out.println("PASS: blank pages: a page with no marks, magnets or masking fluid on white paper is blank, a shaded one isn't; opening an old notebook takes the blank page at its end away, not as a change, its other pages byte for byte once saved; "
                 + "a last page with a mark, a shade or anything of its own (template, rules, time, step, ghost, cover picture) stays, and so do the page drawn on, a page between, the only page and a page with layers; "
-                + "the page bar's + puts a page after the page drawn on (the first from the front cover, the last from the back), on the notebook's template and Page Colour, drawn on, up to 250 pages, \"Notebook full, 250 pages\" past them; a blank page is deleted without asking (told by its page, its picture or its bytes; a faint mark, a shade or a magnet asks); "
+                + "the page bar's + puts a page after the page drawn on (the first from the front cover, the last from the back), on the notebook's template and Page Colour, drawn on, up to 2,000 pages, \"Notebook full, 2000 pages\" past them; a blank page is deleted without asking (told by its page, its picture or its bytes; a faint mark, a shade or a magnet asks); "
                 + "the PDF and PNG copies leave out blank pages at the end, never the first page or one between; a blank page is about 9 KB of a 1920 × 2400 notebook's file");
     }
     static void check(boolean ok, String what) { if (!ok) throw new AssertionError(what); }
@@ -149,7 +149,7 @@ public final class BlankPagesChecks {
         boolean threw = false;
         try { full.insertPage(); } catch (IOException e) { threw = true; }
         check(threw && full.count() == DrawingBook.MAX_PAGES, "Full at " + DrawingBook.MAX_PAGES + " pages: no more");
-        check(DrawingBook.PAGES_FULL.equals("Notebook full, 250 pages"), "The note when full: " + DrawingBook.PAGES_FULL);
+        check(DrawingBook.PAGES_FULL.equals("Notebook full, 2000 pages"), "The note when full: " + DrawingBook.PAGES_FULL);
     }
 
     /** A blank page goes without asking; a page with anything on it asks. */

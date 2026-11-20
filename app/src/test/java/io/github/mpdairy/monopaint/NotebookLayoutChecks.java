@@ -78,6 +78,8 @@ public final class NotebookLayoutChecks {
             }
             check(seen == n, n + " notebooks all on the shelf");
         }
+        check(manta.shelfPage(0, 60)[1] == manta.perPage() - 3 && manta.shelfPage(1, 60)[0] == manta.perPage() - 3,
+                "The shelf's first page: New Notebook, Open File and the Fridge door, then the notebooks (2026-11-17)");
         // Names: the automatic ones, Loose pages and a long one fit; one too long is refused.
         LocalDate today = LocalDate.of(2026, 10, 18);
         for (int i = 0; i < 2000; i++) {

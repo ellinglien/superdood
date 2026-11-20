@@ -74,15 +74,18 @@ public final class DrawLayoutChecks {
         // 2026-10-28 ("above it is a toolbar offering choices for what to do with it"); Paste the Lasso's tap.
         check(java.util.Arrays.equals(DrawLayout.LASSO_BAR, new String[]{"Cut", "Duplicate", "Make Stamp", "Delete"}),
                 "A piece up: Cut, Duplicate, Make Stamp, Delete (Duplicate in Copy's place, 2026-10-28; Make Stamp 2026-11-02)");
+        check(java.util.Arrays.equals(DrawLayout.lassoBar(true), new String[]{"Cut", "Duplicate", "Make Stamp", "Share on Fridge", "Delete"})
+                        && DrawLayout.lassoBar(false) == DrawLayout.LASSO_BAR,
+                "A piece the Lasso lifted: Fridge before Delete (2026-11-15); a pasted, imported or duplicated one, none");
         // The bar, one row of its words (InkWashBar.lightRow: each LIGHT_PAD each side, the row's fine outline), fits the
         // narrowest page beside the column: the Nomad's, portrait.
         float row = 2;  // Theme.FINE each side
-        for (String w : DrawLayout.LASSO_BAR) row += LabText.width(w, TypeStyle.MENU.sp, 0) + 2 * DrawLayout.LIGHT_PAD;
+        for (String w : DrawLayout.lassoBar(true)) row += LabText.width(w, TypeStyle.MENU.sp, 0) + 2 * DrawLayout.LIGHT_PAD;
         DrawLayout nomad = new DrawLayout(749, 998);
         check(row <= nomad.width - nomad.side, "The Lasso's bar fits the Nomad's page: " + row + " dp of " + (nomad.width - nomad.side));
         String bar, pad;
         try { bar = source("InkWashBar"); pad = source("DrawingPad"); } catch (java.io.IOException e) { throw new AssertionError(e); }
-        check(bar.contains("app.pad.cutSelection(); else if (choice == 1) app.pad.duplicateSelection(); else if (choice == 2) app.pad.stampSelection(); else app.pad.deleteSelection();")
+        check(bar.contains("else if (w.equals(StampNib.CUT)) app.pad.stampSelection(); else if (w.equals(DrawLayout.LASSO_FRIDGE)) app.pad.fridgeSelection(); else app.pad.deleteSelection();")
                         && bar.contains("labelContent == lassoContent) && !Ui.outside(labelContent, event, index)")
                         && pad.contains("selection.grab(handle); lassoBar();") && pad.contains("drawSelectionFrame(); flush(true); lassoBar();")
                         && pad.contains("selectionShown.setEmpty(); lassoBar();") && pad.contains("showSelection(); flush(true); lassoBar();"),
@@ -116,9 +119,10 @@ public final class DrawLayoutChecks {
         // The menu (2026-10-30: Settings, Notebook Explorer, Import; Finger, Left-Handed; one group line; Export Page since
         // 2026-11-02, Draw Together on the live branch) fits the Nomad in landscape unscrolled.
         // The column's Sand Timer, Show Kinds and Play too since 2026-11-06, Finger Action out (System Settings'), four groups.
-        java.util.List<DrawLayout.Row> manta = DrawLayout.fileRows(true, null, false, "Draw Together", false, true, true, false);
+        java.util.List<DrawLayout.Row> manta = DrawLayout.fileRows(true, false, null, false, "Draw Together", false, true, true, false);
         int lines = java.util.Collections.frequency(manta, DrawLayout.Row.LINE), menuRows = manta.size() - lines;
-        check(menuRows == 11 && lines == 3 && menuRows * DrawLayout.MENU_ROW + lines * 9 + 2 <= 749 - 2 * DrawLayout.PAD && DrawLayout.LEFT_HANDED.equals("Left-Handed"), "The menu with Export Page, Send to the Fridge, the column's three, Left-Handed and Draw Together fits every screen");
+        // Contents (2026-11-17) one more row in a file's notebook: still fits.
+        check(menuRows == 11 && lines == 3 && (menuRows + 1) * DrawLayout.MENU_ROW + lines * 9 + 2 <= 749 - 2 * DrawLayout.PAD && DrawLayout.LEFT_HANDED.equals("Left-Handed"), "The menu with Export Page, Send to the Fridge, the column's three, Left-Handed and Draw Together fits every screen");
         try {
             String bar = source("InkWashBar"), app = source("PaintActivity"), ink = source("InkWash");
             check(bar.contains("app.showGuides(app.book.options().withNextGuidesStep().guidesShown)") && !app.contains("names.add(NotebookLayout.TEMPLATE)")
@@ -133,12 +137,12 @@ public final class DrawLayoutChecks {
             for (DrawLayout.Row r : manta) rows.add(r.words == null ? "|" : r.words);
             check(rows.equals(java.util.Arrays.asList(NotebookLayout.OPEN_NOTEBOOK, DrawLayout.NOTEBOOK_SETTINGS, "|", LibraryCard.EXPORT_PAGE, Fridge.ROW, PictureImport.IMPORT, EraseKind.SHOW_KINDS, "|",
                                     "Draw Together", SandTimer.NAME, DrawLayout.PLAY, "|", DrawLayout.LEFT_HANDED, SystemSettings.TITLE))
-                            && menu.contains("DrawLayout.fileRows(true, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing)")
+                            && menu.contains("DrawLayout.fileRows(true, contents, null, toolboxRight, LiveShare.SHARE, share.on(), true, inkWashBar.sandShown, playing)")
                             && menu.contains("exportMenu(anchor, book.stacks().of(book.index()))") && menu.contains("DrawingBook.isCover(book.index())) rows.removeIf(r -> \"exportPage\".equals(r.key) || \"fridge\".equals(r.key));")
-                            && menu.contains("Prompts.sendRow(fridgeWord(), openWords)") && !menu.contains("if (fridgeRow == null) rows.removeIf(")
+                            && !menu.contains("Prompts.") && !menu.contains("if (fridgeRow == null) rows.removeIf(")
                             && source("NotebookScreens").contains("app.exportMenu(export, place);") && app.split("\"export menu\"", -1).length == 2
                             && !app.contains("coverRows(") && app.contains("line.setBackgroundColor(Theme.GREY_400)"),
-                    "The menu (the owner's order, 2026-11-06): Notebook Explorer and Notebook Settings; Export Page (the page shown's, Page Settings' one menu, none on a cover, 2026-11-02), Send to the Fridge on every notebook's page, greyed on a closed word's (Prompts.sendRow, 2026-11-13), neither on a cover, Import (pictures and PDFs, one row since 2026-10-29) and Show Kinds; Draw Together, the Sand Timer while it can be set and Play, marked while a toy is on; Left-Handed and System Settings; a grey-400 line between each; no Finger Action (System Settings'), Export Now, Rename, Delete or Replay Page rows: " + rows);
+                    "The menu (the owner's order, 2026-11-06): Notebook Explorer and Notebook Settings; Export Page (the page shown's, Page Settings' one menu, none on a cover, 2026-11-02), Send to the Fridge on every notebook's page (2026-11-13; never greyed since the #inktober52 notebook went, 2026-11-15), neither on a cover, Import (pictures and PDFs, one row since 2026-10-29) and Show Kinds; Draw Together, the Sand Timer while it can be set and Play, marked while a toy is on; Left-Handed and System Settings; a grey-400 line between each; no Finger Action (System Settings'), Export Now, Rename, Delete or Replay Page rows: " + rows);
             // Play the menu's row since 2026-11-06 (the column's button 2026-10-30 to 2026-11-06): its menu beside Menu, marked while a toy is on, read as the menu opens.
             check(menu.contains("case \"play\": actions[i] = () -> { if (!busy()) playMenu(anchor); };")
                             && menu.contains("DrawLayout.playOn(pad != null && (pad.words.open() || pad.text.on() || pad.shapesOn && !pad.lassoOn && !pad.dropperOn), mirrors.on())")
@@ -191,7 +195,7 @@ public final class DrawLayoutChecks {
                     "The status corner: the live status, not tappable, hidden with the foot row in Zen Mode");
             check(DrawLayout.LINE_NAME >= 200 && DrawLayout.LINE_NAME + DrawLayout.NOTE_GAP <= 600 - DrawLayout.LINE_GAP,
                     "The name's room fits the narrowest brush line with the note's gap");
-            DrawLayout.Row left = DrawLayout.fileRows(false, "", false, null, false, false, false, false).get(3), right = DrawLayout.fileRows(false, "", true, null, false, false, false, false).get(3);  // after Import, its line and the browser's Finger Action
+            DrawLayout.Row left = DrawLayout.fileRows(false, false, "", false, null, false, false, false, false).get(3), right = DrawLayout.fileRows(false, false, "", true, null, false, false, false, false).get(3);  // after Import, its line and the browser's Finger Action
             check(left.words.equals(DrawLayout.LEFT_HANDED) && left.icon.equals("ic_ph_hand_pointing") && right.words.equals(DrawLayout.RIGHT_HANDED) && right.icon.equals("ic_ph_hand_pointing_mirrored")
                             && app.contains("prefs.setToolboxRight(!prefs.toolboxRight()); applyToolboxSide();") && DrawLayout.RIGHT_HANDED.equals("Right-Handed"),
                     "The menu's hand row names the other hand (Left-Handed, or Right-Handed with its hand mirrored), applied at once");
@@ -1153,7 +1157,7 @@ public final class DrawLayoutChecks {
             // menu"; the ghost on the page bar that morning, back in the column since 2026-10-28.
             String turner = source("PageTurner");
             String system = source("SystemSettingsPanel");
-            check(!app.contains("fingerMenu(") && !app.contains("case \"finger\"") && DrawLayout.fileRows(false, "", false, null, false, false, false, false).stream().anyMatch(r -> "finger".equals(r.key) && "ic_finger".equals(r.icon))
+            check(!app.contains("fingerMenu(") && !app.contains("case \"finger\"") && DrawLayout.fileRows(false, false, "", false, null, false, false, false, false).stream().anyMatch(r -> "finger".equals(r.key) && "ic_finger".equals(r.icon))
                             && app.contains("fingers[c.ordinal()] = inkWashBar.fingerName(c);") && app.contains("SystemSettingsPanel.rows(this, fingers)")
                             && system.contains("row(app, list, SystemSettings.FINGER, null, fingers, app.inkWash.finger().ordinal(), 3, i -> app.inkWash.finger(choices[i]));") && SystemSettings.FINGER.equals("Finger Action")
                             && bar.contains("app.iconButton(DrawLayout.REFRESH, R.drawable.ic_ph_ghost, () -> { if (app.pad != null) app.pad.refreshAsked(\"Refresh button\"); })")
@@ -1270,7 +1274,7 @@ public final class DrawLayoutChecks {
     /** No Page Bar row (the owner, 2026-11-07: "remove the option to show or hide the page bar (this is unnecessary now)"): the page bar shows but in Zen Mode. */
     static void book() {
         check(!java.util.Arrays.toString(DrawLayout.Part.values()).contains("BOOK"), "No book in the column");
-        check(DrawLayout.fileRows(true, null, false, null, false, true, false, false).stream().noneMatch(r -> "pageBar".equals(r.key)), "No Page Bar row");
+        check(DrawLayout.fileRows(true, false, null, false, null, false, true, false, false).stream().noneMatch(r -> "pageBar".equals(r.key)), "No Page Bar row");
         try {
             String app = source("PaintActivity");
             check(!app.contains("togglePageBar") && !app.contains("barHidden") && app.contains("setVisibility(!zen ? View.VISIBLE : View.GONE)"), "The page bar hidden by Zen Mode alone");

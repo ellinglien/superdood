@@ -335,6 +335,11 @@ public final class CoverChecks {
         byte[] tile = NotebookCovers.shown(true, c.design, "2026-10-19 brisk-bean notebook", W / 2, H / 2, PagePicture.decode(c.picture), PagePicture.decode(c.front));
         int[] at = onLabel();
         check((tile[(at[1] / 2 + 1) * (W / 2) + at[0] / 2 + 1] & 255) < 120, "The tile shows the cover's drawing over its label");
+        // A book's notebook (Open File, 2026-11-20): its cover picture alone, the whole front; its back as any notebook's.
+        PagePicture page = PagePicture.decode(c.picture);
+        byte[] whole = NotebookCovers.shown(true, c.design, "A book", W / 2, H / 2, page, null, true);
+        check(Arrays.equals(whole, NotebookCovers.of(page).tones(W / 2, H / 2)), "A book's front is its first page, whole: no pattern, no label");
+        check(Arrays.equals(NotebookCovers.shown(false, c.design, "A book", W / 2, H / 2, page, null, true), NotebookCovers.shown(false, c.design, "A book", W / 2, H / 2, page, null)), "a book's back cover as any notebook's");
         byte[] bare = NotebookCovers.shown(false, CoverDesign.DEFAULT, "2026-10-19 brisk-bean notebook", W / 2, H / 2, null, null);
         check(Arrays.equals(bare, CoverPattern.cached(CoverDesign.DEFAULT, "2026-10-19 brisk-bean notebook", W / 2, H / 2, true)), "A bare back cover's tile is its pattern");
         // A notebook from before covers: no cover picture unless one was chosen then (not the first page).

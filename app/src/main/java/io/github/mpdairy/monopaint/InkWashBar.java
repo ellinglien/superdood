@@ -524,18 +524,24 @@ final class InkWashBar {
     /**
      * The Lasso's bar over the floating piece (the owner, 2026-10-28: "in supernote there is just one lasso tool...
      * select something and then when the bounding box appears, above it is a toolbar offering choices for what to do with
-     * it"): Cut, Duplicate ("duplicate instead of copy", later that day), Make Stamp (2026-11-02) and Delete ({@link DrawLayout#LASSO_BAR}) in a light row ({@link #lightRow}), just over {@code
+     * it"): Cut, Duplicate ("duplicate instead of copy", later that day), Make Stamp (2026-11-02), Fridge (a lifted piece's, 2026-11-15) and Delete ({@link DrawLayout#lassoBar}) in a light row ({@link #lightRow}), just over {@code
      * piece}, the piece's frame and knob in the root's app coordinates ({@link DrawingPad#lassoBar}), under it with no room
      * over it, on the page; null: gone (the piece put down, cut or deleted, or the pen moving it). The pen on it keeps it
      * ({@link #penDown}); a locked page refuses Cut and Delete as the pieces' own ({@link DrawingPad#deleteSelection}).
      */
-    void lassoBar(RectF piece) {
-        boolean shown = label != null && labelContent == lassoContent;
-        if (piece == null) { if (shown) hideLabel(); return; }
-        if (!shown) lassoContent = lightRow(DrawLayout.LASSO_BAR, -1, DrawLayout.LASSO_BAR.length, false, choice -> {
-            if (app.busy()) return;
-            if (choice == 0) app.pad.cutSelection(); else if (choice == 1) app.pad.duplicateSelection(); else if (choice == 2) app.pad.stampSelection(); else app.pad.deleteSelection();
-        });
+    void lassoBar(RectF piece, boolean fridge) {
+        boolean up = label != null && labelContent == lassoContent;
+        if (piece == null) { if (up) hideLabel(); return; }
+        if (!up || lassoFridge != fridge) {
+            String[] words = DrawLayout.lassoBar(fridge);
+            lassoFridge = fridge;
+            lassoContent = lightRow(words, -1, words.length, false, choice -> {
+                if (app.busy()) return;
+                String w = words[choice];
+                if (w.equals(DrawLayout.LASSO_CUT)) app.pad.cutSelection(); else if (w.equals(DrawLayout.LASSO_DUPLICATE)) app.pad.duplicateSelection();
+                else if (w.equals(StampNib.CUT)) app.pad.stampSelection(); else if (w.equals(DrawLayout.LASSO_FRIDGE)) app.pad.fridgeSelection(); else app.pad.deleteSelection();
+            });
+        }
         int[] size = labelSize(lassoContent);
         RectF page = Popups.bounds(app.root, app.pad);
         float over = piece.top - app.dp(8) - size[1];
@@ -544,6 +550,8 @@ final class InkWashBar {
     }
     /** The Lasso's bar, while it shows. */
     private View lassoContent;
+    /** Whether the bar shown has Fridge. */
+    private boolean lassoFridge;
     /**
      * What was in use when the edge strip's hold began: the hold's own loop already, or a hold that does nothing
      * ({@code heldTrash}), the other loop, the Dropper; and whether the hold's loop deletes.

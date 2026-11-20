@@ -36,6 +36,12 @@ final class PictureImport {
     /** The PDF's import: its progress ("Importing 3 / 12") and what it says once done when it left pages out ("First 124 pages"). */
     static String importing(int done, int of) { return "Importing " + done + " / " + of; }
     static String firstPages(int n) { return "First " + n + " pages"; }
+    /**
+     * Open File (the owner, 2026-11-17: "Open File tile"): the shelf's tile, its caption and its box's title; the box while
+     * an EPUB is first laid out, before its pages are known ("Laying out 3 / 40", its files of the book's spine).
+     */
+    static final String OPEN_FILE = "Open File", OPEN_ABOUT = "PDF or EPUB";
+    static String layingOut(int done, int of) { return "Laying out " + done + " / " + of; }
 
     // The picker (the owner, 2026-10-26: "there's no way to cancel"): the app's own ({@code ImportPicker}), with Cancel
 
@@ -63,13 +69,21 @@ final class PictureImport {
     static boolean pdf(String type, String name) {
         return "application/pdf".equals(type) || name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf");
     }
+    /** Whether a picked file is an EPUB (Open File), by its type ({@code null} when unknown) or else its name's ending. */
+    static boolean epub(String type, String name) {
+        return "application/epub+zip".equals(type) || name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(".epub");
+    }
+    /** The files Open File's picker lists ({@link #entries} with {@code books}): PDFs and EPUBs. */
+    static final String[] BOOKS = {".pdf", ".epub"};
     /** The picker's top folder's name (the storage root, its folders {@link #FOLDERS}), and its note in a folder with nothing to import. */
     static final String STORAGE = "Storage", NOTHING_FOUND = "Nothing found";
     /**
      * What the picker shows in {@code folder} (the owner, 2026-10-29: "more like supernote file explorer"): its folders A
      * to Z, then its pictures and PDFs newest first, hidden ones skipped; at {@code root}, only {@link #FOLDERS} that are there.
      */
-    static java.util.List<java.io.File> entries(java.io.File root, java.io.File folder) {
+    static java.util.List<java.io.File> entries(java.io.File root, java.io.File folder) { return entries(root, folder, false); }
+    /** As above; with {@code books} (Open File), its PDFs and EPUBs ({@link #BOOKS}) instead of pictures and PDFs. */
+    static java.util.List<java.io.File> entries(java.io.File root, java.io.File folder, boolean books) {
         java.util.List<java.io.File> folders = new java.util.ArrayList<>(), files = new java.util.ArrayList<>();
         if (folder.equals(root)) {
             for (String name : FOLDERS) { java.io.File top = new java.io.File(root, name); if (top.isDirectory()) folders.add(top); }
@@ -81,7 +95,7 @@ final class PictureImport {
             String name = file.getName().toLowerCase(java.util.Locale.ROOT);
             if (name.startsWith(".")) continue;
             if (file.isDirectory()) { folders.add(file); continue; }
-            for (String ending : IMPORTABLE) if (name.endsWith(ending)) { files.add(file); break; }
+            for (String ending : books ? BOOKS : IMPORTABLE) if (name.endsWith(ending)) { files.add(file); break; }
         }
         folders.sort((a, b) -> a.getName().compareToIgnoreCase(b.getName()));
         // Each file's time read once: a file written while sorting can't upset the sort.
@@ -423,7 +437,7 @@ final class PictureImport {
 
     // A PDF's notebook
 
-    /** The most PDF pages a notebook holds: two layers a page in its {@link DrawingBook#MAX_PAGES} (124 of 250), one to spare for a page the + adds. */
+    /** The most PDF pages a notebook holds: two layers a page in its {@link DrawingBook#MAX_PAGES} (999 of 2,000), one to spare for a page the + adds. */
     static final int MOST_PDF_PAGES = (DrawingBook.MAX_PAGES - 1) / 2;
     /** How many of a PDF's {@code count} pages are imported. */
     static int pdfPages(int count) { return Math.max(0, Math.min(count, MOST_PDF_PAGES)); }
@@ -455,17 +469,29 @@ final class PictureImport {
     /**
      * Writes a PDF's notebook to {@code out}, as a notebook's file ({@link BookCodec}): {@code pdf}, its PDF pages packed
      * ({@link #pdfPage}), each with {@code clear} (a blank page packed, {@link BlankPages#made}) stacked on it
-     * ({@link #stacks}), opening on the first clear layer, in covers of {@code design}, made {@code day} (an epoch day).
+     * ({@link #stacks}), opening on the first clear layer, in covers of {@code design}, made {@code day} (an epoch day),
+     * with {@code options} (a new notebook's, {@link NotebookOptions#NEW}, and a file's chapters, {@link NotebookOptions.Contents}).
      * The pages may lie in a file ({@link PackedPage#in}): they are copied from it as they are.
      */
-    static void writeBook(java.io.OutputStream out, int width, int height, java.util.List<PackedPage> pdf, PackedPage clear, CoverDesign design, long day) throws java.io.IOException {
-        if (pdf.isEmpty() || pdf.size() > MOST_PDF_PAGES) throw new java.io.IOException("Invalid page list");
+    static void writeBook(java.io.OutputStream out, int width, int height, java.util.List<PackedPage> pdf, PackedPage clear, CoverDesign design, long day, NotebookOptions options) throws java.io.IOException {
+        writeBook(out, width, height, pdf, null, clear, design, day, options);
+    }
+    /**
+     * As above, with each PDF page's picture ({@code shown}, {@link PagePicture}; null: none, or a null list), and the
+     * clear layers' (a blank page's, {@link BlankPages#made}): kept in the file, so the strip and the shelf show a file's
+     * pages from the start, and its first save doesn't wait for 999 pictures (13 s on the Manta, 2026-11-20).
+     */
+    static void writeBook(java.io.OutputStream out, int width, int height, java.util.List<PackedPage> pdf, java.util.List<byte[]> shown, PackedPage clear, CoverDesign design, long day, NotebookOptions options) throws java.io.IOException {
+        if (pdf.isEmpty() || pdf.size() > MOST_PDF_PAGES || shown != null && shown.size() != pdf.size()) throw new java.io.IOException("Invalid page list");
         java.util.List<PackedPage> pages = new java.util.ArrayList<>();
         for (PackedPage p : pdf) { pages.add(p); pages.add(clear); }
         BookOptions.Covers covers = new BookOptions.Covers();
-        covers.design = design; covers.options = NotebookOptions.NEW; covers.tracing = stacks(pdf.size()); covers.lastDay = day;
+        covers.design = design; covers.options = options; covers.tracing = stacks(pdf.size()); covers.lastDay = day;
+        // A book's first page its cover picture: the shelf shows it as the whole cover (NotebookCovers.shown).
+        if (options.contents != null) covers.picture = 0;
+        byte[] blank = shown == null ? null : BlankPages.made(width, height).picture;
         java.util.List<byte[]> pictures = new java.util.ArrayList<>();
-        for (int i = 0; i < pages.size(); i++) pictures.add(null);
+        for (int i = 0; i < pdf.size(); i++) { pictures.add(shown == null ? null : shown.get(i)); pictures.add(blank); }
         BookCodec.write(out, width, height, pages, OPENS_ON, new int[pages.size()], -1, pictures, covers, new long[2]);
     }
 }

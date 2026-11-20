@@ -128,6 +128,8 @@ final class NotebookLayout {
     private int tile(int w) { return (int) Math.floor(w * aspect) + UNDER_COVER + textHeight(); }
     int textHeight() { return (int) Math.ceil(nameLines * LabText.line(TypeStyle.BODY.sp) + COUNT_LINES * LabText.line(TypeStyle.CAPTION.sp)); }
 
+    /** Tiles before the notebooks on the shelf's first page: New Notebook, Open File (2026-11-17) and the Fridge door (2026-11-15). */
+    static final int FIRST_TILES = 3;
     /** Tiles on a shelf page; the first page's first is New notebook. */
     int perPage() { return columns * rows; }
     /** A search find's row in the grid's place (Read Handwriting): the name and page a line, the guess a caption's line, a gap under. */
@@ -135,14 +137,14 @@ final class NotebookLayout {
     /** The finds a shelf page holds: the grid's room less a caption's line for "3 pages unread". */
     int foundPerPage() { return Math.max(1, (gridHeight - (int) Math.ceil(LabText.line(TypeStyle.CAPTION.sp))) / foundRow()); }
     /** The shelf's pages for {@code notebooks} notebooks, with New notebook. */
-    int shelfPages(int notebooks) { return Math.max(1, (notebooks + 1 + perPage() - 1) / perPage()); }
-    /** The notebooks on shelf page {@code page}: the first's index and how many (page 0 starts after New notebook). */
+    int shelfPages(int notebooks) { return Math.max(1, (notebooks + FIRST_TILES + perPage() - 1) / perPage()); }
+    /** The notebooks on shelf page {@code page}: the first's index and how many (page 0 starts after the {@link #FIRST_TILES}). */
     int[] shelfPage(int page, int notebooks) {
-        int first = page == 0 ? 0 : page * perPage() - 1, count = page == 0 ? perPage() - 1 : perPage();
+        int first = page == 0 ? 0 : page * perPage() - FIRST_TILES, count = page == 0 ? perPage() - FIRST_TILES : perPage();
         return new int[]{Math.min(first, notebooks), Math.max(0, Math.min(count, notebooks - first))};
     }
     /** The shelf page notebook {@code index} is on. */
-    int shelfPageOf(int index) { return (index + 1) / perPage(); }
+    int shelfPageOf(int index) { return (index + FIRST_TILES) / perPage(); }
 
     /** The first of {@code tiles} a strip of {@code visible} shows: a window round {@code current} (the notebook's strip, {@link NotebookStrip#start}; the drawing screen's page bar too, {@link PageTurner}). */
     static int window(int current, int tiles, int visible) {

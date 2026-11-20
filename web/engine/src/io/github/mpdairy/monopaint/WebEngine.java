@@ -978,7 +978,7 @@ public final class WebEngine {
     @JSExport public static boolean columnRight() { return "1".equals(KEPT.get(TOOLBOX_RIGHT)); }
     private static final String TOOLBOX_RIGHT = "toolbox_right";
     /** The menu's rows ({@link DrawLayout#fileRows}): a guest's, with the Manta's notebook rows while the Manta shares them ({@code notebook}, books.js). As JSON. */
-    @JSExport public static String fileMenu(int sel, boolean notebook) { return rowsJson(DrawLayout.fileRows(notebook, finger(sel).row(WebEngine::brushName), columnRight(), null, false, false, false, false)); }
+    @JSExport public static String fileMenu(int sel, boolean notebook) { return rowsJson(DrawLayout.fileRows(notebook, false, finger(sel).row(WebEngine::brushName), columnRight(), null, false, false, false, false)); }
     /** The menu's row {@code key} tapped: the drawing hand turned over ("hand"); the Finger row opens its menu (the page's). */
     @JSExport public static void fileAct(String key) { if ("hand".equals(key)) KEPT.put(TOOLBOX_RIGHT, columnRight() ? "0" : "1"); }
     /** Finger Action's menu ({@code PaintActivity.fingerMenu}): each choice's words and the bar's tool it draws with (−1 Nothing), the one chosen marked. */

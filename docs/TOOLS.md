@@ -7,17 +7,15 @@ A short map of the screens. The full story of each tool, and why it works the wa
 
 <img src="images/tour/shelf.png" alt="The shelf: notebook covers in rows" width="360"> <img src="images/tour/notebook-pages.png" alt="A notebook's page view: one page large, with the others along the bottom" width="360">
 
-The app opens on the notebook you were last in; the shelf shows the rest. A notebook has up to 250 pages and its
+The app opens on the notebook you were last in; the shelf shows the rest. A notebook has up to 2,000 pages and its
 own settings: a page template (or one of the tablet's own templates), which tools it keeps, rules such as No
 Erasing, One Brush and Timed Pages, and a cover design.
 Notebooks are saved as you draw, in `Document/Superdood` on the tablet; PNG and PDF copies are made only when
 you ask (Export). The copies are grey, as the tablet is, but for what a Second Ink brush drew: that shows in the
 notebook's Second Ink (Notebook Settings: Blue, Sepia, Red, Green, Violet), there and on the Fridge.
 
-The shelf holds a notebook named **#inktober52**, the Prompts notebook. Opened the first time, it asks to turn on,
-since it uses the internet. Then it adds a page a week, the #inktober52 word, its number and its week across its top.
-**Send to the Fridge** (the menu) sends any page to superdood.org/fridge, a prompt page under its word; the first time, it confirms your email.
-**Stop Taking Part**, in its Notebook Settings, deletes your email and your pages on the Fridge; the notebook stays.
+**Send to the Fridge** (the menu) sends any page to superdood.org/fridge; the first time, it confirms your email.
+**Stop Taking Part**, in System Settings, deletes your email and your pages on the Fridge.
 
 ## The drawing screen
 

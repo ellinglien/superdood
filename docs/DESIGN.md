@@ -413,7 +413,7 @@ colour, a stroke or a typeface. The words follow `docs/TEXT-STYLE.md`.
   the strip like the pages (`StripGesture.tileOf`: front cover, pages, +, back cover). When the window round the page drawn on
   does not reach it, it is pinned in the window's last slot (taking that tile's place), so a page can always be added. A tap adds a new page at the notebook's end, on the notebook's template and Page Colour,
   and turns to it. Not draggable, no long press or riffle; screen-reader label "New page". No Undo (adding a page never had one,
-  and Delete takes a blank page away without asking). Past 250 pages it says "Notebook full, 250 pages". A notebook's pages
+  and Delete takes a blank page away without asking). Past 2000 pages it says "Notebook full, 2000 pages". A notebook's pages
   are the pages drawn or added: no blank page waits at its end (one did until 2026-10-24, and an old notebook's goes when it is
   opened, only when it is a page alone, blank on the Page Colour, with nothing of its own and not the page drawn on, not as a
   change, `BlankPages.opened`). › from the last page turns to the back cover, and Timed Pages' Next Page there adds a page as

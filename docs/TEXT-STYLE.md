@@ -96,39 +96,34 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   (2026-11-06, screen-reader action **Layer Visibility**): **Layer 3**, **Layer 2**, **Layer 1** top to bottom, the one
   drawn on marked, each with Show Kinds' eye (**Full**, **Half**, **Faint**, **Hidden**), said and noted "Layer 1 half";
   a stroke on a hidden layer is refused, "Layer 1 is hidden".
-- **The Prompts notebook** (2026-11-13; `Prompts`, `PromptsWindow`, `Fridge`, `FridgeWindow`): a notebook named
-  **#inktober52** on the shelf, never renamed. Opened before it is on, a window headed **#inktober52**: "Draw along with
-  #inktober52, a word a week.", in bold "This notebook uses the internet.", "It checks superdood.org for each week's word.",
-  "Nothing you draw leaves the tablet unless you choose Send to the Fridge.", small "superdood.org/privacy.html", **Turn On**
-  and **Not Now**. A page for each open word, its word across the top and "#inktober52 no. 45 · Nov 10–16" after it, no box (the owner, 2026-11-13). System Settings' row
-  **#inktober52** (**On**, **Off**; under it "Uses the internet: the week's #inktober52 word.").
+- **#inktober52** (the Prompts notebook 2026-11-13 to 2026-11-15, then a checkbox and a Notebook Settings row, all
+  gone 2026-11-20; the owner: "remove the inktober stuff entirely actually... just keep the fridge"): no words of its
+  own. A page made with a word shows as a plain page.
 - **Send to the Fridge** (2026-11-06, Iconoir post; every notebook's again, 2026-11-13): the menu's row after Export
-  Page, on any page but a cover; greyed on a closed word's prompt page, the menu's note "This word is closed.". Its
-  window, headed the same: the page's small tilted preview; on a prompt page, the word and "no. 45 · open till Nov 23"
-  (elsewhere the page goes on plain paper, no word). The first time (the owner's
+  Page, on any page but a cover. Its window, headed the same: the page's small tilted preview, on plain paper. The first time (the owner's
   words, 2026-11-13): "We need to confirm your email address the first time you post. Superdood won't share it with
-  anyone.", the fields **Email**, **Name**, **Caption (optional)**, small "Privacy: superdood.org/privacy.html ·
+  anyone.", the fields **Email**, **Name**, small "Privacy: superdood.org/privacy.html ·
   Terms: superdood.org/terms.html", **Send Link** and **Cancel** (notes "That isn't an email address.", the server's
-  own); then "Waiting for you to tap the link in your email." till it sends. Confirmed: **Name**, **Caption
-  (optional)**, **Send** ("Sending" while it goes), **Cancel**, **Sent Pages** while any are kept. **Name** is required
+  own); then "Waiting for you to tap the link in your email." till it sends. Confirmed: **Name**, **Send** ("Sending"
+  while it goes), **Cancel**, **Sent Pages** while any are kept. No caption (the owner, 2026-11-15). **Name** is required
   (the owner, 2026-11-13: "that'll be the username"), the tablet's one name, filled in from the last one: **Send** and
   **Send Link** are greyed while it's empty. Sent: headed **Sent**, "On the Fridge." ("Updated on the Fridge." when
-  the page was sent before and its card updated) or "Waiting for a look.", the link, **Copy Link** ("Copied"), **Close**. The list headed **Sent to
-  the Fridge**, a card "#inktober52, page 5, Nov 6, 2026" over its link, **Take Down** (asked "Take Down?", "This can't
-  be undone."). Notes "Send failed", "Too large", "Taken down", "Take down failed", "This word is closed.", or the
-  server's own short words ("Too many at once. Try again later.", "Too many today. Try again tomorrow.", "Confirm your
-  email first.", "Add a name.", "Please choose another name.").
+  its card updated) or "Waiting for a look.", the link, **Copy Link** ("Copied"), **Close**. The list headed **Sent to
+  the Fridge**, a card "Harbour, page 5, Nov 6, 2026" ("page 5 (piece)" for the Lasso's) over its link, **Delete**
+  (asked "Delete?", "This can't be undone."; Take Down till 2026-11-20); the same **Delete** in the Fridge door in place
+  of the site's Report, on a card this tablet sent (2026-11-20). Notes "Send failed", "Too large", "Deleted", "Delete failed", or the server's own short words ("Too many at once. Try again later.", "Too many today. Try
+  again tomorrow.", "Confirm your email first.", "Add a name.", "Please choose another name.").
 - **Fridge Name** (2026-11-13): System Settings' row once this tablet has taken part, its one chip the name (**Add
   Name** before one); a tap opens the name prompt headed **Fridge Name** (**OK**, **Cancel**; empty, the field says "Add
   a name."). Refused, the server's own words; unreachable, "Couldn't reach the Fridge. Try again with Wi-Fi.".
-- **Stop Taking Part** (2026-11-13): the Prompts notebook's Notebook Settings while the tablet takes part, under it small
-  "Deletes your email and your pages on the Fridge. Your notebook stays."; asked "Stop taking part?", "Your email and your
-  pages on the Fridge will be deleted. Your notebook stays on this tablet.", **Stop Taking Part**, **Cancel**; then "You've
-  stopped taking part." or "Couldn't reach the Fridge. Try again with Wi-Fi.". Deleting the notebook while taking part
-  adds "Your pages on the Fridge stay unless you also stop taking part." and **Delete and Stop Taking Part**.
+- **Stop Taking Part** (2026-11-13; System Settings' since 2026-11-15): the row **The Fridge** under Fridge Name while
+  this tablet takes part, small "Deletes your email and your pages on the Fridge.", its chip **Stop Taking Part**; asked
+  "Stop taking part?", "Your email and your pages on the Fridge will be deleted. Your notebooks stay on this tablet.",
+  **Stop Taking Part**, **Cancel**; then "You've stopped taking part." or "Couldn't reach the Fridge. Try again with
+  Wi-Fi.".
 - **The page bar**: the page and its count as "3 / 24", a cover as **Cover** or **Back**; screen-reader text "Page 3 of
   24", "Front cover", "Back cover". Its buttons **Previous page**, **Next page** (inside a notebook also **First page** and **Last page**, 2026-11-10), **Notebook** and **New page** (the + tile after the last page,
-  2026-10-24, its note in a full notebook "Notebook full, 250 pages"). On the
+  2026-10-24, its note in a full notebook "Notebook full, 2000 pages"). On the
   drawing screen its previews say "Page 3 of 24" (the page drawn on "Page 3 of 24, drawing"), "Front cover", "Back
   cover"; a page's screen-reader actions **Move Page Up** (toward the last page, the top of the stack), **Move Page Down**
   and **Page Settings** (was Page Options).
@@ -232,7 +227,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   a tap the next step with the menu's notes ("Template half"), a hold its menu **Full**, **Half**, **Faint**, **Hidden**
   (the one in use marked). The **Lasso** beside it (said "Lasso", ", in use"
   while taken up, and while the edge strip's hold makes its loop delete): its bar over a floating piece **Cut**,
-  **Duplicate**, **Make Stamp**, **Delete** (2026-10-28; Duplicate in Copy's place; Make Stamp 2026-11-02, before Delete, which stays last), and its tap's menu **Paste** alone, once something is cut and nothing
+  **Duplicate**, **Make Stamp**, **Share on Fridge** (a piece the Lasso lifted only), **Delete** (2026-10-28; Duplicate in Copy's place; Make Stamp 2026-11-02; Share on Fridge 2026-11-15, the owner: "Share on Fridge maybe is a better wording"; Delete stays last), and its tap's menu **Paste** alone, once something is cut and nothing
   floats. No Trash button (2026-10-25 to 2026-10-28; the edge strip's hold deletes what the loop rings); notes:
   an empty loop "Nothing to move" (the hold's "Nothing to delete"), Paste on a page of
   another size "Page size differs", a locked page "Page locked". A dirty brush holding paint: the smudge tool is
@@ -274,7 +269,7 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   while on: the column on the right), **System Settings** (2026-11-04, the owner's name for it; Iconoir settings) last: a popup where the menu was
   (2026-11-06; its own page with a bar ‹ **Back** until then), the title **System Settings** (no job line, "For every notebook." gone, 2026-11-06); its rows **Automatic Refresh** (**On**, **Off**; under it "After
   page turns, zoom and erasing"), **Finger Action** (above, 2026-11-06), **Two-Finger Tap** and **Three-Finger Tap** (**Undo**, **Redo**, **Refresh**,
-  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**), **Zen Fan** (2026-11-10; **Closes**, **Stays Open**; under it "When the pen draws on the page"), **Read Handwriting** (2026-11-09; **On**, **Off**; under it "For Search on the shelf"; asks first, in sentences, with **Turn On** and **Not Now**; a failed download says "Download failed" and shows Off), **#inktober52** (2026-11-13, the Prompts notebook's switch; above), **Fridge Name** (2026-11-13, once this tablet has taken part; above). The shelf's Search (2026-11-09, beside the Tools page library's, the same words and the same field): **Search**, × **Close search**, no finds "Nothing found", "3 pages unread" (or "1 page unread") under the finds while some are still to read, results paged with the screen-reader words **Newer results** and **Older results**. Refresh is the column's word for a flash; the
+  **Nothing**), **Edge Strip Hold** (**Trash**, **Lasso**, **Nothing**), **Zen Fan** (2026-11-10; **Closes**, **Stays Open**; under it "When the pen draws on the page"), **Read Handwriting** (2026-11-09; **On**, **Off**; under it "For Search on the shelf"; asks first, in sentences, with **Turn On** and **Not Now**; a failed download says "Download failed" and shows Off), **Fridge Name** (2026-11-13, once this tablet has taken part; above). The shelf's Search (2026-11-09, beside the Tools page library's, the same words and the same field): **Search**, × **Close search**, no finds "Nothing found", "3 pages unread" (or "1 page unread") under the finds while some are still to read, results paged with the screen-reader words **Newer results** and **Older results**. Refresh is the column's word for a flash; the
   owner's "flashes" stays out of the app's words. **Export Now** (the one way the PDF and PNGs are made) and **Delete Notebook**
   are Notebook Settings' foot, Rename its name's button. **Show Kinds** (2026-10-28, the column's eye until 2026-11-06,
   the menu's row since, its popup beside the column; the page drawn on's: **Pen**, **Paint**, **Dry Media** side by side, each eye
@@ -296,6 +291,14 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   Document/Superdood" (2026-10-24: the PDF lives in Documents now), "Export failed",
   no **Self-Portrait Prompt** (the Daily Prompt until 2026-10-30; cut at the release pare-down, 2026-11-05, in git
   at `pre-pare-down`). A cover is never timed: no countdown there.
+- **Open File** (2026-11-17, the owner: "can we make a way to open epubs and pdfs easily from the notebooks area as if
+  they were notebooks?", then "Open File tile"): the shelf's tile after **New Notebook**, its caption "PDF or EPUB",
+  said "Open File, PDF or EPUB"; its picker headed **Open File** (Import's, PDFs and EPUBs only, a file picked at once);
+  its box headed **Open File**, "Laying out 3 / 40" while an EPUB's files are first laid out (before its pages are
+  known), then "Importing 3 / 312", with **Cancel**; notes "Can't open this book" (DRM), "No pages", "Can't read it",
+  "First 999 pages". In a notebook made from a file with chapters (the owner: "Jump to a chapter"), the menu's
+  **Contents** after Notebook Settings opens a window headed **Contents**: a chapter a row (one under another a step
+  in), ‹ "2 / 5" › between pages (said "Previous page", "Next page"), and **Close**; none left, "Nothing found".
 - **A notebook's PDF** (2026-10-24, Document/Inkwash/<title>.pdf, the app's name, not "Inkwash", in code): its outline
   says **Cover**, then a day as "Oct 23, 2026" with its pages under it, "Page 3" (a card's words after it, "Page 3: A self-portrait as a
   knight…", until the Self-Portrait Prompt's cut, 2026-11-05). Its page labels **Cover**, 1, 2, …. Its hidden words (search only,

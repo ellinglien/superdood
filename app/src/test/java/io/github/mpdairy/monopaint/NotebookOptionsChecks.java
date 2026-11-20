@@ -25,6 +25,7 @@ public final class NotebookOptionsChecks {
         if (args.length == 2 && args[0].equals("older")) { older(new File(args[1])); return; }
         templates();
         records();
+        contents();
         guidesShown();
         guidesUnderPaint();
         guidesAreNotMarks();
@@ -206,6 +207,33 @@ public final class NotebookOptionsChecks {
      * Full as made, Half and Faint lightened as a ghost of that step, Hidden none; a record only when not Full; the page
      * drawn on shows them so, its copies print them in full (Guides in PDF's rule alone).
      */
+    /** A notebook made from a file keeps its chapters (the FILE record): through the file, the recovery, and never thrown by a short one. */
+    static void contents() throws Exception {
+        NotebookOptions.Contents some = new NotebookOptions.Contents(List.of(new NotebookOptions.Contents.Chapter(0x89abcdefL, 0, "One"), new NotebookOptions.Contents.Chapter(5, 1, "\u00dcn\u00efcode \u2014 two"))),
+                none = new NotebookOptions.Contents(List.of());
+        for (NotebookOptions.Contents c : new NotebookOptions.Contents[]{some, none}) {
+            NotebookOptions o = NotebookOptions.DEFAULT.withContents(c);
+            BookOptions.Covers covers = new BookOptions.Covers(); covers.options = o;
+            byte[] block = BookOptions.bytes(covers);
+            BookOptions.Found found = BookOptions.find(BookOptions.of(block), 0, block.length);
+            NotebookOptions back = BookOptions.options(found, BookOptions.of(block));
+            check(back.contents != null && back.contents.equals(c) && back.equals(o) && !o.equals(NotebookOptions.DEFAULT), "Contents read back from the file");
+            DrawingBook book = book(); book.setOptions(o);
+            ByteArrayOutputStream recovery = new ByteArrayOutputStream(); RecoveryCodec.write(recovery, book.snapshot(), "");
+            check(RecoveryCodec.read(new ByteArrayInputStream(recovery.toByteArray())).book.options().equals(o), "and from the recovery");
+        }
+        check(some.chapters.get(0).crc == 0x89abcdefL && NotebookOptions.DEFAULT.contents == null, "The CRC stays an unsigned long; none by default");
+        BookOptions.Covers plain = new BookOptions.Covers(); plain.options = NotebookOptions.DEFAULT;
+        check(BookOptions.bytes(plain).length == 0, "No contents, no FILE record");
+        byte[] bytes = NotebookOptions.DEFAULT.withContents(some).contentsBytes();
+        for (int n = 0; n < bytes.length; n++) check(NotebookOptions.DEFAULT.readContents(Arrays.copyOf(bytes, n)).contents == null, "A FILE record cut at " + n + " reads as none");
+        check(NotebookOptions.DEFAULT.readContents(null).contents == null, "and a missing one");
+        List<NotebookOptions.Contents.Chapter> many = new ArrayList<>();
+        for (int i = 0; i < 5000; i++) many.add(new NotebookOptions.Contents.Chapter(i, 0, "x".repeat(300)));
+        byte[] big = NotebookOptions.DEFAULT.withContents(new NotebookOptions.Contents(many)).contentsBytes();
+        check(big.length < 1 << 20 && NotebookOptions.DEFAULT.readContents(big).contents.chapters.size() == 2000, "5,000 long chapters write under 1 MB and read back as 2,000");
+    }
+
     static void guidesShown() throws Exception {
         NotebookOptions o = NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.GRID);
         check(o.guidesShown == NotebookOptions.FULL && o.withNextGuidesStep().withNextGuidesStep().withNextGuidesStep().guidesShown == NotebookOptions.HIDDEN

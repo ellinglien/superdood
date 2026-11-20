@@ -20,6 +20,7 @@ public final class NotebookFileChecks {
         followsPages();
         moved();
         sizeLimit();
+        twoThousand();
         cover();
         damage();
         lazy();
@@ -230,8 +231,32 @@ public final class NotebookFileChecks {
         BookPictures.Found found = BookPictures.parse(block, block.length, new long[]{1, 2, 3, 4, 5});
         int kept = 0; for (byte[] p : found.pictures) if (p != null) kept++;
         check(found.pictures[3] != null && found.pictures[0] != null && kept == 2, "Pictures that don't fit are left out, the cover's kept first (" + kept + " kept)");
-        check(BookCodec.MAX_ARCHIVE_BYTES >= DrawingBook.MAX_PACKED_BYTES && DrawingBook.MAX_PACKED_BYTES == 200 << 20 && DrawingBook.MAX_PAGES == 250,
-                "A notebook holds 250 pages and 200 MB of them");
+        check(BookCodec.MAX_ARCHIVE_BYTES >= DrawingBook.MAX_PACKED_BYTES && DrawingBook.MAX_PACKED_BYTES == 200 << 20 && DrawingBook.MAX_PAGES == 2000,
+                "A notebook holds 2,000 pages and 200 MB of them");
+    }
+    /** A PDF's pages of two layers (a locked picture, a clear layer): 999 through writeBook, and 2,000 layers whole through the codec, each written, read back and opened with every page's CRC, the opening layer and the stacks as written. */
+    static void twoThousand() throws Exception {
+        check(PictureImport.MOST_PDF_PAGES == 999 && DrawingBook.MAX_PAGES == 2000, "A file's 999 pages in a notebook of 2,000 layers");
+        int w = 64, h = 80;
+        ArrayList<PackedPage> pdf = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) { ToneDocument page = PictureImport.pdfPage(w, h, new int[w * h]); mark(page, i % 50, i / 50, 30 + i % 200); pdf.add(PackedPage.of(DrawingBook.encode(page))); }
+        PackedPage clear = PackedPage.of(BlankPages.made(w, h).bytes);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PictureImport.writeBook(out, w, h, new ArrayList<>(pdf.subList(0, 999)), clear, CoverDesign.DEFAULT, 20000, NotebookOptions.NEW);
+        DrawingBook book = BookCodec.read(new ByteArrayInputStream(out.toByteArray()));
+        check(book.count() == 1998 && book.stacks().count() == 999 && book.index() == PictureImport.OPENS_ON && book.linked(1997) && !book.linked(1996), "999 file pages in 1,998 layers, 999 stacks: " + book.count() + " " + book.stacks().count());
+        ArrayList<PackedPage> layers = new ArrayList<>();
+        for (PackedPage p : pdf) { layers.add(p); layers.add(clear); }
+        out = new ByteArrayOutputStream();
+        ArrayList<byte[]> none = new ArrayList<>(); for (int i = 0; i < 2000; i++) none.add(null);
+        BookCodec.write(out, w, h, layers, 1999, new int[2000], -1, none);
+        BookCodec.Pages read = BookCodec.readPages(new ByteArrayInputStream(out.toByteArray()));
+        boolean same = read.pages.size() == 2000 && read.active == 1999;
+        for (int i = 0; same && i < 2000; i++) same = read.pages.get(i).crc == layers.get(i).crc;
+        check(same, "2,000 layers read back, each page's CRC, the active layer");
+        File file = File.createTempFile("two-thousand", ".mpaint");
+        try { Files.write(file.toPath(), out.toByteArray()); check(BookCodec.open(file).count() == 2000 && BookPictures.readCover(file).pages == 2000, "2,000 layers opened from the file and on the shelf"); }
+        finally { file.delete(); }
     }
     static byte[][] fill(int n, byte[] picture) { byte[][] all = new byte[n][]; Arrays.fill(all, picture); return all; }
 

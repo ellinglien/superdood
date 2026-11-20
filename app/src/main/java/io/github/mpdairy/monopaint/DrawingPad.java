@@ -142,6 +142,8 @@ final class DrawingPad extends View {
     private final Rect selectionShown = new Rect();
     /** Inkwash: where the piece was lifted, or null: put down there again, it changes nothing. */
     private FloatingSelection selectionLaid;
+    /** Inkwash: the loop that lifted the piece floating (page points, x y pairs), or null: one pasted, imported or duplicated. The Fridge's (2026-11-15). */
+    private float[] selectionLoop;
     /** Inkwash: the Lasso in use (the side column's button): the pen's strokes are loops that lift a piece ({@link LassoPlanes}). */
     boolean lassoOn;
     /**
@@ -2377,9 +2379,11 @@ final class DrawingPad extends View {
         eraseGuide(); drawSelectionFrame(); flush(true); lassoBar();
     }
     /** Floats {@code piece} over the page, placing any piece already floating first. */
-    void floatSelection(FloatingSelection piece) {
+    void floatSelection(FloatingSelection piece) { floatSelection(piece, null); }
+    /** As above, {@code loop} the Lasso's loop that lifted it (null: none). */
+    private void floatSelection(FloatingSelection piece, float[] loop) {
         finishStroke();
-        selection = piece; selectionLaid = piece.lifted ? piece.copy() : null;
+        selection = piece; selectionLaid = piece.lifted ? piece.copy() : null; selectionLoop = loop;
         showSelection(); flush(true); lassoBar();
     }
     /**
@@ -2388,14 +2392,14 @@ final class DrawingPad extends View {
      */
     private void lassoBar() {
         if (app.inkWashBar == null) return;
-        if (selection == null || selectionHandle != FloatingSelection.NONE) { app.inkWashBar.lassoBar(null); return; }
+        if (selection == null || selectionHandle != FloatingSelection.NONE) { app.inkWashBar.lassoBar(null, false); return; }
         float[] corners = selection.corners(), knob = selectionKnob(), points = java.util.Arrays.copyOf(corners, 10);
         points[8] = knob[0]; points[9] = knob[1];
         pageToView.mapPoints(points);
         RectF frame = new RectF(points[0], points[1], points[0], points[1]);
         for (int i = 2; i < points.length; i += 2) frame.union(points[i], points[i + 1]);
         frame.inset(-dp(8), -dp(8));  // the knob's dot
-        app.inkWashBar.lassoBar(Popups.bounds(app.root, this, frame));
+        app.inkWashBar.lassoBar(Popups.bounds(app.root, this, frame), selectionLoop != null);
     }
     /** Redraws the piece where it lies now, with its frame: the page rendered again where it was and is ({@link #render}). */
     private void showSelection() {
@@ -2456,7 +2460,7 @@ final class DrawingPad extends View {
     private Rect endSelection() {
         eraseGuide();
         Rect area = selectionArea();
-        selection = null; selectionLaid = null; selectionShown.setEmpty(); lassoBar();
+        selection = null; selectionLaid = null; selectionLoop = null; selectionShown.setEmpty(); lassoBar();
         if (lassoBack) { lassoBack = false; lasso(false); if (app.inkWashBar != null) app.inkWashBar.lassoChanged(); }
         return area;
     }
@@ -2486,7 +2490,7 @@ final class DrawingPad extends View {
         if (piece == null) { app.note(lassoDeletes ? DrawLayout.LASSO_NOTHING_DELETED : DrawLayout.LASSO_NOTHING); return; }
         // The way that deletes: what the loop rings goes at once, as Delete takes a piece, never floating.
         if (lassoDeletes) { if (app.pageLocked()) app.note(NotebookRules.PAGE_LOCKED); else erase(piece, pageRect(piece.cutBounds())); return; }
-        floatSelection(piece);
+        floatSelection(piece, points);
     }
     /** Inkwash: Cut (the Lasso's menu): kept to paste, then deleted as Delete does, one Undo step. */
     void cutSelection() {
@@ -2508,6 +2512,16 @@ final class DrawingPad extends View {
     }
     /** Inkwash: Make Stamp (the Lasso's bar, 2026-11-02): the piece's ink a Stamp's nib ({@link PaintActivity#makeStamp}). */
     void stampSelection() { if (selection != null && document != null) app.makeStamp(selection); }
+    /**
+     * Inkwash: Fridge (the Lasso's bar, 2026-11-15): the piece back where it was lifted, the page as it was, then the page
+     * inside the loop sent ({@link PaintActivity#sendToFridge(float[])}).
+     */
+    void fridgeSelection() {
+        float[] loop = selectionLoop;
+        if (loop == null || document == null) return;
+        cancelSelection();
+        app.sendToFridge(loop);
+    }
     /** Inkwash: something cut or copied to paste ({@link #pasteSelection}). */
     boolean hasKept() { return kept != null; }
     /**
@@ -2546,9 +2560,9 @@ final class DrawingPad extends View {
         FloatingSelection piece = selection;
         if (piece == null) return null;
         if (selectionHandle != FloatingSelection.NONE) releaseSelection();
-        FloatingSelection laid = selectionLaid;
-        selection = null; selectionLaid = null; selectionShown.setEmpty(); eraseGuide();
-        if (next == document) { selectionLaid = laid; return piece; }
+        FloatingSelection laid = selectionLaid; float[] loop = selectionLoop;
+        selection = null; selectionLaid = null; selectionLoop = null; selectionShown.setEmpty(); eraseGuide();
+        if (next == document) { selectionLaid = laid; selectionLoop = loop; return piece; }
         return piece.fits(next) ? piece.copy() : null;
     }
     /** Re-renders these page pixels from the document and queues them. */
@@ -2636,6 +2650,8 @@ final class DrawingPad extends View {
         if (action == MotionEvent.ACTION_DOWN) {
             drawFinger = event.getPointerId(0); fingerDownX = event.getX(0); fingerDownY = event.getY(0); fingerDownTime = event.getEventTime();
             fingerChoice = app.inkWash.finger();
+            // A notebook made from a file turns its pages with a finger, whatever Finger Action says (the owner, 2026-11-17: "Quick page turns").
+            if (app.book != null && app.book.options().contents != null) fingerChoice = FingerTool.Choice.TURN;
             float widest = Ui.widestFingerDp(event);
             fingerRefused = FingerTool.refused(fingerChoice, Ui.fingersOnly(event), blocksFingerGesture(), app.busy(), widest);
             // So the owner's real values can be read from logcat to tune the palm thresholds.

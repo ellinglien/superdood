@@ -15,10 +15,11 @@ path, documents, layers and wet media are all his work. If you want a full paint
 
 ## About Superdood
 
-- Things are stored in **Notebooks**. They can be up to 250 pages each and everything saves automatically.
+- Things are stored in **Notebooks**. They can be up to 2,000 pages each and everything saves automatically.
+- **Open File** turns a PDF or an EPUB into a notebook to read and draw on. Its chapters are in Contents.
 - **A brush engine**: Under the hood there's a full modular brush building system. Each brush consists of six customizable elements: Control, Tip, Medium, Affects Page, Drying and After. There are nine tool slots on the side bar and a library of preset brushes (some pens, pencils, markers, charcoal, ink wash, watercolour, gouache, oils) which you can tweak in the app.
 - **[Brush Studio](https://superdood.org/studio/)** is a web brush making companion that reads and writes the same codes.
-- **[The Fridge](https://superdood.org/fridge)** is a shared wall, drawing along with #inktober52's weekly word. Turn on #inktober52 in System Settings for a notebook with a page for each week's word. Menu, Send to the Fridge pins the page you're on, by your name. The first send confirms your email address. You can take any page down again from the tablet.
+- **[The Fridge](https://superdood.org/fridge)** is a shared wall. Menu, Send to the Fridge pins the page you're on, by your name. The first send confirms your email address. You can delete any page again from the tablet.
 - **Second Ink**: Because it's on the Supernote of course everything is monochrome in the app, but some tools like washes are switched to a second ink colour in exports to give things automatically a bit more life.
 - **[Draw Together](https://superdood.org/live/)** allows you to share a page with someone and draw at the same time.
 
@@ -43,7 +44,7 @@ Nothing is installed on your computer. To update later, do it again. Your notebo
 
 Use this if you can't install from the browser, for example if you only have Safari or Firefox.
 
-1. Download [superdood-1.3.apk](https://github.com/ellinglien/superdood/releases/download/v1.3/superdood-1.3.apk).
+1. Download [superdood-1.4.apk](https://github.com/ellinglien/superdood/releases/download/v1.4/superdood-1.4.apk).
 2. On the Supernote, turn on **Sideloading** (as above).
 3. On your computer, install [Android Sideloader](https://github.com/ryan-andrew/android_sideloader/releases).
    On a Mac, if it won't open, right-click it and choose **Open**.

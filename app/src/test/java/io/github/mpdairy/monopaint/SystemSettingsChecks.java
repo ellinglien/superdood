@@ -56,12 +56,17 @@ public final class SystemSettingsChecks {
         check(bar.contains("app.pad.refreshAsked(\"Refresh button\")") && pad.contains("else refreshAsked(tap.label + \" tap\");"), "Refresh, the button or a tap, is asked for");
         check(bar.contains("EdgeHold.Choice choice = app.prefs.edgeHold();"), "The edge strip hold reads its choice");
         check(source("SystemSettingsPanel").contains("if (app.canSimulate())\n            row(app, list, SystemSettings.NOMAD_SIZE,") && source("SystemSettingsPanel").contains("i -> app.setSimulating(i == 0));"), "Nomad Size: one row, only on a tablet that simulates one, switching the simulation");
-        check(source("SystemSettingsPanel").contains("if (!prefs.fridgeTablet().isEmpty())\n            row(app, list, SystemSettings.FRIDGE_NAME, null, new String[]{"), "Fridge Name: one row, only once this tablet has the Fridge's key");
+        check(source("SystemSettingsPanel").contains("if (!prefs.fridgeTablet().isEmpty()) {\n            row(app, list, SystemSettings.FRIDGE_NAME, null, new String[]{")
+                        && source("SystemSettingsPanel").contains("row(app, list, SystemSettings.FRIDGE, Fridge.STOP_NOTE, new String[]{Fridge.STOP}, -1, 1,")
+                        && source("SystemSettingsPanel").contains(".setPositiveButton(Fridge.STOP, (d, w) -> app.stopTakingPart(app::systemSettingsRedrawn))")
+                        && !source("SystemSettingsPanel").contains("PROMPTS"),
+                "Fridge Name and The Fridge's Stop Taking Part (asked first; here since the #inktober52 notebook went, 2026-11-15): only once this tablet has the Fridge's key; no #inktober52 row");
         int flashes = 0;
         for (java.io.File f : new java.io.File("app/src/main/java/io/github/mpdairy/monopaint").listFiles())
             if (f.getName().endsWith(".java") && !f.getName().equals("Ui.java"))
                 flashes += new String(java.nio.file.Files.readAllBytes(f.toPath())).split("Ui\\.flashWindow\\(", -1).length - 1;
-        check(flashes == 4, "Four redraws outside Ui, each behind the gate: the page's auto-refresh, its return, the notebook screens, the test area (" + flashes + ")");
+        check(source("FridgeDoor").contains("SystemSettings.flashes(false, app.prefs.autoRefresh())"), "The Fridge door's flash asks the gate");
+        check(flashes == 5, "Five redraws outside Ui, each behind the gate: the page's auto-refresh, its return, the notebook screens, the Fridge door, the test area (" + flashes + ")");
     }
     private static String source(String name) throws java.io.IOException {
         return new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("app/src/main/java/io/github/mpdairy/monopaint/" + name + ".java")));

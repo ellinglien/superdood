@@ -381,8 +381,17 @@ final class NotebookCovers {
      * ({@link PagePicture#marksAlone}), laid over it (none for null), its design rubbed off where {@code marks} says.
      */
     static byte[] shown(boolean front, CoverDesign design, String name, int width, int height, PagePicture pictured, PagePicture marks) {
-        byte[] paper = paper(front, design, name, width, height, pictured == null ? null : of(pictured));
-        if (marks != null && marks.wear() != null)
+        return shown(front, design, name, width, height, pictured, marks, false);
+    }
+    /**
+     * As above; {@code book}: a notebook made from a book or a PDF (Open File, Import), whose front is its cover picture
+     * alone, the whole cover, no pattern or label (the owner, 2026-11-20: "for imported books and epubs, instead of the
+     * standard notebook cover use the proper cover for the shelf"); marks drawn on the front still over it.
+     */
+    static byte[] shown(boolean front, CoverDesign design, String name, int width, int height, PagePicture pictured, PagePicture marks, boolean book) {
+        boolean whole = front && book && pictured != null;
+        byte[] paper = whole ? of(pictured).tones(width, height) : paper(front, design, name, width, height, pictured == null ? null : of(pictured));
+        if (!whole && marks != null && marks.wear() != null)
             paper = CoverWear.apply(paper, paper(front, design, name, width, height, pictured == null ? null : of(pictured), true), marks.wear().scaled(width, height));
         if (marks == null || marks.white()) return paper;
         byte[] out = new byte[width * height];

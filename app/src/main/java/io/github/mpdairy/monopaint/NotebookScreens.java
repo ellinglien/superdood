@@ -331,7 +331,7 @@ final class NotebookScreens {
         shelfPage = Math.max(0, Math.min(shelfPage, pages - 1));
         int[] range = l.shelfPage(shelfPage, shelf.size());
         List<View> tiles = new ArrayList<>();
-        if (shelfPage == 0) tiles.add(tile(null));
+        if (shelfPage == 0) { tiles.add(tile(null)); tiles.add(openTile()); tiles.add(doorTile()); }
         for (int i = range[0]; i < range[0] + range[1]; i++) tiles.add(tile(shelf.get(i)));
         LinearLayout grid = LabUi.column(app);
         for (int r = 0, k = 0; r < l.rows; r++) {
@@ -374,8 +374,7 @@ final class NotebookScreens {
         if (app.book == null) return;
         // Its own place first: a duplicated page shares its CRC with the one it was copied from.
         PackedPage there = f.page >= 0 && f.page < app.book.count() ? app.book.packed(f.page) : null;
-        int at = there != null && there.crc == f.crc ? f.page : DrawingBook.NONE;
-        for (int i = 0; i < app.book.count() && at == DrawingBook.NONE; i++) { PackedPage p = app.book.packed(i); if (p != null && p.crc == f.crc) at = i; }
+        int at = there != null && there.crc == f.crc ? f.page : app.book.pageWithCrc(f.crc);
         if (at != DrawingBook.NONE) { markPage = at; marks.clear(); marks.addAll(search.boxes(f)); }
         showPages(at != DrawingBook.NONE ? at : f.page);
     }
@@ -406,6 +405,25 @@ final class NotebookScreens {
         });
         // A long press: Rename, Settings (its library card) and Delete.
         if (notebook != null) tile.setOnLongClickListener(v -> { if (!app.shelfBusy()) app.notebookMenu(face, notebook); return true; });
+        return tile;
+    }
+    /** The Fridge door (2026-11-15): a door with cards taped on, "The Fridge" under it; a tap opens the wall ({@link FridgeDoor}). */
+    private View doorTile() { return thingTile(new DoorView(), FridgeDoor.TITLE, FridgeDoor.TILE_ABOUT, () -> app.fridgeDoor.open()); }
+    /** Open File (the owner, 2026-11-17: "Open File tile"): a sheet with its corner folded, "Open File" and "PDF or EPUB" under it; a tap picks a file to make a notebook of ({@code PaintActivity.openFile}). */
+    private View openTile() { return thingTile(new FileView(), PictureImport.OPEN_FILE, PictureImport.OPEN_ABOUT, () -> app.openFile()); }
+    /** A shelf tile that isn't a notebook: {@code face} at a cover's size, {@code name} and {@code about} under it, a tap {@code opens} it while the shelf isn't busy; no long press. */
+    private View thingTile(View face, String name, String about, Runnable opens) {
+        NotebookLayout l = layout;
+        LinearLayout tile = LabUi.column(app);
+        tile.addView(face, sized(l.tileWidth, l.coverHeight));
+        TextView words = text(name, TypeStyle.BODY);
+        LinearLayout.LayoutParams under = sized(-1, -2); under.topMargin = dp(NotebookLayout.UNDER_COVER);
+        tile.addView(words, under);
+        TextView caption = text(about, TypeStyle.CAPTION);
+        caption.setTextColor(Theme.GREY_800); caption.setMaxLines(NotebookLayout.COUNT_LINES);
+        tile.addView(caption, sized(-1, -2));
+        tile.setContentDescription(name + ", " + about);
+        tile.setOnClickListener(v -> { if (!app.shelfBusy()) opens.run(); });
         return tile;
     }
     /** "24 pages · Oct 17": its pages, and the day it last changed ({@link NotebookStrip#about}). */
@@ -660,10 +678,13 @@ final class NotebookScreens {
         DrawingBook book = app.book;
         if (book != null && notebook.path.equals(app.drawingName)) return coverPicture(book, DrawingBook.FRONT, box);
         if (notebook.unreadable) return null;
-        byte[] pictured = notebook.cover < 0 ? null : notebook.picture != null ? notebook.picture : made(notebook, notebook.cover);
+        // A book's notebook made before its first page was its cover picture: that page still.
+        boolean fromBook = notebook.options.contents != null;
+        int cover = notebook.cover >= 0 || !fromBook ? notebook.cover : 0;
+        byte[] pictured = cover < 0 ? null : notebook.cover >= 0 && notebook.picture != null ? notebook.picture : made(notebook, cover);
         byte[] marks = !notebook.frontDrawn ? null : notebook.front != null ? notebook.front : made(notebook, DrawingBook.FRONT);
-        if (notebook.cover >= 0 && pictured == null || notebook.frontDrawn && marks == null) return null;
-        return composed(true, notebook.design, notebook.path, notebook.width, notebook.height, pictured, marks, box);
+        if (cover >= 0 && pictured == null || notebook.frontDrawn && marks == null) return null;
+        return composed(true, notebook.design, notebook.path, notebook.width, notebook.height, pictured, marks, fromBook, box);
     }
     /** A shelf notebook's page {@code page}'s picture (its front cover's, of its marks: {@link DrawingBook#FRONT}) made from its file, or null while it is made. */
     private byte[] made(DocumentStore.Notebook notebook, int page) {
@@ -690,9 +711,11 @@ final class NotebookScreens {
     private Bitmap coverPicture(DrawingBook book, int side, RectF box) {
         boolean front = side == DrawingBook.FRONT;
         byte[] pictured = null, marks = null;
-        if (front && book.cover() >= 0) { pictured = book.picture(book.cover()); if (pictured == null) { picture(book, book.cover()); return null; } }
+        boolean fromBook = book.options().contents != null;
+        int cover = book.cover() >= 0 || !fromBook ? book.cover() : 0;
+        if (front && cover >= 0) { pictured = book.picture(cover); if (pictured == null) { picture(book, cover); return null; } }
         if (book.coverDrawn(side)) { marks = book.picture(side); if (marks == null) { picture(book, side); return null; } }
-        return composed(front, book.design(), app.drawingName, book.width, book.height, pictured, marks, box);
+        return composed(front, book.design(), app.drawingName, book.width, book.height, pictured, marks, fromBook, box);
     }
     /** Covers made as masks, by what they are made of and their size. */
     private final android.util.LruCache<String, Bitmap> covers = new android.util.LruCache<String, Bitmap>(8 << 20) {
@@ -702,18 +725,18 @@ final class NotebookScreens {
      * A cover of the notebook at {@code path} in {@code design} fitted in {@code box}, as a mask ({@link NotebookCovers#shown}):
      * made in the background the first time for what it is made of, then kept; null while it is made.
      */
-    private Bitmap composed(boolean front, CoverDesign design, String path, int pageWidth, int pageHeight, byte[] pictured, byte[] marks, RectF box) {
+    private Bitmap composed(boolean front, CoverDesign design, String path, int pageWidth, int pageHeight, byte[] pictured, byte[] marks, boolean book, RectF box) {
         if (pageWidth <= 0 || pageHeight <= 0) { pageWidth = Math.max(1, Math.round(box.width())); pageHeight = Math.max(1, Math.round(box.height())); }
         float scale = Math.min(box.width() / pageWidth, box.height() / pageHeight);
         int w = Math.max(1, Math.round(pageWidth * scale)), h = Math.max(1, Math.round(pageHeight * scale));
         String name = DrawingFiles.name(path);
-        String key = NotebookCovers.shownKey(front, design, name, w, h, pictured, marks);
+        String key = NotebookCovers.shownKey(front, design, name, w, h, pictured, marks) + (book ? "#book" : "");
         Bitmap ready = covers.get(key);
         if (ready != null || failed.contains(key) || !pending.add(key)) return ready;
         worker.execute(() -> {
             Bitmap mask = null;
             try {
-                byte[] tones = NotebookCovers.shown(front, design, name, w, h, pictured == null ? null : PagePicture.decode(pictured), marks == null ? null : PagePicture.decode(marks));
+                byte[] tones = NotebookCovers.shown(front, design, name, w, h, pictured == null ? null : PagePicture.decode(pictured), marks == null ? null : PagePicture.decode(marks), book);
                 mask = mask(tones, w, h);
             } catch (Exception | OutOfMemoryError e) { android.util.Log.w(ProbeActivity.TAG, "Could not show a cover", e); }
             Bitmap shownMask = mask;
@@ -975,6 +998,58 @@ final class NotebookScreens {
         }
     }
 
+    /** The Fridge door's face: an ink outline, the handle down the left, two cards taped on, a little tilted as the wall's. */
+    @SuppressLint("ViewConstructor")
+    private final class DoorView extends View {
+        DoorView() { super(app); }
+        @Override protected void onDraw(Canvas canvas) {
+            canvas.drawColor(Theme.PAPER);
+            float w = getWidth(), h = getHeight();
+            outline(canvas, new RectF(0, 0, w, h), dp(Theme.BASE), Theme.INK, false);
+            Paint ink = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ink.setColor(Theme.INK); ink.setStyle(Paint.Style.STROKE); ink.setStrokeWidth(dp(Theme.BASE));
+            canvas.drawRoundRect(new RectF(w * .09f, h * .30f, w * .09f + dp(6), h * .62f), dp(3), dp(3), ink);
+            card(canvas, ink, w * .30f, h * .14f, w * .38f, h * .30f, -3);
+            card(canvas, ink, w * .50f, h * .52f, w * .36f, h * .27f, 2);
+        }
+        private void card(Canvas canvas, Paint ink, float x, float y, float cw, float ch, float degrees) {
+            canvas.save();
+            canvas.rotate(degrees, x + cw / 2, y + ch / 2);
+            Paint fill = new Paint();
+            fill.setColor(Theme.PAPER);
+            canvas.drawRect(x, y, x + cw, y + ch, fill);
+            canvas.drawRect(x, y, x + cw, y + ch, ink);
+            fill.setColor(Theme.GREY_400);
+            canvas.drawRect(x + cw * .3f, y - dp(4), x + cw * .7f, y + dp(4), fill);
+            canvas.restore();
+        }
+    }
+
+    /** Open File's face: an ink outline, and in it a sheet with its upper right corner folded over and a few lines of text, as the door's cards are drawn. */
+    @SuppressLint("ViewConstructor")
+    private final class FileView extends View {
+        FileView() { super(app); }
+        @Override protected void onDraw(Canvas canvas) {
+            canvas.drawColor(Theme.PAPER);
+            float w = getWidth(), h = getHeight();
+            outline(canvas, new RectF(0, 0, w, h), dp(Theme.BASE), Theme.INK, false);
+            Paint ink = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ink.setColor(Theme.INK); ink.setStyle(Paint.Style.STROKE); ink.setStrokeWidth(dp(Theme.BASE)); ink.setStrokeJoin(Paint.Join.ROUND);
+            float left = w * .24f, top = h * .18f, right = w * .76f, bottom = h * .82f, fold = (right - left) * .3f;
+            android.graphics.Path sheet = new android.graphics.Path();
+            sheet.moveTo(left, top); sheet.lineTo(right - fold, top); sheet.lineTo(right, top + fold); sheet.lineTo(right, bottom); sheet.lineTo(left, bottom); sheet.close();
+            canvas.drawPath(sheet, ink);
+            android.graphics.Path corner = new android.graphics.Path();
+            corner.moveTo(right - fold, top); corner.lineTo(right - fold, top + fold); corner.lineTo(right, top + fold);
+            canvas.drawPath(corner, ink);
+            float inset = (right - left) * .16f, step = (bottom - top) / 9;
+            for (int line = 0; line < 5; line++) {
+                float y = top + fold + step * (1.2f + line), end = line == 4 ? left + (right - left) * .55f : right - inset;
+                canvas.drawLine(left + inset, y, end, y, ink);
+            }
+        }
+    }
+
     /** The page shown inside the notebook, by its picture; a tap draws on it, a swipe turns it. */
     @SuppressLint("ViewConstructor")
     private final class PageView extends View {
@@ -1102,9 +1177,7 @@ final class NotebookScreens {
     private void fillSettings(DrawingBook book) {
         NotebookOptions o = book.options();
         TracingPaper t = book.tracing();
-        // Stop Taking Part's row in the Prompts notebook while this tablet takes part.
-        boolean takingPart = app.prompts(app.drawingName) && !app.prefs.fridgeTablet().isEmpty();
-        Object shown = java.util.Arrays.asList(o, t.paper, t.strength, book.design(), app.drawingName, count(book), book.cover(), book.stacks().of(book.index()), takingPart);
+        Object shown = java.util.Arrays.asList(o, t.paper, t.strength, book.design(), app.drawingName, count(book), book.cover(), book.stacks().of(book.index()));
         if (shown.equals(settingsShown)) return;
         settingsShown = shown;
         settings.removeAllViews();
@@ -1112,14 +1185,13 @@ final class NotebookScreens {
         LibraryCard.Layout l = LibraryCard.settingsLayout(layout.width - 2 * layout.margin, layout.spreadHeight, name);
         TextView named = text(name, TypeStyle.TITLE);
         named.setTextSize(l.titleSp); named.setMaxLines(l.titleLines);
-        // Favourites is never renamed or deleted (NotebookStrip.FAVOURITES): no Rename, no Delete Notebook. The Prompts
-        // notebook is never renamed (its path is how it is found), but may be deleted.
-        boolean favourites = NotebookStrip.favourites(app.drawingName), kept = favourites || app.prompts(app.drawingName);
-        if (!kept) named.setContentDescription(name + ". " + LibraryCard.RENAME);
-        if (!kept) named.setOnClickListener(v -> tapSetting(LibraryCard.Part.NAME));
+        // Favourites is never renamed or deleted (NotebookStrip.FAVOURITES): no Rename, no Delete Notebook.
+        boolean favourites = NotebookStrip.favourites(app.drawingName);
+        if (!favourites) named.setContentDescription(name + ". " + LibraryCard.RENAME);
+        if (!favourites) named.setOnClickListener(v -> tapSetting(LibraryCard.Part.NAME));
         settings.addView(named, sized(-1, -2));
         LabButton rename = new LabButton(app, 0, LibraryCard.RENAME, false);
-        rename.setVisibility(kept ? View.GONE : View.VISIBLE);
+        rename.setVisibility(favourites ? View.GONE : View.VISIBLE);
         rename.setPadding(0, 0, dp(12), 0);
         rename.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         rename.setOnClickListener(v -> tapSetting(LibraryCard.Part.NAME));
@@ -1149,21 +1221,6 @@ final class NotebookScreens {
             actions.addView(b, at);
         }
         settings.addView(actions, sized(-1, Math.round(l.rowHeight)));
-        // The Prompts notebook while this tablet takes part (the Prompts, 2026-11-13): Stop Taking Part, asked first.
-        if (takingPart) {
-            LabButton stop = new LabButton(app, 0, Fridge.STOP, false);
-            stop.setMinHeight(0); stop.setMinimumHeight(0);
-            stop.setOnClickListener(v -> {
-                if (app.book != book || app.busy() || selector != null) return;
-                app.showDialog(new AlertDialog.Builder(app).setTitle(Fridge.STOP_ASK).setMessage(Fridge.STOP_ABOUT)
-                        .setPositiveButton(Fridge.STOP, (d, w) -> app.stopTakingPart(() -> { if (app.book == book) fillSettings(book); }))
-                        .setNegativeButton(Fridge.CANCEL, null));
-            });
-            settings.addView(stop, sized(-2, dp(LibraryCard.actionHeight(l.rowHeight))));
-            TextView note = text(Fridge.STOP_NOTE, TypeStyle.CAPTION);
-            note.setTextColor(Theme.GREY_800);
-            settings.addView(note, sized(-1, -2));
-        }
         long edited = app.store.modified(app.drawingName);
         TextView foot = text(LibraryCard.foot(DrawingNames.isoDate(DrawingFiles.name(app.drawingName)),
                 edited <= 0 ? null : java.time.Instant.ofEpochMilli(edited).atZone(java.time.ZoneId.systemDefault()).toLocalDate(), count(book)), TypeStyle.CAPTION);

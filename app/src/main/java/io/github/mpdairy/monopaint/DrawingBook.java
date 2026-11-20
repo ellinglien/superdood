@@ -19,11 +19,11 @@ import java.util.LinkedHashMap;
  */
 final class DrawingBook {
     /**
-     * At most 250 pages (100 until the owner, 2026-10-22, "let's increase to another max pg count": a PDF's pages take two
+     * At most 2,000 pages (250 until 2026-11-17, a file's 999 pages; 100 until the owner, 2026-10-22, "let's increase to another max pg count": a PDF's pages take two
      * each with their drawing layer), and 200 MB of them on disk (16 MB while every page was held in memory). Older
-     * builds refuse a notebook of more than 100.
+     * builds refuse a notebook of more than 100 (or 250).
      */
-    static final int MAX_PAGES=250, MAX_PACKED_BYTES=200*1024*1024;
+    static final int MAX_PAGES=2000, MAX_PACKED_BYTES=200*1024*1024;
     /** Inkwash: the front cover's and the back cover's place, for {@link #select}, {@link #index} and the rest; no page's. */
     static final int FRONT=-1, BACK=-2;
     /** What {@link #after} and {@link #before} give past the covers. */
@@ -216,7 +216,6 @@ final class DrawingBook {
      * own template (or Random) puts it back to the notebook's (under Random, a new pick).
      */
     void setPageTemplate(int i,NotebookTemplate t){
-        if(template(i).prompt())return; // a Prompts page keeps its word (the owner, 2026-11-13: it "cannot be drawn over or erased")
         if(isCover(i)||i<0||i>=count())return;
         // A stack's guides are its bottom page's.
         i=stacks().bottom(i);
@@ -749,6 +748,8 @@ final class DrawingBook {
     ToneDocument cachedPage(int i) { return cached(i); }
     /** Page {@code i}'s packed bytes if they are what it holds now, else null (it changed since it was packed; a cover with nothing drawn). */
     PackedPage packed(int i) { return packedCurrent(i) ? packedAt(i) : null; }
+    /** The first page (a layer) whose packed bytes have CRC-32 {@code crc}, wherever it has moved, else {@link #NONE}: a search's find, a chapter of Contents. */
+    int pageWithCrc(long crc) { for (int i = 0; i < count(); i++) { PackedPage p = packed(i); if (p != null && p.crc == crc) return i; } return NONE; }
     /**
      * Takes {@code packed}, the current page packed as {@code key} named it (a save packs it anyway), so leaving the page
      * needn't pack it again; nothing if the page changed since.

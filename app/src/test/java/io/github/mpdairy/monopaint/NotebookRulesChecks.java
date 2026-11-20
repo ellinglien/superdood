@@ -34,6 +34,7 @@ public final class NotebookRulesChecks {
         lock();
         records();
         lockCut();
+        inktoberGone();
         pageRules();
         pageSeconds();
         System.out.println("PASS: a page's own time (Page Settings' slider): the notebook's Timed Pages stops, used while the page is timed On alone and run by its clock, kept with the page and its stack's bottom, as PTIM in the file and TSRM in the recovery only when a page has one, a notebook without one (PRUL or not) byte for byte as before, a record for another page count or over an hour left out");
@@ -622,6 +623,44 @@ public final class NotebookRulesChecks {
         check(left.options().equals(NotebookOptions.DEFAULT.withTemplate(NotebookTemplate.LINED)) && left.snapshot().printedTemplate(0).equals(NotebookTemplate.LINED),
                 "A notebook that left its guides out of the PDF opens with its template, which the copies print");
         System.out.println("PASS: Lock Settings and Guides in PDF cut: locked, sealed and Leave Out notebooks open as said, their rules kept, no lock written again");
+    }
+
+    /**
+     * #inktober52 gone (the owner, 2026-11-20: "i think we should remove the inktober stuff entirely actually... just keep
+     * the fridge."): a notebook with its INKT record and a recovery with its marker, as 1.3 and explore-live wrote them,
+     * still open, every other option as it was, and nothing of it written again; a page with a word's key is a plain
+     * page, its key kept, and takes another template.
+     */
+    static void inktoberGone() throws Exception {
+        int inkt = BookOptions.tag("INKT");
+        DrawingBook book = NotebookOptionsChecks.book();
+        book.setOptions(NotebookOptions.DEFAULT.withLockPages(true).withInk(2));
+        // Lock Pages' record (one byte, 1) retagged INKT: #inktober52 On as the file kept it, Second Ink after it.
+        DrawingBook read = BookCodec.read(new ByteArrayInputStream(retag(NotebookOptionsChecks.bytes(book), BookOptions.LOCK_PAGES, inkt)));
+        check(read.options().equals(NotebookOptions.DEFAULT.withInk(2)) && read.count() == book.count(), "A notebook with #inktober52 on opens, Second Ink after it read");
+        BookOptions.Covers c = new BookOptions.Covers(); c.options = read.options();
+        byte[] block = BookOptions.bytes(c);
+        for (BookOptions.Record r : BookOptions.find(BookOptions.of(block), 0, block.length).records) check(r.tag != inkt, "Saved again: no INKT record");
+        // A recovery with the marker (an int, no more) before Second Ink's section, which still reads.
+        book.setOptions(NotebookOptions.DEFAULT.withInk(2));
+        ByteArrayOutputStream recovery = new ByteArrayOutputStream();
+        RecoveryCodec.write(recovery, book.snapshot(), "");
+        byte[] now = recovery.toByteArray();
+        check(BookPictures.readInt(now, now.length - 5) == 0x54535245, "The recovery ends with Second Ink's section");
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        o.write(now, 0, now.length - 5); o.write(new byte[]{0x54, 0x53, 0x52, 0x49}); o.write(now, now.length - 5, 5);
+        check(RecoveryCodec.read(new ByteArrayInputStream(o.toByteArray())).book.options().equals(NotebookOptions.DEFAULT.withInk(2)), "A recovery with #inktober52's marker opens, Second Ink after it read");
+        recovery.reset();
+        RecoveryCodec.write(recovery, RecoveryCodec.read(new ByteArrayInputStream(o.toByteArray())).book.snapshot(), "");
+        check(Arrays.equals(recovery.toByteArray(), now), "Written again: no marker");
+        // A word's page (1.3's key) is a plain page; its key stays until another template is set.
+        String word = NotebookOptions.OWN + "prompt:lantern|45|lantern|Nov 10–16";
+        DrawingBook paged = new DrawingBook(new ToneDocument(64, 64));
+        paged.restorePageTemplates(Collections.singletonList(word));
+        check(paged.template(0) == NotebookTemplate.BLANK && paged.template(0).guides(64, 64) == null && word.equals(paged.pageTemplates().get(0)), "A word's page shows plain, its key kept");
+        paged.setPageTemplate(0, NotebookTemplate.LINED);
+        check(paged.template(0) == NotebookTemplate.LINED, "and takes another template, as any page");
+        System.out.println("PASS: #inktober52 gone: a notebook with its INKT record and a recovery with its marker open, the options after them read, neither written again; a word's page plain, its key kept till another template is set");
     }
 
     // ---- helpers ----

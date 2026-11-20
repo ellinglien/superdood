@@ -28,7 +28,7 @@ final class DrawingFiles {
     }
     /**
      * Whether a name may hold {@code c}: a letter, a number, a space, #, - or _ (the regex [\\p{L}\\p{N} _#-], spelled out:
-     * the browser's Java has no Unicode classes in its regexes). # for the Prompts notebook's name ({@link Prompts#NOTEBOOK}).
+     * the browser's Java has no Unicode classes in its regexes). # for 1.3's #inktober52 notebook's name, kept so it still opens.
      */
     static boolean nameSign(int c) {
         int t = Character.getType(c);

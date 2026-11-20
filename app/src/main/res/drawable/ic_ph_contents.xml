@@ -1,0 +1,9 @@
+<!-- Iconoir "list" (iconoir.com, MIT, v7.10.1): a notebook's Contents (2026-11-20). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M8 6L20 6" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M4 6.01L4.01 5.99" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M4 12.01L4.01 11.99" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M4 18.01L4.01 17.99" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M8 12L20 12" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M8 18L20 18" android:strokeColor="#000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

@@ -547,17 +547,19 @@ final class DrawLayout {
      * naming the other hand ({@code right}: the column is on the right), and System Settings (2026-11-04, {@link
      * SystemSettings}) last. The notebook's rows are left out for a live page's guest ({@code notebook} false: the page is
      * the host's); Show Kinds, the Sand Timer and Play are the Manta's alone ({@code column}: its column's buttons until
-     * 2026-11-06, the owner: "move the timer, visibility, and mischief tools to the dropdown").
+     * 2026-11-06, the owner: "move the timer, visibility, and mischief tools to the dropdown"). {@link #CONTENTS} after
+     * Notebook Settings in a notebook made from a file that has chapters ({@code contents}, 2026-11-17).
      */
-    static java.util.List<Row> fileRows(boolean notebook, String fingerRow, boolean right, String share, boolean sharing, boolean column, boolean sand, boolean playing) {
+    static java.util.List<Row> fileRows(boolean notebook, boolean contents, String fingerRow, boolean right, String share, boolean sharing, boolean column, boolean sand, boolean playing) {
         java.util.List<Row> rows = new java.util.ArrayList<>();
         if (notebook) {
             rows.add(new Row("open", NotebookLayout.OPEN_NOTEBOOK, "ic_ph_book", false));
             rows.add(new Row("settings", NOTEBOOK_SETTINGS, "ic_ph_page_star", false));
+            if (contents) rows.add(new Row("contents", CONTENTS, "ic_ph_contents", false));
             rows.add(Row.LINE);
             rows.add(new Row("exportPage", LibraryCard.EXPORT_PAGE, "ic_ph_upload_square", false));
             // The Fridge (2026-11-06, Iconoir post): the Manta's alone, after Export Page, another way out for the page; never
-            // a cover's, greyed on a closed word's prompt page (PaintActivity.fileMenu, Prompts.sendRow).
+            // a cover's (PaintActivity.fileMenu).
             if (column) rows.add(new Row("fridge", Fridge.ROW, "ic_ph_post", false));
         }
         rows.add(new Row("import", PictureImport.IMPORT, "ic_ph_download", false));
@@ -680,6 +682,8 @@ final class DrawLayout {
     static final String LEFT_HANDED = "Left-Handed", RIGHT_HANDED = "Right-Handed";
     /** The menu's row for the notebook's settings (the owner, 2026-10-27: "change settings in dropdown to 'notebook settings'"). */
     static final String NOTEBOOK_SETTINGS = "Notebook Settings";
+    /** The menu's row and its window in a notebook made from a file with chapters (the owner, 2026-11-17: "Jump to a chapter"). */
+    static final String CONTENTS = "Contents";
     /**
      * Every icon in the column and its corners, dp: one square (the owner, 2026-10-30: "the icon buttons seem a bit out of
      * whack with each other, make sure to size them and position them carefully so they look like they all belong
@@ -864,10 +868,12 @@ final class DrawLayout {
      * just one lasso tool... when the bounding box appears, above it is a toolbar offering choices for what to do with
      * it. we could merge the lasso trash and the lasso"; {@code InkWashBar.lassoBar}), its menu's Paste, its notes.
      */
-    static final String LASSO_CUT = "Cut", LASSO_DUPLICATE = "Duplicate", LASSO_DELETE = "Delete", LASSO_PASTE = "Paste",
+    static final String LASSO_CUT = "Cut", LASSO_DUPLICATE = "Duplicate", LASSO_FRIDGE = "Share on Fridge" /* the owner, 2026-11-15: "Share on Fridge maybe is a better wording" */, LASSO_DELETE = "Delete", LASSO_PASTE = "Paste",
             LASSO_NOTHING = "Nothing to move", LASSO_NOTHING_DELETED = "Nothing to delete", LASSO_OTHER_SIZE = "Page size differs";
     /** The Lasso's bar's words over a floating piece, in its order: Make Stamp (2026-11-02) before Delete, which stays last. */
     static final String[] LASSO_BAR = {LASSO_CUT, LASSO_DUPLICATE, StampNib.CUT, LASSO_DELETE};
+    /** The bar's words for a piece the Lasso lifted ({@code fridge}): Fridge before Delete (the owner, 2026-11-15: "a lasso select option to send to the fridge"); else {@link #LASSO_BAR}. */
+    static String[] lassoBar(boolean fridge) { return fridge ? new String[]{LASSO_CUT, LASSO_DUPLICATE, StampNib.CUT, LASSO_FRIDGE, LASSO_DELETE} : LASSO_BAR; }
     /**
      * The hint in the foot's corner ({@code InkWashBar.statusCorner}) while {@code brush}, in use, is a Stamp and no stamp
      * has been printed yet ({@code placed}, kept in the preferences): Make Stamp's way while it has no nib of its own,

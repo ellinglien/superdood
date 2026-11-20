@@ -186,8 +186,8 @@ public final class PictureImportChecks {
     }
 
     static void cap() {
-        check(PictureImport.MOST_PDF_PAGES == 124, "124 PDF pages at most");
-        check(PictureImport.pdfPages(3) == 3 && PictureImport.pdfPages(124) == 124 && PictureImport.pdfPages(300) == 124 && PictureImport.pdfPages(0) == 0, "the first 124");
+        check(PictureImport.MOST_PDF_PAGES == 999, "999 PDF pages at most");
+        check(PictureImport.pdfPages(3) == 3 && PictureImport.pdfPages(999) == 999 && PictureImport.pdfPages(3000) == 999 && PictureImport.pdfPages(0) == 0, "the first 999");
         check(PictureImport.fits(0, 1000) && !PictureImport.fits(DrawingBook.MAX_PACKED_BYTES - PictureImport.SPARE - 10, 11), "inside the 200 MB");
         PageStacks s = PictureImport.stacks(3).count() == 6 ? stacksOf(PictureImport.stacks(3)) : null;
         check(s != null && s.count() == 3 && s.size(0) == 2 && s.size(2) == 2 && s.first(1) == 2, "a stack of two a PDF page");
@@ -227,9 +227,8 @@ public final class PictureImportChecks {
             List<PackedPage> pages = new ArrayList<>();
             for (long[] a : at) pages.add(PackedPage.in(source, a[0], (int) a[1], a[2]));
             try (OutputStream out = new BufferedOutputStream(new FileOutputStream(book))) {
-                PictureImport.writeBook(out, W, H, pages, PackedPage.of(BlankPages.made(W, H).bytes), CoverDesign.DEFAULT, 20000);
+                PictureImport.writeBook(out, W, H, pages, PackedPage.of(BlankPages.made(W, H).bytes), CoverDesign.DEFAULT, 20000, NotebookOptions.NEW);
             }
-            source.close();
             DrawingBook opened = BookCodec.open(book);
             check(opened.count() == 6 && opened.stacks().count() == 3, "three pages of two layers: " + opened.count());
             check(opened.index() == 1 && opened.linked(1) && !opened.linked(2) && opened.current().inkless() && !opened.current().locked(), "opens on the first clear layer");
@@ -239,9 +238,26 @@ public final class PictureImportChecks {
             check(!BlankPages.opened(opened) && opened.count() == 6 && opened.stacks().count() == 3, "no blank page added after the last, nor taken");
             check(opened.lastAdded() != null && opened.lastAdded().toEpochDay() == 20000, "made on its day");
             check(opened.options().equals(NotebookOptions.NEW) && opened.current().surface == BrushTexture.FINE_SPECK, "a new notebook's options: on Fine");
+            // Open File's pages keep their pictures, the clear layers a blank page's (2026-11-20).
+            List<byte[]> shown = new ArrayList<>();
+            for (int i = 0; i < pages.size(); i++) shown.add(PagePicture.of(PictureImport.pdfPage(W, H, new int[W * H]).layerSnapshot()).encode());
+            try (OutputStream out = new BufferedOutputStream(new FileOutputStream(book))) {
+                PictureImport.writeBook(out, W, H, pages, shown, PackedPage.of(BlankPages.made(W, H).bytes), CoverDesign.DEFAULT, 20000, NotebookOptions.NEW);
+            }
+            DrawingBook pictured = BookCodec.open(book);
+            check(Arrays.equals(pictured.picture(0), shown.get(0)) && Arrays.equals(pictured.picture(1), BlankPages.made(W, H).picture), "a file's pages keep their pictures, the clear layers a blank page's");
+            check(opened.picture(0) == null, "none given, none kept");
             boolean threw = false;
-            try { PictureImport.writeBook(new ByteArrayOutputStream(), W, H, new ArrayList<>(), pages.get(0), CoverDesign.DEFAULT, 1); } catch (IOException e) { threw = true; }
+            try { PictureImport.writeBook(new ByteArrayOutputStream(), W, H, new ArrayList<>(), pages.get(0), CoverDesign.DEFAULT, 1, NotebookOptions.NEW); } catch (IOException e) { threw = true; }
             check(threw, "no pages, no notebook");
+            // Open File's notebook keeps the file's chapters as written (the FILE record).
+            NotebookOptions.Contents contents = new NotebookOptions.Contents(Arrays.asList(new NotebookOptions.Contents.Chapter(at.get(0)[2], 0, "One"), new NotebookOptions.Contents.Chapter(at.get(2)[2], 1, "Two A")));
+            try (OutputStream out = new BufferedOutputStream(new FileOutputStream(book))) {
+                PictureImport.writeBook(out, W, H, pages, PackedPage.of(BlankPages.made(W, H).bytes), CoverDesign.DEFAULT, 20000, NotebookOptions.NEW.withContents(contents));
+            }
+            source.close();
+            NotebookOptions reopened = BookCodec.open(book).options();
+            check(contents.equals(reopened.contents) && reopened.withContents(null).equals(NotebookOptions.NEW), "a file's notebook reads back with its chapters, its other options a new notebook's");
         } finally { NotebookMigrationChecks.delete(dir); }
     }
 
@@ -260,6 +276,13 @@ public final class PictureImportChecks {
             List<File> document = PictureImport.entries(root, new File(root, "Document"));
             check(document.equals(Arrays.asList(art.getParentFile(), pdf.getParentFile(), scan, old)), "folders A to Z, then pictures and PDFs newest first: " + document);
             check(PictureImport.entries(root, new File(root, "missing")).isEmpty(), "a folder gone, nothing listed");
+            // Open File's picker: folders, then PDFs and EPUBs only.
+            File epub = file(root, "Document/novel.EPUB", now - 200);
+            check(PictureImport.entries(root, new File(root, "Document")).equals(Arrays.asList(art.getParentFile(), pdf.getParentFile(), scan, old)), "Import's picker lists no EPUB");
+            List<File> books = PictureImport.entries(root, new File(root, "Document"), true);
+            check(books.equals(Arrays.asList(art.getParentFile(), pdf.getParentFile(), epub, scan)), "Open File's picker: folders, then PDFs and EPUBs newest first, no pictures: " + books);
+            check(PictureImport.epub(null, "/Download/novel.Epub") && PictureImport.epub("application/epub+zip", "/document/42") && !PictureImport.epub("application/pdf", "/x.pdf") && !PictureImport.epub(null, null),
+                    "an EPUB by its type or its ending");
             check(PictureImport.pdf(null, "/Download/scan.Pdf") && PictureImport.pdf("application/pdf", "/document/42")
                             && !PictureImport.pdf("image/png", "/x.png") && !PictureImport.pdf(null, null),
                     "a PDF by its type or its ending, a picture otherwise");

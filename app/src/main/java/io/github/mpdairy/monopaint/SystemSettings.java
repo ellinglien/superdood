@@ -17,10 +17,10 @@ final class SystemSettings {
     static final String EDGE_HOLD_NOTE = "Manta only";
     /** Zen Mode's fan as the pen draws on the page (the owner, 2026-11-10: "close when a pen touches the rest of the page", "allows users to switch in the system settings"): Closes, or Stays Open as it did from 2026-11-06. */
     static final String ZEN_FAN = "Zen Fan", ZEN_FAN_NOTE = "When the pen draws on the page", CLOSES = "Closes", STAYS_OPEN = "Stays Open";
-    /** The Prompts' switch (the notebook named #inktober52, 2026-11-13): On fetches the week's word; Off stops the words and hides Send to the Fridge, deleting nothing. */
-    static final String PROMPTS = "#inktober52", PROMPTS_NOTE = "Uses the internet: the week's #inktober52 word.";
     /** Fridge Name (the owner, 2026-11-13: "they should be able to update that in settings"): the tablet's name on the Fridge, shown once it has a key; its one chip the name, or Add Name before one. */
     static final String FRIDGE_NAME = "Fridge Name", ADD_NAME = "Add Name";
+    /** Stop Taking Part's row, under Fridge Name: its header; its note and chip {@link Fridge#STOP_NOTE}, {@link Fridge#STOP}. */
+    static final String FRIDGE = "The Fridge";
     /** Read Handwriting (docs/superpowers/specs/2026-11-09-read-handwriting-design.md): its row, note and first-time words. */
     static final String READ_HANDWRITING = "Read Handwriting", READ_HANDWRITING_NOTE = "For Search on the shelf";
     static final String READ_HANDWRITING_ABOUT = "Handwriting is read on this tablet so the shelf can search it. "

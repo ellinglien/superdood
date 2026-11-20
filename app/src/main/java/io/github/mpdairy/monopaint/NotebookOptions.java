@@ -51,7 +51,7 @@ final class NotebookOptions {
     /** Page Colour's default ({@link #paper}): white paper. */
     static final int WHITE = 255;
 
-    static final NotebookOptions DEFAULT = new NotebookOptions(NotebookTemplate.BLANK, Tools.MINE, Collections.<String>emptyList(), false, 0, 0, FULL, WHITE, false, true, BrushTexture.DEFAULT, SecondInk.DEFAULT);
+    static final NotebookOptions DEFAULT = new NotebookOptions(NotebookTemplate.BLANK, Tools.MINE, Collections.<String>emptyList(), false, 0, 0, FULL, WHITE, false, true, BrushTexture.DEFAULT, SecondInk.DEFAULT, null);
     /**
      * A new notebook's options: the defaults on Fine (the owner, 2026-11-03: the pencils were tuned on Fine and look gappy
      * on Smooth). Not {@link #DEFAULT}, which is what a file without records means: older notebooks stay Smooth.
@@ -126,31 +126,51 @@ final class NotebookOptions {
     /** Second Ink (the owner, 2026-11-09): the colour a Second Ink brush's marks show in PDF and PNG copies, an index into {@link SecondInk}; Blue by default. */
     final int ink;
 
-    private NotebookOptions(NotebookTemplate template, Tools tools, List<String> toolbar, boolean noErasing, int brushes, int seconds, int guidesShown, int paper, boolean lockPages, boolean nibPreview, BrushTexture surface, int ink) {
+    /**
+     * Made from a file (the owner, 2026-11-17: "can we make a way to open epubs and pdfs easily from the notebooks area as if they were
+     * notebooks?"): its chapters, each the CRC-32 of its first page's locked layer (a page found by it, as a search's find,
+     * wherever it has moved), its depth (0, or 1 under the one before) and its title. Null: not made from a file.
+     */
+    static final class Contents {
+        static final class Chapter {
+            final long crc; final int depth; final String title;
+            Chapter(long crc, int depth, String title) { this.crc = crc; this.depth = depth; this.title = title; }
+            @Override public boolean equals(Object o) { if (!(o instanceof Chapter)) return false; Chapter c = (Chapter) o; return crc == c.crc && depth == c.depth && title.equals(c.title); }
+            @Override public int hashCode() { return Long.hashCode(crc) * 31 + depth * 7 + title.hashCode(); }
+        }
+        final List<Chapter> chapters;
+        Contents(List<Chapter> chapters) { this.chapters = Collections.unmodifiableList(new ArrayList<>(chapters)); }
+        @Override public boolean equals(Object o) { return o instanceof Contents && chapters.equals(((Contents) o).chapters); }
+        @Override public int hashCode() { return chapters.hashCode(); }
+    }
+    final Contents contents;
+
+    private NotebookOptions(NotebookTemplate template, Tools tools, List<String> toolbar, boolean noErasing, int brushes, int seconds, int guidesShown, int paper, boolean lockPages, boolean nibPreview, BrushTexture surface, int ink, Contents contents) {
         this.template = template; this.tools = tools; this.toolbar = toolbar; this.lockPages = lockPages; this.nibPreview = nibPreview;
         this.noErasing = noErasing; this.brushes = brushes; this.seconds = seconds;
         this.guidesShown = guidesShown >= FULL && guidesShown <= HIDDEN ? guidesShown : FULL;
         this.paper = Math.max(0, Math.min(WHITE, paper));
         this.surface = surface == null ? BrushTexture.DEFAULT : surface;
         this.ink = ink >= 0 && ink < SecondInk.NAMES.length ? ink : SecondInk.DEFAULT;
+        this.contents = contents;
     }
     /** Surface {@code s} (null: the default, Smooth). */
-    NotebookOptions withSurface(BrushTexture s) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, s, ink); }
+    NotebookOptions withSurface(BrushTexture s) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, s, ink, contents); }
     /** The Surface record's bytes ({@code SURF}): one byte, the surface's index. */
     byte[] surfaceBytes() { return new byte[]{(byte) surface.ordinal()}; }
     /** These options with the Surface record read ({@code null}: none, Smooth; one this version doesn't know: Smooth). */
     NotebookOptions readSurface(byte[] bytes) { return bytes == null || bytes.length != 1 ? this : withSurface(BrushTexture.of(bytes[0] & 255)); }
 
-    NotebookOptions withTemplate(NotebookTemplate template) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink); }
-    NotebookOptions withGuidesShown(int step) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, step, paper, lockPages, nibPreview, surface, ink); }
+    NotebookOptions withTemplate(NotebookTemplate template) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink, contents); }
+    NotebookOptions withGuidesShown(int step) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, step, paper, lockPages, nibPreview, surface, ink, contents); }
     /** The next of {@link #GUIDE_STEPS} after this one's, Hidden going back to Full. */
     NotebookOptions withNextGuidesStep() { return withGuidesShown((guidesShown + 1) % GUIDE_STEPS.length); }
-    NotebookOptions withLockPages(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, on, nibPreview, surface, ink); }
-    NotebookOptions withNibPreview(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, on, surface, ink); }
-    NotebookOptions withNoErasing(boolean on) { return new NotebookOptions(template, tools, toolbar, on, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink); }
+    NotebookOptions withLockPages(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, on, nibPreview, surface, ink, contents); }
+    NotebookOptions withNibPreview(boolean on) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, on, surface, ink, contents); }
+    NotebookOptions withNoErasing(boolean on) { return new NotebookOptions(template, tools, toolbar, on, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink, contents); }
     /** Timed Pages {@code seconds}, the nearest of {@link #SECONDS} (none or less: off). */
     NotebookOptions withSeconds(int seconds) {
-        return new NotebookOptions(template, tools, toolbar, noErasing, brushes, SECONDS[nearest(SECONDS, seconds)], guidesShown, paper, lockPages, nibPreview, surface, ink);
+        return new NotebookOptions(template, tools, toolbar, noErasing, brushes, SECONDS[nearest(SECONDS, seconds)], guidesShown, paper, lockPages, nibPreview, surface, ink, contents);
     }
     /** Which of {@code choices} (ascending) is nearest {@code value}. */
     static int nearest(int[] choices, int value) {
@@ -159,15 +179,15 @@ final class NotebookOptions {
         return best;
     }
     /** Page Colour {@code tone} (0 to 255; anything past them the nearest). */
-    NotebookOptions withPaper(int tone) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, tone, lockPages, nibPreview, surface, ink); }
+    NotebookOptions withPaper(int tone) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, tone, lockPages, nibPreview, surface, ink, contents); }
     /** Brushes {@code count}: 1 to {@link #MOST_BRUSHES}; anything else is All. */
     NotebookOptions withBrushes(int count) {
-        return new NotebookOptions(template, tools, toolbar, noErasing, count >= 1 && count <= MOST_BRUSHES ? count : 0, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink);
+        return new NotebookOptions(template, tools, toolbar, noErasing, count >= 1 && count <= MOST_BRUSHES ? count : 0, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink, contents);
     }
     /** My Toolbar (no lines), or {@code tools} with its own {@code toolbar} lines ({@link #FEWEST_SLOTS} to {@link #MOST_SLOTS} of them; anything else is My Toolbar). */
     NotebookOptions withTools(Tools tools, List<String> toolbar) {
-        if (tools == Tools.MINE || !slotCount(toolbar)) return new NotebookOptions(template, Tools.MINE, Collections.<String>emptyList(), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink);
-        return new NotebookOptions(template, tools, Collections.unmodifiableList(new ArrayList<>(toolbar)), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink);
+        if (tools == Tools.MINE || !slotCount(toolbar)) return new NotebookOptions(template, Tools.MINE, Collections.<String>emptyList(), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink, contents);
+        return new NotebookOptions(template, tools, Collections.unmodifiableList(new ArrayList<>(toolbar)), noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink, contents);
     }
     /** The same options with the toolbar lines changed (the notebook's brushes, sizes or greys changed); My Toolbar keeps none, Each Page the first page's roll. */
     NotebookOptions withToolbar(List<String> toolbar) { return tools == Tools.MINE || tools == Tools.EACH_PAGE ? this : withTools(tools, toolbar); }
@@ -206,7 +226,7 @@ final class NotebookOptions {
         if (pageKey != null && pageKey.startsWith(OWN)) return NotebookTemplate.of(pageKey.substring(OWN.length()));
         return template.random() ? NotebookTemplate.of(pageKey) : template;
     }
-    NotebookOptions withInk(int index) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, index); }
+    NotebookOptions withInk(int index) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, index, contents); }
     /** The Second Ink record's bytes ({@code SINK}): one byte, {@link #ink}. */
     byte[] inkBytes() { return new byte[]{(byte) ink}; }
     /** These options with the Second Ink record read ({@code null}: none, Blue; an index out of range: Blue). */
@@ -238,6 +258,32 @@ final class NotebookOptions {
     byte[] nibPreviewBytes() { return new byte[]{(byte) (nibPreview ? 1 : 0)}; }
     /** These options with the Nib Preview record read ({@code null}: none, on). */
     NotebookOptions readNibPreview(byte[] bytes) { return bytes == null || bytes.length != 1 ? this : withNibPreview(bytes[0] != 0); }
+    NotebookOptions withContents(Contents c) { return new NotebookOptions(template, tools, toolbar, noErasing, brushes, seconds, guidesShown, paper, lockPages, nibPreview, surface, ink, c); }
+    /** The FILE record's bytes: version 1, the count, then each chapter's CRC (an int), depth (a byte) and title (UTF, cut to 200 characters). */
+    /** The most chapters a FILE record keeps, so it stays well under the 1 MB a record may be. */
+    static final int MOST_CHAPTERS = 2000;
+    byte[] contentsBytes() {
+        try {
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream(); java.io.DataOutputStream out = new java.io.DataOutputStream(bytes);
+            List<Contents.Chapter> kept = contents.chapters.size() > MOST_CHAPTERS ? contents.chapters.subList(0, MOST_CHAPTERS) : contents.chapters;
+            out.writeByte(1); out.writeInt(kept.size());
+            for (Contents.Chapter c : kept) { out.writeInt((int) c.crc); out.writeByte(c.depth); out.writeUTF(c.title.length() > 200 ? c.title.substring(0, 200) : c.title); }
+            return bytes.toByteArray();
+        } catch (java.io.IOException impossible) { throw new IllegalStateException(impossible); }
+    }
+    /** These options with the FILE record read ({@code null}, a version this one doesn't know, or a short or malformed one: none, as it was). */
+    NotebookOptions readContents(byte[] bytes) {
+        if (bytes == null) return this;
+        try {
+            java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes));
+            if (in.readByte() != 1) return this;
+            int count = in.readInt();
+            if (count < 0 || count > bytes.length) return this;
+            List<Contents.Chapter> chapters = new ArrayList<>();
+            for (int i = 0; i < count; i++) chapters.add(new Contents.Chapter(in.readInt() & 0xffffffffL, in.readByte(), in.readUTF()));
+            return withContents(new Contents(chapters));
+        } catch (java.io.IOException bad) { return this; }
+    }
     /** The No Erasing record's bytes: one byte, 1 for on. */
     byte[] noErasingBytes() { return new byte[]{(byte) (noErasing ? 1 : 0)}; }
     /** The Brushes record's bytes: the count, one byte. */
@@ -283,10 +329,10 @@ final class NotebookOptions {
         if (!(other instanceof NotebookOptions)) return false;
         NotebookOptions o = (NotebookOptions) other;
         return template.equals(o.template) && tools == o.tools && toolbar.equals(o.toolbar)
-                && noErasing == o.noErasing && brushes == o.brushes && seconds == o.seconds && guidesShown == o.guidesShown && paper == o.paper && lockPages == o.lockPages && nibPreview == o.nibPreview && surface == o.surface && ink == o.ink;
+                && noErasing == o.noErasing && brushes == o.brushes && seconds == o.seconds && guidesShown == o.guidesShown && paper == o.paper && lockPages == o.lockPages && nibPreview == o.nibPreview && surface == o.surface && ink == o.ink && java.util.Objects.equals(contents, o.contents);
     }
     @Override public int hashCode() {
         return template.hashCode() * 31 + 7 * tools.hashCode() + 13 * toolbar.hashCode()
-                + (noErasing ? 17 : 0) + 19 * brushes + 23 * seconds + 37 * guidesShown + 41 * paper + (lockPages ? 43 : 0) + (nibPreview ? 0 : 47) + 59 * surface.ordinal() + 61 * ink;
+                + (noErasing ? 17 : 0) + 19 * brushes + 23 * seconds + 37 * guidesShown + 41 * paper + (lockPages ? 43 : 0) + (nibPreview ? 0 : 47) + 59 * surface.ordinal() + 61 * ink + java.util.Objects.hashCode(contents);
     }
 }

@@ -1,5 +1,6 @@
 package io.github.mpdairy.monopaint;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -23,10 +24,18 @@ import java.util.zip.CRC32;
  * into a file of its own in the app's cache as it goes, so the pages never all sit in memory; once all are done the
  * store writes the notebook's file whole from it ({@link DocumentStore#create}). Cancelled, failed or killed part way,
  * nothing is in the library: never a half notebook. One at a time, on a thread of its own.
+ * <p>Open File (the owner, 2026-11-17: "can we make a way to open epubs and pdfs easily from the notebooks area as if
+ * they were notebooks?") goes the same way: a PDF as here, an EPUB laid out page by page ({@link EpubPages},
+ * {@link #runEpub}). A notebook made from a file keeps its chapters ({@link NotebookOptions.Contents}: a PDF's outline,
+ * {@link PdfOutline}; an EPUB's nav or NCX, {@link EpubBook}), an empty Contents when it has none, which still says it was
+ * made from a file. Import's New Notebook of a PDF keeps them too, deliberately: it is the same thing, a file as a notebook.
  */
 final class PdfImport {
-    /** How far it is: {@code done} pages of {@code of} (on its thread). */
-    interface Progress { void at(int done, int of); }
+    /** How far it is: {@code done} pages of {@code of}; before them, an EPUB's first pass, {@code done} of its {@code of} files (on its thread). */
+    interface Progress {
+        void at(int done, int of);
+        default void layingOut(int done, int of) { }
+    }
     /** What it made: the notebook's path, its pages, and whether the PDF had more (the 49, or the 200 MB). */
     static final class Made {
         final String path; final int pages; final boolean cut;
@@ -49,6 +58,17 @@ final class PdfImport {
      * as a one-page PDF would be (Share on Wi-Fi's upload, {@link LiveShare}).
      */
     void run(Context context, Uri uri, String named, boolean pdf, int width, int height, CoverDesign design, long day, DocumentStore store, Progress progress, DocumentStore.Result<Made> done) {
+        run(context, uri, named, pdf, null, width, height, design, day, store, progress, done);
+    }
+    /**
+     * Open File's EPUB at {@code uri} as above, laid out in {@code activity} ({@link EpubPages}), named after the file; a
+     * book with DRM fails with {@link EpubBook#LOCKED} as its message.
+     */
+    void runEpub(Activity activity, Uri uri, int width, int height, CoverDesign design, long day, DocumentStore store, Progress progress, DocumentStore.Result<Made> done) {
+        run(activity, uri, null, true, activity, width, height, design, day, store, progress, done);
+    }
+    /** The one way all are made: {@code epub} the activity an EPUB is laid out in, or null for a PDF ({@code pdf}) or a picture. */
+    private void run(Context context, Uri uri, String named, boolean pdf, Activity epub, int width, int height, CoverDesign design, long day, DocumentStore store, Progress progress, DocumentStore.Result<Made> done) {
         Thread work = new Thread(() -> {
             // A file of its own: the Manta's Import and an upload may run at once.
             File temp;
@@ -58,10 +78,13 @@ final class PdfImport {
             // Until the store has the pages, the cache's file goes with whatever ends this (cancelled, failed).
             boolean handed = false;
             try {
-                String name = named != null ? named : name(context, uri);
+                String name = named != null ? named : epub != null ? name(context, uri, ".epub", "EPUB") : name(context, uri, ".pdf", "PDF");
                 List<long[]> written = new ArrayList<>();
+                List<byte[]> shown = new ArrayList<>();
+                List<NotebookOptions.Contents.Chapter> chapters;
                 boolean cut;
-                try (Pages from = pdf ? pdfPages(context, uri) : picture(context, uri, width, height); FileOutputStream out = new FileOutputStream(temp)) {
+                try (Pages from = epub != null ? EpubPages.open(epub, uri, width, height, progress, this::cancelled) : pdf ? pdfPages(context, uri) : picture(context, uri, width, height); FileOutputStream out = new FileOutputStream(temp)) {
+                    if (cancelled) { done.complete(null, null); return; }
                     int count = from.count(), n = PictureImport.pdfPages(count);
                     if (n == 0) throw new IOException(PictureImport.NO_PAGES);
                     cut = n < count;
@@ -74,15 +97,20 @@ final class PdfImport {
                             progress.at(i, n);
                             from.draw(i, drawn);
                             drawn.getPixels(pixels, 0, width, 0, 0, width, height);
-                            byte[] bytes = DrawingBook.encode(PictureImport.pdfPage(width, height, PictureImport.greys(pixels)));
+                            ToneDocument page = PictureImport.pdfPage(width, height, PictureImport.greys(pixels));
+                            byte[] bytes = DrawingBook.encode(page);
                             // The 200 MB: the pages that fit, and the PDF said cut short.
                             if (!PictureImport.fits(packed, bytes.length + blank)) { cut = true; break; }
                             CRC32 crc = new CRC32(); crc.update(bytes);
                             out.write(bytes);
                             written.add(new long[]{offset, bytes.length, crc.getValue()});
+                            shown.add(picture(page));
                             offset += bytes.length; packed += bytes.length + blank;
                         }
                     } finally { drawn.recycle(); }
+                    // A big file's outline may not fit in memory: no chapters, the pages are done.
+                    try { chapters = from.chapters(written); }
+                    catch (Throwable noOutline) { Log.e(ProbeActivity.TAG, "Chapters unread", noOutline); chapters = List.of(); }
                 }
                 if (written.isEmpty()) throw new IOException(PictureImport.NO_PAGES);
                 if (cancelled) { done.complete(null, null); return; }
@@ -92,8 +120,10 @@ final class PdfImport {
                 for (long[] w : written) pages.add(PackedPage.in(source[0], w[0], (int) w[1], w[2]));
                 PackedPage clear = PackedPage.of(BlankPages.made(width, height).bytes);
                 boolean shortened = cut;
+                // A file's notebook says so with its Contents, empty or not; a picture's has none.
+                NotebookOptions options = pdf ? NotebookOptions.NEW.withContents(new NotebookOptions.Contents(chapters == null ? List.of() : chapters)) : NotebookOptions.NEW;
                 handed = true;
-                store.create(name, out -> PictureImport.writeBook(out, width, height, pages, clear, design, day), (path, error) -> {
+                store.create(name, out -> PictureImport.writeBook(out, width, height, pages, shown, clear, design, day, options), (path, error) -> {
                     source[0].close(); temp.delete();
                     done.complete(path == null ? null : new Made(path, pages.size(), shortened), error);
                 });
@@ -108,11 +138,19 @@ final class PdfImport {
         work.start();
     }
 
-    /** What a notebook's pages are drawn from: a PDF's pages, or one picture. */
-    private interface Pages extends java.io.Closeable {
+    /** {@code page}'s picture for the strip and the shelf; null (made later, as before) when it can't be made. */
+    private static byte[] picture(ToneDocument page) {
+        try { return PagePicture.of(page.layerSnapshot()).encode(); }
+        catch (RuntimeException | OutOfMemoryError e) { return null; }
+    }
+
+    /** What a notebook's pages are drawn from: a PDF's pages, an EPUB's ({@link EpubPages}), or one picture. */
+    interface Pages extends java.io.Closeable {
         int count();
         /** Page {@code i} drawn on white into {@code drawn}, fitted inside it and centred. */
-        void draw(int i, Bitmap drawn);
+        void draw(int i, Bitmap drawn) throws IOException;
+        /** Its chapters once its pages are written ({@code written.get(i)[2]} page i's CRC), past them left out; null for none. */
+        default List<NotebookOptions.Contents.Chapter> chapters(List<long[]> written) { return null; }
     }
     private static Pages pdfPages(Context context, Uri uri) throws IOException {
         ParcelFileDescriptor file = context.getContentResolver().openFileDescriptor(uri, "r");
@@ -122,6 +160,12 @@ final class PdfImport {
         return new Pages() {
             @Override public int count() { return pdf.getPageCount(); }
             @Override public void draw(int i, Bitmap drawn) { PdfImport.draw(pdf, i, drawn); }
+            @Override public List<NotebookOptions.Contents.Chapter> chapters(List<long[]> written) {
+                List<NotebookOptions.Contents.Chapter> chapters = new ArrayList<>();
+                for (PdfOutline.Item item : PdfOutline.read(bytes(context, uri)))
+                    if (item.page >= 0 && item.page < written.size()) chapters.add(new NotebookOptions.Contents.Chapter(written.get(item.page)[2], item.depth, item.title));
+                return chapters;
+            }
             @Override public void close() throws IOException { pdf.close(); file.close(); }
         };
     }
@@ -176,14 +220,29 @@ final class PdfImport {
         }
     }
 
-    /** The PDF's file name without ".pdf", as a notebook's name ({@link NotebookMigration#safeName}); "PDF" when it has none. */
-    private static String name(Context context, Uri uri) {
-        String name = null;
+    /** The file at {@code uri} whole, for its outline; null past {@link PdfOutline#MOST_BYTES} or when it doesn't read. */
+    private static byte[] bytes(Context context, Uri uri) {
+        try (ParcelFileDescriptor file = context.getContentResolver().openFileDescriptor(uri, "r")) { if (file != null && file.getStatSize() > PdfOutline.MOST_BYTES) return null; }
+        catch (IOException | RuntimeException unknown) { /* size unknown: read up to the limit below */ }
+        try (java.io.InputStream in = context.getContentResolver().openInputStream(uri)) {
+            if (in == null) return null;
+            java.io.ByteArrayOutputStream all = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[1 << 16];
+            for (int n; (n = in.read(buffer)) > 0; ) { all.write(buffer, 0, n); if (all.size() > PdfOutline.MOST_BYTES) return null; }
+            return all.toByteArray();
+        } catch (IOException | RuntimeException unread) { return null; }
+    }
+    /** The file's display name as its provider gives it; null when it doesn't. */
+    static String displayName(Context context, Uri uri) {
         try (android.database.Cursor row = context.getContentResolver().query(uri, new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
-            if (row != null && row.moveToFirst()) name = row.getString(0);
-        } catch (RuntimeException unknown) { name = null; }
+            return row != null && row.moveToFirst() ? row.getString(0) : null;
+        } catch (RuntimeException unknown) { return null; }
+    }
+    /** The file's name without {@code ending} (".pdf", ".epub"), as a notebook's name ({@link NotebookMigration#safeName}); {@code none} when it has none. */
+    private static String name(Context context, Uri uri, String ending, String none) {
+        String name = displayName(context, uri);
         if (name == null) name = uri.getLastPathSegment() == null ? "" : uri.getLastPathSegment();
-        if (name.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) name = name.substring(0, name.length() - 4);
-        return NotebookMigration.safeName(name, "PDF");
+        if (name.toLowerCase(java.util.Locale.ROOT).endsWith(ending)) name = name.substring(0, name.length() - ending.length());
+        return NotebookMigration.safeName(name, none);
     }
 }

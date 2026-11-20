@@ -63,15 +63,18 @@ final class PaintPreferences {
     /** System Settings' Zen Fan: whether the fan stays open while the pen draws on the page (closes at first, 2026-11-10). */
     boolean zenFanStays() { return flag("zen_fan_stays", false); }
     void setZenFanStays(boolean value) { setFlag("zen_fan_stays", value); }
-    /** System Settings' #inktober52 (the Prompts, 2026-11-13): the week's words fetched and Send to the Fridge shown; Off at first. Off deletes nothing. */
-    boolean promptsOn() { return flag("prompts_on", false); }
-    void setPromptsOn(boolean value) { setFlag("prompts_on", value); }
-    /** Whether the Prompts notebook has been given (put on the shelf) once. */
-    boolean promptsGiven() { return flag("prompts_given", false); }
-    void setPromptsGiven(boolean value) { setFlag("prompts_given", value); }
-    /** The Prompts notebook's path; "" before it is made. */
-    String promptsPath() { return store.getString("prompts_path", ""); }
-    void setPromptsPath(String value) { store.edit().putString("prompts_path", value).apply(); }
+    /** The Fridge door turned on (its Turn On screen, 2026-11-15): it opens superdood.org/fridge. */
+    /**
+     * A notebook's place (the owner, 2026-11-17: "remember place when reopening"): the page it was last turned to, kept on
+     * each turn, as its file keeps it only when saved; {@link Integer#MIN_VALUE} for none (the covers are -1 and -2).
+     */
+    int place(String path) { return store.getInt("place:" + path, Integer.MIN_VALUE); }
+    void setPlace(String path, int index) { store.edit().putInt("place:" + path, index).apply(); }
+    /** A renamed notebook's place moves with it; a deleted one's goes. */
+    void movePlace(String from, String to) { int at = place(from); dropPlace(from); if (at != Integer.MIN_VALUE) setPlace(to, at); }
+    void dropPlace(String path) { store.edit().remove("place:" + path).apply(); }
+    boolean fridgeDoorOn() { return flag("fridge_door_on", false); }
+    void setFridgeDoorOn(boolean value) { setFlag("fridge_door_on", value); }
     /** This tablet's key from the Fridge's {@code api/confirm} ({@link Fridge#confirm}); "" before. Kept here alone: never shown or logged. */
     String fridgeTablet() { return store.getString("fridge_tablet", ""); }
     void setFridgeTablet(String value) { store.edit().putString("fridge_tablet", value).apply(); }

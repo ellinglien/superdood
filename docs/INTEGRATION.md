@@ -6045,3 +6045,25 @@ untouched.**
 Replay Page holds the UI thread 110–160 ms a step (every 600 ms; the brush engine replaying), but any touch ends a
 replay, so it blocks nothing; left as it is. **Checks:** `MirrorChecks` (row reads match per-pixel reads over two
 layers).
+
+## Open File (2026-11-17)
+
+The owner: "can we make a way to open epubs and pdfs easily from the notebooks area as if they were notebooks?"
+(docs/superpowers/specs/2026-11-17-open-file-design.md). **The engine is untouched.**
+
+| File | Change | Why |
+|---|---|---|
+| `DrawingPad` (upstream) | +2 | In a notebook made from a file (`NotebookOptions.contents`), one finger turns pages whatever Finger Action says ("Quick page turns"). |
+| `PaintActivity` | `openFile`, `makeNotebook`, `contents` | The shelf's Open File; Import's New Notebook of a PDF and Open File one way (the box, progress, Cancel, finish); the Contents window. `pickDocument` takes its MIME types. |
+| `DrawingBook` | +2 `pageWithCrc` | The page a CRC finds: a search's find and a chapter, one loop. |
+| `DrawLayout.fileRows` | `contents` | The Contents row after Notebook Settings (the browser's `WebEngine` passes false). |
+
+**Checks:** `DrawMenusChecks` (the row only when told), `DrawLayoutChecks`, `NotebookLayoutChecks` (three tiles first). Generic: none.
+
+## No #inktober52 (2026-11-20)
+
+The owner: "i think we should remove the inktober stuff entirely actually... just keep the fridge." Superdood-only
+classes: `Prompts` gone; `Fridge`, `FridgeWindow`, `NotebookOptions`, `BookOptions`, `RecoveryCodec`,
+`NotebookTemplate`, `DrawingBook`, `LibraryCard`, `NotebookScreens`, `PaintActivity`. No upstream or engine file. Old
+files still read: the INKT record and the recovery's INKTOBER marker are read and dropped; a page's `prompt:` key stays
+in the file and shows as a plain page. The server: `/fridge/api/words` is empty and `word=` is ignored, for 1.3.

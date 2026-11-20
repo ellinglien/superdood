@@ -191,7 +191,7 @@ final class BookPictures {
             int entries = readShort(eocd, 10);
             long directorySize = readLong32(eocd, 12), directory = readLong32(eocd, 16);
             int pages = entries - 1;
-            if (pages < 1 || pages > DrawingBook.MAX_PAGES || directory + directorySize > size - 22 || directorySize > 65536)
+            if (pages < 1 || pages > DrawingBook.MAX_PAGES || directory + directorySize > size - 22 || directorySize > (1 << 20))
                 throw new IOException("Invalid page directory");
             byte[] central = new byte[(int) directorySize]; in.seek(directory); in.readFully(central);
             long[] crcs = new long[pages];

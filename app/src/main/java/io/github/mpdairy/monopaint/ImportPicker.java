@@ -29,13 +29,15 @@ import java.util.function.IntConsumer;
  * ‹ and › between pages (nothing scrolls: e-ink), each row a picture's small thumbnail, a PDF's first page or a folder's
  * icon before its name and, for a file, its day. A tap on a folder opens it; on a file picks it ({@code picked} hears its
  * Uri) and closes the dialog. It opens where the last file was picked ({@link PaintPreferences#importFolder}). A PDF
- * picked then asks how ({@link #pdf}).
+ * picked then asks how ({@link #pdf}). Open File's ({@code books}, the owner, 2026-11-17: "Open File tile") lists PDFs and
+ * EPUBs instead, headed Open File; the file tapped is picked at once, an EPUB's icon a PDF's.
  */
 final class ImportPicker {
     /** A row's height and the gap under it, dp; the room the title, crumbs, page bar and buttons take. */
     private static final int ROW = 76, GAP = 6, CHROME = 300;
     private final PaintActivity app;
     private final Consumer<Uri> picked;
+    private final boolean books;
     private final File root = Environment.getExternalStorageDirectory();
     private final int rowCount;
     private final TextView[] names, days;
@@ -49,8 +51,10 @@ final class ImportPicker {
     private List<File> files = Collections.emptyList();
     private int page;
 
-    ImportPicker(PaintActivity app, Consumer<Uri> picked) {
-        this.app = app; this.picked = picked;
+    ImportPicker(PaintActivity app, Consumer<Uri> picked) { this(app, picked, false); }
+    /** As above; with {@code books}, Open File's: PDFs and EPUBs. */
+    ImportPicker(PaintActivity app, Consumer<Uri> picked, boolean books) {
+        this.app = app; this.picked = picked; this.books = books;
         int high = app.root.getHeight() > 0 ? Ui.dpOf(app, app.root.getHeight()) : 800;
         rowCount = Math.max(4, Math.min(12, (high - CHROME) / (ROW + GAP)));
         names = new TextView[rowCount]; days = new TextView[rowCount]; thumbnails = new ImageView[rowCount]; rows = new View[rowCount];
@@ -61,7 +65,7 @@ final class ImportPicker {
         for (int i = 0; i < rowCount; i++) content.addView(rows[i] = row(i), rowSize());
         previous = new Button(app); count = new TextView(app); next = new Button(app);
         content.addView(bar(app, previous, count, next, step -> show(page + step)));
-        dialog = new AlertDialog.Builder(app).setTitle(PictureImport.IMPORT).setView(content).setNegativeButton(PictureImport.CANCEL, null).create();
+        dialog = new AlertDialog.Builder(app).setTitle(books ? PictureImport.OPEN_FILE : PictureImport.IMPORT).setView(content).setNegativeButton(PictureImport.CANCEL, null).create();
         dialog.show();
         // As wide as the screen allows (the owner: "maybe bigger modal").
         app.compactDialog(dialog, 4000);
@@ -129,7 +133,7 @@ final class ImportPicker {
     /** Folder {@code at} from its first page, its crumbs above: Storage, then each folder down to it. */
     private void open(File at) {
         folder = at;
-        files = PictureImport.entries(root, at);
+        files = PictureImport.entries(root, at, books);
         crumbs.removeAllViews();
         crumbs.addView(crumb(PictureImport.STORAGE, root, at.equals(root)));
         String path = PictureImport.path(root, at);
@@ -165,7 +169,7 @@ final class ImportPicker {
             days[i].setTextColor(Theme.GREY_800);
             rows[i].setVisibility(file == null ? View.INVISIBLE : View.VISIBLE);
             if (file == null) thumbnails[i].setImageBitmap(null);
-            else thumbnails[i].setImageResource(isFolder ? R.drawable.ic_ph_folder : isPdf(file) ? R.drawable.ic_ph_file_pdf : R.drawable.ic_ph_image);
+            else thumbnails[i].setImageResource(isFolder ? R.drawable.ic_ph_folder : isPdf(file) || PictureImport.epub(null, file.getName()) ? R.drawable.ic_ph_file_pdf : R.drawable.ic_ph_image);
         }
         if (files.isEmpty()) {
             // The note in the first row's place.
