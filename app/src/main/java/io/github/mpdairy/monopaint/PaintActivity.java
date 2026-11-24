@@ -2486,7 +2486,7 @@ public final class PaintActivity extends Activity implements ControlHost {
     /** Export Now's notes: where the copies are (docs/TEXT-STYLE.md: the result, in a few words). */
     static final String EXPORTED = "PDF in " + DrawingStorage.SHARED_NAME, EXPORT_FAILED = PageExport.FAILED;
     /** An export's button while its copy is made (as the Fridge's Send reads "Sending"), then its result for a note's time. */
-    static final String EXPORTING = "Exporting", EXPORTED_BUTTON = "Exported", EXPORT_FAILED_BUTTON = "Export Failed";
+    static final String EXPORTING = ExportProgress.EXPORTING, EXPORTED_BUTTON = "Exported", EXPORT_FAILED_BUTTON = "Export Failed";
     /**
      * An export started from {@code anchor} shows at once (the owner, 2026-11-10: Export Now's only sign was a toast at its
      * end, 70 s on for ten pages): a notebook screen's button reads "Exporting" while it runs, elsewhere a note says so.
@@ -2496,11 +2496,24 @@ public final class PaintActivity extends Activity implements ControlHost {
     private Runnable[] exporting(View anchor, String done) {
         LabButton button = anchor instanceof LabButton ? (LabButton) anchor : null;
         CharSequence name = button == null ? null : button.getText();
-        if (button != null) { button.setText(EXPORTING); button.setEnabled(false); } else message(EXPORTING);
+        boolean[] ended = {false};
+        if (button != null) { button.setText(EXPORTING); button.setEnabled(false); }
+        else {
+            // From the Menu: once it has closed, so the note is at the brush line's right where the time left shows, not a toast (the owner, 2026-11-24).
+            Runnable[] tell = new Runnable[1];
+            long until = android.os.SystemClock.uptimeMillis() + 1500;
+            tell[0] = () -> {
+                if (ended[0] || destroyed) return;
+                if (hasWindowFocus() || android.os.SystemClock.uptimeMillis() >= until) message(EXPORTING);
+                else pad.postDelayed(tell[0], 100);
+            };
+            tell[0].run();
+        }
         Runnable[] ends = new Runnable[2];
         for (int i = 0; i < 2; i++) {
             boolean ok = i == 1;
             ends[i] = () -> {
+                ended[0] = true;
                 if (!ok || done != null) message(ok ? done : EXPORT_FAILED);
                 if (button == null) return;
                 button.setEnabled(true);
@@ -2567,6 +2580,20 @@ public final class PaintActivity extends Activity implements ControlHost {
         if (needsAccess(() -> exportPage(anchor, place, choice, size))) return;
         leaving();
         Runnable[] end = exporting(anchor, PageExport.page(place, choice) + " in " + AutoExport.SUPERNOTE_FOLDER);
+        // High Res can take minutes on a page of many lines: its note says the time left till it ends (ExportProgress).
+        if (size == ExportSize.HIGH && !PageExport.PDF.equals(choice)) {
+            long start = android.os.SystemClock.elapsedRealtime();
+            boolean[] over = {false};
+            Runnable[] tell = new Runnable[1];
+            tell[0] = () -> {
+                if (over[0] || destroyed) return;
+                String note = ExportProgress.note(android.os.SystemClock.elapsedRealtime() - start, ExportProgress.fraction());
+                if (!note.equals(ExportProgress.EXPORTING)) message(note);
+                pad.postDelayed(tell[0], 3000);
+            };
+            pad.postDelayed(tell[0], 3000);
+            for (int i = 0; i < 2; i++) { Runnable then = end[i]; end[i] = () -> { over[0] = true; pad.removeCallbacks(tell[0]); then.run(); }; }
+        }
         if (!AutoExport.page(this, drawingName, book.snapshot(), place, choice, size, end[0], end[1])) end[0].run();
     }
     private void openDrawing() {

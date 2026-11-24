@@ -85,12 +85,16 @@ final class AutoExport {
     static boolean page(PaintActivity app, String path, DrawingBook.Snapshot book, int place, String choice, ExportSize size, Runnable failed, Runnable done) {
         if (path.isEmpty() || book == null || !DrawingStorage.sharedAllowed(app)) return false;
         WORKER.execute(() -> {
+            ExportProgress.begin();
             try {
                 List<PackedPage> pages = book.packed();
                 book.release();
                 PageExport.write(folder(), title(path), place, choice, size, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles());
+                if (ExportProgress.soft > 0) Log.w(ProbeActivity.TAG, "Page copy made with " + ExportProgress.soft + " strips' strokes not drawn again");
+                ExportProgress.end();
                 app.runOnUiThread(done);
             } catch (Exception | OutOfMemoryError error) {
+                ExportProgress.end();
                 book.release();
                 Log.e(ProbeActivity.TAG, "Page copy failed", error);
                 app.runOnUiThread(failed);

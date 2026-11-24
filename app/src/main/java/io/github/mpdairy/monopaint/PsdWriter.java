@@ -25,16 +25,25 @@ final class PsdWriter {
     }
     /** {@code rows}, {@code width × height}, packed as layer {@code name}: read once, a row at a time, so a page's layer is never held whole. */
     static Layer layer(String name, int width, int height, Rows rows) {
-        Channel grey = new Channel(height), alpha = new Channel(height);
-        byte[] g = new byte[width], a = new byte[width];
-        boolean shows = false;
-        for (int y = 0; y < height; y++) {
+        Packing packing = new Packing(width, height);
+        for (int y = 0; y < height; y++) packing.row(rows, y);
+        return packing.layer(name);
+    }
+    /** A layer packed as its rows come, in order, perhaps a strip at a time between other layers' ({@link #layer}). */
+    static final class Packing {
+        private final Channel grey, alpha;
+        private final byte[] g, a;
+        private boolean shows;
+        Packing(int width, int height) { grey = new Channel(height); alpha = new Channel(height); g = new byte[width]; a = new byte[width]; }
+        /** Its row {@code y}, as {@code rows} gives it over nothing. */
+        void row(Rows rows, int y) {
             java.util.Arrays.fill(g, (byte) 0); java.util.Arrays.fill(a, (byte) 0);
             rows.row(y, g, a);
-            for (int x = 0; x < width && !shows; x++) shows = a[x] != 0;
+            for (int x = 0; x < a.length && !shows; x++) shows = a[x] != 0;
             grey.row(g); alpha.row(a);
         }
-        return new Layer(name, grey, alpha, shows);
+        /** It, every row given, named {@code name}. */
+        Layer layer(String name) { return new Layer(name, grey, alpha, shows); }
     }
 
     /**

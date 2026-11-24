@@ -17,16 +17,16 @@ public final class PngRenderChecks {
     public static void main(String[] args) throws Exception {
         Assets.install(Assets.folder(Assets.FOLDER));
         if (args.length > 0 && args[0].equals("bench")) { bench(); return; }
-        choices(); shrink(); social(); sharp(); washes(); vector(); pdf(); pdfLines(); layers();
+        choices(); shrink(); social(); sharp(); washes(); vector(); pdf(); pdfLines(); layers(); progress();
         java.io.File dir = java.nio.file.Files.createTempDirectory("sharppdf").toFile();
         try { pdfNotebook(dir); } finally { NotebookMigrationChecks.delete(dir); }
         System.out.println("PASS: Export Page's PNG sizes: PDF, PNG and Layers by their index as before, Page the notebook's copy; Social shrinks by area (a Manta page to 1080 × 1444); "
                 + "High Res written a strip at a time reads back at twice the page, kept pencil strokes' edges finer than the page's pixels doubled on plain and lined paper and nothing else changed, "
-                + "a page of washes alone exactly its pixels doubled, Vector Ink's lines sharp; "
+                + "a page of washes alone exactly its pixels doubled, the Fridge's PNG in the panel's 16 greys, Vector Ink's lines sharp; "
                 + "the PDFs (Export Page, Export Now, the notebook's) of a page with kept pencil strokes hold its High Res picture at the page's size, its words where they were, Vector Ink's lines "
                 + "still vectors in page pixels over it, their pixels left out; a page of washes alone as before, byte for byte; a record from before reads a sharp page once; "
                 + "Layers at Social and High Res read back as PSDs of that size and dpi, the same layers as at Page, each merged image that size's PNG, the layers laid Normal within a few greys of it, "
-                + "at High Res the pencil's layer and Vector Ink's Pen finer than their pixels doubled, Paper and Template exactly theirs doubled; the size menus' rows");
+                + "at High Res the pencil's layer and Vector Ink's Pen finer than their pixels doubled, Paper and Template exactly theirs doubled; the size menus' rows; High Res counts its work to the end and its note says the time left");
     }
 
     /** A one-page PDF's page: its picture's {@code /Width} and {@code /Height}. */
@@ -293,6 +293,31 @@ public final class PngRenderChecks {
         for (int i = 0; i < 4; i++) VectorInkChecks.draw(d, s, VectorInkChecks.preset("Soft wash"), 24, .6, wobble(r));
         VectorInkChecks.draw(d, s, VectorInkChecks.preset("Blend"), 20, 1, wobble(r));
         check(Arrays.equals(high(d, NotebookTemplate.LINED), doubled(d, NotebookTemplate.LINED)), "a page of washes alone is exactly its pixels doubled");
+        // The Fridge's: the panel's 16 greys, at Page and Social alike, where the PNG has a wash's many.
+        java.util.Set<Integer> sixteen = new java.util.HashSet<>();
+        for (int tone : GrayPalette.VALUES) sixteen.add(DotPattern.exportGray(tone));
+        for (int g : sixteen) check(PngRender.PANEL[g] == g, "the panel's greys stay");
+        int[] size = new int[2];
+        check(Arrays.stream(read(copy(d, PageExport.PNG, ExportSize.PAGE, NotebookTemplate.BLANK), size)).distinct().count() > 16, "the PNG has a wash's many greys");
+        for (ExportSize at : new ExportSize[]{ExportSize.PAGE, ExportSize.SOCIAL})
+            for (int g : read(copy(d, PageExport.FRIDGE, at, NotebookTemplate.BLANK), size)) check(sixteen.contains(g), "the Fridge's PNG is in the panel's 16 greys: " + g);
+    }
+
+    /** High Res's PNG and Layers count their work to the end ({@link ExportProgress}); the note's words. */
+    static void progress() throws Exception {
+        ToneDocument d = InkWashLayers.blank(300, 600);
+        VectorInkChecks.draw(d, new WatercolorSession(), SharpChecks.preset("HB pencil"), 5, 1, wobble(new Random(3)));
+        for (String choice : new String[]{PageExport.PNG, PageExport.LAYERS}) {
+            ExportProgress.begin();
+            check(ExportProgress.fraction() == 0, "nothing done before it starts");
+            copy(d, choice, ExportSize.HIGH, NotebookTemplate.BLANK);
+            check(ExportProgress.fraction() == 1, choice + " High Res counts its work to the end");
+            ExportProgress.end();
+            check(ExportProgress.fraction() == 0, "no share once it ends");
+        }
+        check(ExportProgress.note(4000, .5).equals("Exporting") && ExportProgress.note(60000, .01).equals("Exporting"), "Exporting till a few seconds and a little have passed");
+        check(ExportProgress.note(30000, .5).equals("Exporting, 30 s left") && ExportProgress.note(60000, .25).equals("Exporting, 3 min left")
+                && ExportProgress.note(40000, .8).equals("Exporting, 10 s left") && ExportProgress.note(20000, .8).equals("Exporting") && ExportProgress.note(10000, .99).equals("Exporting"), "the time left, as Timed Pages says it: " + ExportProgress.note(60000, .25));
     }
 
     static void vector() throws Exception {

@@ -143,7 +143,8 @@ codes' and never change. A new wording is a display label: `PartChoice.label`, `
   several layers); done, the note says the file and where, as Export Now's: "p5.psd in EXPORT/Superdood" (the file
   "Harbour p5.psd"); else "Export failed". While a copy is made (2026-11-10, Export Now's and Send's too) the
   button reads **Exporting**, then **Exported** or **Export Failed** for a note's time; from the drawing screen's Menu a note
-  "Exporting". Its last row **Send** (2026-11-05, the owner: "a lightweight
+  "Exporting". A High Res PNG or Layers says the time left every few seconds once it can tell, as Timed Pages says
+  times: "Exporting, 2 min left", "Exporting, 40 s left" (2026-11-24, the owner: "give an estimate of the time"). Its last row **Send** (2026-11-05, the owner: "a lightweight
   quick share option"; `LiveSend`): a window headed **Send**, "superdood.org" over its four letters (as Draw Together's),
   the QR code, the caption "On this Wi-Fi, for ten minutes." and **Close**; notes "Wi-Fi off", "Sharing failed". The
   browser's page: the notebook's title, then **Page 5** and **Notebook** over their files, **PDF**, **PNG** with its

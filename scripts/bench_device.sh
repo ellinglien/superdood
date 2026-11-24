@@ -7,6 +7,7 @@
 # -e erasable 1 draws every brush all erasable, as before it; -e marks true -e marksErasable 0 lays the marks permanent;
 # -e stability wash,session,fill: the heap under load (StabilityBench), -e actions 40 [-e presets "Soft wash,Sumi"]
 # -e eraser true times the eraser over pages with and without shares, and the heap a pair's shares take)
+# LIVE=1 ... -e book "name" -e export true: that notebook's open page made as Export Page's High Res PNG and Layers, each timed (GitHub issue 1).
 # LIVE=1 runs LiveStrokeBench instead: real pen events into the bench build's own drawing screen (it shows on the panel
 # while it runs), printing DrawingPad's "stroke timing" lines too, e.g. LIVE=1 scripts/bench_device.sh -e styles "Ink wash" -e sizes 360.
 # LIVE=1 ... -e book "name" -e rounds 30 [-e away 10] [-e holdMs 45000]: the heap through a long session on one page of a

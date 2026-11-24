@@ -5,6 +5,28 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.5 (2026-11-24)
+
+- **High Res is 2 to 10 times faster** (2026-11-24, GitHub issue 1: a complex page's High Res exports failed): each pen
+  stroke was drawn again in every 64 px square its box covered, so a line across the page was drawn hundreds of times.
+  Now it is drawn once in each quarter of the page's height it crosses; Layers draws a strip's strokes once for all its
+  layers and its merged image (it drew them twice); and the next strips' strokes are drawn on the Manta's other three
+  cores. On the Manta a page of 300 ruled lines' PNG went from 2 min 42 s to 25 s, its Layers from 5 min 23 s to 30 s;
+  a page of 8,000 short lines from 40 s to 17 s and 82 s to 20 s. The pictures are the same (2 of a page's 17 million
+  points differ, at a line's edge). A strip whose strokes can't be drawn again (out of memory, say) goes as its pixels
+  doubled, so the copy is still made.
+- **High Res says the time left** (2026-11-24, the owner: "is there a way to give an estimate of the time and tell the
+  user when exporting?"): while a High Res PNG or Layers is made, the note says "Exporting, 2 min left", from how much of
+  the page's work is done, each part weighed by the strokes it draws again.
+
+- **Fridge pages from the Manta go at full size** (2026-11-21, the owner: "the fridge version of the images online dont
+  always look like the drawing"): a Manta page went shrunk to 1080 wide, which averaged a texture's dots and lines into
+  a muddy, stripy grey. It goes at its own size now, as on the tablet; a page too large for the Fridge still goes at
+  1080 wide.
+- **Fridge pages in the tablet's 16 greys** (2026-11-21, the owner: "the washes", "16 greys, like tablet"): a wash's
+  faint ripples, lost among the tablet's dots, showed online as blotchy rings. A Fridge page is in the tablet's 16
+  greys now, so a wash shows flat as on the tablet. Export Page's copies keep their smooth greys.
+
 ## 1.4 (2026-11-20)
 
 - **Open File** (2026-11-17, the owner: "can we make a way to open epubs and pdfs easily from the notebooks area as if

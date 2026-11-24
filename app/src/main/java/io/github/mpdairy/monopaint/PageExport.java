@@ -33,6 +33,8 @@ import java.util.Locale;
 final class PageExport {
     /** The choices' words (docs/TEXT-STYLE.md) in the menu Export Page opens. */
     static final String PDF = "PDF", PNG = "PNG", LAYERS = "Layers";
+    /** The Fridge's PNG: the PNG in the panel's 16 greys ({@link PngRender#PANEL}); never in a menu. */
+    static final String FRIDGE = "Fridge";
     static final String[] CHOICES = {PDF, PNG, LAYERS};
     /** The note when a copy couldn't be made (Export Now's too). */
     static final String FAILED = "Export failed";
@@ -112,6 +114,7 @@ final class PageExport {
             boolean guides = template.shared(page.width, page.height) != null;
             if (choice.equals(LAYERS)) { psd(out, page, tiles, guides, size); return; }
             long key = NotebookExport.pageKey(NotebookExport.stackKey(pages, stacks, place, tracing), template);
+            if (choice.equals(FRIDGE)) { out.write(PngRender.png(page, size, tiles, guides, key, true)); return; }
             if (choice.equals(PNG)) { out.write(size != ExportSize.PAGE ? PngRender.png(page, size, tiles, guides, key) : NotebookExport.png(page, key, tiles, guides)); return; }
             // Its Vector Ink lines as vectors, where it has some.
             byte[] vectors = NotebookExport.vectorPng(page, key, tiles, guides), png = vectors != null ? vectors : NotebookExport.png(page, key, tiles, guides);
@@ -158,12 +161,31 @@ final class PageExport {
         List<SharpView.Kept> kept = high ? SharpView.kept(doc, new java.util.HashMap<>()) : null;
         // Each pair (a layer of the page, InkWashLayers) kind by kind: its two halves' entries of a kind, side by side in the stack.
         int pairs = (page.layers.size() + 1) / 2, kinds = 1 + ToneDocument.PLANES;
+        List<Sharp> sharps = new ArrayList<>();
+        List<PsdWriter.Packing> packings = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        Sharp.Scratch scratch = high ? new Sharp.Scratch(w, ow, without != 0) : null;
         for (int p = 0; p < pairs; p++) for (int kind = 0; kind < kinds; kind++) {
             int from = p * 2 * kinds + 2 * kind;
+            String name = (pairs > 1 ? "Layer " + (p + 1) + " " : "") + KINDS[kind];
             PagePicture.Composite marks = PagePicture.Composite.printed(page, from, from + 2, without);
-            PsdWriter.Rows rows = high ? new Sharp(page, doc, marks, from, ToneDocument.slotPlane(kind) == ToneDocument.PLANE_LINES, without, kept, grey)
-                    : sized(size, w, h, (y, g, a) -> { marks.marks(y, row, cover); for (int x = 0; x < w; x++) pixel(row[x], cover[x], page.paper, grey, g, a, x); });
-            layers.add(PsdWriter.layer((pairs > 1 ? "Layer " + (p + 1) + " " : "") + KINDS[kind], ow, oh, rows));
+            if (high) { sharps.add(new Sharp(page, doc, marks, from, ToneDocument.slotPlane(kind) == ToneDocument.PLANE_LINES, without, kept, grey, scratch)); packings.add(new PsdWriter.Packing(ow, oh)); names.add(name); continue; }
+            layers.add(PsdWriter.layer(name, ow, oh, sized(size, w, h, (y, g, a) -> { marks.marks(y, row, cover); for (int x = 0; x < w; x++) pixel(row[x], cover[x], page.paper, grey, g, a, x); })));
+        }
+        // High Res: strip by strip, each layer's then the merged image's, the strip's strokes drawn once for them all (SharpView#drawn).
+        PsdWriter.Channel merged = new PsdWriter.Channel(oh);
+        byte[] line = new byte[ow];
+        if (high) {
+            PngRender.High image = PngRender.High.of(page, doc, without, kept, tiles, guides, false);
+            try { for (int sy = 0; sy < image.strips(); sy++) {
+                java.util.Map<List<Object>, SharpStrokes.GridPage> drawn = image.drawn(sy);
+                int top = sy * SharpView.STRIP * ExportSize.HIGH_SCALE, bottom = Math.min(oh, top + SharpView.STRIP * ExportSize.HIGH_SCALE);
+                for (int i = 0; i < sharps.size(); i++) { Sharp sharp = sharps.get(i); sharp.strokes = drawn; for (int y = top; y < bottom; y++) packings.get(i).row(sharp, y); }
+                image.strip(sy, drawn, (greys, count) -> {
+                    for (int r = 0; r < count; r++) { for (int x = 0; x < ow; x++) line[x] = (byte) greys[r * ow + x]; merged.row(line); }
+                });
+            } } finally { image.close(); }
+            for (int i = 0; i < sharps.size(); i++) layers.add(packings.get(i).layer(names.get(i)));
         }
         if (tiles != null && page.magnets != null && !page.magnets.isEmpty()) {
             int[] stamped = new int[w * h];
@@ -173,13 +195,8 @@ final class PageExport {
             })));
         }
         layers.removeIf(l -> !l.shows);
-        // The merged image: the PNG's greys at that size (High Res's drawn a strip at a time).
-        PsdWriter.Channel merged = new PsdWriter.Channel(oh);
-        byte[] line = new byte[ow];
-        if (high) PngRender.high(page, true, tiles, guides, false, (greys, count) -> {
-            for (int r = 0; r < count; r++) { for (int x = 0; x < ow; x++) line[x] = (byte) greys[r * ow + x]; merged.row(line); }
-        });
-        else {
+        // The merged image: the PNG's greys at that size (High Res's made above, strip by strip with the layers).
+        if (!high) {
             byte[] greys = NotebookExport.greys(page, tiles, guides);
             if (ow != w || oh != h) greys = PngRender.shrink(greys, w, h, ow, oh);
             for (int y = 0; y < oh; y++) { System.arraycopy(greys, y * ow, line, 0, ow); merged.row(line); }
@@ -213,13 +230,13 @@ final class PageExport {
 
     /**
      * High Res's layer of a kind of a pair (stack places {@code from} and {@code from + 1}, as {@code marks} composes
-     * them): its pixels doubled, a tile row at a time ({@link SharpView#TILE}), except where a plane of it holds just
+     * them): its pixels doubled, a strip at a time ({@link SharpView#STRIP}), except where a plane of it holds just
      * what its kept dry strokes lay ({@link SharpView#holds}) and the layer shows just those planes there (no reflection,
      * no other mark): there the strokes are drawn again at 2 × ({@link SharpView#drawn}), as High Res's PNG draws them.
      * A pair's Vector Ink ({@code pen}: its kind) takes its lines, drawn at 2 × ({@link VectorLines#over}), in place of their pixels.
      */
     private static final class Sharp implements PsdWriter.Rows {
-        private final int k = ExportSize.HIGH_SCALE, w, h, ow, side = SharpView.TILE;
+        private final int k = ExportSize.HIGH_SCALE, w, h, ow, side = SharpView.STRIP;
         private final ToneDocument.Snapshot page;
         private final PagePicture.Composite marks;
         private final int[] grey;
@@ -227,13 +244,28 @@ final class PageExport {
         private final int[] opacity = new int[2];
         private final List<List<SharpView.Kept>> kept = new ArrayList<>();
         private final VectorLines lines;
-        /** The tile row's marks at 2 × (inked, coverage) and at 1 ×; the tile row they hold. */
+        /** The strip's marks at 2 × (inked, coverage) and at 1 ×: every layer's in turn, a strip each ({@link #psd}). */
+        static final class Scratch {
+            final int[] inked, cover, inked1, cover1;
+            final byte[] coverage;
+            Scratch(int w, int ow, boolean lines) {
+                int side = SharpView.STRIP, k = ExportSize.HIGH_SCALE;
+                inked = new int[ow * side * k]; cover = new int[inked.length]; inked1 = new int[w * side]; cover1 = new int[inked1.length];
+                coverage = lines ? new byte[inked.length] : null;
+            }
+        }
         private final int[] inked, cover, inked1, cover1;
         private final byte[] coverage;
+        /** The strip this layer's marks in {@link Scratch} are of (another layer's may have been drawn there since: each draws its strip whole, in turn). */
         private int band = -1;
+        /** Each strip's work ({@link ExportProgress}). */
+        private final long[] work;
+        /** The strip's strokes drawn again, shared with the other layers and the merged image ({@link SharpView#drawn}). */
+        java.util.Map<List<Object>, SharpStrokes.GridPage> strokes;
 
-        Sharp(ToneDocument.Snapshot page, ToneDocument doc, PagePicture.Composite marks, int from, boolean pen, int without, List<SharpView.Kept> all, int[] grey) {
+        Sharp(ToneDocument.Snapshot page, ToneDocument doc, PagePicture.Composite marks, int from, boolean pen, int without, List<SharpView.Kept> all, int[] grey, Scratch scratch) {
             this.page = page; this.marks = marks; this.grey = grey; w = page.width; h = page.height; ow = w * k;
+            inked = scratch.inked; cover = scratch.cover; inked1 = scratch.inked1; cover1 = scratch.cover1; coverage = scratch.coverage;
             VectorLines drawn = VectorLines.NONE;
             for (int e = 0; e < 2; e++) {
                 int place = from + e, owner = ToneDocument.stackOwner(place);
@@ -248,16 +280,21 @@ final class PageExport {
                 for (SharpView.Kept s : all) { ToneDocument.Layer plane = doc.addressed(s.e.plane); if (plane != null && plane.tones == entry.tones) on.add(s); }
             }
             lines = drawn.isEmpty() ? null : drawn;
-            inked = new int[ow * side * k]; cover = new int[inked.length]; inked1 = new int[w * side]; cover1 = new int[inked1.length];
-            coverage = lines == null ? null : new byte[inked.length];
+            List<SharpView.Kept> both = new ArrayList<>(kept.get(0));
+            both.addAll(kept.get(1));
+            work = new long[(h + side - 1) / side];
+            for (int ty = 0; ty < work.length; ty++) ExportProgress.add(work[ty] = SharpView.work(both, ty, h));
         }
 
         @Override public void row(int y, byte[] g, byte[] a) {
-            if (y / (side * k) != band) draw(band = y / (side * k));
+            if (y / (side * k) != band) {
+                draw(band = y / (side * k));
+                ExportProgress.step(work[band]);
+            }
             for (int x = 0, i = (y - band * side * k) * ow; x < ow; x++, i++) pixel(inked[i], cover[i], page.paper, grey, g, a, x);
         }
 
-        /** Tile row {@code ty}. */
+        /** Strip {@code ty} ({@link SharpView#STRIP}). */
         private void draw(int ty) {
             int top = ty * side, rows = Math.min(side, h - top);
             int[] ri = new int[w], rc = new int[w];
@@ -266,7 +303,8 @@ final class PageExport {
                 System.arraycopy(ri, 0, inked1, r * w, w); System.arraycopy(rc, 0, cover1, r * w, w);
                 for (int j = 0; j < k; j++) for (int x = 0, o = (r * k + j) * ow; x < ow; x++) { inked[o + x] = ri[x / k]; cover[o + x] = rc[x / k]; }
             }
-            for (int tx = 0; tx * side < w; tx++) tile(tx * side, top, Math.min(side, w - tx * side), rows);
+            // One strip the page's width: a stroke drawn once a strip, not again in every tile its box covers (GitHub issue 1).
+            tile(0, top, w, rows);
             if (lines != null) {
                 java.util.Arrays.fill(coverage, (byte) 0);
                 lines.over(k, 0, 0, 0, top * k, ow, rows * k, inked, cover, coverage);
@@ -276,18 +314,29 @@ final class PageExport {
         private void tile(int x, int top, int tw, int th) {
             SharpStrokes.GridPage[] once = new SharpStrokes.GridPage[2], fine = new SharpStrokes.GridPage[2];
             boolean any = false;
+            // Strokes that can't be drawn again (out of memory, say) leave the strip its pixels doubled: the copy is still made (GitHub issue 1).
+            try { any = drawn(x, top, tw, th, once, fine); } catch (RuntimeException | OutOfMemoryError e) { ExportProgress.soft++; return; }
+            if (!any) return;
+            fill(x, top, tw, th, once, fine);
+        }
+        /** The planes' kept strokes over page px {@code x, top, tw × th} drawn into {@code once} (1 ×) and {@code fine} (k ×); whether any shows. */
+        private boolean drawn(int x, int top, int tw, int th, SharpStrokes.GridPage[] once, SharpStrokes.GridPage[] fine) {
+            boolean any = false;
             for (int e = 0; e < 2; e++) {
                 List<SharpView.Kept> here = new ArrayList<>();
                 for (SharpView.Kept s : kept.get(e)) if (s.box[0] < x + tw && s.box[2] > x && s.box[1] < top + th && s.box[3] > top) here.add(s);
                 if (here.isEmpty()) continue;
-                once[e] = SharpView.drawn(x, top, tw, th, w, h, here, 1);
+                once[e] = SharpView.drawn(x, top, tw, th, w, h, here, 1, strokes);
                 boolean some = false;
                 for (int p = 0; p < tw * th && !some; p++) some = once[e].alpha(p) > 0;
                 if (!some) { once[e] = null; continue; }
-                fine[e] = SharpView.drawn(x, top, tw, th, w, h, here, k);
+                fine[e] = SharpView.drawn(x, top, tw, th, w, h, here, k, strokes);
                 any = true;
             }
-            if (!any) return;
+            return any;
+        }
+        /** The strip's points at k × where a plane holds just its strokes ({@link #drawn}'s) and the layer shows just those planes. */
+        private void fill(int x, int top, int tw, int th, SharpStrokes.GridPage[] once, SharpStrokes.GridPage[] fine) {
             int fw = tw * k;
             boolean[] held = new boolean[2];
             for (int py = 0; py < th; py++) for (int px = 0; px < tw; px++) {

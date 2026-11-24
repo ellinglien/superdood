@@ -21,6 +21,8 @@ import java.util.List;
 final class SharpView {
     /** A tile's side, page px. */
     static final int TILE = 64;
+    /** High Res's strip, page px tall ({@link #strip}): a stroke is drawn again once a strip it crosses. */
+    static final int STRIP = 4 * TILE;
     /** The most points the tiles kept hold together, any grid (two bytes each: 24 MB), the least used going first: a screen's at any zoom fits. */
     static final int MOST_POINTS = 12 << 20;
     private long points;
@@ -116,18 +118,46 @@ final class SharpView {
         return here.isEmpty() ? null : Area.of(page, k, x, y, w, h, here, ghost, layerSteps, without, shown);
     }
     /**
-     * High Res's PNG ({@link PngRender#high}): the tiles of tile row {@code ty} at grid {@code k} drawn now, on this
-     * thread, the rows before dropped: a page drawn finer a strip at a time, {@code without} as {@link #want} takes it.
+     * High Res's PNG ({@link PngRender#high}): strip {@code sy} ({@link #STRIP} page px tall, the page's width) drawn
+     * finer, its kept strokes ({@code kept}, {@link #kept}) over it each drawn once ({@link #render}), or null where
+     * nothing in it is: a stroke crossing the page was drawn again in every tile its box covers (a page of long ruled
+     * lines took minutes on the Manta: GitHub issue 1).
      */
-    void drawRow(ToneDocument page, int k, int ty, int without) {
-        clear();
-        now = k;
-        List<Kept> kept = kept(page);
-        for (int tx = 0; tx * TILE < page.width; tx++) {
-            Area area = area(page, kept, k, tx, ty, null, 0, without, null);
-            short[] t = area == null ? NONE : render(area);
-            synchronized (this) { put(key(k, tx, ty), t); }
+    /**
+     * Strip {@code sy}'s work for {@link ExportProgress} ({@code height} the page's): a strip's own (doubled and written)
+     * as 2000 samples of stroke, and the samples of each of {@code kept} over it, drawn again there.
+     */
+    static long work(List<Kept> kept, int sy, int height) {
+        int y = sy * STRIP, h = Math.min(STRIP, height - y);
+        long work = 2000;
+        for (Kept s : kept) if (s.box[1] < y + h && s.box[3] > y) work += s.e.size();
+        return work;
+    }
+    /**
+     * Strip {@code sy}'s kept strokes drawn again into {@code drawn}, plane by plane, at 1 and {@code k} to a pixel, as
+     * {@link #strip} and High Res's Layers draw them ({@link #drawn}'s keys): on a helper, ahead of the strip's turn.
+     */
+    static void prefetch(ToneDocument page, List<Kept> kept, int k, int sy, java.util.Map<List<Object>, SharpStrokes.GridPage> drawn) {
+        int y = sy * STRIP, h = Math.min(STRIP, page.height - y);
+        java.util.Map<byte[], List<Kept>> planes = new java.util.IdentityHashMap<>();
+        List<byte[]> order = new ArrayList<>();
+        for (Kept s : kept) {
+            if (!(s.box[1] < y + h && s.box[3] > y && s.box[0] < page.width && s.box[2] > 0)) continue;
+            ToneDocument.Layer plane = page.addressed(s.e.plane);
+            if (plane == null) continue;
+            List<Kept> on = planes.get(plane.tones);
+            if (on == null) { planes.put(plane.tones, on = new ArrayList<>()); order.add(plane.tones); }
+            on.add(s);
         }
+        for (byte[] t : order) for (int at : new int[]{1, k}) drawn(0, y, page.width, h, page.width, page.height, planes.get(t), at, drawn);
+    }
+    static short[] strip(ToneDocument page, List<Kept> kept, int k, int sy, int without, java.util.Map<List<Object>, SharpStrokes.GridPage> drawn) {
+        int y = sy * STRIP, h = Math.min(STRIP, page.height - y);
+        List<Kept> here = new ArrayList<>();
+        for (Kept s : kept) if (s.box[1] < y + h && s.box[3] > y && s.box[0] < page.width && s.box[2] > 0) here.add(s);
+        if (here.isEmpty()) return null;
+        short[] out = render(Area.of(page, k, 0, y, page.width, h, here, null, 0, without, null), page.width, STRIP, drawn);
+        return out == NONE ? null : out;
     }
     /**
      * The tiles at grid {@code k} over {@code inner}, raster px {@code x, y, w × h} (plain greys), page point (px, py) at
@@ -249,7 +279,12 @@ final class SharpView {
      * Tile {@code a} drawn: {@code (TILE k)²} greys, row by row, −1 where the screen is left as it is, then ({@link #whole})
      * each page pixel's composite where it is drawn finer; {@link #NONE} where nothing in it is.
      */
-    static short[] render(Area a) {
+    static short[] render(Area a) { return render(a, TILE, TILE, null); }
+    /**
+     * As above, laid out {@code across × down} page px ({@code TILE} square, or a strip's: {@link #strip}): its points
+     * {@code across × k} a row, {@code down × k} rows, then each page pixel's composite {@code across} a row.
+     */
+    static short[] render(Area a, int across, int down, java.util.Map<List<Object>, SharpStrokes.GridPage> drawn) {
         int w = a.w, h = a.h, k = a.k, n = w * h;
         boolean[] matched = new boolean[n];
         java.util.Arrays.fill(matched, true);
@@ -258,21 +293,21 @@ final class SharpView {
         for (int i = 0; i < a.count; i++) {
             List<Kept> on = a.strokes.get(i);
             if (on == null) continue;
-            SharpStrokes.GridPage once = drawn(a, on, 1);
+            SharpStrokes.GridPage once = drawn(a.x, a.y, a.w, a.h, a.pageWidth, a.pageHeight, on, 1, drawn);
             boolean some = false;
             byte[] t = a.tones[i], al = a.alpha[i];
             for (int p = 0; p < n; p++) {
                 if (!holds(once, p, t[p] & 255, al[p] & 255)) matched[p] = false; else if (once.alpha(p) > 0) some = true;
             }
             if (!some) continue;
-            fine[i] = drawn(a, on, k);
+            fine[i] = drawn(a.x, a.y, a.w, a.h, a.pageWidth, a.pageHeight, on, k, drawn);
             any = true;
         }
         if (!any) return NONE;
         // The tile's points row by row, a whole tile's side (a tile at the page's edge leaves the rest −1); the planes' drawings the grid's.
         // Then each page pixel's composite as the screen showed it ({@link #WHOLE}).
-        int side = TILE * k, gw = w * k;
-        short[] out = new short[side * side + TILE * TILE];
+        int side = across * k, gw = w * k, wholeAt = side * down * k;
+        short[] out = new short[wholeAt + across * down];
         java.util.Arrays.fill(out, (short) -1);
         boolean laid = false;
         for (int py = 0; py < h; py++) for (int px = 0; px < w; px++) {
@@ -283,7 +318,7 @@ final class SharpView {
             for (int i = 0; i < a.count; i++) whole = over(whole, a.tones[i][p] & 255, a.alpha[i][p] & 255, a.opacity[i]);
             if (a.shown != null && a.shown[p] != whole) continue;
             if (!finer(fine, a, p, px, py, gw)) continue;
-            out[side * side + py * TILE + px] = (short) whole;
+            out[wholeAt + py * across + px] = (short) whole;
             for (int j = 0; j < k; j++) for (int q = 0; q < k; q++) {
                 int f = (py * k + j) * gw + px * k + q, v = a.paper;
                 for (int i = 0; i < a.count; i++) {
@@ -316,7 +351,19 @@ final class SharpView {
     /** Area {@code a}'s kept strokes {@code on} (one plane's) drawn again at {@code k} to a pixel over white: its points row by row. */
     static SharpStrokes.GridPage drawn(Area a, List<Kept> on, int k) { return drawn(a.x, a.y, a.w, a.h, a.pageWidth, a.pageHeight, on, k); }
     /** As above, over page px {@code x, y, w × h} of a {@code pageWidth × pageHeight} page: High Res's Layers copy too. */
-    static SharpStrokes.GridPage drawn(int x, int y, int w, int h, int pageWidth, int pageHeight, List<Kept> on, int k) {
+    static SharpStrokes.GridPage drawn(int x, int y, int w, int h, int pageWidth, int pageHeight, List<Kept> on, int k) { return drawn(x, y, w, h, pageWidth, pageHeight, on, k, null); }
+    /**
+     * As above, kept in {@code drawn} (null: none) by where, the strokes and {@code k}, and taken from it when there: a
+     * High Res Layers copy's layers and its merged image draw the same strip's strokes once (read only, after).
+     */
+    static SharpStrokes.GridPage drawn(int x, int y, int w, int h, int pageWidth, int pageHeight, List<Kept> on, int k, java.util.Map<List<Object>, SharpStrokes.GridPage> drawn) {
+        if (drawn == null) return draw(x, y, w, h, pageWidth, pageHeight, on, k);
+        List<Object> key = java.util.Arrays.asList(x, y, w, h, k, new ArrayList<>(on));
+        SharpStrokes.GridPage page = drawn.get(key);
+        if (page == null) drawn.put(key, page = draw(x, y, w, h, pageWidth, pageHeight, on, k));
+        return page;
+    }
+    private static SharpStrokes.GridPage draw(int x, int y, int w, int h, int pageWidth, int pageHeight, List<Kept> on, int k) {
         FineGrid grid = FineGrid.over(k, x, y, w, h, pageWidth, pageHeight);
         SharpStrokes.GridPage page = new SharpStrokes.GridPage(grid.width, grid.height);
         // Each stroke's paper (the page's surface, or with none the brush's own), read at the grid's points, kept across the strokes.

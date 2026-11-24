@@ -11,6 +11,7 @@ import android.view.View;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -35,6 +36,7 @@ final class LiveStrokeBench {
         PartChoice[] lives = ModularPerfBench.lives(lv == null ? "wet" : lv);
         String[] modes = (md == null ? "gray,fast" : md).split(",");
         if (args.getString("cases") != null && args.getString("settle") == null) { cases(test, args, report); return; }
+        if (args.getString("book") != null && args.getString("export") != null) { exportSession(test, args, report); return; }
         if (args.getString("book") != null) { heapSession(test, args, report); return; }
         PaintActivity activity = (PaintActivity)test.startActivitySync(new Intent(test.getTargetContext(), PaintActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         front = activity;
@@ -420,6 +422,47 @@ final class LiveStrokeBench {
         heapLine("end", report);
         if (hold > 0) { Log.i("InkBench", "holding for a heap dump " + hold + " ms"); SystemClock.sleep(hold); }
         activity.finish();
+    }
+    /**
+     * Export Page's High Res on a notebook (-e book "name" -e export true): the bench library's notebook {@code name}
+     * opened where it was left, then its open page's PNG and Layers at High Res made as Export Page makes them (off the
+     * main thread, the notebook open beside them), each timed with the heap after, or its failure and why (GitHub issue 1).
+     */
+    static void exportSession(Instrumentation test, android.os.Bundle args, StringBuilder report) throws Exception {
+        PaintActivity activity = (PaintActivity)test.startActivitySync(new Intent(test.getTargetContext(), PaintActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        front = activity;
+        for (int i = 0; i < 100 && (Boolean)get(activity, "loading"); i++) SystemClock.sleep(100);
+        test.waitForIdleSync(); SystemClock.sleep(500);
+        main(test, () -> call(activity, "openNotebook", new Class<?>[]{String.class}, args.getString("book")));
+        SystemClock.sleep(500);
+        for (int i = 0; i < 600 && (Boolean)get(activity, "loading"); i++) SystemClock.sleep(100);
+        test.waitForIdleSync();
+        main(test, () -> { call(get(activity, "notebooks"), "hide"); activity.navigationLocked = false; });
+        test.waitForIdleSync(); SystemClock.sleep(3000);
+        heapLine("opened", report);
+        Runtime rt = Runtime.getRuntime();
+        report.append(String.format(Locale.ROOT, "heap limit %.0f MB%n", rt.maxMemory() / 1e6));
+        for (String choice : new String[]{PageExport.PNG, PageExport.LAYERS}) {
+            DrawingBook.Snapshot[] snap = new DrawingBook.Snapshot[1];
+            int[] place = new int[1];
+            main(test, () -> { snap[0] = activity.book.snapshot(); place[0] = activity.book.index(); });
+            long t0 = SystemClock.elapsedRealtime();
+            String line;
+            try {
+                List<PackedPage> pages = snap[0].packed();
+                snap[0].release();
+                byte[] out = PageExport.bytes("Bench", place[0], choice, ExportSize.HIGH, pages, snap[0].options, snap[0].pageTemplates, snap[0].tracing, null, 0);
+                line = String.format(Locale.ROOT, "%s High Res: %.1f s, %d KB", choice, (SystemClock.elapsedRealtime() - t0) / 1e3, out.length >> 10);
+            } catch (Throwable e) {
+                snap[0].release();
+                Log.e("InkBench", choice + " High Res failed", e);
+                line = String.format(Locale.ROOT, "%s High Res FAILED after %.1f s: %s", choice, (SystemClock.elapsedRealtime() - t0) / 1e3, e);
+            }
+            Log.i("InkBench", line); report.append(line).append('\n');
+            heapLine("after", report);
+        }
+        activity.finish();
+        test.waitForIdleSync(); SystemClock.sleep(1000);
     }
     private static void heapLine(String what, StringBuilder report) {
         Runtime rt = Runtime.getRuntime();

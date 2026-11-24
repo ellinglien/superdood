@@ -66,12 +66,12 @@ public final class FridgeChecks {
             check(Fridge.deleting(kept, at) == null, "Not a delete of this tablet's card: " + at);
     }
     static void size() {
-        check(Fridge.size(1785, 2387) == ExportSize.SOCIAL, "The Manta's page is wider than 1600: Social");
+        check(Fridge.size(1785, 2387) == ExportSize.PAGE, "The Manta's page goes at its own size");
         int[] manta = ExportSize.SOCIAL.of(1785, 2387);
-        check(manta[0] <= Fridge.WIDE_MOST && manta[0] <= Fridge.WIDTH_MOST && manta[1] <= Fridge.HEIGHT_MOST, "Social fits the server");
+        check(manta[0] <= Fridge.WIDTH_MOST && manta[1] <= Fridge.HEIGHT_MOST, "Social fits the server");
         // An 8-bit grey PNG that deflate can't shrink at all: a byte a pixel and a filter byte a row, plus its blocks' and chunks' headers.
         check((long) manta[0] * manta[1] + manta[1] + 64 * 1024 < Fridge.BYTES_MOST, "Social is under 3 MB whatever is drawn");
-        check(Fridge.size(1404, 1872) == ExportSize.PAGE && Fridge.size(1600, 2000) == ExportSize.PAGE && Fridge.size(1500, 3000) == ExportSize.SOCIAL, "Up to 1600 wide and 2700 tall: its own size");
+        check(Fridge.size(1404, 1872) == ExportSize.PAGE && Fridge.size(2000, 2700) == ExportSize.PAGE && Fridge.size(2001, 2000) == ExportSize.SOCIAL && Fridge.size(1500, 3000) == ExportSize.SOCIAL, "Up to 2000 wide and 2700 tall: its own size");
     }
 
     static void answers() {

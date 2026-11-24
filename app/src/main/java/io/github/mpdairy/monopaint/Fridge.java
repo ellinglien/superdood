@@ -37,8 +37,6 @@ final class Fridge {
     static final String CONFIRM_API = SITE + "/api/confirm", CONFIRMED_API = SITE + "/api/confirmed", LEAVE_API = SITE + "/api/leave", NAME_API = SITE + "/api/name";
     /** The server's limits: a name's characters, the PNG's bytes and pixels. */
     static final int NAME_MOST = 40, BYTES_MOST = 3 << 20, WIDTH_MOST = 2000, HEIGHT_MOST = 2700;
-    /** Wider than this, the page goes at Social ({@link ExportSize}), well under {@link #BYTES_MOST}. */
-    static final int WIDE_MOST = 1600;
 
     /** The words (docs/TEXT-STYLE.md). */
     static final String ROW = "Send to the Fridge", NAME = "Name", EMAIL = "Email",
@@ -81,16 +79,20 @@ final class Fridge {
                     && path != null && (path.equals("/fridge") || path.startsWith("/fridge/")) && !path.toLowerCase(Locale.ROOT).contains("%2e");
         } catch (java.net.URISyntaxException e) { return false; }
     }
-    /** The size the page goes at: its own when it is no wider than {@link #WIDE_MOST} and fits the server, else Social. */
-    static ExportSize size(int width, int height) { return width <= WIDE_MOST && height <= HEIGHT_MOST ? ExportSize.PAGE : ExportSize.SOCIAL; }
     /**
-     * Page {@code place}'s PNG as Export Page writes it at {@link #size}, on plain paper, as before the Template tick
-     * (2026-11-10); Social when that is over {@link #BYTES_MOST}.
+     * The size the page goes at: its own when it fits the server, else Social. The Manta's page too, so a texture's dots
+     * and lines go as drawn, not averaged into a muddy grey (the owner, 2026-11-21: "the fridge version of the images
+     * online dont always look like the drawing"); {@link #png} falls back to Social past {@link #BYTES_MOST}.
+     */
+    static ExportSize size(int width, int height) { return width <= WIDTH_MOST && height <= HEIGHT_MOST ? ExportSize.PAGE : ExportSize.SOCIAL; }
+    /**
+     * Page {@code place}'s PNG as Export Page writes it at {@link #size} but in the panel's 16 greys ({@link
+     * PageExport#FRIDGE}), on plain paper, as before the Template tick (2026-11-10); Social when that is over {@link #BYTES_MOST}.
      */
     static byte[] png(String title, int place, int width, int height, List<PackedPage> pages, NotebookOptions options, TracingPaper tracing, Magnets.Tiles tiles) throws IOException {
         options = options.withTemplate(NotebookTemplate.BLANK);
         for (ExportSize size = size(width, height); ; size = ExportSize.SOCIAL) {
-            byte[] png = PageExport.bytes(title, place, PageExport.PNG, size, pages, options, null, tracing, tiles, LocalDate.now().toEpochDay());
+            byte[] png = PageExport.bytes(title, place, PageExport.FRIDGE, size, pages, options, null, tracing, tiles, LocalDate.now().toEpochDay());
             if (png.length <= BYTES_MOST) return png;
             if (size == ExportSize.SOCIAL) throw new Failed(TOO_LARGE, 0);
         }
