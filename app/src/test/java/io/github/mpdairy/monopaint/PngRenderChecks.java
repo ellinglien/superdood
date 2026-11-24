@@ -17,7 +17,7 @@ public final class PngRenderChecks {
     public static void main(String[] args) throws Exception {
         Assets.install(Assets.folder(Assets.FOLDER));
         if (args.length > 0 && args[0].equals("bench")) { bench(); return; }
-        choices(); shrink(); social(); sharp(); washes(); vector(); pdf(); pdfLines(); layers(); progress();
+        choices(); shrink(); social(); sharp(); washes(); vector(); pdf(); pdfLines(); layers(); progress(); stack();
         java.io.File dir = java.nio.file.Files.createTempDirectory("sharppdf").toFile();
         try { pdfNotebook(dir); } finally { NotebookMigrationChecks.delete(dir); }
         System.out.println("PASS: Export Page's PNG sizes: PDF, PNG and Layers by their index as before, Page the notebook's copy; Social shrinks by area (a Manta page to 1080 × 1444); "
@@ -303,6 +303,18 @@ public final class PngRenderChecks {
             for (int g : read(copy(d, PageExport.FRIDGE, at, NotebookTemplate.BLANK), size)) check(sixteen.contains(g), "the Fridge's PNG is in the panel's 16 greys: " + g);
     }
 
+    /** A see-through stack of pages of three layers each, more layers than a page may hold: High Res and the PDF as its bottom page alone shows it (GitHub issue 1, "Invalid layer count"). */
+    static void stack() throws Exception {
+        ToneDocument bottom = SharpChecks.page(BrushTexture.COLD_PRESS), top = InkWashLayers.blank(bottom.width, bottom.height);
+        for (ToneDocument d : new ToneDocument[]{bottom, top}) while (InkWashLayers.pairs(d) < 3) check(InkWashLayers.add(d, true), "a layer added");
+        ToneDocument.Snapshot page = PageStacks.flatten(new ArrayList<>(Arrays.asList(bottom.layerSnapshot(), top.layerSnapshot())), null);
+        check(page.layers.size() > ToneDocument.MAX_LAYERS, "the stack holds more layers than a page: " + page.layers.size());
+        byte[] alone = PngRender.png(bottom.layerSnapshot(), ExportSize.HIGH, PageExportChecks.tiles(), false, 7);
+        check(Arrays.equals(PngRender.png(page, ExportSize.HIGH, PageExportChecks.tiles(), false, 7), alone), "the stack's High Res PNG is its bottom page's, its kept strokes sharp, the clear layers over it nothing");
+        check(PngRender.sharp(page) && NotebookExport.vectorPng(page, 7, PageExportChecks.tiles(), false) != null, "its PDF page holds the sharp picture");
+        PageExport.psd(new java.io.ByteArrayOutputStream(), page, PageExportChecks.tiles(), false, ExportSize.HIGH);
+    }
+
     /** High Res's PNG and Layers count their work to the end ({@link ExportProgress}); the note's words. */
     static void progress() throws Exception {
         ToneDocument d = InkWashLayers.blank(300, 600);
@@ -315,6 +327,12 @@ public final class PngRenderChecks {
             ExportProgress.end();
             check(ExportProgress.fraction() == 0, "no share once it ends");
         }
+        ExportProgress.begin();
+        ExportProgress.fellBack(256, 256, new OutOfMemoryError("x"));
+        check(ExportProgress.soft == 1 && ExportProgress.fellBack().equals("Rows 256 to 512: java.lang.OutOfMemoryError: x\n"), "the rows that fell back, for the report: " + ExportProgress.fellBack());
+        ExportProgress.begin();
+        check(ExportProgress.soft == 0 && ExportProgress.fellBack().isEmpty(), "a new copy starts with none");
+        ExportProgress.end();
         check(ExportProgress.note(4000, .5).equals("Exporting") && ExportProgress.note(60000, .01).equals("Exporting"), "Exporting till a few seconds and a little have passed");
         check(ExportProgress.note(30000, .5).equals("Exporting, 30 s left") && ExportProgress.note(60000, .25).equals("Exporting, 3 min left")
                 && ExportProgress.note(40000, .8).equals("Exporting, 10 s left") && ExportProgress.note(20000, .8).equals("Exporting") && ExportProgress.note(10000, .99).equals("Exporting"), "the time left, as Timed Pages says it: " + ExportProgress.note(60000, .25));

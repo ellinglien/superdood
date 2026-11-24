@@ -5,6 +5,15 @@ with each change; when cutting a release, retitle that section with the new vers
 
 ## Unreleased
 
+## 1.5.1 (2026-11-24)
+
+- **High Res works on see-through pages** (2026-11-24, GitHub issue 1, the notebook sent): pages stacked as see-through
+  pages in an earlier version hold more layers together than one page may, so their High Res PNG, Layers and PDF (and
+  the notebook's own PDF copy) failed at once with "Export failed". They export now, the bottom page's strokes sharp.
+- **A report when part of a High Res copy isn't sharp** (2026-11-24, the owner: "can it save a report"): the note says
+  "p5.png, part at normal res", and "Harbour p5 report.txt" beside the file says which rows and why, to send with a bug
+  report.
+
 ## 1.5 (2026-11-24)
 
 - **High Res is 2 to 10 times faster** (2026-11-24, GitHub issue 1: a complex page's High Res exports failed): each pen

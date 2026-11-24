@@ -89,8 +89,8 @@ final class AutoExport {
             try {
                 List<PackedPage> pages = book.packed();
                 book.release();
-                PageExport.write(folder(), title(path), place, choice, size, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles());
-                if (ExportProgress.soft > 0) Log.w(ProbeActivity.TAG, "Page copy made with " + ExportProgress.soft + " strips' strokes not drawn again");
+                File made = PageExport.write(folder(), title(path), place, choice, size, pages, book.options, book.pageTemplates, book.tracing, WordsMode.exportTiles());
+                report(app, made, ExportProgress.fellBack());
                 ExportProgress.end();
                 app.runOnUiThread(done);
             } catch (Exception | OutOfMemoryError error) {
@@ -101,6 +101,24 @@ final class AutoExport {
             }
         });
         return true;
+    }
+    /**
+     * Beside {@code made}, "Harbour p5 report.txt" when some of its rows fell back to normal res ({@code fellBack}, {@link ExportProgress}),
+     * for the owner to be sent (GitHub issue 1); an older one goes when none did. Never fails the copy.
+     */
+    private static void report(android.content.Context app, File made, String fellBack) {
+        File report = new File(made.getParentFile(), made.getName().replaceFirst("\\.[^.]+$", "") + " report.txt");
+        if (fellBack.isEmpty()) { report.delete(); return; }
+        Log.w(ProbeActivity.TAG, "Page copy made with rows at normal res:\n" + fellBack);
+        String version = "?";
+        try { version = app.getPackageManager().getPackageInfo(app.getPackageName(), 0).versionName; } catch (Exception e) { /* left "?" */ }
+        Runtime r = Runtime.getRuntime();
+        String text = "Superdood " + version + ", " + android.os.Build.MODEL + "\n" + made.getName() + ", High Res\n\n"
+                + "Some of the page came out at normal resolution: its strokes couldn't be drawn again sharp.\n"
+                + "Sending this file to github.com/ellinglien/superdood/issues helps fix it.\n\n"
+                + fellBack + "\nMemory: " + r.maxMemory() / (1 << 20) + " MB most, " + (r.totalMemory() - r.freeMemory()) / (1 << 20) + " MB in use\n";
+        try { java.nio.file.Files.write(report.toPath(), text.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
+        catch (Exception e) { Log.w(ProbeActivity.TAG, "Report not written", e); }
     }
     /** A notebook's copies waiting their turn on {@link #WORKER}, by path: what they are made from and whom they tell. */
     private static final java.util.HashMap<String, Queued> QUEUED = new java.util.HashMap<>();

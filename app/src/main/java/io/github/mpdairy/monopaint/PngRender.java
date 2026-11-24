@@ -65,7 +65,7 @@ final class PngRender {
     /** {@code page}'s High Res greys, as {@link #high(ToneDocument.Snapshot, boolean, Magnets.Tiles, boolean, long, byte[])} draws them, into {@code out} a strip at a time: the PNG's rows, or the Layers copy's merged image (grey: it reads the low byte); second ink's shares with them when {@code colour}. */
     static void high(ToneDocument.Snapshot page, boolean lines, Magnets.Tiles tiles, boolean guides, boolean colour, Strips out) throws IOException {
         // The page as a ToneDocument: its kept strokes (its Replay log) and Vector Ink's lines, read in place.
-        ToneDocument doc = new ToneDocument(page);
+        ToneDocument doc = strokes(page);
         High high = High.of(page, doc, lines ? VectorInk.sharpLayers(doc, 0, null) : 0, SharpView.kept(doc, new java.util.IdentityHashMap<>()), tiles, guides, colour);
         try { for (int ty = 0; ty < high.strips(); ty++) high.strip(ty, high.drawn(ty), out); }
         finally { high.close(); }
@@ -76,7 +76,15 @@ final class PngRender {
         void rows(int[] greys, int count) throws IOException;
     }
     /** Whether {@code page} holds a kept dry stroke High Res draws sharp ({@link SharpView#kept}); else at 2 × it is only its pixels doubled. */
-    static boolean sharp(ToneDocument.Snapshot page) { return !SharpView.kept(new ToneDocument(page), new java.util.HashMap<>()).isEmpty(); }
+    static boolean sharp(ToneDocument.Snapshot page) { return !SharpView.kept(strokes(page), new java.util.HashMap<>()).isEmpty(); }
+    /**
+     * {@code page} as a page for High Res's kept strokes and Vector Ink's lines. A see-through stack flattened holds up to
+     * four pages' layers, more than a page may (GitHub issue 1: "Invalid layer count", its copies failed); its Replay log
+     * is its bottom page's, whose layers come first, so the layers past a page's most are left to their pixels doubled.
+     */
+    static ToneDocument strokes(ToneDocument.Snapshot page) {
+        return page.layers.size() <= ToneDocument.MAX_LAYERS ? new ToneDocument(page) : new ToneDocument(page, new java.util.ArrayList<>(page.layers.subList(0, ToneDocument.MAX_LAYERS)));
+    }
 
     /** {@code greys} ({@code width × height}, a byte a pixel) shrunk to {@code w × h}: each pixel the mean of the page area under it. */
     static byte[] shrink(byte[] greys, int width, int height, int w, int h) { return shrink(greys, null, width, height, w, h); }
@@ -204,7 +212,7 @@ final class PngRender {
             int top = ty * SharpView.STRIP, h = Math.min(SharpView.STRIP, ph - top) * k;
             short[] fine;
             // A strip whose strokes can't be drawn again (out of memory, say) goes as its pixels doubled: the copy is still made (GitHub issue 1).
-            try { fine = SharpView.strip(page, kept, k, ty, without, drawn); } catch (RuntimeException | OutOfMemoryError e) { fine = null; ExportProgress.soft++; }
+            try { fine = SharpView.strip(page, kept, k, ty, without, drawn); } catch (RuntimeException | OutOfMemoryError e) { fine = null; ExportProgress.fellBack(top, h / k, e); }
             for (int r = 0; r < h; r++) for (int c = 0, row = (top + r / k) * pw; c < w; c++) band[r * w + c] = raw[row + c / k] & 255;
             // Where the strip holds a finer point and the pixel shows what it was drawn over ({@link SharpView#over}'s rule).
             if (fine != null) for (int r = 0, wholeAt = w * SharpView.STRIP * k; r < h; r++) for (int c = 0; c < w; c++) {

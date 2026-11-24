@@ -336,7 +336,9 @@ final class ToneDocument {
     /** Inkwash: the index of the layer {@code layer} is or is a plane of; -1 for none (the masking fluid). */
     private int ownerOf(Layer layer) { int a=address(layers,layer); return a<0?-1:a&15; }
     /** A page holding what {@code snapshot} holds, its magnets and paper too, with no history. */
-    ToneDocument(Snapshot snapshot) { this(snapshot.width,snapshot.height,snapshot.layers,snapshot.active,snapshot.mask); magnets=snapshot.magnets; mirrors=snapshot.mirrors; texts=snapshot.texts; paper=snapshot.paper; surface=snapshot.surface; paperPixels=madePaper=snapshot.paperPixels; wear=snapshot.wear; guides=snapshot.guides; clock=snapshot.clock; kindsShown=snapshot.kindsShown; sections=snapshot.sections; log=snapshot.log; fades.addAll(snapshot.fades); }
+    ToneDocument(Snapshot snapshot) { this(snapshot, snapshot.layers); }
+    /** As above with only {@code layers}, the first of its own (High Res's of a see-through stack, {@link PngRender#strokes}). */
+    ToneDocument(Snapshot snapshot, ArrayList<Layer> layers) { this(snapshot.width,snapshot.height,layers,snapshot.active,snapshot.mask); magnets=snapshot.magnets; mirrors=snapshot.mirrors; texts=snapshot.texts; paper=snapshot.paper; surface=snapshot.surface; paperPixels=madePaper=snapshot.paperPixels; wear=snapshot.wear; guides=snapshot.guides; clock=snapshot.clock; kindsShown=snapshot.kindsShown; sections=snapshot.sections; log=snapshot.log; fades.addAll(snapshot.fades); }
 
     /**
      * Inkwash: the page's paper (PageShade), the tone every composite of the page starts from: 255, white, as every page

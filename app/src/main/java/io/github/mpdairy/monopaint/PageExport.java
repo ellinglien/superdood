@@ -38,6 +38,8 @@ final class PageExport {
     static final String[] CHOICES = {PDF, PNG, LAYERS};
     /** The note when a copy couldn't be made (Export Now's too). */
     static final String FAILED = "Export failed";
+    /** High Res's note when some rows went at normal res, after the file's name: "p5.png, part at normal res" (its report beside it). */
+    static final String SOFT = "part at normal res";
     /** A page's layers' kinds as the Layers copy names them, in {@link ToneDocument#stacked}'s order: the base, then each plane ({@link ToneDocument#STACK_PLANES}). */
     static final String[] KINDS = {"Old Paint", "Dry Media", "Washes", "Pen", "Vector Ink", "Paint"};
     static final String PAPER = "Paper", TEMPLATE = "Template", MAGNETS = "Magnets";
@@ -156,7 +158,7 @@ final class PageExport {
         }
         // High Res: the kept dry strokes, and Vector Ink's layers drawn from their lines (their pixels left out).
         boolean high = size == ExportSize.HIGH;
-        ToneDocument doc = high ? new ToneDocument(page) : null;
+        ToneDocument doc = high ? PngRender.strokes(page) : null;
         int without = high ? VectorInk.sharpLayers(doc, 0, null) : 0;
         List<SharpView.Kept> kept = high ? SharpView.kept(doc, new java.util.HashMap<>()) : null;
         // Each pair (a layer of the page, InkWashLayers) kind by kind: its two halves' entries of a kind, side by side in the stack.
@@ -315,7 +317,7 @@ final class PageExport {
             SharpStrokes.GridPage[] once = new SharpStrokes.GridPage[2], fine = new SharpStrokes.GridPage[2];
             boolean any = false;
             // Strokes that can't be drawn again (out of memory, say) leave the strip its pixels doubled: the copy is still made (GitHub issue 1).
-            try { any = drawn(x, top, tw, th, once, fine); } catch (RuntimeException | OutOfMemoryError e) { ExportProgress.soft++; return; }
+            try { any = drawn(x, top, tw, th, once, fine); } catch (RuntimeException | OutOfMemoryError e) { ExportProgress.fellBack(top, th, e); return; }
             if (!any) return;
             fill(x, top, tw, th, once, fine);
         }

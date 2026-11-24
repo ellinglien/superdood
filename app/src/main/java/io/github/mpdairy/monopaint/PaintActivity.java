@@ -2592,7 +2592,11 @@ public final class PaintActivity extends Activity implements ControlHost {
                 pad.postDelayed(tell[0], 3000);
             };
             pad.postDelayed(tell[0], 3000);
-            for (int i = 0; i < 2; i++) { Runnable then = end[i]; end[i] = () -> { over[0] = true; pad.removeCallbacks(tell[0]); then.run(); }; }
+            for (int i = 0; i < 2; i++) { Runnable then = end[i]; boolean ok = i == 1; end[i] = () -> {
+                over[0] = true; pad.removeCallbacks(tell[0]); then.run();
+                // Some of it went at normal res: said in place of where it is, its report beside it (the owner, 2026-11-24).
+                if (ok && ExportProgress.soft > 0) message(PageExport.page(place, choice) + ", " + PageExport.SOFT);
+            }; }
         }
         if (!AutoExport.page(this, drawingName, book.snapshot(), place, choice, size, end[0], end[1])) end[0].run();
     }

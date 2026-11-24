@@ -13,8 +13,17 @@ final class ExportProgress {
     private static volatile boolean active;
     /** Strips that went out as their pixels doubled, their strokes' drawing having failed (out of memory, say): the copy still made. */
     static volatile int soft;
+    /** Which page rows those were and why, for the report beside the copy (the owner, 2026-11-24: "can it save a report"). */
+    private static final StringBuilder why = new StringBuilder();
     /** A page copy starts: nothing to do yet. */
-    static void begin() { total = 0; done = 0; soft = 0; active = true; }
+    static synchronized void begin() { total = 0; done = 0; soft = 0; why.setLength(0); active = true; }
+    /** Page rows {@code top} to {@code top + rows} went out as their pixels doubled, {@code e} the reason. */
+    static synchronized void fellBack(int top, int rows, Throwable e) {
+        soft++;
+        if (why.length() < 4000) why.append("Rows ").append(top).append(" to ").append(top + rows).append(": ").append(e).append('\n');
+    }
+    /** The rows that fell back since {@link #begin}, a line each ("" when none). */
+    static synchronized String fellBack() { return why.toString(); }
     /** It ended. */
     static void end() { active = false; }
     /** Work about to be done. */
